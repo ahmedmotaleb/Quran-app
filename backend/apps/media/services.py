@@ -76,7 +76,7 @@ def store_audio(*, owner, purpose: str, upload, duration_seconds) -> MediaObject
 
 
 def can_read(user, m: MediaObject) -> bool:
-    """Recordings are private: owner, the student's assigned teacher (once submitted), admins.
+    """Recordings are private: owner, the student's assigned teacher (once submitted, or in a submitted quiz), admins.
     Voice feedback: its teacher, and the student whose submission it answers. Parents: never."""
     if not user.is_authenticated or m.state != MediaObject.State.VALIDATED:
         return False
@@ -85,7 +85,16 @@ def can_read(user, m: MediaObject) -> bool:
     from apps.learning.models import Feedback, Submission
 
     if m.purpose == MediaObject.Purpose.RECITATION and user.role == Role.TEACHER:
-        return Submission.objects.filter(media=m, student_id__in=assigned_student_ids(user)).exists()
+        from apps.assessments.models import Answer
+
+        mine = assigned_student_ids(user)
+        return (Submission.objects.filter(media=m, student_id__in=mine).exists()
+                or Answer.objects.filter(recording=m, attempt__student_id__in=mine).exclude(attempt__status="in_progress").exists())
+    if m.purpose in (MediaObject.Purpose.LESSON_FILE, MediaObject.Purpose.COURSE_COVER):
+        from apps.learning.models import Lesson
+
+        # Learning content: any active user may read files of published lessons.
+        return Lesson.objects.filter(media=m, state="published", course__state="published").exists()
     if m.purpose == MediaObject.Purpose.VOICE_FEEDBACK and user.role == Role.STUDENT:
         return Feedback.objects.filter(voice=m, submission__student=user).exists()
     return False

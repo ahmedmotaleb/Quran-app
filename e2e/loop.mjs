@@ -47,7 +47,7 @@ const T = await session('teacher@halqa.app');
 await step(T.page, 'teacher sees live queue (no sample sessions)', async () => {
   await T.app.getByText('مرحبًا، الشيخ عبدالرحمن السالم').waitFor();
   await T.app.getByText('يوسف أحمد · حفظ سورة الملك').waitFor();
-  if (await T.app.getByText('جلسات اليوم').count()) throw new Error('sample sessions shown');
+  if (await T.app.getByText('عمر الحربي').count()) throw new Error('sample sessions shown');  // demo-only names
 });
 await T.page.screenshot({ path: out + '/m2-teacher-dash.png' });
 await step(T.page, 'teacher plays the real recording', async () => {
@@ -99,7 +99,7 @@ await step(S.page, 'student sees the newly assigned task', async () => {
   await S.page.getByRole('button', { name: /رجوع/ }).first().click();
   await S.page.getByRole('button', { name: /رجوع/ }).first().click();
   await S.app.getByRole('tab', { name: /حفظ/ }).click();
-  await S.app.getByText('حفظ سورة النبأ').waitFor();
+  await S.app.getByText('حفظ سورة النبأ').first().waitFor();
 });
 console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no page errors');
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');

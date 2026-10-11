@@ -64,7 +64,7 @@ class AssignmentStart(APIView):
 
 # ---- Submissions & teacher feedback (Prompt 14) ----------------------------------------
 from django.db import IntegrityError, transaction  # noqa: E402
-from django.db.models import Prefetch  # noqa: E402
+from django.db.models import Prefetch, Q  # noqa: E402
 
 from apps.core.pagination import StandardPagination  # noqa: E402
 from apps.media.models import MediaObject  # noqa: E402
@@ -191,3 +191,64 @@ class FeedbackCreate(APIView):
             transaction.on_commit(lambda: notify(student, "feedback_new", "وصل تقييم معلمك", title, link=f"/feedback/{sid}", dedupe=f"feedback:{sid}"))
         audit("feedback.created", actor=request.user, target=fb, request=request, decision=fb.decision)
         return Response(services.submission_out(_submissions(request.user).get(pk=s.pk), request.user, request), status=201)
+
+
+# ---- Lesson library (Prompt 09) ---------------------------------------------------------
+from .models import Course, Lesson, LessonCompletion, PublishState  # noqa: E402
+
+TOPIC_LABELS = {"tajweed": "التجويد", "hifz": "الحفظ والمراجعة", "adab": "آداب التلاوة", "ulum": "علوم القرآن"}
+
+
+def _published_lessons():
+    return Lesson.objects.filter(state=PublishState.PUBLISHED, course__state=PublishState.PUBLISHED).select_related("course", "media")
+
+
+def _lesson_out(l: Lesson, done: set, request, full=False) -> dict:
+    from apps.media import services as media_services
+
+    out = {"id": l.id, "title": l.title, "kind": l.kind, "course": l.course_id, "course_title": l.course.title, "topic": l.course.topic,
+           "topic_label": TOPIC_LABELS.get(l.course.topic, l.course.topic), "level": l.course.level or "جميع المستويات",
+           "duration_minutes": l.duration_minutes, "order": l.order, "completed": l.id in done}
+    if full:
+        out["body"] = l.body
+        out["external_url"] = l.external_url
+        out["media"] = media_services.read_url(l.media, request) if l.media and l.media.state == "validated" else None
+    return out
+
+
+class LessonList(APIView):
+    """Published lessons of published courses — the shared library for learners. `?topic=`."""
+
+    permission_classes = [IsLearningUser]
+
+    def get(self, request):
+        qs = _published_lessons().order_by("course__title", "order", "id")
+        if request.query_params.get("topic"):
+            qs = qs.filter(course__topic=request.query_params["topic"])
+        done = set(LessonCompletion.objects.filter(student=request.user).values_list("lesson_id", flat=True))
+        return Response([_lesson_out(l, done, request) for l in qs[:200]])
+
+
+class LessonDetail(APIView):
+    permission_classes = [IsLearningUser]
+
+    def get(self, request, pk):
+        l = _published_lessons().filter(pk=pk).first()
+        if l is None:
+            raise NOT_FOUND
+        done = set(LessonCompletion.objects.filter(student=request.user, lesson=l).values_list("lesson_id", flat=True))
+        nxt = _published_lessons().filter(course=l.course).filter(Q(order__gt=l.order) | Q(order=l.order, id__gt=l.id)).order_by("order", "id").first()
+        return Response({**_lesson_out(l, done, request, full=True), "next": {"id": nxt.id, "title": nxt.title} if nxt else None})
+
+
+class LessonComplete(APIView):
+    """Student marks a lesson complete (self-reported; not evidence of mastery). Idempotent."""
+
+    permission_classes = [IsStudent]
+
+    def post(self, request, pk):
+        l = _published_lessons().filter(pk=pk).first()
+        if l is None:
+            raise NOT_FOUND
+        LessonCompletion.objects.get_or_create(student=request.user, lesson=l)
+        return Response({"id": l.id, "completed": True})

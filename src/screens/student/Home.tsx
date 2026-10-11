@@ -2,7 +2,8 @@ import { color } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
 import { Badge, ProgressBar, card, iconTile, muted, primaryBtn } from '@/components/ui';
 import { TODAY_LABEL } from '@/data/demo';
-import { rangeL } from '@/lib/format';
+import { dateKey, fmtDay } from '@/lib/time';
+import { rangeL, tzOf } from '@/lib/format';
 import { go, setState, tab, toast, useApp } from '@/store/store';
 import { homeHifz, upcomingSessions } from '@/store/selectors';
 import { BRAND } from '@/theme/brand';
@@ -32,7 +33,7 @@ export default function Home() {
         <img src="/assets/halqa-mark.png" alt={BRAND.ar} style={{ width: 38, height: 38, objectFit: 'contain' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800 }}>السلام عليكم، {s.user.first}</h1>
-          <p style={muted(13)}>{TODAY_LABEL}</p>
+          <p style={muted(13)}>{s.liveMode ? fmtDay(new Date().toISOString(), tzOf(s.tz).iana) : TODAY_LABEL}</p>
         </div>
         <button onClick={() => toast('لا توجد إشعارات جديدة', 'bell')} aria-label="الإشعارات"
           style={{ width: 48, height: 48, borderRadius: 14, border: `1px solid ${color.border}`, background: color.card, color: color.primary, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
@@ -124,11 +125,27 @@ export default function Home() {
             <span style={{ fontSize: 13, color: color.muted, fontWeight: 700 }}>تقدّمك</span>
             <span style={{ color: color.primary, fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2 }}>التفاصيل <Icon name="chevL" size={18} /></span>
           </span>
-          <span style={{ fontSize: 16, fontWeight: 700 }}>حفظ معتمد: 3 سور · 18% من جزء تبارك</span>
-          <ProgressBar pct={18} />
-          <span style={{ fontSize: 13, color: color.muted }}>أتممت واجباتك 5 أيام هذا الأسبوع، استمر بهدوء.</span>
+          {s.liveMode ? <LiveSummary /> : <>
+            <span style={{ fontSize: 16, fontWeight: 700 }}>حفظ معتمد: 3 سور · 18% من جزء تبارك</span>
+            <ProgressBar pct={18} />
+            <span style={{ fontSize: 13, color: color.muted }}>أتممت واجباتك 5 أيام هذا الأسبوع، استمر بهدوء.</span>
+          </>}
         </button>
       </div>
     </div>
   );
+}
+
+/** Live: real counts only — approved memorisation tasks and days this week with a submitted recitation. */
+function LiveSummary() {
+  const s = useApp(); const tz = tzOf(s.tz).iana;
+  const hifz = s.tasks.filter((t) => t.type === 'hifz');
+  const ok = hifz.filter((t) => t.status === 'reviewed').length;
+  const weekAgo = Date.now() - 7 * 86_400_000;
+  const days = new Set(s.subs.filter((x) => new Date(x.created_at).getTime() >= weekAgo).map((x) => dateKey(x.created_at, tz))).size;
+  return <>
+    <span style={{ fontSize: 16, fontWeight: 700 }}>حفظ معتمد: {ok} من {hifz.length} مهام</span>
+    <ProgressBar pct={hifz.length ? (ok / hifz.length) * 100 : 0} />
+    <span style={{ fontSize: 13, color: color.muted }}>{days ? `سلّمت تلاوتك في ${days} ${days === 1 ? 'يوم' : days === 2 ? 'يومين' : 'أيام'} هذا الأسبوع، استمر بهدوء.` : 'لم تسلّم تلاوة هذا الأسبوع بعد. ابدأ بخطوة صغيرة.'}</span>
+  </>;
 }

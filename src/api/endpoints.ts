@@ -90,6 +90,37 @@ export const teacherOccurrences = (days = 8) => api<ApiTeacherOcc[]>('GET', `tea
 export const openSlot = (starts_at: string, minutes = 45) => api<ApiTeacherOcc>('POST', 'teacher/occurrences', { starts_at, minutes });
 export const closeSlot = (id: number) => api<null>('POST', `teacher/occurrences/${id}/close`);
 export const markAttendance = (booking: number, attendance: string) => api<ApiBooking>('POST', `bookings/${booking}/attendance`, { attendance });
+// ---- lessons & quizzes ----
+export interface ApiLesson {
+  id: number; title: string; kind: 'text' | 'video' | 'audio' | 'pdf'; course: number; course_title: string; topic: string; topic_label: string;
+  level: string; duration_minutes: number | null; order: number; completed: boolean;
+  body?: string; external_url?: string; media?: SignedUrl | null; next?: { id: number; title: string } | null;
+}
+export interface ApiAttemptSummary { id: number; number: number; status: 'in_progress' | 'submitted' | 'graded'; deadline_at: string | null; objective_score: number | null; objective_max: number | null; score: number | null; max: number }
+export interface ApiQuestion { id: number; kind: 'mcq' | 'true_false' | 'short' | 'recitation'; prompt: string; options: string[]; points: number }
+export interface ApiTest {
+  id: number; title: string; topic: string; level: string; duration_minutes: number | null; max_attempts: number; question_count: number;
+  has_recitation: boolean; attempts: ApiAttemptSummary[]; questions?: ApiQuestion[];
+}
+export interface ApiResult extends ApiAttemptSummary {
+  test_title: string; answers: { answer: number; question: number; kind: ApiQuestion['kind']; prompt: string; options: string[]; points: number;
+    response: unknown; is_correct: boolean | null; points_awarded: number | null; grade_reason: string; correct: unknown; recording: SignedUrl | null }[];
+}
+export interface ApiGradingItem {
+  answer: number; attempt: number; test_title: string; student: number; student_name: string; kind: string; prompt: string; points: number;
+  response: unknown; submitted_at: string; recording: SignedUrl | null; duration_seconds: number | null;
+}
+export const lessons = () => api<ApiLesson[]>('GET', 'lessons');
+export const lesson = (id: number) => api<ApiLesson>('GET', `lessons/${id}`);
+export const completeLesson = (id: number) => api<{ id: number; completed: boolean }>('POST', `lessons/${id}/complete`);
+export const tests = () => api<ApiTest[]>('GET', 'tests');
+export const testDetail = (id: number) => api<ApiTest>('GET', `tests/${id}`);
+export const startAttempt = (testId: number) => api<ApiAttemptSummary>('POST', `tests/${testId}/attempts`);
+export const submitAttempt = (id: number, answers: { question: number; response?: unknown; recording?: string }[]) =>
+  api<ApiResult>('POST', `attempts/${id}/submit`, { answers });
+export const attempt = (id: number) => api<ApiResult>('GET', `attempts/${id}`);
+export const gradingQueue = () => api<ApiGradingItem[]>('GET', 'teacher/grading');
+export const gradeAnswer = (id: number, points: number, reason: string) => api<{ attempt_status: string }>('POST', `answers/${id}/grade`, { points, reason });
 export const parentChildren = () => api<Page<Me>>('GET', 'parent/children?page_size=50');
 export const createAssignment = (b: {
   student: number; kind: string; title: string; surah: number; ayah_from: number; ayah_to: number; instructions: string; due_at: string; requires_recording: boolean;
@@ -124,7 +155,7 @@ export function toSession(b: ApiBooking): Session {
   return {
     id: String(b.id), t: String(o.teacher), teacherName: o.teacher_name, h: 0, type: o.kind === 'group' ? 'جماعية' : 'فردية', dur: minutes,
     status: b.status === 'cancelled' ? 'cancelled' : past ? 'completed' : 'confirmed',
-    task: b.assignment ? String(b.assignment) : null, note: b.note, startsAt: o.starts_at, endsAt: o.ends_at, canJoin: b.can_join,
+    task: b.assignment ? String(b.assignment) : null, note: b.note, startsAt: o.starts_at, endsAt: o.ends_at, canJoin: b.can_join, attendance: b.attendance,
   };
 }
 

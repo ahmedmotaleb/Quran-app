@@ -39,7 +39,7 @@ export async function loadStudentData() {
   if (get().me?.role !== 'student') return;
   setState({ net: { ...get().net, loading: true, error: null } });
   try {
-    const [a, t, b, sub] = await Promise.all([E.assignments(), E.teachers(), E.bookings(), E.submissions()]);
+    const [a, t, b, sub, ls, ts] = await Promise.all([E.assignments(), E.teachers(), E.bookings(), E.submissions(), E.lessons(), E.tests()]);
     const tz = iana();
     // Newest first: the first submission seen per task is its latest attempt.
     const fb: Record<string, Feedback> = {}; const recs: Record<string, Recording> = {};
@@ -53,7 +53,7 @@ export async function loadStudentData() {
       tasks: a.results.map((x) => E.toTask(x, tz)),
       teachers: t.results.map(E.toTeacher),
       sessions: b.results.map(E.toSession),
-      fb, recs, avail: {},
+      fb, recs, avail: {}, subs: sub.results, lessons: ls, tests: ts,
       net: { ...s.net, loading: false, error: null },
     }));
   } catch (e) {
@@ -66,7 +66,7 @@ export async function loadTeacherData() {
   if (get().me?.role !== 'teacher') return;
   setState({ net: { ...get().net, loading: true, error: null } });
   try {
-    const [st, a, sub, occ] = await Promise.all([E.teacherStudents(), E.assignments(), E.submissions(), E.teacherOccurrences()]);
+    const [st, a, sub, occ, gr] = await Promise.all([E.teacherStudents(), E.assignments(), E.submissions(), E.teacherOccurrences(), E.gradingQueue()]);
     const tz = iana();
     const reviews: ReviewItem[] = sub.results.map((x) => ({
       id: String(x.id), taskId: String(x.assignment), student: x.student_name, sid: String(x.student), title: x.assignment_title,
@@ -74,7 +74,7 @@ export async function loadTeacherData() {
       at: fmtRelative(x.created_at, tz), status: x.feedback ? 'reviewed' : 'submitted',
     }));
     setState((s) => ({
-      students: st.results.map(E.toStudent), tasks: a.results.map((x) => E.toTask(x, tz)), reviews, tsched: occ,
+      students: st.results.map(E.toStudent), tasks: a.results.map((x) => E.toTask(x, tz)), reviews, tsched: occ, grading: gr,
       net: { ...s.net, loading: false, error: null },
     }));
   } catch (e) {
@@ -105,8 +105,14 @@ export const loadData = () => {
   return r === 'teacher' ? loadTeacherData() : r === 'parent' ? loadParentData() : loadStudentData();
 };
 
-/** On startup: restore the session (cookie on web, stored token on Android). */
-export async function bootstrap(): Promise<boolean> {
+/** On startup: restore the session (cookie on web, stored token on Android). Runs once even if called twice
+ * (React StrictMode re-runs effects in development), so a late duplicate can't yank the user back to home. */
+let booting: Promise<boolean> | null = null;
+export function bootstrap(): Promise<boolean> {
+  booting ??= restoreSession();
+  return booting;
+}
+async function restoreSession(): Promise<boolean> {
   await loadToken();
   try {
     const u = await E.me();
@@ -178,7 +184,7 @@ export async function logout() {
   await setToken(null);
   resetCsrf();
   // Nothing from the previous account stays in memory.
-  setState({ me: null, tasks: [], sessions: [], fb: {}, recs: {}, avail: {}, reviews: null, students: [], teachers: [], parent: null, tsched: null });
+  setState({ me: null, tasks: [], sessions: [], fb: {}, recs: {}, avail: {}, reviews: null, students: [], teachers: [], parent: null, tsched: null, subs: [], lessons: null, lessonCur: null, tests: null, lq: null, grading: null });
 }
 
 export async function saveTimezone(id: TzId) {
@@ -349,4 +355,66 @@ export async function setAttendance(bookingId: number, value: string) {
 export async function teacherCancelBooking(bookingId: number) {
   try { await E.cancelBooking(bookingId, 'ألغاه المعلم'); toast('أُلغي الحجز وأُبلغ الطالب'); } catch (e) { toast(msg(e), 'alert'); }
   await refreshSchedule();
+}
+
+/* ---------------- lessons & quizzes ---------------- */
+export async function openLesson(id: number) {
+  setState({ lessonCur: null });
+  try { setState({ lessonCur: await E.lesson(id) }); } catch (e) { toast(msg(e), 'alert'); }
+}
+export async function completeLesson(id: number) {
+  try {
+    await E.completeLesson(id);
+    setState((s) => ({
+      lessons: s.lessons?.map((l) => (l.id === id ? { ...l, completed: true } : l)) ?? null,
+      lessonCur: s.lessonCur?.id === id ? { ...s.lessonCur, completed: true } : s.lessonCur,
+    }));
+    toast('أحسنت، سُجّل الدرس كمكتمل');
+  } catch (e) { toast(msg(e), 'alert'); }
+}
+
+/** Starts (or resumes) an attempt. The server decides limits and the deadline. */
+export async function startQuiz(testId: number) {
+  try {
+    const [t, a] = await Promise.all([E.testDetail(testId), E.startAttempt(testId)]);
+    setState({ lq: { test: t, questions: t.questions ?? [], attempt: a.id, answers: {}, result: null, busy: false } });
+    return true;
+  } catch (e) { toast(msg(e), 'alert'); return false; }
+}
+export async function openResult(testId: number, attemptId: number) {
+  try {
+    const [t, r] = await Promise.all([E.testDetail(testId), E.attempt(attemptId)]);
+    setState({ lq: { test: t, questions: t.questions ?? [], attempt: attemptId, answers: {}, result: r, busy: false } });
+    return true;
+  } catch (e) { toast(msg(e), 'alert'); return false; }
+}
+export const answerQuiz = (qid: number, v: unknown) => setState((s) => (s.lq ? { lq: { ...s.lq, answers: { ...s.lq.answers, [qid]: v } } } : {}));
+
+/** Uploads any recitation recordings, then submits every answer in one request (idempotent on the server). */
+export async function submitQuiz(recordings: Record<number, { blob: Blob; secs: number }>) {
+  const q = get().lq; if (!q || q.busy) return;
+  setState({ lq: { ...q, busy: true } });
+  try {
+    const answers: { question: number; response?: unknown; recording?: string }[] = [];
+    for (const x of q.questions) {
+      if (x.kind === 'recitation') {
+        const r = recordings[x.id];
+        if (r) answers.push({ question: x.id, recording: (await E.uploadRecitation(r.blob, r.secs)).id });
+      } else if (q.answers[x.id] !== undefined) answers.push({ question: x.id, response: q.answers[x.id] });
+    }
+    const result = await E.submitAttempt(q.attempt, answers);
+    setState((s) => ({ lq: s.lq && { ...s.lq, result, busy: false } }));
+    try { setState({ tests: await E.tests() }); } catch { /* list refresh is best effort */ }
+  } catch (e) {
+    setState((s) => ({ lq: s.lq && { ...s.lq, busy: false } }));
+    toast(msg(e), 'alert');
+  }
+}
+
+export async function gradeRecitation(answerId: number, points: number, reason: string) {
+  try {
+    await E.gradeAnswer(answerId, points, reason);
+    toast('حُفظت الدرجة');
+    setState({ grading: await E.gradingQueue() });
+  } catch (e) { toast(msg(e), 'alert'); }
 }

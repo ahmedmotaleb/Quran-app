@@ -2,10 +2,12 @@ import { color, font } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
 import { BackHeader, PlayButton, PlayerBar, card, outlineBtn, primaryBtn, usePlayer } from '@/components/ui';
 import { LESSONS, QUIZ } from '@/data/demo';
+import { LessonPageLive, QuizPageLive } from './LearnLive';
 import { back, openSheet, quizUnanswered, replace, setState, toast, up, useApp } from '@/store/store';
 
 export function LessonPage() {
   const s = useApp();
+  if (s.liveMode) return <LessonPageLive />;
   const l = LESSONS.find((x) => x.id === s.params.id) || LESSONS[0];
   const nx = LESSONS[(LESSONS.indexOf(l) + 1) % LESSONS.length];
   const dur = parseInt(l.dur, 10) * 60;
@@ -54,7 +56,9 @@ export function LessonPage() {
 }
 
 export function QuizPage() {
+  const live = useApp((s) => s.liveMode);
   const Q = useApp((s) => s.quiz);
+  if (live) return <QuizPageLive />;
   if (!Q) return <BackHeader title="اختبار أحكام النون الساكنة" />;
   const qq = QUIZ[Q.idx];
   const mcq = QUIZ.filter((x) => !x.rec);

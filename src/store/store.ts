@@ -12,7 +12,7 @@ import * as media from '@/services/media';
 import type { IconName } from '@/components/Icon';
 import { BRAND } from '@/theme/brand';
 import { LIVE } from '@/api/client';
-import type { ApiBooking, ApiSubmission, ApiTeacherOcc, Me } from '@/api/endpoints';
+import type { ApiBooking, ApiGradingItem, ApiLesson, ApiQuestion, ApiResult, ApiSubmission, ApiTeacherOcc, ApiTest, Me } from '@/api/endpoints';
 import * as live from './live';
 
 /* ------------------------------------------------------------------ */
@@ -59,6 +59,14 @@ const initial = () => ({
   reviews: null as ReviewItem[] | null,
   /** Live mode, teacher: own sessions (with bookings) for the coming week. */
   tsched: null as ApiTeacherOcc[] | null,
+  /** Live mode: all of the student's submissions (progress), the library, tests, and the teacher's grading queue. */
+  subs: [] as ApiSubmission[],
+  lessons: null as ApiLesson[] | null,
+  lessonCur: null as ApiLesson | null,
+  tests: null as ApiTest[] | null,
+  /** Live quiz: the open test, its attempt, local answers (by question id) and the server result. */
+  lq: null as null | { test: ApiTest; questions: ApiQuestion[]; attempt: number; answers: Record<number, unknown>; result: ApiResult | null; busy: boolean },
+  grading: null as ApiGradingItem[] | null,
   /** Live mode, parent: linked children and their records (the API scopes all of it). */
   parent: null as null | { kids: { id: string; name: string; level: string }[]; tasks: Task[]; bookings: ApiBooking[]; subs: ApiSubmission[] },
   role: null as Role | null,

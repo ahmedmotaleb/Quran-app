@@ -8,7 +8,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.models import GuardianLink, LinkStatus, Role, StudentProfile, TeacherAssignment, TeacherProfile, User
-from apps.learning.models import Assignment, AssignmentStatus
+from apps.assessments.models import Question, Test
+from apps.learning.models import Assignment, AssignmentStatus, Course, Lesson
 from apps.scheduling.models import AvailabilityRule
 from apps.scheduling.services import generate_occurrences
 
@@ -69,4 +70,27 @@ class Command(BaseCommand):
                                ayah_to=20, due_at=due + timedelta(days=2), instructions="حدّد مواضع الإظهار والإخفاء ثم سجّل تلاوتك."),
                     Assignment(student=sara, teacher=teacher, kind="hifz", title="حفظ سورة الطارق", surah=86, ayah_from=1, ayah_to=10, due_at=due),
                 ])
+            # Library + quiz (development content: titles from the design; lesson bodies are placeholders).
+            if not Course.objects.exists():
+                placeholder = "محتوى تجريبي لبيئة التطوير. يضيف المعلم نص الدرس ومواده قبل النشر."
+                for topic, level, title, lessons in (
+                    ("tajweed", "مبتدئ", "أساسيات التجويد", [("مقدمة في أحكام النون الساكنة والتنوين", 14), ("الإظهار الحلقي: أمثلة تطبيقية", 11), ("المدود وأنواعها", 22)]),
+                    ("adab", "", "آداب التلاوة", [("آداب حامل القرآن", 18)]),
+                    ("hifz", "", "الحفظ والمراجعة", [("كيف تراجع حفظك بانتظام", 16)]),
+                ):
+                    c = Course.objects.create(title=title, topic=topic, level=level, teacher=teacher, state="published")
+                    for i, (lt, mins) in enumerate(lessons, 1):
+                        Lesson.objects.create(course=c, order=i, title=lt, kind="text", body=placeholder, duration_minutes=mins, state="published")
+            if not Test.objects.exists():
+                t = Test.objects.create(title="اختبار أحكام النون الساكنة والتنوين", topic="tajweed", author=teacher, state="published",
+                                        duration_minutes=10, max_attempts=2)
+                for i, (prompt, options, key) in enumerate((
+                    ("كم عدد حروف الإظهار الحلقي؟", ["4", "6", "15", "1"], 1),
+                    ("ما الحكم عند مجيء الباء بعد النون الساكنة أو التنوين؟", ["الإخفاء", "الإدغام", "الإقلاب", "الإظهار"], 2),
+                    ("كم عدد حروف الإخفاء الحقيقي؟", ["15", "6", "4", "10"], 0),
+                    ("حروف الإدغام مجموعة في كلمة:", ["يرملون", "ينمو", "قطب جد", "أخي هاك"], 0),
+                ), 1):
+                    Question.objects.create(test=t, order=i, kind="mcq", prompt=prompt, options=options, answer_key=key)
+                Question.objects.create(test=t, order=5, kind="recitation", points=2,
+                                        prompt="سجّل تلاوتك لموضع من سورة الملك يجتمع فيه حكما الإظهار والإخفاء.")
         self.stdout.write(self.style.SUCCESS(f"Seeded {len(PEOPLE)} accounts (password from SEED_PASSWORD), {created} new session slots."))

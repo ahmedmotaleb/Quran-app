@@ -46,7 +46,7 @@ export interface Session {
   id: string; t: string; day?: number; past?: string; h: number; type: string; dur: number;
   status: SessionStatus; task: string | null; note?: string; summary?: string;
   /** Live mode: real instants from the server (demo sessions use day/h). */
-  teacherName?: string; startsAt?: string; endsAt?: string; canJoin?: boolean;
+  teacherName?: string; startsAt?: string; endsAt?: string; canJoin?: boolean; attendance?: string;
 }
 
 /** Live mode adds the occurrence id, its instant and kind; `h` is then local hour + minutes/60. */

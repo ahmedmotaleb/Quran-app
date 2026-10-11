@@ -1,5 +1,6 @@
 from django.urls import include, path
 
+from apps.assessments import views as assessments
 from apps.learning import views as learning
 from apps.media import views as media
 from apps.notifications import views as notifications
@@ -20,6 +21,17 @@ urlpatterns = [
     path("submissions", learning.SubmissionList.as_view()),
     path("submissions/<int:pk>", learning.SubmissionDetail.as_view()),
     path("submissions/<int:pk>/feedback", learning.FeedbackCreate.as_view()),
+    path("lessons", learning.LessonList.as_view()),
+    path("lessons/<int:pk>", learning.LessonDetail.as_view()),
+    path("lessons/<int:pk>/complete", learning.LessonComplete.as_view()),
+    # Quizzes
+    path("tests", assessments.TestList.as_view()),
+    path("tests/<int:pk>", assessments.TestDetail.as_view()),
+    path("tests/<int:pk>/attempts", assessments.AttemptStart.as_view()),
+    path("attempts/<int:pk>", assessments.AttemptDetail.as_view()),
+    path("attempts/<int:pk>/submit", assessments.AttemptSubmit.as_view()),
+    path("teacher/grading", assessments.PendingGrading.as_view()),
+    path("answers/<int:pk>/grade", assessments.GradeAnswer.as_view()),
     # Private media
     path("media/recitations", media.RecitationUpload.as_view()),
     path("media/voice-feedback", media.VoiceFeedbackUpload.as_view()),

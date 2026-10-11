@@ -110,11 +110,13 @@ The app runs in one of two modes, chosen at build time by `VITE_API_BASE_URL`:
 | Live mode: connected to the API | Live mode: still sample content (banner shown) |
 | --- | --- |
 | Sign-in, sign-up (student only), sign-out, session restore, password-reset request | Teacher content tools (lectures, quizzes) |
-| Onboarding answers, profile timezone | Live video sessions |
-| Student tasks, recording upload and submission, teacher feedback | Student progress, lessons, quizzes |
+| Onboarding answers, profile timezone | |
+| Student tasks, recording upload and submission, teacher feedback | Live video sessions |
 | Teacher directory, real open slots, booking, cancelling, rescheduling | Teacher voice notes (hidden in live mode) |
 | Teacher: students, new tasks, review queue, scores, timed notes | |
 | Teacher schedule: today's sessions, open/close slots, cancel a booking (student notified), attendance | |
+| Lesson library, mark complete; quizzes graded on the server, recitation answers graded by the teacher | |
+| Student progress from real records (approved tasks, teacher scores, attendance, minutes recorded) | |
 | Parent: linked children only — sessions, attendance, tasks, progress, latest feedback (no audio) | |
 
 Web uses the session cookie + CSRF token; Android stores a bearer token in app-private

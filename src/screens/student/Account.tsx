@@ -9,8 +9,11 @@ const rowBtn = { width: '100%', minHeight: 52, border: 'none', background: 'tran
 
 export default function Account() {
   const s = useApp(); const role = s.role;
-  const name = role === 'teacher' ? 'الشيخ عبدالرحمن السالم' : role === 'parent' ? 'أحمد العلي' : s.user.name;
-  const email = role === 'teacher' ? 'teacher@halqa.app' : role === 'parent' ? 'parent@halqa.app' : s.user.email;
+  const live = s.liveMode;
+  const name = live ? s.user.name : role === 'teacher' ? 'الشيخ عبدالرحمن السالم' : role === 'parent' ? 'أحمد العلي' : s.user.name;
+  const email = live ? s.user.email : role === 'teacher' ? 'teacher@halqa.app' : role === 'parent' ? 'parent@halqa.app' : s.user.email;
+  // Live: the teachers who assigned this student's tasks.
+  const myTeachers = [...new Set(s.tasks.map((t) => t.teacherName).filter(Boolean))].join('، ') || 'لم يُربط معلم بعد';
   const ini = role === 'teacher' ? 'ع' : role === 'parent' ? 'أ' : s.user.first[0];
   const roleL = { student: 'حساب طالب', teacher: 'حساب معلم', parent: 'حساب ولي أمر', admin: 'حساب إدارة' }[role || 'student'];
   const tz = tzOf(s.tz);
@@ -32,7 +35,7 @@ export default function Account() {
       {role === 'student' && (
         <section style={{ ...card, padding: '4px 16px' }}>
           <h2 style={{ margin: '12px 0 4px', fontSize: 14, color: color.muted, fontWeight: 700 }}>التعلّم</h2>
-          {([['المستوى', s.user.level], ['الهدف اليومي', s.user.goal], ['المعلم المرتبط', 'الشيخ عبدالرحمن السالم']] as const).map(([k, v], i) => (
+          {([['المستوى', s.user.level], ['الهدف اليومي', s.user.goal], ['المعلم المرتبط', live ? myTeachers : 'الشيخ عبدالرحمن السالم']] as const).map(([k, v], i) => (
             <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i < 2 ? `1px solid ${color.divider}` : 'none' }}>
               <span style={{ fontSize: 15 }}>{k}</span><span style={{ fontSize: 15, fontWeight: 700 }}>{v}</span>
             </div>

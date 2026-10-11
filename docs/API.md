@@ -61,6 +61,12 @@ server logs.
 | `POST bookings/{id}/reschedule` | owner | atomic: new booking + cancel old, or nothing |
 | `POST bookings/{id}/attendance` | session teacher, after start | audited |
 | `GET quran/source`, `GET quran/surahs`, `GET quran/surahs/{n}?from&to` | signed in | verbatim text from the active verified source; `503 quran_unavailable` if none |
+| `GET lessons`, `GET lessons/{id}`, `POST lessons/{id}/complete` | learning users (complete: student) | published lessons of published courses; completion is self-reported |
+| `GET tests`, `GET tests/{id}` | student | open, published tests; questions never include answer keys |
+| `POST tests/{id}/attempts` | student | starts or resumes; enforces `max_attempts`, sets the deadline |
+| `POST attempts/{id}/submit` | owner | all answers at once; objective questions graded on the server; keys revealed only after submission (if the test releases results); idempotent; 2-minute grace after the deadline |
+| `GET attempts/{id}` | scoped (owner, teacher, linked parent, admin) | |
+| `GET teacher/grading`, `POST answers/{id}/grade` | the student's teacher | recitation / short answers; points 0..question points |
 | `GET notifications`, `POST notifications/read` | signed in | own only |
 | `GET, POST admin/users` | admin | filters `role,status,q,unlinked=1`; created users set their password via recovery |
 | `POST admin/users/{id}/status` | admin | suspension requires a reason; revokes tokens |

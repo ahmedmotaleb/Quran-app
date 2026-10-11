@@ -11,6 +11,7 @@ import {
 } from '@/store/store';
 import { decoSession, pastSessions, slotTime, teacherById, upcomingSessions, weekDays } from '@/store/selectors';
 import { loadStudentData } from '@/store/live';
+import { LessonsTabLive, QuizzesTabLive } from './LearnLive';
 
 type CircTab = 'teachers' | 'bookings' | 'lessons' | 'quizzes';
 const TABS: [CircTab, string][] = [['teachers', 'المعلمون'], ['bookings', 'حجوزاتي'], ['lessons', 'الدروس'], ['quizzes', 'الاختبارات']];
@@ -29,8 +30,8 @@ export default function Circles() {
       </div>
       {ct === 'teachers' && <TeachersTab />}
       {ct === 'bookings' && <BookingsTab />}
-      {ct === 'lessons' && <LessonsTab />}
-      {ct === 'quizzes' && <QuizzesTab />}
+      {ct === 'lessons' && (s.liveMode ? <LessonsTabLive /> : <LessonsTab />)}
+      {ct === 'quizzes' && (s.liveMode ? <QuizzesTabLive /> : <QuizzesTab />)}
     </div>
   );
 }

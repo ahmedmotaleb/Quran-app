@@ -6,7 +6,9 @@ import {
 import { DAYS, SUR, TODAY_LABEL } from '@/data/demo';
 import { fmt, scoreL, timeIn, typeIcon, tzLabel, tzOf } from '@/lib/format';
 import { dateKey, dayLabel, fmtDay, fmtTime, zonedToIso as zonedIso } from '@/lib/time';
-import { setAttendance, teacherCancelBooking, toggleSlot as toggleLiveSlot } from '@/store/live';
+import { gradeRecitation, setAttendance, teacherCancelBooking, toggleSlot as toggleLiveSlot } from '@/store/live';
+import type { ApiGradingItem } from '@/api/endpoints';
+import { useState } from 'react';
 import { weekDays } from '@/store/selectors';
 import { openSheet } from '@/store/store';
 import {
@@ -254,12 +256,19 @@ export function TeacherAssign() {
 /* ---------------- Reviews list + review a recording ---------------- */
 export function TeacherReviews() {
   const rvTab = useApp((s) => s.rvTab); const { revs, pend, open } = useReviews();
+  const live = useApp((s) => s.liveMode); const grading = useApp((s) => s.grading);
   const list = revs.filter((r) => (rvTab === 'pending' ? r.status === 'submitted' : r.status === 'reviewed'));
   return (
     <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>المراجعات</h1>
       <Segmented role="tablist" fs={14} options={[['pending', `تنتظر المراجعة (${pend.length})`], ['done', 'تمت مراجعتها']] as const} value={rvTab} onChange={(k) => setState({ rvTab: k })} />
       {list.length === 0 && <p style={muted(15, { padding: 24, textAlign: 'center' })}>لا توجد تسجيلات تنتظر المراجعة</p>}
+      {rvTab === 'pending' && live && !!grading?.length && (
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>أسئلة تلاوة في الاختبارات ({grading.length})</h2>
+          {grading.map((g) => <GradeCard key={g.answer} g={g} />)}
+        </section>
+      )}
       {list.map((r) => (
         <button key={r.id} onClick={() => open(r)} style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 6, textAlign: 'right', cursor: 'pointer', color: color.ink }}>
           <span style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 8 }}>
@@ -628,6 +637,27 @@ function ScheduleLive() {
         </div>
         <p style={muted(12)}>الإتاحة الأسبوعية الثابتة تضبطها الإدارة؛ هنا تفتح أو تغلق مواعيد محددة.</p>
       </>}
+    </div>
+  );
+}
+
+/** One quiz recitation / short answer awaiting the teacher's grade. */
+function GradeCard({ g }: { g: ApiGradingItem }) {
+  const [pts, setPts] = useState<number | null>(null); const [reason, setReason] = useState('');
+  return (
+    <div style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span style={{ fontSize: 15, fontWeight: 700 }}>{g.student_name} · {g.test_title}</span>
+      <span style={{ fontSize: 14, color: color.body }}>{g.prompt}</span>
+      {g.recording ? <audio controls preload="none" src={g.recording.url} style={{ width: '100%' }} aria-label={`تسجيل ${g.student_name}`} />
+        : <p style={{ margin: 0, fontSize: 14 }}>الإجابة: {String(g.response ?? '—')}</p>}
+      <div role="radiogroup" aria-label="الدرجة" style={{ display: 'flex', gap: 6 }}>
+        {Array.from({ length: g.points + 1 }, (_, n) => (
+          <button key={n} role="radio" aria-checked={pts === n} onClick={() => setPts(n)}
+            style={{ flex: 1, minHeight: 44, borderRadius: 10, border: `1.5px solid ${pts === n ? color.primary : color.borderStrong}`, background: pts === n ? color.primary : color.card, color: pts === n ? color.ivory : color.primary, fontFamily: font.latin, fontWeight: 700, cursor: 'pointer' }}>{n}</button>
+        ))}
+      </div>
+      <input aria-label="ملاحظة (اختياري)" placeholder="ملاحظة (اختياري)" value={reason} onChange={(e) => setReason(e.target.value)} style={inputStyle(null, false, { fontSize: 14 })} />
+      <button disabled={pts === null} onClick={() => pts !== null && gradeRecitation(g.answer, pts, reason)} style={primaryBtn(48, 15, { opacity: pts === null ? 0.6 : 1 })}>حفظ الدرجة (من {g.points})</button>
     </div>
   );
 }

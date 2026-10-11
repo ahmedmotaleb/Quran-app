@@ -89,12 +89,14 @@ await step('cancelled shows in past list', async () => {
   await page.getByRole('button', { name: /رجوع/ }).first().click().catch(() => {});
   await page.getByRole('button', { exact: true, name: 'الجلسات' }).click();
   await app.getByRole('tab', { name: 'حجوزاتي' }).click();
-  await app.getByText('لا توجد حجوزات قادمة').waitFor();
+  await app.getByText('السابقة والملغاة').waitFor();
+  await app.getByText('ملغاة').first().waitFor();
 });
 await page.screenshot({ path: out + '/l7-cancelled.png' });
-await step('sample banner on unwired screen', async () => {
+await step('progress is live (no sample banner)', async () => {
   await page.getByRole('button', { exact: true, name: 'تقدمي' }).click();
-  await page.getByText('محتوى تجريبي — هذا القسم لم يُربط بالخادم بعد.').waitFor();
+  await app.getByText('دقائق التلاوة التي سجّلتها وسلّمتها').waitFor();
+  if (await page.getByText('محتوى تجريبي —').count()) throw new Error('sample banner shown');
 });
 await step('logout ends server session', async () => {
   await page.getByRole('button', { exact: true, name: 'حسابي' }).click();

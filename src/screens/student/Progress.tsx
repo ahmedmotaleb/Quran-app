@@ -3,6 +3,7 @@ import { Icon } from '@/components/Icon';
 import { ProgressBar, Segmented, card, muted } from '@/components/ui';
 import { rangeL, surahName } from '@/lib/format';
 import { go, setState, useApp } from '@/store/store';
+import { ProgressLive } from './LearnLive';
 
 const CHART = {
   week: [['أحد', 25], ['إثنين', 30], ['ثلاثاء', 0], ['أربعاء', 20], ['خميس', 35], ['جمعة', 15], ['سبت', 28]],
@@ -32,7 +33,8 @@ export function useEvals() {
 }
 
 export default function Progress() {
-  const s = useApp(); const pr = s.progRange;
+  const s = useApp();
+  if (s.liveMode) return <ProgressLive />; const pr = s.progRange;
   const chart = CHART[pr]; const mx = Math.max(...chart.map((c) => c[1]));
   const evals = useEvals();
   const pending = s.tasks.filter((t) => t.status === 'submitted');
