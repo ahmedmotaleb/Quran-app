@@ -118,9 +118,10 @@ Web uses the session cookie + CSRF token; Android stores a bearer token in app-p
 storage (`@capacitor/preferences`). Bookings send an `Idempotency-Key`, so a retried tap
 never double-books. Server errors are shown in Arabic as the server wrote them.
 
-Quran text is real in both modes (Tanzil Uthmani via api.alquran.cloud for now; moving to
-the backend's verified copy is the next step). If it fails to load, the app shows an
-error state and never placeholder text.
+Quran text: in live mode it comes only from the backend's imported, checksum-verified copy
+(`manage.py import_quran`, see `backend/README.md`); until that import runs, the Mushaf says
+the verified source is unavailable. Demo mode reads Tanzil Uthmani via api.alquran.cloud.
+Either way, a failure shows an error state and never placeholder text.
 
 ### Running live mode locally
 

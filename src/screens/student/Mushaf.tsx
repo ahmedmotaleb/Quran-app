@@ -62,7 +62,7 @@ export default function Mushaf() {
           <div role="alert" style={{ background: color.card, border: `1px dashed ${color.borderStrong}`, borderRadius: 16, padding: '24px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 10 }}>
             <span style={{ color: color.dangerInk }}><Icon name="alert" size={30} /></span>
             <p style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>تعذّر تحميل النص القرآني</p>
-            <p style={muted(14, { lineHeight: 1.7 })}>لا نعرض أي نص قرآني إلا من مصدر معتمد. تحقق من الاتصال ثم أعد المحاولة.</p>
+            <p style={muted(14, { lineHeight: 1.7 })}>{M.errMsg ?? 'لا نعرض أي نص قرآني إلا من مصدر معتمد. تحقق من الاتصال ثم أعد المحاولة.'}</p>
             <button onClick={() => loadSurah(M.surah)} style={{ minHeight: 48, padding: '0 20px', border: 'none', borderRadius: 12, background: color.primary, color: color.ivory, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="refresh" /> إعادة المحاولة</button>
           </div>
         )}

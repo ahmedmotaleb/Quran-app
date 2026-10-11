@@ -40,7 +40,7 @@ export interface AssignForm {
   time: string; instr: string; needRec: boolean; errors: Record<string, string | null>;
 }
 export interface MushafState {
-  surah: number; data: SurahData | null; loading: boolean; error: boolean; from: number; to: number; font: number;
+  surah: number; data: SurahData | null; loading: boolean; error: boolean; errMsg?: string | null; from: number; to: number; font: number;
   bookmark: number | null; playing: boolean; cur: number | null; repeat: number; rep: number; jump: string;
   list: SurahListItem[] | null; listQ: string; listErr: boolean; flash: number | null;
 }
@@ -298,13 +298,15 @@ export function submitRec() {
 /* Mushaf                                                               */
 /* ------------------------------------------------------------------ */
 export async function loadSurah(n: number) {
-  setM({ loading: true, error: false, surah: n });
+  setM({ loading: true, error: false, errMsg: null, surah: n });
   try {
     const d = await fetchSurah(n);
     const m = get().m;
     if (m.surah === n) setM({ loading: false, data: d, from: Math.min(m.from, d.numberOfAyahs), to: Math.min(m.to, d.numberOfAyahs) });
-  } catch {
-    setM({ loading: false, error: true, data: null });
+  } catch (e) {
+    // The server's message for `quran_unavailable` says the verified source isn't available.
+    const code = (e as { code?: string }).code;
+    setM({ loading: false, error: true, data: null, errMsg: code === 'quran_unavailable' ? (e as Error).message : null });
   }
 }
 export async function loadSurahList() {
