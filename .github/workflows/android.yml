@@ -1,0 +1,134 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main, halqa-frontend]
+    paths-ignore: ['**.md', 'project/**', 'chats/**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      ANDROID_VERSION_CODE: ${{ github.run_number }}
+      HAS_KEYSTORE: ${{ secrets.HALQA_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 build-tools;36.0.0 platform-tools'
+
+      - name: Install and build web app
+        run: |
+          npm ci
+          npm run build
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Release must refuse to build without signing keys
+        working-directory: android
+        run: |
+          if ./gradlew --no-daemon assembleRelease > release-guard.log 2>&1; then
+            echo "::error::assembleRelease succeeded without signing configuration"; exit 1
+          fi
+          grep -q "Release signing is not configured" release-guard.log
+          echo "Release guard OK: unsigned release was refused."
+
+      - name: Name, hash and describe debug APK
+        id: debug
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          OUT="halqa-${VERSION}-${ANDROID_VERSION_CODE}-debug.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$OUT"
+          sha256sum "$OUT" | tee "$OUT.sha256"
+          ls -l "$OUT"
+          echo "file=$OUT" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Debug APK"
+            echo "- File: \`$OUT\` ($(du -h "$OUT" | cut -f1))"
+            echo "- SHA-256: \`$(cut -d' ' -f1 "$OUT.sha256")\`"
+            echo "- Debug-signed, for testing only. Not for distribution."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: halqa-debug-apk
+          path: |
+            ${{ steps.debug.outputs.file }}
+            ${{ steps.debug.outputs.file }}.sha256
+          retention-days: 14
+
+      # ---- Signed release (only when the keystore secrets exist) ----
+      - name: Decode release keystore
+        id: keystore
+        if: env.HAS_KEYSTORE == 'true'
+        env:
+          KEYSTORE_B64: ${{ secrets.HALQA_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/halqa-release.jks"
+          echo "path=$RUNNER_TEMP/halqa-release.jks" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed release APK
+        if: steps.keystore.outputs.path != ''
+        working-directory: android
+        env:
+          HALQA_KEYSTORE_FILE: ${{ steps.keystore.outputs.path }}
+          HALQA_KEYSTORE_PASSWORD: ${{ secrets.HALQA_KEYSTORE_PASSWORD }}
+          HALQA_KEY_ALIAS: ${{ secrets.HALQA_KEY_ALIAS }}
+          HALQA_KEY_PASSWORD: ${{ secrets.HALQA_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Verify signature, hash release APK
+        id: release
+        if: steps.keystore.outputs.path != ''
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          OUT="halqa-${VERSION}-${ANDROID_VERSION_CODE}-release.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$OUT"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$OUT" | tee "$OUT.signature.txt"
+          sha256sum "$OUT" | tee "$OUT.sha256"
+          echo "file=$OUT" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Release APK"
+            echo "- File: \`$OUT\` ($(du -h "$OUT" | cut -f1))"
+            echo "- SHA-256: \`$(cut -d' ' -f1 "$OUT.sha256")\`"
+            echo "- Signature verified with apksigner."
+          } >> "$GITHUB_STEP_SUMMARY"
+          rm -f "$RUNNER_TEMP/halqa-release.jks"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.release.outputs.file != ''
+        with:
+          name: halqa-release-apk
+          path: |
+            ${{ steps.release.outputs.file }}
+            ${{ steps.release.outputs.file }}.sha256
+            ${{ steps.release.outputs.file }}.signature.txt
+          retention-days: 30
+
+      - name: Note missing release signing
+        if: steps.keystore.outputs.path == ''
+        run: echo "### Release APK not built" >> "$GITHUB_STEP_SUMMARY" && echo "Add the HALQA_KEYSTORE_BASE64, HALQA_KEYSTORE_PASSWORD, HALQA_KEY_ALIAS and HALQA_KEY_PASSWORD repository secrets to build a signed release." >> "$GITHUB_STEP_SUMMARY"

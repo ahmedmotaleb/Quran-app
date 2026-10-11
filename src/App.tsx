@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import AppShell from './AppShell';
 import DemoPanel from './demo/DemoPanel';
 import { startSplash, tick, useApp } from './store/store';
+import { isNative } from './lib/native';
 
 const AdminApp = lazy(() => import('./admin/AdminApp'));
 const DesignSystem = lazy(() => import('./designsystem/DesignSystem'));
@@ -36,7 +37,8 @@ export default function App() {
  * (mirrors the Claude Design prototype). On phones it renders full-screen.
  */
 function MobileApp() {
-  const framed = useMedia(FRAME_QUERY);
+  // The installed Android app is always full-screen, even on tablets — the demo frame is web-only.
+  const framed = useMedia(FRAME_QUERY) && !isNative;
   const device = useApp((s) => s.device);
 
   useEffect(() => {

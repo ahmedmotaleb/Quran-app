@@ -60,6 +60,45 @@ A style guide rendered with the app's real tokens and components (colours, type,
 buttons, badges, fields, tabs/chips/switch, icons, principles). Its Quran samples are
 loaded from the API like everywhere else, never hand-typed.
 
+## Android app (Capacitor)
+
+The same web app is packaged as an Android APK with Capacitor 8 (`android/`, app ID
+`app.halqa.quran`, min SDK 24, target/compile SDK 36). The installed app always runs
+full-screen (the desktop demo frame is web-only). It uses the hardware back button for
+in-app navigation and draws edge-to-edge with safe-area padding. Recording asks for the
+microphone permission at runtime.
+
+**Toolchain:** Node 22, JDK 21, Android SDK platform 36 + build-tools 36.0.0 (Android
+Gradle Plugin 8.13, Gradle 8.14.3 via the wrapper).
+
+```bash
+npm run build && npx cap sync android
+cd android && ./gradlew assembleDebug     # app/build/outputs/apk/debug/app-debug.apk
+```
+
+**Release signing:** `assembleRelease` reads `HALQA_KEYSTORE_FILE`, `HALQA_KEYSTORE_PASSWORD`,
+`HALQA_KEY_ALIAS` and `HALQA_KEY_PASSWORD` from the environment and **fails** if any is
+missing. It never falls back to debug signing. Keep the keystore out of Git (`*.jks` is
+ignored) and back it up: every future update must be signed with the same key.
+
+**CI:** `.github/workflows/android.yml` builds the debug APK on every push, records its
+SHA-256 and checks that an unsigned release is refused. If the repository secrets
+`HALQA_KEYSTORE_BASE64` (base64 of the .jks), `HALQA_KEYSTORE_PASSWORD`, `HALQA_KEY_ALIAS`
+and `HALQA_KEY_PASSWORD` are set, it also builds the signed release, verifies the
+signature with `apksigner` and uploads it with its hash. Download APKs from the run's
+**Artifacts**.
+
+**Backend:** there is no API yet. When the Django backend exists, the app must point to
+its HTTPS origin (never localhost or a live-reload URL in a shipped build).
+
+### تثبيت التطبيق على أندرويد (نسخة تجريبية)
+1. افتح صفحة **Actions** في المستودع، واختر آخر تشغيل ناجح لـ «Android APK».
+2. نزّل الملف `halqa-debug-apk` من قسم **Artifacts** ثم فك ضغطه.
+3. انقل ملف ‎.apk‎ إلى الهاتف وافتحه، واسمح بـ«تثبيت التطبيقات من مصادر غير معروفة» عند الطلب.
+4. عند أول تسجيل للتلاوة سيطلب التطبيق إذن الميكروفون؛ اختر «السماح».
+
+هذه نسخة اختبار موقّعة بمفتاح التطوير، وكل بياناتها تجريبية. لا تُوزَّع على المستخدمين.
+
 ## What is real and what is simulated
 
 | Real | Simulated (labelled in the UI) |
@@ -89,6 +128,8 @@ src/
   admin/                 admin portal: data, store, tables, dialogs, settings (lazy-loaded)
   designsystem/          living style guide (lazy-loaded)
   theme/brand.ts         product name and tagline (single source)
+  lib/native.ts          Android: back button, system bar style (no-op on web)
+android/                 Capacitor Android project
 ```
 
 Times are stored in Riyadh time (the demo's equivalent of UTC) and shown in the user's
