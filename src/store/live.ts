@@ -2,17 +2,20 @@
  * Live mode (VITE_API_BASE_URL set): store actions backed by the Django API.
  * Wired: auth (login/register/logout/session restore/forgot), onboarding, profile timezone,
  * student tasks, teacher directory, slots, booking/cancel/reschedule.
- * Not wired yet (screens keep demo content, labelled): teacher & parent dashboards,
- * recording upload (needs object storage), feedback details, lessons, quizzes, progress.
+ * recording upload + submission, teacher feedback (student view), teacher students/assign/reviews.
+ * Not wired yet (screens keep demo content, labelled): parent app, teacher schedule & content,
+ * live video, lessons, quizzes, progress.
  */
 import * as E from '@/api/endpoints';
 import { ApiError, IS_NATIVE, loadToken, resetCsrf, setToken } from '@/api/client';
 import { TZS } from '@/data/demo';
-import type { Role, Slot, TzId } from '@/data/types';
-import { dayOffset } from '@/lib/time';
-import { tzOf } from '@/lib/format';
+import type { Feedback, Recording, Role, Slot, TzId } from '@/data/types';
+import { dayOffset, fmtRelative, zonedToIso } from '@/lib/time';
+import { rangeL, tzOf, typeL } from '@/lib/format';
+import { SUR } from '@/data/demo';
 import { BRAND } from '@/theme/brand';
-import { reset, setState, toast, up, useApp } from './store';
+import * as media from '@/services/media';
+import { back, reset, setState, toast, up, useApp, type AssignForm, type ReviewDraft, type ReviewItem } from './store';
 
 // Lazy: store.ts and this module import each other.
 const get = () => useApp.getState();
@@ -36,19 +39,50 @@ export async function loadStudentData() {
   if (get().me?.role !== 'student') return;
   setState({ net: { ...get().net, loading: true, error: null } });
   try {
-    const [a, t, b] = await Promise.all([E.assignments(), E.teachers(), E.bookings()]);
+    const [a, t, b, sub] = await Promise.all([E.assignments(), E.teachers(), E.bookings(), E.submissions()]);
     const tz = iana();
+    // Newest first: the first submission seen per task is its latest attempt.
+    const fb: Record<string, Feedback> = {}; const recs: Record<string, Recording> = {};
+    for (const x of sub.results) {
+      const k = String(x.assignment);
+      if (recs[k]) continue;
+      recs[k] = { dur: x.duration_seconds, url: x.audio?.url ?? null };
+      if (x.feedback) fb[k] = E.toFeedback(x.feedback, x.duration_seconds, tz);
+    }
     setState((s) => ({
       tasks: a.results.map((x) => E.toTask(x, tz)),
       teachers: t.results.map(E.toTeacher),
       sessions: b.results.map(E.toSession),
-      fb: {}, recs: {}, avail: {},
+      fb, recs, avail: {},
       net: { ...s.net, loading: false, error: null },
     }));
   } catch (e) {
     setState((s) => ({ net: { ...s.net, loading: false, error: msg(e) } }));
   }
 }
+
+/** Teacher app: assigned students, their tasks, and the review queue. */
+export async function loadTeacherData() {
+  if (get().me?.role !== 'teacher') return;
+  setState({ net: { ...get().net, loading: true, error: null } });
+  try {
+    const [st, a, sub] = await Promise.all([E.teacherStudents(), E.assignments(), E.submissions()]);
+    const tz = iana();
+    const reviews: ReviewItem[] = sub.results.map((x) => ({
+      id: String(x.id), taskId: String(x.assignment), student: x.student_name, sid: String(x.student), title: x.assignment_title,
+      range: rangeL({ s: x.surah, from: x.ayah_from, to: x.ayah_to }), dur: x.duration_seconds, url: x.audio?.url ?? null,
+      at: fmtRelative(x.created_at, tz), status: x.feedback ? 'reviewed' : 'submitted',
+    }));
+    setState((s) => ({
+      students: st.results.map(E.toStudent), tasks: a.results.map((x) => E.toTask(x, tz)), reviews,
+      net: { ...s.net, loading: false, error: null },
+    }));
+  } catch (e) {
+    setState((s) => ({ net: { ...s.net, loading: false, error: msg(e) } }));
+  }
+}
+
+export const loadData = () => (get().me?.role === 'teacher' ? loadTeacherData() : loadStudentData());
 
 /** On startup: restore the session (cookie on web, stored token on Android). */
 export async function bootstrap(): Promise<boolean> {
@@ -58,7 +92,7 @@ export async function bootstrap(): Promise<boolean> {
     if (u.role === 'admin') return false;
     applyUser(u);
     reset(homeFor(u.role), u.role);
-    await loadStudentData();
+    await loadData();
     return true;
   } catch {
     return false;
@@ -74,7 +108,7 @@ export async function login(email: string, password: string) {
     applyUser(r.user);
     up('login', { loading: false, pw: '' });
     reset(homeFor(r.user.role), r.user.role);
-    await loadStudentData();
+    await loadData();
   } catch (e) {
     const err = e as ApiError;
     const field = err.code === 'bad_credentials' || err.code === 'account_pending' || err.code === 'account_suspended' || err.code === 'admin_portal_only' ? 'email' : null;
@@ -122,12 +156,13 @@ export async function logout() {
   try { await E.logout(); } catch { /* signing out locally regardless */ }
   await setToken(null);
   resetCsrf();
-  setState({ me: null });
+  // Nothing from the previous account stays in memory.
+  setState({ me: null, tasks: [], sessions: [], fb: {}, recs: {}, avail: {}, reviews: null, students: [], teachers: [] });
 }
 
 export async function saveTimezone(id: TzId) {
   const zone = TZS.find((t) => t.id === id)!.iana;
-  try { applyUser(await E.updateMe({ timezone: zone })); await loadStudentData(); } catch (e) { toast(msg(e), 'alert'); }
+  try { applyUser(await E.updateMe({ timezone: zone })); await loadData(); } catch (e) { toast(msg(e), 'alert'); }
 }
 
 export async function startTask(id: string) {
@@ -194,6 +229,79 @@ export async function cancel(id: string) {
     await loadStudentData();
     toast('تم إلغاء الحجز');
   } catch (e) {
+    toast(msg(e), 'alert');
+  }
+}
+
+/* ---------------- recordings ---------------- */
+/**
+ * Uploads the recording, then submits it. The Idempotency-Key and the uploaded media id are kept
+ * on the recorder state, so "retry" after a failure never uploads twice or submits twice.
+ */
+export async function submitRecording() {
+  const r = get().rec;
+  const blob = media.recording.blob;
+  if (!r.mediaId && !blob) {
+    up('rec', { phase: 'failed', err: 'لا يوجد تسجيل صوتي حقيقي لرفعه. سجّل بالميكروفون ثم أعد المحاولة.' });
+    return;
+  }
+  const key = r.key ?? E.newIdempotencyKey();
+  up('rec', { phase: 'uploading', prog: 5, key, err: null });
+  try {
+    let mediaId = r.mediaId;
+    if (!mediaId) { mediaId = (await E.uploadRecitation(blob!, r.secs)).id; up('rec', { mediaId, prog: 70 }); }
+    const sub = await E.submit(+r.task, mediaId, key);
+    setState((s) => ({
+      rec: { ...s.rec, phase: 'success', prog: 100, key: null, mediaId: null },
+      tasks: s.tasks.map((t) => (t.id === r.task ? { ...t, status: 'submitted', at: 'الآن' } : t)),
+      recs: { ...s.recs, [r.task]: { dur: sub.duration_seconds, url: sub.audio?.url ?? media.recording.url } },
+    }));
+  } catch (e) {
+    const err = e as ApiError;
+    // A rejected file needs a new recording; a network/server error can be retried as is.
+    if (err.status >= 400 && err.status < 500 && err.code !== 'not_submittable') up('rec', { mediaId: null });
+    up('rec', { phase: 'failed', err: msg(e) });
+  }
+}
+
+/* ---------------- teacher ---------------- */
+export async function sendFeedback(v: ReviewDraft, r: ReviewItem) {
+  try {
+    await E.giveFeedback(+r.id, {
+      score_hifz: v.ratings.hifz, score_tajweed: v.ratings.tajweed, score_fluency: v.ratings.fluency,
+      decision: v.decision === 'approve' ? 'accept' : 'repeat', general: v.general.trim(), needs_review: v.needs.trim(),
+      next_step: '', notes: v.notes.map((n) => ({ at_seconds: n.t, text: n.text })),
+    });
+    back();
+    toast(`أُرسل التقييم إلى ${r.student}`);
+    await loadTeacherData();
+  } catch (e) {
+    const err = e as ApiError;
+    if (err.fields && Object.keys(err.fields).length) up('rv', { errors: { needs: err.field('needs_review') } });
+    toast(msg(e), 'alert');
+  }
+}
+
+const DUE_DAYS = { today: 0, tomorrow: 1, in3: 3, week: 7 } as const;
+
+export async function createAssignment(f: AssignForm) {
+  const tz = iana();
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date(Date.now() + DUE_DAYS[f.due] * 86_400_000));
+  const name = SUR[+f.s][0];
+  const stu = get().students.find((x) => x.id === f.sid);
+  try {
+    await E.createAssignment({
+      student: +f.sid, kind: f.type, title: f.type === 'tajweed' ? 'تجويد: سورة ' + name : `${typeL(f.type)} سورة ${name}`,
+      surah: +f.s, ayah_from: +f.from, ayah_to: +f.to, instructions: f.instr.trim(), due_at: zonedToIso(day, f.time || '21:00', tz),
+      requires_recording: f.needRec,
+    });
+    back();
+    toast(`أُرسل الواجب إلى ${stu?.name ?? 'الطالب'}`);
+    await loadTeacherData();
+  } catch (e) {
+    const err = e as ApiError;
+    up('af', { errors: { from: err.field?.('ayah_from') ?? null, to: err.field?.('ayah_to') ?? null } });
     toast(msg(e), 'alert');
   }
 }

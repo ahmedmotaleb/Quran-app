@@ -19,14 +19,15 @@ export interface Teacher {
 }
 
 export interface Student {
-  id: string; name: string; ini: string; age: number; level: string; plan: string; att: string; late?: boolean;
+  id: string; name: string; ini: string; /** 0 = unknown */ age: number; level: string; plan: string; att: string; late?: boolean;
+  /** Live mode: has an active guardian link. */ guardian?: boolean;
 }
 
 export interface Task {
   id: string; type: TaskType; title: string;
   /** Surah number */ s: number; from: number; to: number;
   due: string; status: TaskStatus; today?: boolean; instr: string; at?: string; isNew?: boolean;
-  /** Live mode: real instant + assigning teacher. */ dueAt?: string; teacherName?: string;
+  /** Live mode: real instant, assigning teacher, and (teacher app) the student. */ dueAt?: string; teacherName?: string; sid?: string;
 }
 
 export interface TimedNote { t: number; text: string }
@@ -36,6 +37,7 @@ export type Decision = 'approve' | 'redo';
 export interface Feedback {
   teacher: string; date: string; dur: number; scores: Scores; decision: Decision;
   notes: TimedNote[]; voice: number | null; general: string; needs: string; next: string;
+  /** Live mode: signed, short-lived URL of the teacher's voice note. */ voiceUrl?: string | null;
 }
 
 export interface Recording { dur: number; url?: string | null }

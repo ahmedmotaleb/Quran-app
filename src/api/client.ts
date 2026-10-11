@@ -14,6 +14,8 @@ export const LIVE = !!RAW_BASE;
 const BASE = (RAW_BASE ?? '').replace(/\/$/, '');
 export const IS_NATIVE = Capacitor.isNativePlatform();
 const TIMEOUT_MS = 15_000;
+/** Uploads get longer: a 10-minute recitation on a slow connection. */
+const UPLOAD_TIMEOUT_MS = 120_000;
 const TOKEN_KEY = 'halqa.auth.token';
 
 export class ApiError extends Error {
@@ -62,15 +64,16 @@ export function newIdempotencyKey(): string {
 
 async function raw(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<unknown> {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), body instanceof FormData ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS);
   const h: Record<string, string> = { Accept: 'application/json', ...headers };
-  if (body !== undefined) h['Content-Type'] = 'application/json';
+  const form = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (body !== undefined && !form) h['Content-Type'] = 'application/json';
   if (token) h.Authorization = `Bearer ${token}`;
   if (csrf && method !== 'GET') h['X-CSRFToken'] = csrf;
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
-      method, headers: h, body: body === undefined ? undefined : JSON.stringify(body), signal: ctrl.signal,
+      method, headers: h, body: body === undefined ? undefined : form ? (body as FormData) : JSON.stringify(body), signal: ctrl.signal,
       credentials: IS_NATIVE ? 'omit' : 'include',
     });
   } catch (e) {

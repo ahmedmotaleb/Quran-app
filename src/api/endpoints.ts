@@ -1,5 +1,5 @@
 /** Typed API calls and adapters from server records to the screens' data shapes. */
-import type { Session, Task, TaskStatus, Teacher } from '@/data/types';
+import type { Feedback, Session, Student, Task, TaskStatus, Teacher } from '@/data/types';
 import { fmtRelative } from '@/lib/time';
 import { api, newIdempotencyKey, type Page } from './client';
 
@@ -52,6 +52,40 @@ export const reschedule = (id: number, occurrence: number, key: string) =>
   api<ApiBooking>('POST', `bookings/${id}/reschedule`, { occurrence }, { idempotencyKey: key });
 export { newIdempotencyKey };
 
+// ---- recordings, submissions, feedback ----
+export interface SignedUrl { url: string; expires_at: string }
+export interface ApiMedia extends SignedUrl { id: string; duration_seconds: number }
+export interface ApiFeedback {
+  id: number; teacher: number; teacher_name: string; created_at: string; score_hifz: number; score_tajweed: number; score_fluency: number;
+  decision: 'accept' | 'repeat'; general: string; needs_review: string; next_step: string;
+  notes: { at_seconds: number; text: string }[]; voice: SignedUrl | null; voice_seconds: number | null;
+}
+export interface ApiSubmission {
+  id: number; assignment: number; assignment_title: string; kind: string; surah: number; ayah_from: number; ayah_to: number;
+  student: number; student_name: string; attempt: number; duration_seconds: number; created_at: string;
+  audio: SignedUrl | null; feedback: ApiFeedback | null;
+}
+export interface ApiTeacherStudent { id: number; full_name: string; level: string; birth_year: number | null; guardian_linked: boolean }
+
+export function uploadRecitation(blob: Blob, seconds: number) {
+  const f = new FormData();
+  const type = (blob.type || 'audio/webm').split(';')[0];
+  f.append('file', new File([blob], 'recitation', { type }));
+  f.append('duration_seconds', String(Math.max(1, Math.round(seconds))));
+  return api<ApiMedia>('POST', 'media/recitations', f);
+}
+export const submit = (assignment: number, media: string, key: string) =>
+  api<ApiSubmission>('POST', `assignments/${assignment}/submissions`, { media }, { idempotencyKey: key });
+export const submissions = (q = '') => api<Page<ApiSubmission>>('GET', `submissions?page_size=100${q}`);
+export const giveFeedback = (id: number, body: {
+  score_hifz: number; score_tajweed: number; score_fluency: number; decision: 'accept' | 'repeat';
+  general: string; needs_review: string; next_step: string; notes: { at_seconds: number; text: string }[];
+}) => api<ApiSubmission>('POST', `submissions/${id}/feedback`, body);
+export const teacherStudents = () => api<Page<ApiTeacherStudent>>('GET', 'teacher/students?page_size=100');
+export const createAssignment = (b: {
+  student: number; kind: string; title: string; surah: number; ayah_from: number; ayah_to: number; instructions: string; due_at: string; requires_recording: boolean;
+}) => api<ApiAssignment>('POST', 'assignments', b);
+
 // ---- adapters ----
 const STATUS: Record<ApiAssignment['status'], TaskStatus> = {
   not_started: 'not_started', in_progress: 'in_progress', submitted: 'submitted', accepted: 'reviewed', needs_repeat: 'needs_repeat',
@@ -61,7 +95,7 @@ export function toTask(a: ApiAssignment, tz: string): Task {
   return {
     id: String(a.id), type: a.kind, title: a.title, s: a.surah, from: a.ayah_from, to: a.ayah_to,
     due: fmtRelative(a.due_at, tz), dueAt: a.due_at, status: STATUS[a.status], instr: a.instructions || 'لا توجد توجيهات إضافية.',
-    today: fmtRelative(a.due_at, tz).startsWith('اليوم'), teacherName: a.teacher_name,
+    today: fmtRelative(a.due_at, tz).startsWith('اليوم'), teacherName: a.teacher_name, sid: String(a.student),
   };
 }
 
@@ -83,4 +117,20 @@ export function toSession(b: ApiBooking): Session {
     status: b.status === 'cancelled' ? 'cancelled' : past ? 'completed' : 'confirmed',
     task: b.assignment ? String(b.assignment) : null, note: b.note, startsAt: o.starts_at, endsAt: o.ends_at, canJoin: b.can_join,
   };
+}
+
+export function toFeedback(f: ApiFeedback, dur: number, tz: string): Feedback {
+  return {
+    teacher: String(f.teacher), date: fmtRelative(f.created_at, tz), dur,
+    scores: { hifz: f.score_hifz, tajweed: f.score_tajweed, fluency: f.score_fluency },
+    decision: f.decision === 'accept' ? 'approve' : 'redo',
+    notes: f.notes.map((n) => ({ t: n.at_seconds, text: n.text })),
+    voice: f.voice ? Math.round(f.voice_seconds ?? 0) || null : null, voiceUrl: f.voice?.url ?? null,
+    general: f.general || '—', needs: f.needs_review || 'لا يوجد', next: f.next_step || (f.decision === 'accept' ? 'انتقل إلى النطاق التالي في خطتك.' : 'أعد تسجيل المواضع المحددة وأرسلها للمعلم.'),
+  };
+}
+
+export function toStudent(u: ApiTeacherStudent): Student {
+  const age = u.birth_year ? new Date().getFullYear() - u.birth_year : 0;
+  return { id: String(u.id), name: u.full_name, ini: u.full_name.trim().charAt(0) || '؟', age, level: u.level || '—', plan: '—', att: '—', guardian: u.guardian_linked };
 }

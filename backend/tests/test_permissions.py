@@ -28,6 +28,9 @@ class TestObjectAccess:
         assert c.get(f"/api/v1/assignments/{a1.pk}").status_code == 200
         assert c.get(f"/api/v1/assignments/{a2.pk}").status_code == 404
         assert [s["id"] for s in c.get("/api/v1/teacher/students").json()["results"]] == [world.s1.pk]
+        row = c.get("/api/v1/teacher/students").json()["results"][0]
+        assert set(row) == {"id", "full_name", "level", "birth_year", "guardian_linked"}  # no emails or guardian identities
+        assert row["guardian_linked"] is True
 
     def test_teacher_cannot_assign_work_to_unassigned_student(self, world):
         body = {"student": world.s2.pk, "kind": "hifz", "title": "حفظ", "surah": 67, "ayah_from": 1, "ayah_to": 5,

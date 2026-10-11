@@ -45,3 +45,17 @@ export function dayLabel(iso: string, tz: string): string {
   const off = dayOffset(iso, tz);
   return off === 0 ? 'اليوم' : off === 1 ? 'غدًا' : fmtDay(iso, tz);
 }
+
+/** Wall-clock date ("YYYY-MM-DD") + time ("HH:MM") in an IANA zone → ISO instant (DST-safe). */
+export function zonedToIso(date: string, time: string, tz: string): string {
+  const [y, mo, d] = date.split('-').map(Number); const [hh, mm] = time.split(':').map(Number);
+  const wall = Date.UTC(y, mo - 1, d, hh, mm);
+  const offset = (t: number) => {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+      .formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute) - t;
+  };
+  let t = wall - offset(wall);
+  t = wall - offset(t);
+  return new Date(t).toISOString();
+}

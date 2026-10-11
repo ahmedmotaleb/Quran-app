@@ -3,8 +3,9 @@ import { Icon, type IconName } from '@/components/Icon';
 import {
   Avatar, BackHeader, Badge, Chips, FieldError, Ltr, PlayerBar, RecDot, SearchInput, Segmented, Switch, card, iconTile, inputStyle, labelStyle, muted, outlineBtn, primaryBtn, usePlayer,
 } from '@/components/ui';
-import { DAYS, STUDENTS, SUR, TODAY_LABEL } from '@/data/demo';
-import { fmt, scoreL, timeIn, typeIcon, tzLabel } from '@/lib/format';
+import { DAYS, SUR, TODAY_LABEL } from '@/data/demo';
+import { fmt, scoreL, timeIn, typeIcon, tzLabel, tzOf } from '@/lib/format';
+import { fmtDay } from '@/lib/time';
 import {
   go, openAssign, openReview, playerSeek, selectReviews, sendAssign, sendReview, setState, tab, toast, up, useApp, back,
   type AppState, type ReviewItem,
@@ -27,10 +28,10 @@ const TODAY_SESSIONS = [
 ];
 
 export function TeacherDash() {
-  const tz = useApp((s) => s.tz);
+  const tz = useApp((s) => s.tz); const live = useApp((s) => s.liveMode); const name = useApp((s) => s.user.name);
   const { pend, open } = useReviews();
   const tiles: { label: string; icon: IconName; click: () => void }[] = [
-    { label: 'أنشئ واجبًا', icon: 'plus', click: () => openAssign('u1') },
+    { label: 'أنشئ واجبًا', icon: 'plus', click: () => openAssign(live ? undefined : 'u1') },
     { label: 'محاضرة أو اختبار', icon: 'layers', click: () => go('tcontent') },
     { label: 'المواعيد', icon: 'cal', click: () => tab('tschedule') },
   ];
@@ -39,8 +40,8 @@ export function TeacherDash() {
       <header style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
         <img src="/assets/halqa-mark.png" alt={BRAND.ar} style={{ width: 38, height: 38, objectFit: 'contain' }} />
         <div style={{ flex: 1 }}>
-          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800 }}>مرحبًا، الشيخ عبدالرحمن</h1>
-          <p style={muted(13)}>{TODAY_LABEL.replace(' 2026', '')} · {tzLabel(tz)}</p>
+          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800 }}>مرحبًا، {live ? name : 'الشيخ عبدالرحمن'}</h1>
+          <p style={muted(13)}>{live ? fmtDay(new Date().toISOString(), tzOf(tz).iana) : TODAY_LABEL.replace(' 2026', '')} · {tzLabel(tz)}</p>
         </div>
       </header>
       <section style={{ background: color.primary, color: color.ivory, borderRadius: 20, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -60,7 +61,8 @@ export function TeacherDash() {
         ))}
         {pend.length > 0 && <button onClick={() => tab('treviews')} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.ivory, fontSize: 14, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>عرض كل المراجعات</button>}
       </section>
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* Today's sessions for teachers are not served by the API yet; live mode omits the sample list. */}
+      {!live && <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>جلسات اليوم</h2>
         {TODAY_SESSIONS.map((x, i) => (
           <div key={x.stu} style={{ ...card, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -72,7 +74,7 @@ export function TeacherDash() {
             {i === 0 && <button onClick={() => go('live', { id: x.sid || 's1' })} style={primaryBtn(44, 14, { padding: '0 14px', borderRadius: 12 })}>ابدأ</button>}
           </div>
         ))}
-      </section>
+      </section>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
         {tiles.map((t) => (
           <button key={t.label} onClick={t.click} style={{ minHeight: 84, borderRadius: 16, border: `1px solid ${color.border}`, background: color.card, color: color.primary, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
@@ -88,13 +90,13 @@ export function TeacherDash() {
 export function TeacherStudents() {
   const s = useApp(); const { pend } = useReviews();
   const subIds = pend.map((r) => r.sid); const sq = s.stuQ.trim();
-  const list = STUDENTS.filter((u) => (!sq || u.name.includes(sq)) && (s.stuF === 'all' || (s.stuF === 'sub' && subIds.includes(u.id)) || (s.stuF === 'late' && u.late) || u.level === s.stuF));
+  const list = s.students.filter((u) => (!sq || u.name.includes(sq)) && (s.stuF === 'all' || (s.stuF === 'sub' && subIds.includes(u.id)) || (s.stuF === 'late' && u.late) || u.level === s.stuF));
   return (
     <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>الطلاب</h1>
       <SearchInput value={s.stuQ} onChange={(v) => setState({ stuQ: v })} placeholder="ابحث باسم الطالب" />
       <Chips scroll options={[['all', 'الكل'], ['sub', 'لديه تسليم'], ['late', 'متأخر'], ['مبتدئ', 'مبتدئ'], ['متوسط', 'متوسط'], ['متقدم', 'متقدم']] as const} value={s.stuF} onChange={(k) => setState({ stuF: k })} wrapStyle={{ paddingBottom: 0 }} />
-      <p style={muted(13)}>{list.length} من {STUDENTS.length} طالب</p>
+      <p style={muted(13)}>{list.length} من {s.students.length} طالب</p>
       {list.length === 0 && (
         <div style={{ textAlign: 'center', padding: 20, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
           <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>لا يوجد طلاب مطابقون</p>
@@ -120,11 +122,13 @@ export function TeacherStudents() {
 
 export function TeacherStudent() {
   const s = useApp(); const { revs, open } = useReviews(); const evals = useEvals();
-  const u = STUDENTS.find((x) => x.id === s.params.id) || STUDENTS[0];
-  const isY = u.id === 'u1';
+  const u = s.students.find((x) => x.id === s.params.id) || s.students[0];
+  if (!u) return <BackHeader title="ملف الطالب" sticky />;
+  const live = s.liveMode;
+  const isY = live || u.id === 'u1';
   const recs = revs.filter((r) => r.sid === u.id);
   const tasks = isY
-    ? s.tasks.filter((t) => t.status !== 'reviewed').map((t) => ({ id: t.id, title: t.title, range: `سورة ${SUR[t.s]?.[0] ?? ''} · الآيات ${t.from}–${t.to}`, kind: t.status, icon: typeIcon(t.type),
+    ? s.tasks.filter((t) => t.status !== 'reviewed' && (!live || t.sid === u.id)).map((t) => ({ id: t.id, title: t.title, range: `سورة ${SUR[t.s]?.[0] ?? ''} · الآيات ${t.from}–${t.to}`, kind: t.status, icon: typeIcon(t.type),
       open: () => { const r = revs.find((rr) => rr.taskId === t.id && rr.status === 'submitted'); if (r) open(r); else toast('لا يوجد تسليم لهذه المهمة بعد', 'clock'); } }))
     : [{ id: 'x', title: u.plan, range: 'الواجب الحالي', kind: 'in_progress' as const, icon: 'book' as IconName, open: () => toast('بيانات عرض مختصرة لهذا الطالب', 'clock') }];
 
@@ -136,17 +140,18 @@ export function TeacherStudent() {
           <Avatar ini={u.ini} size={64} fs={26} />
           <div>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{u.name}</h2>
-            <p style={{ margin: '3px 0 0', fontSize: 14, color: color.body }}>{u.age} سنة · المستوى {u.level}</p>
-            <p style={muted(12, { margin: '2px 0 0' })}>ولي الأمر: {isY || u.id === 'u2' ? 'أحمد العلي (مرتبط)' : 'غير مرتبط'}</p>
+            <p style={{ margin: '3px 0 0', fontSize: 14, color: color.body }}>{u.age ? `${u.age} سنة · ` : ''}المستوى {u.level}</p>
+            <p style={muted(12, { margin: '2px 0 0' })}>ولي الأمر: {live ? (u.guardian ? 'مرتبط' : 'غير مرتبط') : isY || u.id === 'u2' ? 'أحمد العلي (مرتبط)' : 'غير مرتبط'}</p>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        {!live && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div style={{ ...card, borderRadius: 14, padding: 12 }}><p style={muted(12)}>الحضور</p><p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 800 }}>{u.att}</p></div>
           <div style={{ ...card, borderRadius: 14, padding: 12 }}><p style={muted(12)}>الخطة الحالية</p><p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 700 }}>{u.plan}</p></div>
-        </div>
+        </div>}
         <button onClick={() => openAssign(u.id)} style={primaryBtn(52, 16)}><Icon name="plus" /> أنشئ واجبًا لـ {u.name}</button>
         <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>الخطة</h3>
+          {tasks.length === 0 && <p style={muted(14)}>لا توجد مهام مفتوحة.</p>}
           {tasks.map((t) => (
             <button key={t.id} onClick={t.open} style={{ ...card, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'right', cursor: 'pointer', color: color.ink }}>
               <span style={{ color: color.primary }}><Icon name={t.icon} /></span>
@@ -165,7 +170,7 @@ export function TeacherStudent() {
             </button>
           ))}
         </section>
-        {isY && (
+        {isY && !live && (
           <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>التقييمات</h3>
             {evals.map((e) => (
@@ -183,10 +188,10 @@ export function TeacherStudent() {
 
 /* ---------------- Create assignment ---------------- */
 export function TeacherAssign() {
-  const f = useApp((s) => s.af); const tz = useApp((s) => s.tz);
+  const f = useApp((s) => s.af); const tz = useApp((s) => s.tz); const students = useApp((s) => s.students);
   if (!f) return <BackHeader title="واجب جديد" sticky />;
   const max = SUR[+f.s][1];
-  const stu = STUDENTS.find((x) => x.id === f.sid)!;
+  const stu = students.find((x) => x.id === f.sid);
   const sel = { ...inputStyle(false), padding: '0 14px' };
   return (
     <div>
@@ -195,7 +200,7 @@ export function TeacherAssign() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label htmlFor="af-stu" style={labelStyle}>الطالب</label>
           <select id="af-stu" value={f.sid} onChange={(e) => up('af', { sid: e.target.value })} style={sel}>
-            {STUDENTS.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            {students.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -237,7 +242,7 @@ export function TeacherAssign() {
           <span style={{ fontSize: 15 }}>يتطلب تسجيل تلاوة</span>
           <Switch on={f.needRec} label="يتطلب تسجيل تلاوة" onToggle={() => up('af', { needRec: !f.needRec })} />
         </div>
-        <button onClick={sendAssign} style={primaryBtn()}>إرسال الواجب إلى {stu.name}</button>
+        <button onClick={sendAssign} style={primaryBtn()}>إرسال الواجب إلى {stu?.name ?? 'الطالب'}</button>
       </div>
     </div>
   );
@@ -346,6 +351,7 @@ export function TeacherReview() {
           <label htmlFor="rv-gen" style={{ fontSize: 15, fontWeight: 700 }}>ملاحظة عامة</label>
           <textarea id="rv-gen" rows={3} value={V.general} onChange={(e) => up('rv', { general: e.target.value })} style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15, resize: 'vertical' }} />
         </div>
+        {s.liveMode ? <p style={muted(12)}>الملاحظات الصوتية للمعلم لم تُفعَّل في التطبيق بعد؛ استخدم الملاحظات المكتوبة على التوقيت.</p> : <>
         <div style={{ ...card, borderRadius: 14, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, minHeight: 64 }}>
           {!V.voiceRec && !V.voice && (
             <button onClick={() => up('rv', { voiceRec: true, voiceSecs: 0 })} style={{ flex: 1, minHeight: 44, border: 'none', background: 'transparent', color: color.primary, fontSize: 15, fontWeight: 700, display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}><Icon name="mic" /> سجّل ملاحظة صوتية (اختياري)</button>
@@ -365,6 +371,7 @@ export function TeacherReview() {
           )}
         </div>
         <p style={muted(12)}>الملاحظة الصوتية محاكاة داخل النموذج — لا يُلتقط صوت فعلي.</p>
+        </>}
         <button onClick={sendReview} style={primaryBtn()}><Icon name="check" /> إرسال التقييم للطالب</button>
       </div>
     </div>

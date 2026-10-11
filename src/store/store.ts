@@ -4,7 +4,7 @@ import {
   type Screen,
 } from '@/data/demo';
 import type {
-  Availability, Decision, Feedback, OtherSubmission, Recording, Role, Scores, Session, SurahData, SurahListItem, Task, TaskStatus, TaskType, Teacher, TimedNote, TzId,
+  Availability, Decision, Feedback, OtherSubmission, Recording, Role, Scores, Session, SurahData, SurahListItem, Student, Task, TaskStatus, TaskType, Teacher, TimedNote, TzId,
 } from '@/data/types';
 import { rangeL, typeL } from '@/lib/format';
 import { ayahAudioUrl, fetchSurah, fetchSurahList } from '@/services/quran';
@@ -45,12 +45,18 @@ export interface MushafState {
   list: SurahListItem[] | null; listQ: string; listErr: boolean; flash: number | null;
 }
 
+/** Live recorder state: the retry-safe submission key and the already-uploaded file. */
+const REC_LIVE = { live: LIVE, key: null as string | null, mediaId: null as string | null, err: null as string | null };
+
 const initial = () => ({
   /** True when a backend is configured (VITE_API_BASE_URL); demo data otherwise. */
   liveMode: LIVE,
   me: null as Me | null,
   net: { loading: false, error: null as string | null },
   teachers: [...TEACHERS] as Teacher[],
+  students: [...STUDENTS] as Student[],
+  /** Live mode: the teacher's review queue from the API (demo derives it from tasks). */
+  reviews: null as ReviewItem[] | null,
   role: null as Role | null,
   screen: 'splash' as Screen,
   params: {} as Params,
@@ -82,7 +88,7 @@ const initial = () => ({
     /** Live mode: request state and the Idempotency-Key for the chosen slot. */
     loading: false, busy: false, key: null as null | { occ: number; key: string },
   },
-  rec: { phase: 'idle' as RecPhase, secs: 0, task: 'k1', demo: false, prog: 0 },
+  rec: { phase: 'idle' as RecPhase, secs: 0, task: 'k1', demo: false, prog: 0, ...REC_LIVE },
   player: { key: null as string | null, pos: 0, dur: 0, playing: false },
   m: { surah: 67, data: null, loading: false, error: false, from: 1, to: 10, font: 26, bookmark: null, playing: false, cur: null, repeat: 1, rep: 0, jump: '', list: null, listQ: '', listErr: false, flash: null } as MushafState,
   live: { phase: 'waiting' as LivePhase, mic: true, cam: true, secs: 0, count: 272, attempt: 0, taskOpen: true, c: 0 },
@@ -173,7 +179,7 @@ function onEnter(screen: Screen, p: Params) {
   }
   if (screen === 'record') {
     media.discardRecorder();
-    set((s) => ({ rec: { phase: 'idle', secs: 0, task: p.task || s.rec.task || 'k1', demo: false, prog: 0 } }));
+    set((s) => ({ rec: { phase: 'idle', secs: 0, task: p.task || s.rec.task || 'k1', demo: false, prog: 0, ...REC_LIVE } }));
   }
   if (screen === 'live') set({ live: { phase: 'waiting', mic: true, cam: true, secs: 0, count: 272, attempt: 0, taskOpen: true, c: 0 } });
 }
@@ -200,7 +206,10 @@ export function tick() {
   }
   const r = s.rec;
   if (r.phase === 'recording') o.rec = { ...r, secs: r.secs + 0.25 };
-  if (r.phase === 'uploading') {
+  if (r.phase === 'uploading' && s.liveMode) {
+    // Real upload: creep towards 90% until the server answers (fetch has no upload progress).
+    if (r.prog < 90) o.rec = { ...r, prog: r.prog + (90 - r.prog) * 0.04 };
+  } else if (r.phase === 'uploading') {
     const prog = Math.min(100, r.prog + 7);
     if (prog >= 100) {
       if (s.sim.uploadFail) o.rec = { ...r, prog: 100, phase: 'failed' };
@@ -287,10 +296,7 @@ export function resetRec() { media.discardRecorder(); up('rec', { phase: 'idle',
 export function submitRec() {
   media.stopPlayback(); up('player', { playing: false });
   if (get().ds === 'offline') { up('rec', { phase: 'failed' }); return; }
-  if (get().liveMode) {
-    // Honest: uploads need the private object storage (Prompt 13), which is not configured yet.
-    up('rec', { phase: 'failed' }); toast('رفع التسجيلات غير مفعّل على الخادم بعد. احتفظ بالتسجيل وحاول لاحقًا.', 'alert'); return;
-  }
+  if (get().liveMode) { live.submitRecording(); return; }
   up('rec', { phase: 'uploading', prog: 0 });
 }
 
@@ -467,6 +473,7 @@ export interface ReviewItem {
 }
 /** All submissions visible to the teacher: Yousef's live tasks + other demo students. Pending first. */
 export function selectReviews(s: AppState): ReviewItem[] {
+  if (s.liveMode) return s.reviews ?? [];
   const mine: ReviewItem[] = s.tasks.filter((t) => t.status === 'submitted' || t.status === 'reviewed').map((t) => ({
     id: 'y-' + t.id, taskId: t.id, student: 'يوسف أحمد', sid: 'u1', title: t.title, range: rangeL(t),
     dur: s.recs[t.id]?.dur || 120, url: s.recs[t.id]?.url, at: t.at || 'أمس', status: t.status as 'submitted' | 'reviewed',
@@ -484,6 +491,7 @@ export function sendReview() {
   if (v.decision === 'redo' && !v.needs.trim()) e.needs = 'حدّد ما يحتاج الطالب إلى إعادته';
   if (Object.keys(e).length) { up('rv', { errors: e }); toast('أكمل الحقول المطلوبة قبل الإرسال', 'alert'); return; }
   const r = selectReviews(s).find((x) => x.id === v.rid)!;
+  if (LIVE) { live.sendFeedback(v, r); return; }
   if (r.taskId) {
     const taskId = r.taskId;
     set((st) => ({
@@ -519,7 +527,7 @@ export function simEval() {
 /* Assignment                                                           */
 /* ------------------------------------------------------------------ */
 export function openAssign(sid?: string) {
-  set({ af: { sid: sid || 'u1', type: 'hifz', s: '67', from: '', to: '', due: 'tomorrow', time: '21:00', instr: '', needRec: true, errors: {} } });
+  set({ af: { sid: sid || (LIVE ? get().students[0]?.id ?? '' : 'u1'), type: 'hifz', s: '67', from: '', to: '', due: 'tomorrow', time: '21:00', instr: '', needRec: true, errors: {} } });
   go('tassign');
 }
 export function sendAssign() {
@@ -528,6 +536,7 @@ export function sendAssign() {
   if (!a || a < 1) e.from = 'أدخل رقم آية البداية'; else if (a > max) e.from = `السورة تحتوي ${max} آية فقط`;
   if (!b || b < 1) e.to = 'أدخل رقم آية النهاية'; else if (b > max) e.to = `السورة تحتوي ${max} آية فقط`; else if (a && b < a) e.to = 'يجب أن تكون النهاية بعد البداية';
   if (Object.keys(e).length) { up('af', { errors: e }); return; }
+  if (LIVE) { if (f.sid) live.createAssignment(f); else toast('لا يوجد طلاب مرتبطون بك بعد', 'alert'); return; }
   const stu = STUDENTS.find((x) => x.id === f.sid)!;
   const due = { today: 'اليوم، 9:00 م', tomorrow: 'غدًا، 9:00 م', in3: 'الأربعاء 14 أكتوبر', week: 'الأحد 18 أكتوبر' }[f.due];
   const name = SUR[+f.s][0];

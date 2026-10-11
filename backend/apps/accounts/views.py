@@ -30,7 +30,7 @@ from .permissions import IsAdminRole, IsLearningUser, IsParent, IsStudent, IsTea
 from .serializers import (
     AcceptInvitationSerializer, AdminCreateUserSerializer, AdminUserSerializer, GuardianLinkSerializer, InvitationCreateSerializer,
     LoginSerializer, MeSerializer, OnboardingSerializer, RegisterSerializer, StatusChangeSerializer, TeacherAssignmentSerializer,
-    TeacherPublicSerializer, arabic_password_error,
+    TeacherPublicSerializer, TeacherStudentSerializer, arabic_password_error,
 )
 
 log = logging.getLogger(__name__)
@@ -455,11 +455,11 @@ class TeacherDetail(generics.RetrieveAPIView):
 
 class MyStudents(generics.ListAPIView):
     permission_classes = [IsTeacher]
-    serializer_class = AdminUserSerializer
+    serializer_class = TeacherStudentSerializer
 
     def get_queryset(self):
-        return User.objects.filter(pk__in=assigned_student_ids(self.request.user)).prefetch_related(
-            "teacher_assignments__teacher", "guardians__guardian", "guardian_links__student").order_by("full_name")
+        return User.objects.filter(pk__in=assigned_student_ids(self.request.user)).select_related("student_profile").prefetch_related(
+            "guardians").order_by("full_name")
 
 
 class MyChildren(generics.ListAPIView):

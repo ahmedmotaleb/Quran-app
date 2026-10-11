@@ -16,7 +16,7 @@ export default function Home() {
   const next = upcomingSessions(s)[0];
   const hifz = homeHifz(s);
   const rev = s.tasks.find((t) => t.today && t.type === 'review');
-  const newFb = s.tasks.find((t) => t.status === 'reviewed' && s.fb[t.id]?.date === 'اليوم');
+  const newFb = s.tasks.find((t) => t.status === 'reviewed' && s.fb[t.id]?.date.startsWith('اليوم'));
 
   const hifzAction = hifz && (hifz.status === 'submitted' ? 'عرض التسليم' : hifz.status === 'reviewed' ? 'عرض التقييم' : 'سجّل تلاوتك');
   const hifzGo = () => hifz && (hifz.status === 'reviewed' ? go('feedback', { id: hifz.id }) : hifz.status === 'submitted' ? go('task', { id: hifz.id }) : go('record', { task: hifz.id }));

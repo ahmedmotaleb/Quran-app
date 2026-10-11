@@ -1,6 +1,6 @@
 /**
  * Browser media: the shared playback element, Mushaf ayah audio, and the real
- * microphone recorder (MediaRecorder). Uploading is NOT real — see store.submitRec.
+ * microphone recorder (MediaRecorder). Uploads: demo mode simulates; live mode sends the blob (store.submitRec).
  */
 
 /** The single <audio> used by every PlayerBar that has a real URL (recordings). */
@@ -27,7 +27,7 @@ let mr: MediaRecorder | null = null;
 let stream: MediaStream | null = null;
 let chunks: Blob[] = [];
 /** Object URL of the last finished recording (null for demo recordings). */
-export const recording: { url: string | null } = { url: null };
+export const recording: { url: string | null; blob: Blob | null } = { url: null, blob: null };
 
 export function recorderSupported() {
   return typeof navigator.mediaDevices?.getUserMedia === 'function' && typeof window.MediaRecorder !== 'undefined';
@@ -44,6 +44,7 @@ export async function startRecorder(onStop: () => void) {
   r.onstop = () => {
     const b = new Blob(chunks, { type: r.mimeType || 'audio/webm' });
     recording.url = b.size ? URL.createObjectURL(b) : null;
+    recording.blob = b.size ? b : null;
     s.getTracks().forEach((t) => t.stop());
     onStop();
   };
@@ -59,6 +60,6 @@ export function stopRecorder(): boolean {
 export function discardRecorder() {
   try { if (mr && mr.state !== 'inactive') { mr.onstop = null; mr.stop(); } } catch { /* ignore */ }
   stream?.getTracks().forEach((t) => t.stop());
-  mr = null; stream = null; recording.url = null;
+  mr = null; stream = null; recording.url = null; recording.blob = null;
   if (playback.el) { playback.el.pause(); playback.el = null; }
 }

@@ -128,8 +128,8 @@ export function TaskDetail() {
         )}
         <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10, position: 'sticky', bottom: 0, background: color.ivory, padding: '10px 0 4px' }}>
           {canRec && <button onClick={() => go('record', { task: t.id })} style={primaryBtn()}><Icon name="mic" /> سجّل تلاوتك</button>}
-          {t.status === 'reviewed' && !s.fb[t.id] && <p style={muted(13, { textAlign: 'center' })}>اعتمد المعلم هذه المهمة. عرض تفاصيل التقييم داخل التطبيق لم يُفعَّل بعد.</p>}
-          {t.status === 'reviewed' && s.fb[t.id] && <button onClick={() => go('feedback', { id: t.id })} style={primaryBtn()}><Icon name="award" /> عرض تقييم المعلم</button>}
+          {(t.status === 'reviewed' || t.status === 'needs_repeat') && !s.fb[t.id] && <p style={muted(13, { textAlign: 'center' })}>اعتمد المعلم هذه المهمة. عرض تفاصيل التقييم داخل التطبيق لم يُفعَّل بعد.</p>}
+          {(t.status === 'reviewed' || t.status === 'needs_repeat') && s.fb[t.id] && <button onClick={() => go('feedback', { id: t.id })} style={primaryBtn()}><Icon name="award" /> عرض تقييم المعلم</button>}
           <button onClick={() => go('mushaf', { s: t.s, from: t.from, to: t.to })} style={sageBtn()}><Icon name="book" /> افتح النطاق في المصحف</button>
         </div>
       </div>

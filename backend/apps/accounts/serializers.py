@@ -189,3 +189,18 @@ class TeacherProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = TeacherProfile
         fields = ["specialization", "bio", "audience", "levels", "tags", "offers_individual", "offers_group"]
+
+
+class TeacherStudentSerializer(serializers.ModelSerializer):
+    """What a teacher needs about an assigned student — no contact details or guardian identities."""
+
+    level = serializers.CharField(source="student_profile.level", read_only=True, default="")
+    birth_year = serializers.IntegerField(source="student_profile.birth_year", read_only=True, default=None)
+    guardian_linked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "full_name", "level", "birth_year", "guardian_linked"]
+
+    def get_guardian_linked(self, u) -> bool:
+        return any(g.status == "active" for g in u.guardians.all())

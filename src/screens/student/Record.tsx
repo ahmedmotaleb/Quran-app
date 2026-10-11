@@ -69,7 +69,7 @@ export default function Record() {
             <button onClick={startRec} aria-label="ابدأ التسجيل" style={{ width: 84, height: 84, borderRadius: '50%', border: 'none', background: color.primary, color: color.ivory, display: 'grid', placeItems: 'center', cursor: 'pointer', boxShadow: `0 0 0 8px ${color.sage}` }}><Icon name="mic" size={30} /></button>
             <p style={{ margin: '6px 0 0', fontSize: 15, fontWeight: 700 }}>ابدأ التسجيل</p>
             <p style={muted(13)}>اختر مكانًا هادئًا، وسجّل النطاق كاملًا دون النظر.</p>
-            <button onClick={demoRec} style={linkBtn(14, { textDecoration: 'underline' })}>استخدم تسجيلًا تجريبيًا بدون ميكروفون</button>
+            {!R.live && <button onClick={demoRec} style={linkBtn(14, { textDecoration: 'underline' })}>استخدم تسجيلًا تجريبيًا بدون ميكروفون</button>}
           </div>
         )}
         {ph === 'requesting' && <div style={{ display: 'flex', justifyContent: 'center' }}><Spinner /></div>}
@@ -104,7 +104,7 @@ export default function Record() {
               <li>افتح إعدادات التطبيق أو المتصفح.</li><li>اختر «الأذونات» ثم «الميكروفون».</li><li>اسمح لتطبيق {BRAND.ar} بالوصول، ثم عد وحاول مجددًا.</li>
             </ol>
             <button onClick={startRec} style={primaryBtn(54, 16)}>حاول مرة أخرى</button>
-            <button onClick={demoRec} style={outlineBtn(52, 15)}>تابع بتسجيل تجريبي</button>
+            {!R.live && <button onClick={demoRec} style={outlineBtn(52, 15)}>تابع بتسجيل تجريبي</button>}
           </div>
         )}
         {ph === 'empty' && (
@@ -124,7 +124,7 @@ export default function Record() {
           </div>
         )}
         {ph === 'failed' && (
-          <StatusBlock role="alert" icon="upload" iconBg={color.dangerBg} iconFg={color.dangerInk} title="تعذّر رفع التسجيل. حاول مرة أخرى" body={`تسجيلك (${durL}) محفوظ على الجهاز ولن يُفقد.`}>
+          <StatusBlock role="alert" icon="upload" iconBg={color.dangerBg} iconFg={color.dangerInk} title="تعذّر رفع التسجيل. حاول مرة أخرى" body={R.err ?? `تسجيلك (${durL}) محفوظ على الجهاز ولن يُفقد.`}>
             <button onClick={submitRec} style={primaryBtn(54, 16, { padding: '0 28px' })}><Icon name="refresh" /> إعادة المحاولة</button>
             <button onClick={back} style={linkBtn(15, { minHeight: 48 })}>لاحقًا</button>
           </StatusBlock>
@@ -134,7 +134,7 @@ export default function Record() {
             <span style={{ width: 80, height: 80, borderRadius: '50%', background: color.primary, color: color.ivory, display: 'grid', placeItems: 'center', boxShadow: `0 0 0 10px ${color.sage}` }}><Icon name="check" size={30} /></span>
             <h2 style={{ margin: '12px 0 0', fontSize: 22, fontWeight: 800 }}>تم تسليم تلاوتك</h2>
             <p style={{ margin: 0, fontSize: 15, color: color.body, lineHeight: 1.7 }}>{taskL} · {durL}<br />حالة المهمة الآن: تم التسليم. سيصلك إشعار عند تقييم المعلم.</p>
-            <p style={{ margin: 0, fontSize: 12, color: color.muted, background: color.sand, padding: '6px 12px', borderRadius: 999 }}>تسليم تجريبي داخل النموذج — لم يُرفع أي ملف إلى خادم</p>
+            <p style={{ margin: 0, fontSize: 12, color: color.muted, background: color.sand, padding: '6px 12px', borderRadius: 999 }}>{R.live ? 'رُفع التسجيل إلى الخادم ويراه معلمك فقط.' : 'تسليم تجريبي داخل النموذج — لم يُرفع أي ملف إلى خادم'}</p>
             <div style={{ display: 'flex', gap: 10, width: '100%', marginTop: 8 }}>
               <button onClick={() => reset('home', 'student')} style={outlineBtn(52, 15, { flex: 1 })}>الرئيسية</button>
               <button onClick={back} style={primaryBtn(52, 15, { flex: 1 })}>عرض المهمة</button>

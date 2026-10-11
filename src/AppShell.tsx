@@ -85,7 +85,8 @@ function DataStateView({ screen, ds }: { screen: Screen; ds: Exclude<DataState, 
   );
 }
 
-const SAMPLE_SCREENS: Screen[] = ['feedback', 'live', 'lesson', 'quiz', 'progress'];
+// Teacher: students, assignments and reviews are live; today's sessions, schedule and content are not yet.
+const SAMPLE_SCREENS: Screen[] = ['live', 'lesson', 'quiz', 'progress', 'tschedule', 'tcontent'];
 
 /**
  * The phone UI. `framed` renders the fake status bar + home indicator used inside the
@@ -104,7 +105,7 @@ export default function AppShell({ framed }: { framed: boolean }) {
   const Cur = SCREENS[screen];
   const liveMode = useApp((s) => s.liveMode);
   // Live mode: screens whose data is not served by the API yet keep the design's sample content, labelled as such.
-  const sample = liveMode && (role === 'teacher' || role === 'parent' || SAMPLE_SCREENS.includes(screen));
+  const sample = liveMode && (role === 'parent' || SAMPLE_SCREENS.includes(screen));
 
   return (
     <div style={{ height: '100%', overflow: 'hidden', background: dark ? color.liveBg : color.ivory, display: 'flex', flexDirection: 'column', position: 'relative', paddingTop: framed ? 0 : 'env(safe-area-inset-top)' }}>

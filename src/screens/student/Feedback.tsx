@@ -10,7 +10,7 @@ export default function Feedback() {
   const id = s.params.id!;
   const t = s.tasks.find((x) => x.id === id);
   const f = s.fb[id];
-  const voice = usePlayer('voice-' + id, f?.voice || 0, null);
+  const voice = usePlayer('voice-' + id, f?.voice || 0, f?.voiceUrl ?? null);
   if (!t || !f) return <BackHeader title="تقييم المعلم" sticky />;
   const th = teacherById(f.teacher);
   const approved = f.decision === 'approve';
