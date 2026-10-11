@@ -1,7 +1,15 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import AppShell from './AppShell';
 import DemoPanel from './demo/DemoPanel';
 import { startSplash, tick, useApp } from './store/store';
+
+const AdminApp = lazy(() => import('./admin/AdminApp'));
+
+function useHash() {
+  const [h, setH] = useState(() => window.location.hash);
+  useEffect(() => { const on = () => setH(window.location.hash); window.addEventListener('hashchange', on); return () => window.removeEventListener('hashchange', on); }, []);
+  return h;
+}
 
 const FRAME_QUERY = '(min-width: 760px)';
 
@@ -14,11 +22,17 @@ function useMedia(q: string) {
   return m;
 }
 
+/** `#/admin` opens the desktop admin portal; everything else is the mobile app. */
+export default function App() {
+  const isAdmin = useHash().startsWith('#/admin');
+  return isAdmin ? <Suspense fallback={null}><AdminApp /></Suspense> : <MobileApp />;
+}
+
 /**
  * On wide screens the app is shown inside a device frame next to the prototype panel
  * (mirrors the Claude Design prototype). On phones it renders full-screen.
  */
-export default function App() {
+function MobileApp() {
   const framed = useMedia(FRAME_QUERY);
   const device = useApp((s) => s.device);
 

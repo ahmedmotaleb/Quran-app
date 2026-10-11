@@ -4,12 +4,7 @@ import { Icon } from '@/components/Icon';
 import { BackButton, FieldError, Spinner, inputStyle, labelStyle, linkBtn, muted, outlineBtn, primaryBtn, Chips, Segmented } from '@/components/ui';
 import { DAYS, DEMO_PASSWORD } from '@/data/demo';
 import { tzLabel } from '@/lib/format';
-import { back, doForgot, doLogin, doSignup, go, obNext, openSheet, reset, setState as set, skipSplash, up, useApp } from '@/store/store';
-
-const ADMIN_INFO = {
-  kind: 'info' as const, title: 'بوابة الإدارة',
-  body: 'تدخل الإدارة من بوابة ديسكتوب منفصلة بحساب ذي صلاحيات إدارية. لوحة الإدارة خارج نطاق هذا التطبيق حاليًا.',
-};
+import { back, doForgot, doLogin, doSignup, go, obNext, reset, setState as set, skipSplash, up, useApp } from '@/store/store';
 
 export function Splash() {
   return (
@@ -97,7 +92,7 @@ export function Login() {
       </div>
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
         <p style={muted(15)}>ليس لديك حساب؟ <button type="button" onClick={() => go('signup')} style={linkBtn(15, { fontWeight: 800, padding: '0 4px' })}>أنشئ حساب طالب</button></p>
-        <button type="button" onClick={() => openSheet(ADMIN_INFO)} style={{ fontSize: 13, color: color.muted, minHeight: 44, display: 'flex', alignItems: 'center', border: 'none', background: 'transparent', textDecoration: 'underline', cursor: 'pointer' }}>دخول الإدارة</button>
+        <button type="button" onClick={() => { window.location.hash = '#/admin'; }} style={{ fontSize: 13, color: color.muted, minHeight: 44, display: 'flex', alignItems: 'center', border: 'none', background: 'transparent', textDecoration: 'underline', cursor: 'pointer' }}>دخول الإدارة</button>
       </div>
     </form>
   );

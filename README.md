@@ -19,6 +19,21 @@ full-screen and respects the safe areas.
 Demo accounts (password `halqa123`): `yousef@halqa.app` (student), `teacher@halqa.app`,
 `parent@halqa.app`. Public sign-up only ever creates a student account.
 
+## Admin portal (`#/admin`)
+
+The desktop admin portal has its own sign-in (`admin@halqa.app` / `halqa123`). Admin
+accounts can't sign in to the mobile app, and other accounts can't sign in to the portal.
+You reach it from «دخول الإدارة» on the login screen, or from the demo panel. Sections:
+- **Overview:** KPIs and pending actions.
+- **Users & linking:** search, role and status filters, pagination over about 190 demo
+  accounts, approve-and-link (pick a teacher and a parent, or a parent's children; both
+  sides of a link stay in sync), add/edit user, suspend/reactivate.
+- **Teachers:** approve, reject, suspend.
+- **Content:** publish, return to teacher, unpublish.
+- **Subscriptions:** activate, plus an expired filter.
+
+On narrow screens the sidebar stacks above the content, and tables scroll sideways.
+
 ## What is real and what is simulated
 
 | Real | Simulated (labelled in the UI) |
@@ -45,6 +60,7 @@ src/
   screens/auth|student|teacher|parent/
   AppShell.tsx           status bar, nav, data-state views, toast, bottom sheet
   demo/DemoPanel.tsx     prototype control panel (desktop only)
+  admin/                 admin portal: data, store, UI (lazy-loaded)
 ```
 
 Times are stored in Riyadh time (the demo's equivalent of UTC) and shown in the user's
@@ -57,11 +73,13 @@ See `project/HANDOFF.md` for the suggested entities. The parts that need a backe
 authentication and role-based routing, recording upload (`store.submitRec`), booking
 persistence and slot locking (`store.confirmBooking`), review submission
 (`store.sendReview`), assignments (`store.sendAssign`), live sessions (a WebRTC
-provider), notifications, file storage for lessons, and the admin portal.
+provider), notifications, file storage for lessons, and the admin portal's server-side pagination,
+linking and approvals.
 
 ## Not yet implemented
 
-- The desktop admin portal (`project/Halqa Admin.dc.html`)
+- Admin sections the brief lists but the design doesn't: separate students/parents pages,
+  circles, bookings, lectures, quizzes, settings
 - The standalone design-system page (`project/Halqa Design System.dc.html`)
 
 ## Design handoff

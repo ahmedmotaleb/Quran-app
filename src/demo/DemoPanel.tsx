@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import { color, font } from '@/theme/tokens';
 import { SCREEN_NAMES } from '@/data/demo';
-import { openSheet, reset, restartSplash, setState, simEval, toast, up, useApp, type DataState, type DeviceKey } from '@/store/store';
+import { reset, restartSplash, setState, simEval, toast, up, useApp, type DataState, type DeviceKey } from '@/store/store';
 
 /**
  * Prototype control panel (desktop only). Lets reviewers jump between roles, run the
@@ -46,8 +46,7 @@ export default function DemoPanel() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {quick.map((q) => <button key={q.label} onClick={q.click} style={{ minHeight: 44, borderRadius: 12, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{q.label}</button>)}
         </div>
-        <button onClick={() => openSheet({ kind: 'info', title: 'لوحة الإدارة', body: 'لوحة الإدارة (ديسكتوب) ونظام التصميم صفحتان منفصلتان في حزمة التصميم (project/). لم تُنفَّذا ضمن هذا التطبيق بعد.' })}
-          style={{ minHeight: 44, borderRadius: 12, background: color.sage, color: color.primary, fontSize: 14, fontWeight: 700, border: 'none', cursor: 'pointer' }}>لوحة الإدارة ونظام التصميم</button>
+        <a href="#/admin" style={{ minHeight: 44, borderRadius: 12, background: color.primary, color: color.ivory, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>لوحة الإدارة (ديسكتوب)</a>
         <p style={{ margin: 0, fontSize: 13, color: color.muted }}>الشاشة الحالية: <strong style={{ color: color.ink }}>{SCREEN_NAMES[s.screen]}{roleL}</strong></p>
       </div>
       <div style={box}>
