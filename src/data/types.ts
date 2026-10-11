@@ -5,7 +5,7 @@
  */
 export type Role = 'student' | 'teacher' | 'parent' | 'admin';
 export type TaskType = 'hifz' | 'review' | 'tajweed';
-export type TaskStatus = 'not_started' | 'in_progress' | 'submitted' | 'reviewed';
+export type TaskStatus = 'not_started' | 'in_progress' | 'submitted' | 'reviewed' | 'needs_repeat';
 export type SessionStatus = 'confirmed' | 'cancelled' | 'completed';
 export type BadgeKind = TaskStatus | SessionStatus | 'late' | 'newsub';
 export type TzId = 'cairo' | 'riyadh' | 'dubai' | 'kl' | 'london';
@@ -26,6 +26,7 @@ export interface Task {
   id: string; type: TaskType; title: string;
   /** Surah number */ s: number; from: number; to: number;
   due: string; status: TaskStatus; today?: boolean; instr: string; at?: string; isNew?: boolean;
+  /** Live mode: real instant + assigning teacher. */ dueAt?: string; teacherName?: string;
 }
 
 export interface TimedNote { t: number; text: string }
@@ -42,9 +43,12 @@ export interface Recording { dur: number; url?: string | null }
 export interface Session {
   id: string; t: string; day?: number; past?: string; h: number; type: string; dur: number;
   status: SessionStatus; task: string | null; note?: string; summary?: string;
+  /** Live mode: real instants from the server (demo sessions use day/h). */
+  teacherName?: string; startsAt?: string; endsAt?: string; canJoin?: boolean;
 }
 
-export interface Slot { h: number; taken: boolean }
+/** Live mode adds the occurrence id, its instant and kind; `h` is then local hour + minutes/60. */
+export interface Slot { h: number; taken: boolean; occ?: number; iso?: string; kind?: string }
 /** teacherId → 7 days → slots (hours in Riyadh time, GMT+3). */
 export type Availability = Record<string, Slot[][]>;
 

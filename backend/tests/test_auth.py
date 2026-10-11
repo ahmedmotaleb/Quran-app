@@ -141,3 +141,16 @@ class TestInvitations:
         Invitation.objects.filter(pk=inv.pk).update(expires_at=timezone.now() - timedelta(seconds=1))
         r = client_for(make_user("p3@x.test", Role.PARENT)).post("/api/v1/auth/invitations/accept", {"code": raw})
         assert r.json()["code"] == "invitation_invalid"
+
+
+@pytest.mark.django_db
+def test_csrf_token_in_body_works_for_cross_origin_web_app():
+    # The web app may live on another origin and cannot read the API's cookie; it sends the body token.
+    make_user("csrf@example.com", Role.STUDENT)
+    c = APIClient(enforce_csrf_checks=True)
+    token = c.get("/api/v1/auth/csrf").json()["csrfToken"]
+    r = c.post("/api/v1/auth/login", {"email": "csrf@example.com", "password": PW, "client": "web"}, format="json", HTTP_X_CSRFTOKEN=token)
+    assert r.status_code == 200
+    token = c.get("/api/v1/auth/csrf").json()["csrfToken"]  # rotated on login
+    assert c.patch("/api/v1/me", {"phone": "1"}, format="json").status_code == 403
+    assert c.patch("/api/v1/me", {"phone": "1"}, format="json", HTTP_X_CSRFTOKEN=token).status_code == 200

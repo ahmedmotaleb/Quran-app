@@ -85,6 +85,8 @@ function DataStateView({ screen, ds }: { screen: Screen; ds: Exclude<DataState, 
   );
 }
 
+const SAMPLE_SCREENS: Screen[] = ['feedback', 'live', 'lesson', 'quiz', 'progress'];
+
 /**
  * The phone UI. `framed` renders the fake status bar + home indicator used inside the
  * desktop demo frame; full-screen (real phones) relies on safe-area insets instead.
@@ -100,6 +102,9 @@ export default function AppShell({ framed }: { framed: boolean }) {
   const offlineBanner = ds === 'offline' && !showState && !['splash', 'intro'].includes(screen);
   const navBg = dark ? color.liveBg : showNav ? color.card : color.ivory;
   const Cur = SCREENS[screen];
+  const liveMode = useApp((s) => s.liveMode);
+  // Live mode: screens whose data is not served by the API yet keep the design's sample content, labelled as such.
+  const sample = liveMode && (role === 'teacher' || role === 'parent' || SAMPLE_SCREENS.includes(screen));
 
   return (
     <div style={{ height: '100%', overflow: 'hidden', background: dark ? color.liveBg : color.ivory, display: 'flex', flexDirection: 'column', position: 'relative', paddingTop: framed ? 0 : 'env(safe-area-inset-top)' }}>
@@ -112,6 +117,11 @@ export default function AppShell({ framed }: { framed: boolean }) {
       {offlineBanner && (
         <div role="status" style={{ flexShrink: 0, background: color.offlineBar, color: color.ivory, fontSize: 13, fontWeight: 500, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <Icon name="wifiOff" size={18} /> أنت غير متصل بالإنترنت. ستظهر آخر بيانات محفوظة.
+        </div>
+      )}
+      {sample && (
+        <div role="note" style={{ flexShrink: 0, background: color.warnBg, color: color.warnInk, fontSize: 13, fontWeight: 700, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="alert" size={18} /> محتوى تجريبي — هذا القسم لم يُربط بالخادم بعد.
         </div>
       )}
       <main id="scr" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', position: 'relative', zoom: { s: 0.92, m: 1, l: 1.1 }[uiScale] }}>

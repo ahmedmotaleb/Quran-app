@@ -101,14 +101,39 @@ its HTTPS origin (never localhost or a live-reload URL in a shipped build).
 
 ## What is real and what is simulated
 
-| Real | Simulated (labelled in the UI) |
-| --- | --- |
-| Quran text (Tanzil Uthmani via api.alquran.cloud) | Sign-in and sign-up, password reset email |
-| Ayah audio (Mishary Alafasy via everyayah.com) | Uploading recordings, the teacher's voice note |
-| Microphone recording and playback (MediaRecorder) | Saving bookings, live video, notifications, downloads |
+The app runs in one of two modes, chosen at build time by `VITE_API_BASE_URL`:
 
-Everything is held in memory and is lost on reload. Quran text is only ever shown from
-the API. If it fails to load, the app shows an error state and never placeholder text.
+- **Demo mode** (unset): the original prototype. Everything is held in memory and resets on
+  reload. Sign-in, bookings, uploads and notifications are simulated and labelled.
+- **Live mode** (set): the student journey talks to the Django API in `backend/`.
+
+| Live mode: connected to the API | Live mode: still sample content (banner shown) |
+| --- | --- |
+| Sign-in, sign-up (student only), sign-out, session restore, password-reset request | Teacher and parent apps |
+| Onboarding answers, profile timezone | Recording upload (needs object storage; the app says so) |
+| Student tasks and their statuses | Teacher feedback details, progress, lessons, quizzes |
+| Teacher directory, real open slots, booking, cancelling, rescheduling | Live video sessions |
+
+Web uses the session cookie + CSRF token; Android stores a bearer token in app-private
+storage (`@capacitor/preferences`). Bookings send an `Idempotency-Key`, so a retried tap
+never double-books. Server errors are shown in Arabic as the server wrote them.
+
+Quran text is real in both modes (Tanzil Uthmani via api.alquran.cloud for now; moving to
+the backend's verified copy is the next step). If it fails to load, the app shows an
+error state and never placeholder text.
+
+### Running live mode locally
+
+```bash
+cd backend && cp ../.env.example .env   # set DATABASE_URL etc.
+.venv/bin/python manage.py migrate && .venv/bin/python manage.py seed_dev
+.venv/bin/python manage.py runserver     # :8000
+cd .. && VITE_API_BASE_URL=/ npm run dev  # Vite proxies /api → :8000
+```
+
+Seeded accounts (development only): `yousef@halqa.app`, `teacher@halqa.app`,
+`parent@halqa.app`; password from `SEED_PASSWORD` (default `halqa123`). Admins sign in at
+`#/admin` only.
 
 ## Layout
 
@@ -121,6 +146,9 @@ src/
   services/media.ts      shared <audio>, Mushaf audio, MediaRecorder
   store/store.ts         app state (zustand) + actions: navigation, recorder, booking, reviews…
   store/selectors.ts     derived data (sessions in the user's timezone, etc.)
+  store/live.ts          live-mode actions backed by the API
+  api/client.ts          fetch wrapper: base URL, auth, CSRF, timeout, retries, errors
+  api/endpoints.ts       typed endpoints + adapters to the screens' data shapes
   components/            Icon, UI primitives (Badge, Segmented, Chips, Switch, PlayerBar…), Sheet
   screens/auth|student|teacher|parent/
   AppShell.tsx           status bar, nav, data-state views, toast, bottom sheet
@@ -132,9 +160,9 @@ src/
 android/                 Capacitor Android project
 ```
 
-Times are stored in Riyadh time (the demo's equivalent of UTC) and shown in the user's
-chosen timezone (`lib/format.ts → timeIn`). Task status moves
-`not_started → in_progress → submitted → reviewed`.
+In live mode times are real instants from the server, shown in the user's IANA timezone
+(`lib/time.ts`). Demo data keeps hours in Riyadh time (`lib/format.ts → timeIn`). Task
+status moves `not_started → in_progress → submitted → reviewed | needs_repeat`.
 
 ## Backend integration notes
 
@@ -148,7 +176,7 @@ linking and approvals.
 ## Not yet implemented
 
 - Real payments and subscription billing
-- Server persistence. Every change is in memory and resets on reload.
+- Server persistence for the teacher, parent and admin apps (they still use demo data).
 
 ## Design handoff
 

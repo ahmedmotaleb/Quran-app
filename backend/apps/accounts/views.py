@@ -9,6 +9,7 @@ from django.db.models import Prefetch, Q
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 from rest_framework import generics, status
@@ -55,7 +56,8 @@ class CsrfView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        return Response({"ok": True})
+        # Also returned in the body: a web app on another origin cannot read the API's cookie.
+        return Response({"csrfToken": get_token(request)})
 
 
 class RegisterView(APIView):

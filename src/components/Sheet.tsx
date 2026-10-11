@@ -1,3 +1,5 @@
+import { LIVE } from '@/api/client';
+import { saveTimezone } from '@/store/live';
 import { useEffect, useRef } from 'react';
 import { color, font } from '@/theme/tokens';
 import { Icon, type IconName } from './Icon';
@@ -87,7 +89,7 @@ export default function Sheet() {
         {TZS.map((t) => {
           const on = t.id === tz;
           return (
-            <button key={t.id} role="radio" aria-checked={on} onClick={() => { setState({ tz: t.id, sheet: null }); toast('تم تحديث المنطقة الزمنية؛ ستظهر المواعيد بتوقيتك', 'globe'); }}
+            <button key={t.id} role="radio" aria-checked={on} onClick={() => { setState({ tz: t.id, sheet: null }); if (LIVE) saveTimezone(t.id); toast('تم تحديث المنطقة الزمنية؛ ستظهر المواعيد بتوقيتك', 'globe'); }}
               style={{ minHeight: 52, padding: '0 14px', borderRadius: 12, border: `1px solid ${color.border}`, background: color.card, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', color: color.ink, fontSize: 15, textAlign: 'right' }}>
               <span style={{ flex: 1 }}>{t.label} ({tzOf(t.id).gmt})</span>
               {on && <span style={{ color: color.primary }}><Icon name="check" size={18} /></span>}

@@ -1,14 +1,16 @@
 import { color, font } from '@/theme/tokens';
+import type { Slot } from '@/data/types';
 import { Icon } from '@/components/Icon';
 import {
   Avatar, BackHeader, Badge, Chips, KVCard, SearchInput, card, dangerOutlineBtn, iconTile, listBtn, muted, outlineBtn, primaryBtn,
 } from '@/components/ui';
-import { DAYS, LESSONS, TEACHERS } from '@/data/demo';
-import { dayFull, dayL, timeIn, tzLabel, type BadgeSpec } from '@/lib/format';
+import { LESSONS } from '@/data/demo';
+import { dayL, timeIn, tzLabel, type BadgeSpec } from '@/lib/format';
 import {
   back, cancelSession, confirmBooking, go, openSheet, openTeacher, replace, rescheduleSession, reset, setState, startQuiz, toast, up, useApp,
 } from '@/store/store';
-import { decoSession, pastSessions, teacherById, upcomingSessions } from '@/store/selectors';
+import { decoSession, pastSessions, slotTime, teacherById, upcomingSessions, weekDays } from '@/store/selectors';
+import { loadStudentData } from '@/store/live';
 
 type CircTab = 'teachers' | 'bookings' | 'lessons' | 'quizzes';
 const TABS: [CircTab, string][] = [['teachers', 'المعلمون'], ['bookings', 'حجوزاتي'], ['lessons', 'الدروس'], ['quizzes', 'الاختبارات']];
@@ -36,11 +38,13 @@ export default function Circles() {
 function TeachersTab() {
   const s = useApp();
   const q = s.q.trim();
-  const list = TEACHERS.filter((t) => (s.filt === 'all' || t.tags.includes(s.filt)) && (!q || t.name.includes(q) || t.spec.includes(q)));
+  const list = s.teachers.filter((t) => (s.filt === 'all' || t.tags.includes(s.filt)) && (!q || t.name.includes(q) || t.spec.includes(q)));
   return (
     <>
       <SearchInput value={s.q} onChange={(v) => setState({ q: v })} placeholder="ابحث عن معلم أو تخصص" />
       <Chips scroll options={[['all', 'الكل'], ['hifz', 'حفظ'], ['tajweed', 'تجويد'], ['kids', 'أطفال'], ['group', 'حلقات جماعية']] as const} value={s.filt} onChange={(k) => setState({ filt: k })} />
+      {s.net.error && <NetError msg={s.net.error} />}
+      {s.net.loading && !s.teachers.length && <p role="status" style={muted(14)}>جارٍ التحميل…</p>}
       <p style={muted(13)}>{list.length} معلم</p>
       {list.length === 0 && (
         <div style={{ textAlign: 'center', padding: 24, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
@@ -51,7 +55,7 @@ function TeachersTab() {
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,320px),1fr))', gap: 10 }}>
         {list.map((t) => {
-          const first = s.avail[t.id].map((d, i) => ({ i, sl: d.find((x) => !x.taken) })).find((x) => x.sl);
+          const first = s.liveMode ? undefined : s.avail[t.id].map((d, i) => ({ i, sl: d.find((x) => !x.taken) })).find((x) => x.sl);
           return (
             <button key={t.id} onClick={() => openTeacher(t.id, t.types, first ? first.i : 0)} style={{ ...listBtn, alignItems: 'flex-start' }}>
               <Avatar ini={t.ini} size={52} fs={21} />
@@ -61,7 +65,7 @@ function TeachersTab() {
                 <span style={{ fontSize: 13, color: color.muted }}>جلسات {t.types.join(' · ')} · {t.aud}</span>
                 <span style={{ fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, color: color.ink }}>
                   <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: first ? color.primary : '#A0A89F' }} />
-                  {first ? `أقرب موعد: ${dayL(first.i)}، ${timeIn(s.tz, first.sl!.h)}` : 'لا مواعيد متاحة هذا الأسبوع'}
+                  {s.liveMode ? 'اعرض المواعيد المتاحة' : first ? `أقرب موعد: ${dayL(first.i)}، ${timeIn(s.tz, first.sl!.h)}` : 'لا مواعيد متاحة هذا الأسبوع'}
                 </span>
               </span>
               <span style={{ color: color.primary, alignSelf: 'center' }}><Icon name="chevL" /></span>
@@ -78,6 +82,7 @@ function BookingsTab() {
   const upcoming = upcomingSessions(s); const past = pastSessions(s);
   return (
     <>
+      {s.net.error && <NetError msg={s.net.error} />}
       {upcoming.length === 0 && (
         <div style={{ textAlign: 'center', padding: 24, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
           <p style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>لا توجد حجوزات قادمة</p>
@@ -152,12 +157,26 @@ function QuizzesTab() {
   );
 }
 
+function NetError({ msg }: { msg: string }) {
+  return (
+    <div role="alert" style={{ background: color.dangerBg, borderRadius: 14, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <p style={{ margin: 0, fontSize: 15, color: color.dangerDeep, fontWeight: 700, display: 'flex', gap: 8 }}><Icon name="alert" /> {msg}</p>
+      <button onClick={() => loadStudentData()} style={{ alignSelf: 'flex-start', minHeight: 44, padding: '0 16px', border: 'none', borderRadius: 10, background: color.dangerDeep, color: color.card, fontWeight: 700, cursor: 'pointer' }}>إعادة المحاولة</button>
+    </div>
+  );
+}
+
 /* ---------------- Teacher page + slot picker ---------------- */
 export function TeacherPage() {
   const s = useApp(); const B = s.bk; const t = teacherById(B.t);
-  const days = s.avail[B.t]; const totalFree = days.reduce((a, d) => a + d.filter((x) => !x.taken).length, 0);
+  const wk = weekDays(s);
+  // Live slots carry their kind (individual/group); show only those matching the chosen type.
+  const fits = (x: Slot) => !x.kind || x.kind === B.type;
+  const days = (s.avail[B.t] ?? Array.from({ length: 7 }, () => [] as Slot[])).map((d) => d.filter(fits));
+  const totalFree = days.reduce((a, d) => a + d.filter((x) => !x.taken).length, 0);
   const dayFree = days[B.day].some((x) => !x.taken);
   const notify = !!s.notifyMe[B.t];
+  const chosen = B.h !== null ? days[B.day].find((x) => x.h === B.h) : undefined;
 
   return (
     <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -177,7 +196,7 @@ export function TeacherPage() {
           <div style={{ display: 'flex', background: color.sunken, borderRadius: 14, padding: 4, gap: 4 }}>
             {t.types.map((x) => {
               const on = B.type === x;
-              return <button key={x} aria-pressed={on} onClick={() => up('bk', { type: x })} style={{ flex: 1, minHeight: 48, border: 'none', borderRadius: 11, background: on ? color.primary : 'transparent', color: on ? color.ivory : color.body, fontSize: 14, fontWeight: on ? 700 : 500, cursor: 'pointer' }}>{x === 'فردية' ? 'فردية · 45 دقيقة' : 'جماعية · 60 دقيقة'}</button>;
+              return <button key={x} aria-pressed={on} onClick={() => up('bk', { type: x, h: null })} style={{ flex: 1, minHeight: 48, border: 'none', borderRadius: 11, background: on ? color.primary : 'transparent', color: on ? color.ivory : color.body, fontSize: 14, fontWeight: on ? 700 : 500, cursor: 'pointer' }}>{x === 'فردية' ? 'فردية · 45 دقيقة' : 'جماعية · 60 دقيقة'}</button>;
             })}
           </div>
         </div>
@@ -186,7 +205,9 @@ export function TeacherPage() {
             <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>المواعيد المتاحة</p>
             <p style={muted(12, { display: 'flex', gap: 4, alignItems: 'center', background: color.sand, padding: '4px 10px', borderRadius: 999 })}><Icon name="globe" size={18} /> {tzLabel(s.tz)}</p>
           </div>
-          {totalFree === 0 ? (
+          {B.loading ? <p role="status" style={muted(14, { textAlign: 'center', padding: 16 })}>جارٍ تحميل المواعيد…</p>
+            : B.error && s.liveMode && totalFree === 0 ? <NetError msg={B.error} />
+            : totalFree === 0 ? (
             <div role="status" style={{ background: color.card, border: `1px dashed ${color.borderStrong}`, borderRadius: 16, padding: 20, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
               <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>لا توجد مواعيد متاحة هذا الأسبوع</p>
               <p style={muted(14)}>يحدّث المعلم مواعيده أسبوعيًا.</p>
@@ -198,13 +219,13 @@ export function TeacherPage() {
           ) : (
             <>
               <div role="listbox" aria-label="الأيام" style={{ display: 'flex', gap: 8, overflowX: 'auto', margin: '0 -16px', padding: '2px 16px' }}>
-                {DAYS.map((d, i) => {
+                {wk.map((d, i) => {
                   const free = days[i].filter((x) => !x.taken).length; const on = B.day === i;
                   return (
                     <button key={i} role="option" aria-selected={on} onClick={() => up('bk', { day: i, h: null, error: null })}
                       style={{ flexShrink: 0, width: 72, minHeight: 84, borderRadius: 14, border: `1.5px solid ${on ? color.primary : color.borderChip}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.ink, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, cursor: 'pointer' }}>
-                      <span style={{ fontSize: 13, fontWeight: 700 }}>{i === 0 ? 'اليوم' : d[0]}</span>
-                      <span style={{ fontFamily: font.latin, fontSize: 20, fontWeight: 700 }}>{d[1]}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700 }}>{d.label}</span>
+                      <span style={{ fontFamily: font.latin, fontSize: 20, fontWeight: 700 }}>{d.num}</span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: on ? color.sage : free ? color.primary : color.faint }}>{free ? `${free} متاح` : 'لا يوجد'}</span>
                     </button>
                   );
@@ -213,7 +234,7 @@ export function TeacherPage() {
               {!dayFree && <p role="status" style={{ margin: 0, padding: 16, textAlign: 'center', fontSize: 14, color: color.muted, background: color.card, border: `1px dashed ${color.borderStrong}`, borderRadius: 14 }}>لا توجد مواعيد متاحة في هذا اليوم. جرّب يومًا آخر.</p>}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(96px,1fr))', gap: 8 }}>
                 {days[B.day].map((x) => {
-                  const on = B.h === x.h; const label = timeIn(s.tz, x.h);
+                  const on = B.h === x.h; const label = slotTime(s, x);
                   return (
                     <button key={x.h} onClick={() => { if (!x.taken) up('bk', { h: x.h, error: null }); }} disabled={x.taken} aria-pressed={on} aria-label={x.taken ? `${label} محجوز` : label}
                       style={{ minHeight: 52, borderRadius: 12, border: `1.5px solid ${x.taken ? '#E0D9C8' : on ? color.primary : color.borderStrong}`, background: x.taken ? color.takenSlot : on ? color.primary : color.card, color: x.taken ? color.faint : on ? color.ivory : color.primary, fontSize: 15, fontWeight: 700, cursor: x.taken ? 'default' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1.2 }}>
@@ -227,7 +248,7 @@ export function TeacherPage() {
           )}
         </div>
         <div style={{ marginTop: 'auto', position: 'sticky', bottom: 0, background: color.ivory, padding: '10px 0 4px', display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${color.dividerHeader}` }}>
-          <p style={{ margin: 0, fontSize: 14, color: color.body, textAlign: 'center' }}>{B.h !== null ? `${dayFull(B.day)} · ${timeIn(s.tz, B.h)}` : 'لم تختر موعدًا بعد'}</p>
+          <p style={{ margin: 0, fontSize: 14, color: color.body, textAlign: 'center' }}>{chosen ? `${wk[B.day].full} · ${slotTime(s, chosen)}` : 'لم تختر موعدًا بعد'}</p>
           <button onClick={() => (B.h === null ? toast('اختر موعدًا أولًا', 'alert') : go('bkreview'))} aria-disabled={B.h === null}
             style={primaryBtn(54, 17, { background: B.h !== null ? color.primary : color.disabledBtn })}>متابعة</button>
         </div>
@@ -238,7 +259,8 @@ export function TeacherPage() {
 
 export function BookingReview() {
   const s = useApp(); const B = s.bk; const t = teacherById(B.t);
-  const chips = [...s.tasks.filter((x) => x.status !== 'reviewed').slice(0, 3).map((x) => [x.id, x.title] as const), ['none', 'بدون مهمة'] as const];
+  const chosen = s.avail[B.t]?.[B.day]?.find((x) => x.h === B.h && (!x.kind || x.kind === B.type));
+  const chips = [...s.tasks.filter((x) => x.status !== 'reviewed' && x.status !== 'submitted').slice(0, 3).map((x) => [x.id, x.title] as const), ['none', 'بدون مهمة'] as const];
   return (
     <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
       <BackHeader title="مراجعة الحجز" />
@@ -252,8 +274,8 @@ export function BookingReview() {
         <KVCard rows={[
           ['المعلم', t.name],
           ['نوع الجلسة', `${B.type} · ${B.type === 'جماعية' ? '60 دقيقة' : '45 دقيقة'}`],
-          ['اليوم', dayFull(B.day)],
-          ['الوقت', <span style={{ textAlign: 'left' }}><span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>{B.h !== null ? timeIn(s.tz, B.h) : ''}</span><span style={{ display: 'block', fontSize: 12, color: color.muted }}>{tzLabel(s.tz)}</span></span>],
+          ['اليوم', weekDays(s)[B.day].full],
+          ['الوقت', <span style={{ textAlign: 'left' }}><span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>{chosen ? slotTime(s, chosen) : ''}</span><span style={{ display: 'block', fontSize: 12, color: color.muted }}>{tzLabel(s.tz)}</span></span>],
         ]} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>مهمة الجلسة</p>
@@ -265,7 +287,7 @@ export function BookingReview() {
             style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15, color: color.ink, resize: 'vertical' }} />
         </div>
         <p style={muted(13, { lineHeight: 1.7, display: 'flex', gap: 6 })}><Icon name="clock" size={18} /> يمكنك الإلغاء أو إعادة الجدولة مجانًا قبل الموعد بـ 12 ساعة.</p>
-        <button onClick={confirmBooking} style={primaryBtn(54, 17, { marginTop: 'auto' })}>{B.resched ? 'تأكيد الموعد الجديد' : 'تأكيد الحجز'}</button>
+        <button onClick={confirmBooking} disabled={B.busy} style={primaryBtn(54, 17, { marginTop: 'auto' })}>{B.busy ? 'جارٍ التأكيد…' : B.resched ? 'تأكيد الموعد الجديد' : 'تأكيد الحجز'}</button>
       </div>
     </div>
   );
@@ -283,7 +305,7 @@ export function BookingDone() {
       <p style={{ margin: 0, fontSize: 16, color: color.body }}>{x.teacherName}</p>
       <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{x.dateFull} · {x.timeL}</p>
       <p style={muted(13)}>{x.tzL}</p>
-      <p style={muted(13, { margin: '6px 0 0' })}>سنذكّرك قبل الموعد بساعة. حجز تجريبي داخل النموذج.</p>
+      <p style={muted(13, { margin: '6px 0 0' })}>{s.liveMode ? 'حُفظ الحجز على الخادم.' : 'سنذكّرك قبل الموعد بساعة. حجز تجريبي داخل النموذج.'}</p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', marginTop: 16 }}>
         <button onClick={() => replace('session', { id: x.id })} style={primaryBtn(54, 16)}>عرض تفاصيل الجلسة</button>
         <button onClick={() => reset('home', 'student')} style={outlineBtn(52, 15)}>العودة للرئيسية</button>

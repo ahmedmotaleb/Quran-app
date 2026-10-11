@@ -29,7 +29,7 @@ export default function Record() {
     kind: 'confirm', title: 'إعادة التسجيل؟', body: 'سيُحذف التسجيل الحالي ولن يمكن استعادته.', ok: 'احذف وأعد التسجيل', danger: true,
     onOk: () => { resetRec(); setState({ sheet: null }); },
   });
-  const pickable = s.tasks.filter((t) => t.status === 'not_started' || t.status === 'in_progress');
+  const pickable = s.tasks.filter((t) => t.status === 'not_started' || t.status === 'in_progress' || t.status === 'needs_repeat');
 
   return (
     <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column' }}>

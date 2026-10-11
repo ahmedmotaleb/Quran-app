@@ -1,16 +1,19 @@
 import { create } from 'zustand';
 import {
-  ACCOUNTS, QUIZ, SUR, STUDENTS, generateAvailability, initialFeedback, initialOthers, initialRecordings, initialSessions, initialTasks,
+  ACCOUNTS, QUIZ, SUR, STUDENTS, TEACHERS, generateAvailability, initialFeedback, initialOthers, initialRecordings, initialSessions, initialTasks,
   type Screen,
 } from '@/data/demo';
 import type {
-  Availability, Decision, Feedback, OtherSubmission, Recording, Role, Scores, Session, SurahData, SurahListItem, Task, TaskStatus, TaskType, TimedNote, TzId,
+  Availability, Decision, Feedback, OtherSubmission, Recording, Role, Scores, Session, SurahData, SurahListItem, Task, TaskStatus, TaskType, Teacher, TimedNote, TzId,
 } from '@/data/types';
 import { rangeL, typeL } from '@/lib/format';
 import { ayahAudioUrl, fetchSurah, fetchSurahList } from '@/services/quran';
 import * as media from '@/services/media';
 import type { IconName } from '@/components/Icon';
 import { BRAND } from '@/theme/brand';
+import { LIVE } from '@/api/client';
+import type { Me } from '@/api/endpoints';
+import * as live from './live';
 
 /* ------------------------------------------------------------------ */
 /* State shape                                                          */
@@ -43,6 +46,11 @@ export interface MushafState {
 }
 
 const initial = () => ({
+  /** True when a backend is configured (VITE_API_BASE_URL); demo data otherwise. */
+  liveMode: LIVE,
+  me: null as Me | null,
+  net: { loading: false, error: null as string | null },
+  teachers: [...TEACHERS] as Teacher[],
   role: null as Role | null,
   screen: 'splash' as Screen,
   params: {} as Params,
@@ -69,7 +77,11 @@ const initial = () => ({
   sessions: initialSessions() as Session[],
   avail: generateAvailability() as Availability,
   others: initialOthers() as OtherSubmission[],
-  bk: { t: 't1', type: 'فردية', day: 0, h: null as number | null, note: '', task: 'k1' as string | null, error: null as string | null, resched: null as string | null },
+  bk: {
+    t: 't1', type: 'فردية', day: 0, h: null as number | null, note: '', task: 'k1' as string | null, error: null as string | null, resched: null as string | null,
+    /** Live mode: request state and the Idempotency-Key for the chosen slot. */
+    loading: false, busy: false, key: null as null | { occ: number; key: string },
+  },
   rec: { phase: 'idle' as RecPhase, secs: 0, task: 'k1', demo: false, prog: 0 },
   player: { key: null as string | null, pos: 0, dur: 0, playing: false },
   m: { surah: 67, data: null, loading: false, error: false, from: 1, to: 10, font: 26, bookmark: null, playing: false, cur: null, repeat: 1, rep: 0, jump: '', list: null, listQ: '', listErr: false, flash: null } as MushafState,
@@ -169,6 +181,8 @@ function onEnter(screen: Screen, p: Params) {
 export function startSplash() {
   clearTimeout(splashTimer);
   splashTimer = setTimeout(() => { if (get().screen === 'splash') set({ screen: 'intro' }); }, 2000);
+  // Live: a still-valid session (cookie or stored token) goes straight to the app.
+  if (LIVE) live.bootstrap();
 }
 export function skipSplash() { clearTimeout(splashTimer); set({ screen: 'intro' }); }
 export function restartSplash() { reset('splash', null); startSplash(); }
@@ -244,6 +258,8 @@ export function playerSeek(key: string, dur: number, t: number) {
 /* Recorder                                                             */
 /* ------------------------------------------------------------------ */
 function markInProgress() {
+  const s0 = get(); const t0 = s0.tasks.find((t) => t.id === s0.rec.task);
+  if (s0.liveMode) { if (t0 && (t0.status === 'not_started' || t0.status === 'needs_repeat')) live.startTask(t0.id); return; }
   set((s) => ({ tasks: s.tasks.map((t) => (t.id === s.rec.task && t.status === 'not_started' ? { ...t, status: 'in_progress' } : t)) }));
 }
 export async function startRec() {
@@ -271,6 +287,10 @@ export function resetRec() { media.discardRecorder(); up('rec', { phase: 'idle',
 export function submitRec() {
   media.stopPlayback(); up('player', { playing: false });
   if (get().ds === 'offline') { up('rec', { phase: 'failed' }); return; }
+  if (get().liveMode) {
+    // Honest: uploads need the private object storage (Prompt 13), which is not configured yet.
+    up('rec', { phase: 'failed' }); toast('رفع التسجيلات غير مفعّل على الخادم بعد. احتفظ بالتسجيل وحاول لاحقًا.', 'alert'); return;
+  }
   up('rec', { phase: 'uploading', prog: 0 });
 }
 
@@ -332,10 +352,13 @@ export function pickSurah(x: SurahListItem) {
 /* Auth & onboarding (simulated)                                        */
 /* ------------------------------------------------------------------ */
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
+/** The server enforces 10 (Django MinimumLengthValidator); the demo keeps the design's 8. */
+export const PW_MIN = LIVE ? 10 : 8;
 export function doLogin() {
   const L = get().login; const e: Record<string, string> = {}; const em = L.email.trim().toLowerCase();
   if (!em) e.email = 'أدخل بريدك الإلكتروني'; else if (!EMAIL_RE.test(em)) e.email = 'صيغة البريد الإلكتروني غير صحيحة';
-  if (!L.pw) e.pw = 'أدخل كلمة المرور'; else if (L.pw.length < 6) e.pw = 'كلمة المرور 6 أحرف على الأقل';
+  if (!L.pw) e.pw = 'أدخل كلمة المرور'; else if (!LIVE && L.pw.length < 6) e.pw = 'كلمة المرور 6 أحرف على الأقل';
+  if (LIVE) { if (Object.keys(e).length) up('login', { errors: e }); else live.login(em, L.pw); return; }
   if (!e.email && ACCOUNTS[em] === 'admin') e.email = 'حساب الإدارة يدخل من بوابة الإدارة المنفصلة.';
   else if (!e.email && !ACCOUNTS[em]) e.email = 'لا يوجد حساب بهذا البريد. جرّب أحد الحسابات التجريبية أدناه.';
   if (Object.keys(e).length) { up('login', { errors: e }); return; }
@@ -349,9 +372,10 @@ export function doSignup() {
   const S = get().signup; const e: Record<string, string> = {}; const em = S.email.trim().toLowerCase();
   if (S.name.trim().length < 2) e.name = 'أدخل اسمك الكامل';
   if (!em) e.email = 'أدخل بريدك الإلكتروني'; else if (!EMAIL_RE.test(em)) e.email = 'صيغة البريد الإلكتروني غير صحيحة';
-  else if (ACCOUNTS[em]) e.email = 'هذا البريد مسجّل بالفعل. سجّل الدخول بدلًا من ذلك.';
-  if (S.pw.length < 8) e.pw = 'استخدم 8 أحرف على الأقل';
+  else if (!LIVE && ACCOUNTS[em]) e.email = 'هذا البريد مسجّل بالفعل. سجّل الدخول بدلًا من ذلك.';
+  if (S.pw.length < PW_MIN) e.pw = `استخدم ${PW_MIN} أحرف على الأقل`;
   if (Object.keys(e).length) { up('signup', { errors: e }); return; }
+  if (LIVE) { live.register(S.name.trim(), em, S.pw); return; }
   const name = S.name.trim();
   set((s) => ({ user: { ...s.user, name, first: name.split(' ')[0], email: em }, signup: { ...s.signup, errors: {} }, ob: { ...s.ob, step: 0 } }));
   // Public sign-up only ever grants the student role.
@@ -360,6 +384,7 @@ export function doSignup() {
 export function doForgot() {
   const em = get().forgot.email.trim();
   if (!EMAIL_RE.test(em)) { up('forgot', { errors: { email: em ? 'صيغة البريد الإلكتروني غير صحيحة' : 'أدخل بريدك الإلكتروني' } }); return; }
+  if (LIVE) { live.forgot(em); return; }
   up('forgot', { sent: true, errors: {} });
 }
 export function obNext() {
@@ -368,12 +393,14 @@ export function obNext() {
   if (o.step === 1 && !o.goal) { up('ob', { error: 'اختر هدفك اليومي للمتابعة' }); return; }
   if (o.step === 2 && !o.days.length) { up('ob', { error: 'اختر يومًا واحدًا على الأقل' }); return; }
   if (o.step < 2) { up('ob', { step: o.step + 1, error: null }); return; }
+  if (LIVE) { live.finishOnboarding(o.level!, o.goal!, o.days, o.period); return; }
   set((s) => ({ user: { ...s.user, level: o.level!, goal: o.goal! } }));
   reset('home', 'student');
   toast(`تم إعداد خطتك. مرحبًا بك في ${BRAND.ar}`);
 }
 export function logout() {
   set({ sheet: null });
+  if (LIVE) live.logout();
   reset('login', null, { login: { email: '', pw: '', show: false, errors: {}, loading: false } });
 }
 
@@ -383,13 +410,21 @@ export function logout() {
 const markSlot = (avail: Availability, t: string, day: number, h: number, taken: boolean): Availability =>
   ({ ...avail, [t]: avail[t].map((d, i) => (i === day ? d.map((x) => (x.h === h ? { ...x, taken } : x)) : d)) });
 
+const firstOpenTask = () => get().tasks.find((t) => t.status !== 'reviewed' && t.status !== 'submitted')?.id ?? null;
 export function openTeacher(teacherId: string, types: string[], firstDay: number) {
-  set({ bk: { t: teacherId, type: types[0], day: firstDay, h: null, note: '', task: 'k1', error: null, resched: null } });
+  set({ bk: { t: teacherId, type: types[0], day: firstDay, h: null, note: '', task: LIVE ? firstOpenTask() : 'k1', error: null, resched: null, loading: false, busy: false, key: null } });
   go('teacher', { id: teacherId });
+  if (LIVE) live.loadSlots(teacherId);
+}
+function bookingDone(id: string) {
+  // Drop teacher + review screens from history so "back" from confirmation lands where booking started.
+  set((st) => ({ ...leave(), screen: 'bkdone', params: { id }, stack: st.stack.slice(0, Math.max(0, st.stack.length - 2)) }));
+  scrollTop();
 }
 export function confirmBooking() {
   const s = get(); const b = s.bk;
-  if (b.h === null) return;
+  if (b.h === null || b.busy) return;
+  if (LIVE) { live.confirm().then((id) => { if (id) bookingDone(id); }); return; }
   if (s.sim.slotTaken) {
     set({ bk: { ...b, error: 'لم يعد هذا الموعد متاحًا؛ حجزه طالب آخر قبل قليل. اختر موعدًا آخر.' }, avail: markSlot(s.avail, b.t, b.day, b.h, true), sim: { ...s.sim, slotTaken: false } });
     return;
@@ -404,11 +439,10 @@ export function confirmBooking() {
     sessions.push({ id, t: b.t, day: b.day, h: b.h, type: b.type, dur: b.type === 'جماعية' ? 60 : 45, status: 'confirmed', task: b.task, note: b.note });
   }
   set({ sessions, avail: markSlot(s.avail, b.t, b.day, b.h, true) });
-  // Drop teacher + review screens from history so "back" from confirmation lands where booking started.
-  set((st) => ({ ...leave(), screen: 'bkdone', params: { id }, stack: st.stack.slice(0, Math.max(0, st.stack.length - 2)) }));
-  scrollTop();
+  bookingDone(id);
 }
 export function cancelSession(x: Session) {
+  if (LIVE) { set({ sheet: null }); live.cancel(x.id); return; }
   set((st) => ({
     sheet: null,
     sessions: st.sessions.map((y) => (y.id === x.id ? { ...y, status: 'cancelled' } : y)),
@@ -417,8 +451,9 @@ export function cancelSession(x: Session) {
   toast('تم إلغاء الحجز');
 }
 export function rescheduleSession(x: Session) {
-  set({ bk: { t: x.t, type: x.type, day: x.day || 0, h: null, note: '', task: x.task, error: null, resched: x.id } });
+  set({ bk: { t: x.t, type: x.type, day: x.day || 0, h: null, note: '', task: x.task, error: null, resched: x.id, loading: false, busy: false, key: null } });
   go('teacher', { id: x.t });
+  if (LIVE) live.loadSlots(x.t);
 }
 
 /* ------------------------------------------------------------------ */

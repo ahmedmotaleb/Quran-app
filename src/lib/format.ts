@@ -46,6 +46,7 @@ const BADGES: Record<BadgeKind, BadgeSpec> = {
   in_progress: { label: 'قيد التنفيذ', bg: color.warnBg, fg: color.warnInk, icon: 'clock' },
   submitted: { label: 'تم التسليم', bg: color.sage, fg: color.primary, icon: 'upload' },
   reviewed: { label: 'تمت المراجعة', bg: color.primary, fg: color.ivory, icon: 'check' },
+  needs_repeat: { label: 'مطلوب الإعادة', bg: color.warnBg, fg: color.warnInk, icon: 'repeat' },
   confirmed: { label: 'مؤكدة', bg: color.sage, fg: color.primary, icon: 'check' },
   cancelled: { label: 'ملغاة', bg: color.dangerBg, fg: color.dangerInk, icon: 'x' },
   completed: { label: 'مكتملة', bg: color.neutralBg, fg: color.subtle, icon: 'check' },

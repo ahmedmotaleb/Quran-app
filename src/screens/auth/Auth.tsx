@@ -4,7 +4,8 @@ import { Icon } from '@/components/Icon';
 import { BackButton, FieldError, Spinner, inputStyle, labelStyle, linkBtn, muted, outlineBtn, primaryBtn, Chips, Segmented } from '@/components/ui';
 import { DAYS, DEMO_PASSWORD } from '@/data/demo';
 import { tzLabel } from '@/lib/format';
-import { back, doForgot, doLogin, doSignup, go, obNext, reset, setState as set, skipSplash, up, useApp } from '@/store/store';
+import { PW_MIN, back, doForgot, doLogin, doSignup, go, obNext, reset, setState as set, skipSplash, up, useApp } from '@/store/store';
+import { LIVE } from '@/api/client';
 import { BRAND } from '@/theme/brand';
 import { Logo } from '@/components/Logo';
 
@@ -83,7 +84,7 @@ export function Login() {
         <button type="button" onClick={() => go('forgot')} style={linkBtn(14, { alignSelf: 'flex-start', padding: 0 })}>نسيت كلمة المرور؟</button>
       </div>
       <button type="submit" disabled={L.loading} style={primaryBtn()}>{L.loading ? 'جارٍ الدخول…' : 'تسجيل الدخول'}</button>
-      <div style={{ background: color.sand, borderRadius: 14, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {!LIVE && <div style={{ background: color.sand, borderRadius: 14, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <p style={{ margin: 0, fontSize: 13, color: color.subtle }}>حسابات تجريبية (كلمة المرور {DEMO_PASSWORD}):</p>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {([['yousef@halqa.app', 'طالب'], ['teacher@halqa.app', 'معلم'], ['parent@halqa.app', 'ولي أمر']] as const).map(([em, l]) => (
@@ -91,7 +92,7 @@ export function Login() {
               style={{ minHeight: 40, padding: '0 14px', borderRadius: 999, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{l}</button>
           ))}
         </div>
-      </div>
+      </div>}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
         <p style={muted(15)}>ليس لديك حساب؟ <button type="button" onClick={() => go('signup')} style={linkBtn(15, { fontWeight: 800, padding: '0 4px' })}>أنشئ حساب طالب</button></p>
         <button type="button" onClick={() => { window.location.hash = '#/admin'; }} style={{ fontSize: 13, color: color.muted, minHeight: 44, display: 'flex', alignItems: 'center', border: 'none', background: 'transparent', textDecoration: 'underline', cursor: 'pointer' }}>دخول الإدارة</button>
@@ -127,7 +128,7 @@ export function Signup() {
         <label htmlFor="su-pw" style={labelStyle}>كلمة المرور</label>
         <input id="su-pw" type="password" dir="ltr" autoComplete="new-password" value={S.pw} aria-describedby="su-pw-h" aria-invalid={!!E.pw} onChange={(e) => field('pw', e.target.value)} style={inputStyle(E.pw, true)} />
         <FieldError msg={E.pw} />
-        <p id="su-pw-h" style={muted(13)}>{S.pw.length >= 8 ? 'كلمة مرور مناسبة' : '8 أحرف على الأقل'}</p>
+        <p id="su-pw-h" style={muted(13)}>{S.pw.length >= PW_MIN ? 'كلمة مرور مناسبة' : `${PW_MIN} أحرف على الأقل`}</p>
       </div>
       <button type="submit" style={primaryBtn(54, 17, { marginTop: 8 })}>إنشاء الحساب</button>
       <p style={muted(13, { textAlign: 'center', lineHeight: 1.7 })}>بإنشاء الحساب توافق على شروط الاستخدام وسياسة الخصوصية.</p>
@@ -160,7 +161,7 @@ export function Forgot() {
           <span style={{ width: 72, height: 72, borderRadius: '50%', background: color.sage, color: color.primary, display: 'grid', placeItems: 'center' }}><Icon name="mail" size={30} /></span>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800 }}>تحقق من بريدك</h1>
           <p style={muted(15, { lineHeight: 1.7 })}>إن كان البريد <bdi dir="ltr" style={{ fontFamily: font.latin, color: color.ink }}>{F.email}</bdi> مسجلًا لدينا فستصلك رسالة خلال دقائق.</p>
-          <p style={muted(12)}>إرسال تجريبي — يحتاج ربطًا بخدمة البريد.</p>
+          {!LIVE && <p style={muted(12)}>إرسال تجريبي — يحتاج ربطًا بخدمة البريد.</p>}
           <button type="button" onClick={() => { up('forgot', { sent: false }); back(); }} style={primaryBtn(52, 16, { padding: '0 24px' })}>العودة لتسجيل الدخول</button>
         </div>
       )}

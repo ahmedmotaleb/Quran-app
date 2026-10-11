@@ -79,9 +79,11 @@ const ORDER = ['not_started', 'in_progress', 'submitted', 'reviewed'];
 export function TaskDetail() {
   const s = useApp();
   const t = s.tasks.find((x) => x.id === s.params.id) || s.tasks[0];
-  const idx = ORDER.indexOf(t.status);
+  if (!t) return <BackHeader title="تفاصيل المهمة" />;
+  // "Needs repeat" sits back on the in-progress step.
+  const idx = ORDER.indexOf(t.status === 'needs_repeat' ? 'in_progress' : t.status);
   const rec = s.recs[t.id];
-  const canRec = t.status === 'not_started' || t.status === 'in_progress';
+  const canRec = t.status === 'not_started' || t.status === 'in_progress' || t.status === 'needs_repeat';
 
   return (
     <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -93,7 +95,7 @@ export function TaskDetail() {
           <Badge kind={t.status} size="lg" style={{ alignSelf: 'flex-start' }} />
         </div>
         <div style={{ ...card, padding: '4px 16px' }}>
-          {([['النطاق', rangeL(t)], ['موعد التسليم', t.due], ['المعلم', teacherById('t1').name]] as const).map(([k, v], i) => (
+          {([['النطاق', rangeL(t)], ['موعد التسليم', t.due], ['المعلم', t.teacherName ?? teacherById('t1').name]] as const).map(([k, v], i) => (
             <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '12px 0', borderBottom: i < 2 ? `1px solid ${color.divider}` : 'none' }}>
               <span style={{ fontSize: 14, color: color.muted }}>{k}</span><span style={{ fontSize: 15, fontWeight: 700 }}>{v}</span>
             </div>
@@ -126,7 +128,8 @@ export function TaskDetail() {
         )}
         <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10, position: 'sticky', bottom: 0, background: color.ivory, padding: '10px 0 4px' }}>
           {canRec && <button onClick={() => go('record', { task: t.id })} style={primaryBtn()}><Icon name="mic" /> سجّل تلاوتك</button>}
-          {t.status === 'reviewed' && <button onClick={() => go('feedback', { id: t.id })} style={primaryBtn()}><Icon name="award" /> عرض تقييم المعلم</button>}
+          {t.status === 'reviewed' && !s.fb[t.id] && <p style={muted(13, { textAlign: 'center' })}>اعتمد المعلم هذه المهمة. عرض تفاصيل التقييم داخل التطبيق لم يُفعَّل بعد.</p>}
+          {t.status === 'reviewed' && s.fb[t.id] && <button onClick={() => go('feedback', { id: t.id })} style={primaryBtn()}><Icon name="award" /> عرض تقييم المعلم</button>}
           <button onClick={() => go('mushaf', { s: t.s, from: t.from, to: t.to })} style={sageBtn()}><Icon name="book" /> افتح النطاق في المصحف</button>
         </div>
       </div>
