@@ -9,16 +9,27 @@ export function fmt(s: number): string {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export const tzOf = (tz: TzId) => TZS.find((t) => t.id === tz)!;
+const tzBase = (tz: TzId) => TZS.find((t) => t.id === tz)!;
+
+/** Demo "today" (Sunday 11 Oct 2026). Demo slot hours are defined in Riyadh time (UTC+3, no DST). */
+const DEMO_DAY_UTC = Date.UTC(2026, 9, 11);
+const instantFromRiyadhHour = (h: number) => new Date(DEMO_DAY_UTC + (h - 3) * 3600_000);
+
+/** "GMT+3"-style label for the zone at the demo date, from the IANA database (handles DST). */
+function gmtLabel(iana: string): string {
+  const part = new Intl.DateTimeFormat('en-US', { timeZone: iana, timeZoneName: 'shortOffset' })
+    .formatToParts(new Date(DEMO_DAY_UTC + 12 * 3600_000)).find((p) => p.type === 'timeZoneName');
+  return part?.value === 'GMT' ? 'GMT+0' : (part?.value ?? 'GMT');
+}
+export const tzOf = (tz: TzId) => { const t = tzBase(tz); return { ...t, gmt: gmtLabel(t.iana) }; };
 export const tzLabel = (tz: TzId) => { const t = tzOf(tz); return `بتوقيت ${t.label} (${t.gmt})`; };
 
-/** Formats an hour stored in Riyadh time (GMT+3) into the viewer's timezone, 12h with ص/م. */
+/** Formats a demo slot (hour in Riyadh time) as 12h time with ص/م in the viewer's IANA timezone. */
 export function timeIn(tz: TzId, h: number): string {
-  let x = h + tzOf(tz).off - 3;
-  x = ((x % 24) + 24) % 24;
-  const hh = Math.floor(x), mm = Math.round((x - hh) * 60);
-  const h12 = hh % 12 || 12;
-  return `${h12}:${String(mm).padStart(2, '0')} ${hh < 12 ? 'ص' : 'م'}`;
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tzBase(tz).iana, hour: 'numeric', minute: '2-digit', hour12: true })
+    .formatToParts(instantFromRiyadhHour(h));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${get('hour')}:${get('minute')} ${get('dayPeriod').toUpperCase() === 'AM' ? 'ص' : 'م'}`;
 }
 
 export const dayFull = (i: number) => { const d = DAYS[i]; return `${d[0]} ${d[1]} أكتوبر`; };

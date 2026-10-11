@@ -52,7 +52,7 @@ const initial = () => ({
   sheet: null as Sheet | null,
   device: '390' as DeviceKey,
   user: { name: 'يوسف أحمد', first: 'يوسف', email: 'yousef@halqa.app', level: 'متوسط', goal: '5 أسطر يوميًا' },
-  tz: 'riyadh' as TzId,
+  tz: 'cairo' as TzId,
   uiScale: 'm' as 's' | 'm' | 'l',
   notif: { tasks: true, sessions: true, feedback: true, news: false } as Record<string, boolean>,
   intro: 0,

@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { color, font } from '@/theme/tokens';
 import { FieldError, Switch, inputStyle, labelStyle, outlineBtn, primaryBtn } from '@/components/ui';
 import { TZS } from '@/data/demo';
+import { tzOf } from '@/lib/format';
 import { saveSettings, useAdmin } from './adminStore';
 import { card } from './AdminTables';
 import type { AdminSettings as Settings } from './adminData';
@@ -69,7 +70,7 @@ export default function AdminSettings() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <label htmlFor="st-tz" style={labelStyle}>المنطقة الزمنية الافتراضية</label>
             <select id="st-tz" value={v.tz} onChange={(e) => up({ tz: e.target.value })} style={{ ...inputStyle(false), padding: '0 12px' }}>
-              {TZS.map((t) => <option key={t.id} value={t.id}>{t.label} ({t.gmt})</option>)}
+              {TZS.map((t) => <option key={t.id} value={t.id}>{t.label} ({tzOf(t.id).gmt})</option>)}
             </select>
             <p style={{ margin: 0, fontSize: 12, color: color.muted }}>تُخزَّن الأوقات بالتوقيت العالمي وتُعرض لكل مستخدم بتوقيته.</p>
           </div>

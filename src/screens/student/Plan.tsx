@@ -19,7 +19,7 @@ export default function Plan() {
 
   return (
     <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>خطتي</h1>
+      <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>تعلمي</h1>
       <div role="tablist" style={{ display: 'flex', background: color.sunken, borderRadius: 14, padding: 4, gap: 4 }}>
         {TABS.map(([k, l]) => {
           const on = pt === k;

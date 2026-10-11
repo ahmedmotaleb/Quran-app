@@ -107,7 +107,7 @@ export const initialCircles = (): AdminCircle[] => [
   { id: 5, name: 'حلقة الفجر', teacher: 'الشيخ عبدالرحمن السالم', schedule: 'يوميًا · 5:30 ص', level: 'جميع المستويات', members: 0, capacity: 15, st: 'draft' },
 ];
 
-/** Bookings across the platform; times shown in Riyadh time (GMT+3). */
+/** bookings across the platform; times shown in Cairo time. */
 export function initialBookings(): AdminBooking[] {
   const days = ['الأحد 11 أكتوبر', 'الإثنين 12 أكتوبر', 'الثلاثاء 13 أكتوبر', 'الأربعاء 14 أكتوبر', 'الخميس 15 أكتوبر', 'السبت 10 أكتوبر', 'الخميس 8 أكتوبر'];
   const hours = ['4:00 م', '5:00 م', '6:30 م', '8:00 م', '9:00 م'];
@@ -129,6 +129,6 @@ export function initialBookings(): AdminBooking[] {
 }
 
 export const initialSettings = (): AdminSettings => ({
-  orgName: `${BRAND.ar} لتعليم القرآن`, supportEmail: 'support@halqa.app', tz: 'riyadh', cancelHours: 12, joinMinutes: 10,
+  orgName: `${BRAND.ar} لتعليم القرآن`, supportEmail: 'support@halqa.app', tz: 'cairo', cancelHours: 12, joinMinutes: 10,
   durIndividual: 45, durGroup: 60, reminders: true, parentReports: true, openSignup: true,
 });

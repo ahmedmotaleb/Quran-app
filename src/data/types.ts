@@ -8,9 +8,10 @@ export type TaskType = 'hifz' | 'review' | 'tajweed';
 export type TaskStatus = 'not_started' | 'in_progress' | 'submitted' | 'reviewed';
 export type SessionStatus = 'confirmed' | 'cancelled' | 'completed';
 export type BadgeKind = TaskStatus | SessionStatus | 'late' | 'newsub';
-export type TzId = 'riyadh' | 'dubai' | 'kl' | 'london';
+export type TzId = 'cairo' | 'riyadh' | 'dubai' | 'kl' | 'london';
 
-export interface TimeZone { id: TzId; label: string; gmt: string; off: number }
+/** `iana` is the real timezone; offsets (incl. DST) are computed by Intl, never hardcoded. */
+export interface TimeZone { id: TzId; label: string; iana: string }
 
 export interface Teacher {
   id: string; name: string; ini: string; spec: string; tags: string[];

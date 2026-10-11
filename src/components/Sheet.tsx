@@ -3,7 +3,7 @@ import { color, font } from '@/theme/tokens';
 import { Icon, type IconName } from './Icon';
 import { Spinner, outlineBtn, primaryBtn } from './ui';
 import { TZS } from '@/data/demo';
-import { normalizeArabic } from '@/lib/format';
+import { normalizeArabic, tzOf } from '@/lib/format';
 import { closeSheet, pickSurah, playAyah, setState, toast, up, useApp } from '@/store/store';
 
 /** Bottom sheet host: confirm / info / ayah actions / surah picker / timezone picker. */
@@ -89,7 +89,7 @@ export default function Sheet() {
           return (
             <button key={t.id} role="radio" aria-checked={on} onClick={() => { setState({ tz: t.id, sheet: null }); toast('تم تحديث المنطقة الزمنية؛ ستظهر المواعيد بتوقيتك', 'globe'); }}
               style={{ minHeight: 52, padding: '0 14px', borderRadius: 12, border: `1px solid ${color.border}`, background: color.card, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', color: color.ink, fontSize: 15, textAlign: 'right' }}>
-              <span style={{ flex: 1 }}>{t.label} ({t.gmt})</span>
+              <span style={{ flex: 1 }}>{t.label} ({tzOf(t.id).gmt})</span>
               {on && <span style={{ color: color.primary }}><Icon name="check" size={18} /></span>}
             </button>
           );

@@ -72,7 +72,7 @@ export default function Feedback() {
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={() => go('record', { task: t.id })} style={outlineBtn(52, 15, { flex: 1 })}>سجّل مرة أخرى</button>
-          <button onClick={() => tab('plan')} style={primaryBtn(52, 15, { flex: 1 })}>العودة إلى خطتي</button>
+          <button onClick={() => tab('plan')} style={primaryBtn(52, 15, { flex: 1 })}>العودة إلى تعلمي</button>
         </div>
       </div>
     </div>

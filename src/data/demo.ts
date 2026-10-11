@@ -13,10 +13,11 @@ export const DAYS: [string, number][] = [
 export const TODAY_LABEL = 'الأحد 11 أكتوبر 2026';
 
 export const TZS: TimeZone[] = [
-  { id: 'riyadh', label: 'الرياض', gmt: 'GMT+3', off: 3 },
-  { id: 'dubai', label: 'دبي', gmt: 'GMT+4', off: 4 },
-  { id: 'kl', label: 'كوالالمبور', gmt: 'GMT+8', off: 8 },
-  { id: 'london', label: 'لندن', gmt: 'GMT+1', off: 1 },
+  { id: 'cairo', label: 'القاهرة', iana: 'Africa/Cairo' },
+  { id: 'riyadh', label: 'الرياض', iana: 'Asia/Riyadh' },
+  { id: 'dubai', label: 'دبي', iana: 'Asia/Dubai' },
+  { id: 'kl', label: 'كوالالمبور', iana: 'Asia/Kuala_Lumpur' },
+  { id: 'london', label: 'لندن', iana: 'Europe/London' },
 ];
 
 /** Offline surah index used for assignments and as a fallback list: number → [name, ayah count]. */
@@ -67,9 +68,9 @@ export const QUIZ: QuizQuestion[] = [
 
 export const SCREEN_NAMES = {
   splash: 'شاشة البداية', intro: 'التعريف', login: 'تسجيل الدخول', signup: 'إنشاء حساب', forgot: 'استعادة كلمة المرور', onboard: 'إعداد الطالب',
-  home: 'الرئيسية', plan: 'خطتي', task: 'تفاصيل المهمة', record: 'تسجيل التلاوة', feedback: 'تقييم المعلم', mushaf: 'المصحف',
-  circles: 'الحلقات', teacher: 'صفحة المعلم', bkreview: 'مراجعة الحجز', bkdone: 'تأكيد الحجز', session: 'تفاصيل الجلسة',
-  live: 'الجلسة المباشرة', lesson: 'صفحة الدرس', quiz: 'الاختبار', progress: 'تقدّمي', account: 'حسابي',
+  home: 'الرئيسية', plan: 'تعلمي', task: 'تفاصيل المهمة', record: 'تسجيل التلاوة', feedback: 'تقييم المعلم', mushaf: 'المصحف',
+  circles: 'الجلسات', teacher: 'صفحة المعلم', bkreview: 'مراجعة الحجز', bkdone: 'تأكيد الحجز', session: 'تفاصيل الجلسة',
+  live: 'الجلسة المباشرة', lesson: 'صفحة الدرس', quiz: 'الاختبار', progress: 'تقدمي', account: 'حسابي',
   tdash: 'لوحة اليوم (معلم)', tstudents: 'الطلاب (معلم)', tstudent: 'ملف الطالب', tassign: 'إنشاء واجب',
   treviews: 'المراجعات (معلم)', treview: 'مراجعة تسجيل', tschedule: 'المواعيد (معلم)', tcontent: 'إنشاء محتوى', phome: 'متابعة ولي الأمر',
 } as const;

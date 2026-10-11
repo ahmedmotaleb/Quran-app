@@ -70,7 +70,7 @@ function config(s: AdminState): Config {
           ...(x.st !== 'draft' ? [toggleAct('circles', x.id, x.name, x.st)] : []),
         ],
       }));
-      return { cols: ['الحلقة', 'المعلم', 'الموعد (الرياض)', 'الطلاب'], rows, searchL: 'ابحث باسم الحلقة أو المعلم', extra: { label: 'المعلم', options: all('كل المعلمين', TEACHER_NAMES) }, add: { label: 'حلقة جديدة', dialog: { kind: 'circle', id: null } } };
+      return { cols: ['الحلقة', 'المعلم', 'الموعد (القاهرة)', 'الطلاب'], rows, searchL: 'ابحث باسم الحلقة أو المعلم', extra: { label: 'المعلم', options: all('كل المعلمين', TEACHER_NAMES) }, add: { label: 'حلقة جديدة', dialog: { kind: 'circle', id: null } } };
     }
     case 'bookings': {
       const rows = s.bookings.map((x): Row => ({
@@ -80,7 +80,7 @@ function config(s: AdminState): Config {
           ? [{ label: 'إلغاء الحجز', danger: true, click: () => confirmAction('إلغاء الحجز؟', `سيُلغى موعد ${x.student} مع ${x.teacher} (${x.when}) ويُبلَّغ الطرفان، ويعود الموعد متاحًا.`, 'إلغاء الحجز', () => setStatus('bookings', x.id, 'cancelled', 'أُلغي الحجز وأُبلغ الطرفان')) }]
           : [],
       }));
-      return { cols: ['الطالب', 'المعلم', 'الموعد (الرياض)', 'النوع'], rows, searchL: 'ابحث باسم الطالب أو المعلم', extra: { label: 'المعلم', options: all('كل المعلمين', TEACHER_NAMES) } };
+      return { cols: ['الطالب', 'المعلم', 'الموعد (القاهرة)', 'النوع'], rows, searchL: 'ابحث باسم الطالب أو المعلم', extra: { label: 'المعلم', options: all('كل المعلمين', TEACHER_NAMES) } };
     }
     case 'lectures':
     case 'quizzes': {

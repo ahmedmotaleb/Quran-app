@@ -206,7 +206,7 @@ function CircleDialog({ id }: { id: number | null }) {
       <Field id="ci-teacher" label="المعلم">
         <select id="ci-teacher" value={v.teacher} onChange={(e) => up({ teacher: e.target.value })} style={selStyle}>{TEACHER_NAMES.map((t) => <option key={t}>{t}</option>)}</select>
       </Field>
-      <Field id="ci-sched" label="الموعد" error={errs.schedule} hint="بتوقيت الرياض (GMT+3)؛ يُعرض لكل طالب بتوقيته.">
+      <Field id="ci-sched" label="الموعد" error={errs.schedule} hint="بتوقيت القاهرة (Africa/Cairo)؛ يُعرض لكل طالب بتوقيته.">
         <input id="ci-sched" value={v.schedule} aria-invalid={!!errs.schedule} placeholder="مثال: الأحد والثلاثاء · 8:00 م" onChange={(e) => up({ schedule: e.target.value })} style={inputStyle(errs.schedule)} />
       </Field>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

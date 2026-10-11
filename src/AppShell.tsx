@@ -31,12 +31,12 @@ const SCREENS: Record<Screen, ComponentType> = {
   treviews: TeacherReviews, treview: TeacherReview, tschedule: TeacherSchedule, tcontent: TeacherContent, phome: ParentHome,
 };
 
-const TABS_STUDENT: [Screen, string, IconName][] = [['home', 'الرئيسية', 'home'], ['plan', 'خطتي', 'plan'], ['circles', 'الحلقات', 'users'], ['progress', 'تقدّمي', 'chart'], ['account', 'حسابي', 'user']];
+const TABS_STUDENT: [Screen, string, IconName][] = [['home', 'الرئيسية', 'home'], ['plan', 'تعلمي', 'plan'], ['circles', 'الجلسات', 'users'], ['progress', 'تقدمي', 'chart'], ['account', 'حسابي', 'user']];
 const TABS_TEACHER: [Screen, string, IconName][] = [['tdash', 'اليوم', 'home'], ['tstudents', 'الطلاب', 'users'], ['treviews', 'المراجعات', 'inbox'], ['tschedule', 'المواعيد', 'cal'], ['account', 'حسابي', 'user']];
 
 /** Main screens that can be switched into loading / empty / error / offline from the demo panel. */
 const MAIN: Screen[] = ['home', 'plan', 'circles', 'progress', 'tdash', 'tstudents', 'treviews', 'phome'];
-const TITLES: Partial<Record<Screen, string>> = { home: 'الرئيسية', plan: 'خطتي', circles: 'الحلقات', progress: 'تقدّمي', tdash: 'لوحة اليوم', tstudents: 'الطلاب', treviews: 'المراجعات', phome: 'متابعة الأبناء' };
+const TITLES: Partial<Record<Screen, string>> = { home: 'الرئيسية', plan: 'تعلمي', circles: 'الجلسات', progress: 'تقدمي', tdash: 'لوحة اليوم', tstudents: 'الطلاب', treviews: 'المراجعات', phome: 'متابعة الأبناء' };
 const EMPTY: Partial<Record<Screen, [string, string]>> = {
   home: ['لا توجد مهام لليوم', 'استرح أو راجع ما حفظته سابقًا. سيضيف معلمك مهامك القادمة هنا.'],
   plan: ['لا توجد مهام لليوم', 'سيضيف معلمك المهام القادمة هنا، وستصلك إشعارات بها.'],

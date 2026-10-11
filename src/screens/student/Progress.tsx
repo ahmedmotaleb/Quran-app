@@ -51,7 +51,7 @@ export default function Progress() {
 
   return (
     <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>تقدّمي</h1>
+      <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>تقدمي</h1>
       <Segmented role="group" label="الفترة الزمنية" options={[['week', 'أسبوع'], ['month', 'شهر'], ['q', '3 أشهر']] as const} value={pr} onChange={(k) => setState({ progRange: k })} />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,150px),1fr))', gap: 10 }}>
         {metrics.map((m) => (
