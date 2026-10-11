@@ -4,7 +4,6 @@ on:
   push:
     branches: [main, halqa-frontend]
     paths-ignore: ['**.md', 'project/**', 'chats/**']
-  pull_request:
   workflow_dispatch:
 
 concurrency:
