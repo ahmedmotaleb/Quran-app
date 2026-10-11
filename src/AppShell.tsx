@@ -105,7 +105,7 @@ export default function AppShell({ framed }: { framed: boolean }) {
   const Cur = SCREENS[screen];
   const liveMode = useApp((s) => s.liveMode);
   // Live mode: screens whose data is not served by the API yet keep the design's sample content, labelled as such.
-  const sample = liveMode && (role === 'parent' || SAMPLE_SCREENS.includes(screen));
+  const sample = liveMode && SAMPLE_SCREENS.includes(screen);
 
   return (
     <div style={{ height: '100%', overflow: 'hidden', background: dark ? color.liveBg : color.ivory, display: 'flex', flexDirection: 'column', position: 'relative', paddingTop: framed ? 0 : 'env(safe-area-inset-top)' }}>

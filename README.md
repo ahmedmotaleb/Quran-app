@@ -109,10 +109,12 @@ The app runs in one of two modes, chosen at build time by `VITE_API_BASE_URL`:
 
 | Live mode: connected to the API | Live mode: still sample content (banner shown) |
 | --- | --- |
-| Sign-in, sign-up (student only), sign-out, session restore, password-reset request | Teacher and parent apps |
-| Onboarding answers, profile timezone | Recording upload (needs object storage; the app says so) |
-| Student tasks and their statuses | Teacher feedback details, progress, lessons, quizzes |
-| Teacher directory, real open slots, booking, cancelling, rescheduling | Live video sessions |
+| Sign-in, sign-up (student only), sign-out, session restore, password-reset request | Teacher schedule and content tools |
+| Onboarding answers, profile timezone | Live video sessions |
+| Student tasks, recording upload and submission, teacher feedback | Student progress, lessons, quizzes |
+| Teacher directory, real open slots, booking, cancelling, rescheduling | Teacher voice notes (hidden in live mode) |
+| Teacher: students, new tasks, review queue, scores, timed notes | |
+| Parent: linked children only — sessions, attendance, tasks, progress, latest feedback (no audio) | |
 
 Web uses the session cookie + CSRF token; Android stores a bearer token in app-private
 storage (`@capacitor/preferences`). Bookings send an `Idempotency-Key`, so a retried tap

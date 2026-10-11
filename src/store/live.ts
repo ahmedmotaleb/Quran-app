@@ -82,7 +82,28 @@ export async function loadTeacherData() {
   }
 }
 
-export const loadData = () => (get().me?.role === 'teacher' ? loadTeacherData() : loadStudentData());
+/** Parent: only children with an active guardian link come back from the API. */
+export async function loadParentData() {
+  if (get().me?.role !== 'parent') return;
+  setState({ net: { ...get().net, loading: true, error: null } });
+  try {
+    const [k, a, b, sub] = await Promise.all([E.parentChildren(), E.assignments(), E.bookings(), E.submissions()]);
+    const tz = iana();
+    const kids = k.results.map((x) => ({ id: String(x.id), name: x.full_name, level: x.level || '—' }));
+    setState((s) => ({
+      parent: { kids, tasks: a.results.map((x) => E.toTask(x, tz)), bookings: b.results, subs: sub.results },
+      child: kids.some((x) => x.id === s.child) ? s.child : kids[0]?.id ?? '',
+      net: { ...s.net, loading: false, error: null },
+    }));
+  } catch (e) {
+    setState((s) => ({ net: { ...s.net, loading: false, error: msg(e) } }));
+  }
+}
+
+export const loadData = () => {
+  const r = get().me?.role;
+  return r === 'teacher' ? loadTeacherData() : r === 'parent' ? loadParentData() : loadStudentData();
+};
 
 /** On startup: restore the session (cookie on web, stored token on Android). */
 export async function bootstrap(): Promise<boolean> {
@@ -157,7 +178,7 @@ export async function logout() {
   await setToken(null);
   resetCsrf();
   // Nothing from the previous account stays in memory.
-  setState({ me: null, tasks: [], sessions: [], fb: {}, recs: {}, avail: {}, reviews: null, students: [], teachers: [] });
+  setState({ me: null, tasks: [], sessions: [], fb: {}, recs: {}, avail: {}, reviews: null, students: [], teachers: [], parent: null });
 }
 
 export async function saveTimezone(id: TzId) {

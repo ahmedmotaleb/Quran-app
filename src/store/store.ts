@@ -12,7 +12,7 @@ import * as media from '@/services/media';
 import type { IconName } from '@/components/Icon';
 import { BRAND } from '@/theme/brand';
 import { LIVE } from '@/api/client';
-import type { Me } from '@/api/endpoints';
+import type { ApiBooking, ApiSubmission, Me } from '@/api/endpoints';
 import * as live from './live';
 
 /* ------------------------------------------------------------------ */
@@ -57,6 +57,8 @@ const initial = () => ({
   students: [...STUDENTS] as Student[],
   /** Live mode: the teacher's review queue from the API (demo derives it from tasks). */
   reviews: null as ReviewItem[] | null,
+  /** Live mode, parent: linked children and their records (the API scopes all of it). */
+  parent: null as null | { kids: { id: string; name: string; level: string }[]; tasks: Task[]; bookings: ApiBooking[]; subs: ApiSubmission[] },
   role: null as Role | null,
   screen: 'splash' as Screen,
   params: {} as Params,
