@@ -1,22 +1,18 @@
 /**
  * Central API client (Prompt 03/06).
  * - Base URL from VITE_API_BASE_URL. Unset → the app runs in labelled demo mode (no server).
- * - Web: session cookie + CSRF token header. Android: bearer token kept in app-private storage.
+ * - Web / installed PWA: HttpOnly session cookie + CSRF token header. No token is stored in the browser.
  * - 15 s timeout. Only GETs (and requests carrying an Idempotency-Key) are retried automatically.
  * - Errors carry the server's stable `code`, Arabic `message`, per-field errors and request id.
  */
-import { Preferences } from '@capacitor/preferences';
-import { Capacitor } from '@capacitor/core';
 
 const RAW_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
 /** True when a backend is configured; false means demo mode. */
 export const LIVE = !!RAW_BASE;
 const BASE = (RAW_BASE ?? '').replace(/\/$/, '');
-export const IS_NATIVE = Capacitor.isNativePlatform();
 const TIMEOUT_MS = 15_000;
 /** Uploads get longer: a 10-minute recitation on a slow connection. */
 const UPLOAD_TIMEOUT_MS = 120_000;
-const TOKEN_KEY = 'halqa.auth.token';
 
 export class ApiError extends Error {
   constructor(
@@ -38,22 +34,10 @@ export class ApiError extends Error {
 const OFFLINE = () => new ApiError(0, 'network', 'تعذّر الاتصال بالخادم. تحقق من الإنترنت ثم حاول مرة أخرى.');
 const TIMEOUT = () => new ApiError(0, 'timeout', 'استغرق الطلب وقتًا أطول من المتوقع. حاول مرة أخرى.');
 
-let token: string | null = null;
 let csrf: string | null = null;
 
-export async function loadToken() {
-  if (!IS_NATIVE) return;
-  token = (await Preferences.get({ key: TOKEN_KEY })).value;
-}
-export async function setToken(t: string | null) {
-  token = t;
-  if (!IS_NATIVE) return;
-  if (t) await Preferences.set({ key: TOKEN_KEY, value: t });
-  else await Preferences.remove({ key: TOKEN_KEY });
-}
-
 async function ensureCsrf() {
-  if (IS_NATIVE || csrf) return;
+  if (csrf) return;
   const r = await raw('GET', '/api/v1/auth/csrf');
   csrf = (r as { csrfToken?: string })?.csrfToken ?? null;
 }
@@ -68,13 +52,12 @@ async function raw(method: string, path: string, body?: unknown, headers: Record
   const h: Record<string, string> = { Accept: 'application/json', ...headers };
   const form = typeof FormData !== 'undefined' && body instanceof FormData;
   if (body !== undefined && !form) h['Content-Type'] = 'application/json';
-  if (token) h.Authorization = `Bearer ${token}`;
   if (csrf && method !== 'GET') h['X-CSRFToken'] = csrf;
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
       method, headers: h, body: body === undefined ? undefined : form ? (body as FormData) : JSON.stringify(body), signal: ctrl.signal,
-      credentials: IS_NATIVE ? 'omit' : 'include',
+      credentials: 'include',
     });
   } catch (e) {
     throw (e as Error).name === 'AbortError' ? TIMEOUT() : OFFLINE();
@@ -104,7 +87,7 @@ export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
     } catch (e) {
       const err = e as ApiError;
       // A CSRF failure after the session rotated (login/logout): refresh the token once.
-      if (err.status === 403 && err.code === 'permission_denied' && !IS_NATIVE && attempt === 0 && method !== 'GET') {
+      if (err.status === 403 && err.code === 'permission_denied' && attempt === 0 && method !== 'GET') {
         csrf = null; await ensureCsrf(); continue;
       }
       const transient = err.status === 0 || err.status >= 500;

@@ -72,6 +72,18 @@ or credential).
 | Media storage | S3-compatible adapter (Cloudflare R2 proposed) | Handbook; **blocked** on credentials |
 | Android app ID | `app.halqa.quran` | Must be confirmed before the first Play/public release |
 
+## Change of direction: PWA instead of Android (owner decision)
+
+The owner asked for a PWA instead of an Android app. The Capacitor project, its CI workflow and the
+Android-only client code were removed (recoverable from git history). Consequences:
+
+- Prompt 24 (signed release APK) and the `HALQA_KEYSTORE_*` secrets are no longer needed; the
+  release artefact is the `dist/` build from `.github/workflows/web.yml`, served over HTTPS.
+- Sign-in uses the HttpOnly session cookie everywhere; the bearer-token path stays in the API,
+  unused, in case a native client returns.
+- iOS: installable via Safari "Add to Home Screen"; web push on iOS needs iOS 16.4+ and an
+  installed app (relevant when notifications channels are built).
+
 ## Backlog (mapped to the handbook)
 
 1. **03** Backend foundation: project layout, env config, health/readiness, request IDs, seed data, CI on PostgreSQL.
@@ -95,7 +107,7 @@ or credential).
 | `DJANGO_ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `CORS_ALLOWED_ORIGINS` | Host/origin allowlists | Ops | dev values only |
 | `STORAGE_*` (endpoint, bucket, keys) | Private media (R2) | Owner | **missing** |
 | `EMAIL_*` | Password recovery | Owner | **missing** — recovery emails are logged in dev only |
-| `HALQA_KEYSTORE_*` | Android release signing | Owner | **missing** |
+| `HALQA_KEYSTORE_*` | Android release signing | — | not needed (PWA) |
 | Hosting (API, web, PostgreSQL) | Staging/production | Owner | **not chosen** |
 
 ## Checks that could not run here

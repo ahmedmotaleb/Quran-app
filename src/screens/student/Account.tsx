@@ -2,7 +2,8 @@ import { color, font } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
 import { BackButton, Segmented, Switch, card, dangerOutlineBtn } from '@/components/ui';
 import { tzOf } from '@/lib/format';
-import { go, logout, openSheet, setState, up, useApp } from '@/store/store';
+import { go, logout, openSheet, setState, toast, up, useApp } from '@/store/store';
+import { promptInstall, useInstall } from '@/pwa/install';
 
 const NOTIFS = [['tasks', 'تذكير بالواجبات'], ['sessions', 'تذكير قبل الجلسات'], ['feedback', 'تقييمات المعلم'], ['news', 'أخبار الحلقة']] as const;
 const rowBtn = { width: '100%', minHeight: 52, border: 'none', background: 'transparent', display: 'flex', alignItems: 'center', gap: 8, padding: 0, cursor: 'pointer', color: color.ink, fontSize: 15 } as const;
@@ -65,6 +66,7 @@ export default function Account() {
           <span style={{ fontSize: 14, fontWeight: 700 }}>{tz.label} ({tz.gmt})</span><span style={{ color: color.primary }}><Icon name="chevL" size={18} /></span>
         </button>
       </section>
+      <InstallRow />
       <section style={{ ...card, padding: '4px 16px' }}>
         <button onClick={() => openSheet({ kind: 'info', title: 'المساعدة', body: 'للمساعدة في الحجز أو التسجيل أو الاشتراك، تواصل مع فريق الدعم عبر support@halqa.app. نرد عادة خلال يوم عمل.' })}
           style={{ ...rowBtn, borderBottom: `1px solid ${color.divider}` }}><Icon name="help" size={18} /><span style={{ flex: 1, textAlign: 'right' }}>المساعدة</span><Icon name="chevL" size={18} /></button>
@@ -75,5 +77,22 @@ export default function Account() {
         style={dangerOutlineBtn(52, 16)}><Icon name="leave" /> تسجيل الخروج</button>
       <p style={{ margin: 0, fontSize: 12, color: color.muted, textAlign: 'center', fontFamily: font.latin }}>HALQA · v0.1 prototype</p>
     </div>
+  );
+}
+
+/** Offers to install the PWA on the home screen; hidden when already installed or unsupported. */
+function InstallRow() {
+  const how = useInstall();
+  if (!how) return null;
+  const click = async () => {
+    if (how === 'prompt') { if (await promptInstall()) toast('ثُبّت التطبيق على جهازك'); return; }
+    openSheet({ kind: 'info', title: 'ثبّت الحلقة على iPhone', body: 'من متصفح Safari: اضغط زر المشاركة أسفل الشاشة، ثم اختر «إضافة إلى الشاشة الرئيسية»، ثم «إضافة».' });
+  };
+  return (
+    <button onClick={click} style={{ ...card, minHeight: 56, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', color: color.ink, fontSize: 15, fontWeight: 700, textAlign: 'right' }}>
+      <span style={{ color: color.primary }}><Icon name="upload" size={18} /></span>
+      <span style={{ flex: 1 }}>ثبّت التطبيق على جهازك</span>
+      <span style={{ color: color.primary }}><Icon name="chevL" size={18} /></span>
+    </button>
   );
 }

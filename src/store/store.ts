@@ -146,13 +146,37 @@ function scrollTop() {
   requestAnimationFrame(() => { const e = document.getElementById('scr'); if (e) e.scrollTop = 0; });
 }
 
+/*
+ * Phone back button / gesture (installed PWA): each in-app step pushes a browser history entry, so
+ * "back" walks the app's stack instead of closing it. The URL is unchanged (admin keeps its #/admin).
+ */
+let skipPop = false;
+const inApp = () => !location.hash.startsWith('#/');
+function pushNav() { if (inApp()) history.pushState({ halqa: true }, ''); }
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', () => {
+    if (!inApp()) return;
+    if (skipPop) { skipPop = false; return; }
+    const s = get();
+    if (s.sheet) { set({ sheet: null }); pushNav(); return; }   // back closes an open sheet first
+    if (s.stack.length) popScreen();
+  });
+}
+
 export function go(screen: Screen, params: Params = {}) {
   const x = leave();
   set((s) => ({ ...x, stack: [...s.stack, { screen: s.screen, params: s.params }], screen, params }));
   scrollTop();
   onEnter(screen, params);
+  pushNav();
 }
+/** On-screen back arrow: pop the app stack and keep browser history in step. */
 export function back() {
+  const had = get().stack.length > 0;
+  popScreen();
+  if (had && inApp() && history.state?.halqa) { skipPop = true; history.back(); }
+}
+function popScreen() {
   const x = leave();
   set((s) => {
     const st = [...s.stack]; const p = st.pop();

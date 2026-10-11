@@ -9,7 +9,7 @@ the server default zone, Africa/Cairo). Lists are paginated:
 | Client | Mechanism |
 | --- | --- |
 | Web app / admin portal | Session cookie (HttpOnly, SameSite=Lax). Writes need `X-CSRFToken` (get the cookie from `GET /auth/csrf`). |
-| Android app | `Authorization: Bearer <token>` from `POST /auth/login` with `"client":"native"`. Only a SHA-256 hash is stored. The token expires (30 days by default) and is revoked by logout, password change/reset or suspension. |
+| Native clients (none at present — the app is a PWA and uses the cookie session) | `Authorization: Bearer <token>` from `POST /auth/login` with `"client":"native"`. Only a SHA-256 hash is stored. The token expires (30 days by default) and is revoked by logout, password change/reset or suspension. |
 
 ## Errors
 

@@ -2,7 +2,9 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import AppShell from './AppShell';
 import DemoPanel from './demo/DemoPanel';
 import { startSplash, tick, useApp } from './store/store';
-import { isNative } from './lib/native';
+import PwaUpdate from './pwa/PwaUpdate';
+import { isStandalone } from './pwa/install';
+import { LIVE } from './api/client';
 
 const AdminApp = lazy(() => import('./admin/AdminApp'));
 const DesignSystem = lazy(() => import('./designsystem/DesignSystem'));
@@ -26,6 +28,10 @@ function useMedia(q: string) {
 
 /** `#/admin` → admin portal, `#/design-system` → living style guide, anything else → the mobile app. */
 export default function App() {
+  return <><Routes /><PwaUpdate /></>;
+}
+
+function Routes() {
   const h = useHash();
   if (h.startsWith('#/admin')) return <Suspense fallback={null}><AdminApp /></Suspense>;
   if (h.startsWith('#/design-system')) return <Suspense fallback={null}><DesignSystem /></Suspense>;
@@ -37,8 +43,8 @@ export default function App() {
  * (mirrors the Claude Design prototype). On phones it renders full-screen.
  */
 function MobileApp() {
-  // The installed Android app is always full-screen, even on tablets — the demo frame is web-only.
-  const framed = useMedia(FRAME_QUERY) && !isNative;
+  // The phone frame + prototype panel are a demo-mode desktop aid only: never when installed, never in live mode.
+  const framed = useMedia(FRAME_QUERY) && !isStandalone() && !LIVE;
   const device = useApp((s) => s.device);
 
   useEffect(() => {

@@ -1,0 +1,36 @@
+name: Web (PWA)
+
+on:
+  push:
+    branches: [main, halqa-frontend]
+    paths-ignore: ['backend/**', '.github/workflows/backend.yml']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Build (demo mode)
+        run: npm run build
+      - name: Check the PWA output
+        run: |
+          test -f dist/sw.js && test -f dist/manifest.webmanifest
+          node -e "const m=JSON.parse(require('fs').readFileSync('dist/manifest.webmanifest','utf8'));for(const k of ['name','short_name','start_url','display','icons']) if(!m[k]) throw new Error('manifest missing '+k);if(m.display!=='standalone'||m.dir!=='rtl') throw new Error('display/dir')"
+          # Duplicate precache entries make Workbox abort installation (offline would silently break).
+          dups=$(grep -o 'url:"[^"]*"' dist/sw.js | sort | uniq -d | wc -l); test "$dups" = 0
+          # API responses must never be cached by the service worker.
+          if grep -o 'urlPattern:[^,]*' dist/sw.js | grep -q '/api/'; then echo "service worker caches /api"; exit 1; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: halqa-pwa-${{ github.sha }}
+          path: dist
+          retention-days: 14

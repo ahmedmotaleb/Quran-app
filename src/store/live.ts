@@ -7,7 +7,7 @@
  * live video, lessons, quizzes, progress.
  */
 import * as E from '@/api/endpoints';
-import { ApiError, IS_NATIVE, loadToken, resetCsrf, setToken } from '@/api/client';
+import { ApiError, resetCsrf } from '@/api/client';
 import { TZS } from '@/data/demo';
 import type { Feedback, Recording, Role, Slot, TzId } from '@/data/types';
 import { dayOffset, fmtRelative, zonedToIso } from '@/lib/time';
@@ -19,7 +19,6 @@ import { back, reset, setState, toast, up, useApp, type AssignForm, type ReviewD
 
 // Lazy: store.ts and this module import each other.
 const get = () => useApp.getState();
-const client = () => (IS_NATIVE ? 'native' : 'web') as 'web' | 'native';
 const iana = () => tzOf(get().tz).iana;
 const msg = (e: unknown) => (e instanceof ApiError ? e.message : 'حدث خطأ غير متوقع. حاول مرة أخرى.');
 
@@ -113,7 +112,6 @@ export function bootstrap(): Promise<boolean> {
   return booting;
 }
 async function restoreSession(): Promise<boolean> {
-  await loadToken();
   try {
     const u = await E.me();
     if (u.role === 'admin') return false;
@@ -129,8 +127,7 @@ async function restoreSession(): Promise<boolean> {
 export async function login(email: string, password: string) {
   up('login', { loading: true, errors: {} });
   try {
-    const r = await E.login(email, password, client());
-    if (r.token) await setToken(r.token);
+    const r = await E.login(email, password);
     resetCsrf();
     applyUser(r.user);
     up('login', { loading: false, pw: '' });
@@ -146,8 +143,7 @@ export async function login(email: string, password: string) {
 
 export async function register(name: string, email: string, password: string) {
   try {
-    const r = await E.register(name, email, password, client(), Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Cairo');
-    if (r.token) await setToken(r.token);
+    const r = await E.register(name, email, password, Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Cairo');
     resetCsrf();
     applyUser(r.user);
     setState((s) => ({ signup: { ...s.signup, errors: {}, pw: '' }, ob: { ...s.ob, step: 0 } }));
@@ -181,7 +177,6 @@ export async function forgot(email: string) {
 
 export async function logout() {
   try { await E.logout(); } catch { /* signing out locally regardless */ }
-  await setToken(null);
   resetCsrf();
   // Nothing from the previous account stays in memory.
   setState({ me: null, tasks: [], sessions: [], fb: {}, recs: {}, avail: {}, reviews: null, students: [], teachers: [], parent: null, tsched: null, subs: [], lessons: null, lessonCur: null, tests: null, lq: null, grading: null });

@@ -3,7 +3,7 @@
 //   node e2e/<file>.mjs <screenshot-dir> [base-url]
 // Needs Playwright (PLAYWRIGHT_MODULE overrides the import, CHROMIUM_PATH the browser).
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
-const out = process.argv[2]; const BASE = 'http://localhost:5174/';
+const out = process.argv[2]; const BASE = process.argv[3] || 'http://localhost:5174/';
 const b = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH || undefined,
   args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],

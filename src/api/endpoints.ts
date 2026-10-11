@@ -26,10 +26,9 @@ export interface ApiBooking {
 }
 
 // ---- auth ----
-export const login = (email: string, password: string, client: 'web' | 'native') =>
-  api<LoginResult>('POST', 'auth/login', { email, password, client, device: client === 'native' ? 'android' : '' });
-export const register = (full_name: string, email: string, password: string, client: 'web' | 'native', timezone: string) =>
-  api<LoginResult>('POST', 'auth/register', { full_name, email, password, client, timezone });
+export const login = (email: string, password: string) => api<LoginResult>('POST', 'auth/login', { email, password, client: 'web' });
+export const register = (full_name: string, email: string, password: string, timezone: string) =>
+  api<LoginResult>('POST', 'auth/register', { full_name, email, password, client: 'web', timezone });
 export const logout = () => api<null>('POST', 'auth/logout');
 export const me = () => api<Me>('GET', 'me');
 export const updateMe = (patch: Partial<Pick<Me, 'full_name' | 'timezone' | 'phone'>>) => api<Me>('PATCH', 'me', patch);
