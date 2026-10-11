@@ -1,0 +1,92 @@
+# API contracts (v1)
+
+Base path `/api/v1`. JSON only. Times are ISO-8601 with offset (stored in UTC; rendered in
+the server default zone, Africa/Cairo). Lists are paginated:
+`{count, next, previous, results}`, `?page=` and `?page_size=` (max 100).
+
+## Authentication
+
+| Client | Mechanism |
+| --- | --- |
+| Web app / admin portal | Session cookie (HttpOnly, SameSite=Lax). Writes need `X-CSRFToken` (get the cookie from `GET /auth/csrf`). |
+| Android app | `Authorization: Bearer <token>` from `POST /auth/login` with `"client":"native"`. Only a SHA-256 hash is stored. The token expires (30 days by default) and is revoked by logout, password change/reset or suspension. |
+
+## Errors
+
+Every error looks like this:
+
+```json
+{"code": "slot_taken", "message": "لم يعد هذا الموعد متاحًا…", "fields": {"…": ["…"]}, "request_id": "…"}
+```
+
+`code` is stable for programs; `message` is Arabic for people. `fields` appears on
+validation errors. `request_id` also comes back as the `X-Request-ID` header and in
+server logs.
+
+## Endpoints
+
+| Method & path | Who | Notes |
+| --- | --- | --- |
+| `GET /api/health`, `GET /api/ready` | anyone | liveness; DB + migrations readiness |
+| `GET auth/csrf` | anyone | sets CSRF cookie |
+| `POST auth/register` | anyone | always creates a **student**; `role` in the body is ignored; respects `open_signup` |
+| `POST auth/login` | student, teacher, parent | admins get `admin_portal_only` |
+| `POST admin/auth/login` | admin | `otp` required when MFA is on |
+| `POST auth/logout` | signed in | ends the session or revokes the bearer token |
+| `POST auth/password/forgot` | anyone | same answer whether or not the email exists; throttled |
+| `POST auth/password/reset` | holder of emailed link | single-use (token is invalidated by the password change); revokes tokens |
+| `POST auth/password/change` | signed in | revokes other devices' tokens |
+| `POST auth/invitations/accept` | per purpose | teacher account / guardian link / student→teacher |
+| `GET, PATCH me` | signed in | name, timezone, phone |
+| `PUT me/onboarding` | student | level, goal, preferred days/period |
+| `POST invitations` | admin (any purpose); teacher (`student_teacher` only) | code shown once |
+| `GET teachers`, `GET teachers/{id}` | learning users | approved, active teachers; `?q=`, `?tag=` |
+| `GET teachers/{id}/slots` | learning users | open occurrences in the booking window, `seats_left` from DB |
+| `GET teacher/students` | teacher | assigned students only |
+| `GET parent/children` | parent | children with an **active** guardian link only |
+| `GET, POST assignments` | list: scoped; create: teacher for assigned students | range validated against Hafs ayah counts |
+| `GET assignments/{id}` | scoped | 404 if not visible |
+| `POST assignments/{id}/start` | owning student | `not_started`/`needs_repeat` → `in_progress` |
+| `GET, POST bookings` | list: scoped; create: student | create needs `Idempotency-Key` header; `?when=upcoming|past`, `?status=` |
+| `GET bookings/{id}` | scoped | |
+| `POST bookings/{id}/cancel` | owner (outside cancel window), session teacher, admin | idempotent |
+| `POST bookings/{id}/reschedule` | owner | atomic: new booking + cancel old, or nothing |
+| `POST bookings/{id}/attendance` | session teacher, after start | audited |
+| `GET quran/source`, `GET quran/surahs`, `GET quran/surahs/{n}?from&to` | signed in | verbatim text from the active verified source; `503 quran_unavailable` if none |
+| `GET notifications`, `POST notifications/read` | signed in | own only |
+| `GET, POST admin/users` | admin | filters `role,status,q,unlinked=1`; created users set their password via recovery |
+| `POST admin/users/{id}/status` | admin | suspension requires a reason; revokes tokens |
+| `POST admin/teacher-assignments`, `POST admin/teacher-assignments/{id}/end` | admin | |
+| `POST admin/guardian-links`, `POST admin/guardian-links/{id}/revoke` | admin | |
+| `POST admin/mfa/setup`, `POST admin/mfa/confirm` | admin | TOTP (RFC 6238) |
+
+## Permission matrix (learning records: assignments, bookings, feedback)
+
+| Role | Can read | Can write |
+| --- | --- | --- |
+| Student | own | start own tasks, book/cancel/reschedule own sessions |
+| Teacher | students with an active `TeacherAssignment`; own sessions' bookings | assignments for assigned students; attendance for own sessions; cancel own sessions' bookings |
+| Parent | children with an **active** `GuardianLink` (read-only) | — |
+| Admin | everything (admin endpoints) | users, links, assignments, status; all changes audited |
+
+Objects outside your scope return **404** (not 403), so IDs can't be probed.
+
+## Status transitions
+
+Assignment: `not_started → in_progress → submitted → accepted | needs_repeat`;
+`needs_repeat → in_progress | submitted`. Every change is stored in `AssignmentEvent`
+with the actor.
+
+Booking: `confirmed → cancelled`. Attendance is set separately on confirmed bookings:
+`present | late | absent | excused`.
+
+## Integrity guarantees (PostgreSQL)
+
+- Teacher sessions cannot overlap (`EXCLUDE USING gist` on `tstzrange`, cancelled excluded).
+- One confirmed booking per student per session (partial unique index).
+- Booking creation is idempotent per `(student, Idempotency-Key)`.
+- Capacity and student-overlap checks run inside the booking transaction, under a row
+  lock on the session and an advisory lock per student. Tested with concurrent requests.
+- Feedback scores are 1–5; a "repeat" decision must say what needs review.
+- Ayah ranges are valid (`from ≥ 1`, `to ≥ from`, surah 1–114).
+- `PROTECT` foreign keys keep teaching history when users are archived.

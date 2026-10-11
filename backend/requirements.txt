@@ -1,0 +1,8 @@
+# Runtime — pinned. Python 3.12+ (developed on 3.13), PostgreSQL 16.
+Django==5.2.18
+djangorestframework==3.18.3
+psycopg[binary]==3.3.6
+django-cors-headers==4.9.0
+argon2-cffi==25.1.0
+gunicorn==26.2.0
+whitenoise==6.12.0
