@@ -42,6 +42,13 @@ follows the brief:
 On narrow screens the sidebar becomes a top bar with a horizontal section list, and
 tables scroll sideways.
 
+## Brand name
+
+The product name lives in `src/theme/brand.ts` (`BRAND.ar`, `BRAND.en`, `BRAND.tagline`).
+The full logo is the emblem image (`public/assets/halqa-mark.png`, which has no lettering)
+plus a wordmark drawn as live text by `components/Logo.tsx`. Changing the name in that one
+file updates the logo, page titles and in-app text.
+
 ## Design system (`#/design-system`)
 
 A style guide rendered with the app's real tokens and components (colours, type,
@@ -76,6 +83,7 @@ src/
   demo/DemoPanel.tsx     prototype control panel (desktop only)
   admin/                 admin portal: data, store, tables, dialogs, settings (lazy-loaded)
   designsystem/          living style guide (lazy-loaded)
+  theme/brand.ts         product name and tagline (single source)
 ```
 
 Times are stored in Riyadh time (the demo's equivalent of UTC) and shown in the user's

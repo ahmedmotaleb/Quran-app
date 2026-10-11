@@ -5,6 +5,7 @@ import { TODAY_LABEL } from '@/data/demo';
 import { rangeL } from '@/lib/format';
 import { go, setState, tab, toast, useApp } from '@/store/store';
 import { homeHifz, upcomingSessions } from '@/store/selectors';
+import { BRAND } from '@/theme/brand';
 
 const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,320px),1fr))', gap: 16 } as const;
 
@@ -28,7 +29,7 @@ export default function Home() {
   return (
     <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 16, position: 'relative' }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
-        <img src="/assets/halqa-mark.png" alt="الحلقة" style={{ width: 38, height: 38, objectFit: 'contain' }} />
+        <img src="/assets/halqa-mark.png" alt={BRAND.ar} style={{ width: 38, height: 38, objectFit: 'contain' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800 }}>السلام عليكم، {s.user.first}</h1>
           <p style={muted(13)}>{TODAY_LABEL}</p>

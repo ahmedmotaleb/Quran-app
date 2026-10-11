@@ -1,5 +1,6 @@
 /** Demo data for the admin portal (بيانات عرض). Replace with paginated API calls. */
 import { TEACHERS } from '@/data/demo';
+import { BRAND } from '@/theme/brand';
 
 export type Status = 'active' | 'pending' | 'expired' | 'off' | 'confirmed' | 'completed' | 'cancelled' | 'full' | 'draft';
 export type UserRole = 'طالب' | 'طالبة' | 'ولي أمر';
@@ -128,6 +129,6 @@ export function initialBookings(): AdminBooking[] {
 }
 
 export const initialSettings = (): AdminSettings => ({
-  orgName: 'الحلقة لتعليم القرآن', supportEmail: 'support@halqa.app', tz: 'riyadh', cancelHours: 12, joinMinutes: 10,
+  orgName: `${BRAND.ar} لتعليم القرآن`, supportEmail: 'support@halqa.app', tz: 'riyadh', cancelHours: 12, joinMinutes: 10,
   durIndividual: 45, durGroup: 60, reminders: true, parentReports: true, openSignup: true,
 });

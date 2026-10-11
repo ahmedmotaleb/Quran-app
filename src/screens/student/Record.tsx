@@ -3,6 +3,7 @@ import { Icon } from '@/components/Icon';
 import { BackHeader, PlayerBar, RecDot, Spinner, StatusBlock, card, linkBtn, muted, outlineBtn, primaryBtn } from '@/components/ui';
 import { fmt } from '@/lib/format';
 import { recording } from '@/services/media';
+import { BRAND } from '@/theme/brand';
 import {
   back, demoRec, openSheet, pauseRec, reset, resetRec, resumeRec, setState, startRec, stopRec, submitRec, up, useApp,
 } from '@/store/store';
@@ -100,7 +101,7 @@ export default function Record() {
             <span style={{ width: 64, height: 64, borderRadius: '50%', background: color.dangerBg, color: color.dangerInk, display: 'grid', placeItems: 'center', alignSelf: 'center' }}><Icon name="micOff" size={30} /></span>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, textAlign: 'center' }}>لم يُسمح بالوصول إلى الميكروفون</h2>
             <ol style={{ margin: 0, padding: '0 20px 0 0', fontSize: 14, lineHeight: 1.9, color: color.body }}>
-              <li>افتح إعدادات التطبيق أو المتصفح.</li><li>اختر «الأذونات» ثم «الميكروفون».</li><li>اسمح للحلقة بالوصول، ثم عد وحاول مجددًا.</li>
+              <li>افتح إعدادات التطبيق أو المتصفح.</li><li>اختر «الأذونات» ثم «الميكروفون».</li><li>اسمح لتطبيق {BRAND.ar} بالوصول، ثم عد وحاول مجددًا.</li>
             </ol>
             <button onClick={startRec} style={primaryBtn(54, 16)}>حاول مرة أخرى</button>
             <button onClick={demoRec} style={outlineBtn(52, 15)}>تابع بتسجيل تجريبي</button>

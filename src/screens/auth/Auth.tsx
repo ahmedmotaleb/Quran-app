@@ -5,14 +5,16 @@ import { BackButton, FieldError, Spinner, inputStyle, labelStyle, linkBtn, muted
 import { DAYS, DEMO_PASSWORD } from '@/data/demo';
 import { tzLabel } from '@/lib/format';
 import { back, doForgot, doLogin, doSignup, go, obNext, reset, setState as set, skipSplash, up, useApp } from '@/store/store';
+import { BRAND } from '@/theme/brand';
+import { Logo } from '@/components/Logo';
 
 export function Splash() {
   return (
     <div onClick={skipSplash} style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 32, position: 'relative', overflow: 'hidden', cursor: 'pointer' }}>
       <div style={{ position: 'absolute', width: 520, height: 520, borderRadius: '50%', border: `56px solid ${color.sand}`, top: -300, left: -220 }} />
       <div style={{ position: 'absolute', width: 380, height: 380, borderRadius: '50%', border: `40px solid ${color.sand}`, bottom: -230, right: -170 }} />
-      <img src="/assets/halqa-logo.png" alt="الحلقة HALQA" style={{ width: 230, height: 230, objectFit: 'contain', position: 'relative' }} />
-      <p style={{ margin: 0, fontSize: 20, fontWeight: 500, color: color.primary, position: 'relative' }}>نتعلّم القرآن معًا</p>
+      <Logo size={140} />
+      <p style={{ margin: 0, fontSize: 20, fontWeight: 500, color: color.primary, position: 'relative', marginTop: 8 }}>{BRAND.tagline}</p>
       <div style={{ position: 'absolute', bottom: 56 }}><Spinner /></div>
     </div>
   );
@@ -57,8 +59,8 @@ export function Login() {
   return (
     <form onSubmit={prevent(doLogin)} noValidate style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '12px 20px 24px', gap: 18 }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, marginTop: 4 }}>
-        <img src="/assets/halqa-logo.png" alt="الحلقة HALQA" style={{ width: 150, height: 150, objectFit: 'contain' }} />
-        <h1 style={{ margin: '-6px 0 0', fontSize: 24, fontWeight: 800 }}>تسجيل الدخول</h1>
+        <Logo size={84} />
+        <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>تسجيل الدخول</h1>
         <p style={muted(14, { margin: '4px 0 0' })}>تُعرض لك الواجهة المناسبة بحسب نوع حسابك</p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -105,7 +107,7 @@ export function Signup() {
     <form onSubmit={prevent(doSignup)} noValidate style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '4px 20px 24px', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, margin: '0 -12px' }}>
         <BackButton onClick={back} />
-        <img src="/assets/halqa-mark.png" alt="الحلقة" style={{ width: 34, height: 34, objectFit: 'contain' }} />
+        <img src="/assets/halqa-mark.png" alt={BRAND.ar} style={{ width: 34, height: 34, objectFit: 'contain' }} />
       </div>
       <div>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>إنشاء حساب طالب</h1>

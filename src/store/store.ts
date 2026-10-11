@@ -10,6 +10,7 @@ import { rangeL, typeL } from '@/lib/format';
 import { ayahAudioUrl, fetchSurah, fetchSurahList } from '@/services/quran';
 import * as media from '@/services/media';
 import type { IconName } from '@/components/Icon';
+import { BRAND } from '@/theme/brand';
 
 /* ------------------------------------------------------------------ */
 /* State shape                                                          */
@@ -369,7 +370,7 @@ export function obNext() {
   if (o.step < 2) { up('ob', { step: o.step + 1, error: null }); return; }
   set((s) => ({ user: { ...s.user, level: o.level!, goal: o.goal! } }));
   reset('home', 'student');
-  toast('تم إعداد خطتك. مرحبًا بك في الحلقة');
+  toast(`تم إعداد خطتك. مرحبًا بك في ${BRAND.ar}`);
 }
 export function logout() {
   set({ sheet: null });

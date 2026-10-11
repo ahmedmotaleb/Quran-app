@@ -6,6 +6,7 @@ import { rangeL, timeIn, typeIcon, tzLabel } from '@/lib/format';
 import { go, setState, useApp } from '@/store/store';
 import { teacherById, upcomingSessions } from '@/store/selectors';
 import { AttendancePill } from '@/screens/student/Progress';
+import { BRAND } from '@/theme/brand';
 
 const KIDS = [['u1', 'يوسف', '14 سنة'], ['u2', 'سارة', '10 سنوات']] as const;
 
@@ -33,7 +34,7 @@ export default function ParentHome() {
   return (
     <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
       <header style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
-        <img src="/assets/halqa-mark.png" alt="الحلقة" style={{ width: 38, height: 38, objectFit: 'contain' }} />
+        <img src="/assets/halqa-mark.png" alt={BRAND.ar} style={{ width: 38, height: 38, objectFit: 'contain' }} />
         <div style={{ flex: 1 }}>
           <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800 }}>متابعة الأبناء</h1>
           <p style={muted(13)}>تظهر بيانات أبنائك المرتبطين فقط</p>
