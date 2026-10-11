@@ -1,25 +1,70 @@
-# CODING AGENTS: READ THIS FIRST
+# حَلْقة | HALQA — Quran learning app
 
-This is a **handoff bundle** from Claude Design (claude.ai/design).
+The mobile app (student, teacher and parent) built from the Claude Design handoff in
+`project/Halqa App.dc.html`. It is Arabic-first and fully RTL. The stack is React 18,
+TypeScript and Vite.
 
-A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported this bundle so a coding agent can implement the designs for real.
+```bash
+npm install
+npm run dev        # http://localhost:5173
+npm run build      # type-check + production build
+```
 
-## What you should do — IMPORTANT
+On screens 760px and wider, the app opens inside a phone frame next to the prototype
+control panel. The panel lets you jump between roles, run the four guided flows, force
+loading/empty/error/offline states, simulate a failed upload or a slot that is no longer
+free, and switch between 360, 390 and tablet widths. On narrower screens the app runs
+full-screen and respects the safe areas.
 
-**Read the chat transcripts first.** There are 1 chat transcript(s) in `chats/`. The transcripts show the full back-and-forth between the user and the design assistant — they tell you **what the user actually wants** and **where they landed** after iterating. Don't skip them. The final HTML files are the output, but the chat is where the intent lives.
+Demo accounts (password `halqa123`): `yousef@halqa.app` (student), `teacher@halqa.app`,
+`parent@halqa.app`. Public sign-up only ever creates a student account.
 
-**Read `project/Halqa App.dc.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
+## What is real and what is simulated
 
-**If anything is ambiguous, ask the user to confirm before you start implementing.** It's much cheaper to clarify scope up front than to build the wrong thing.
+| Real | Simulated (labelled in the UI) |
+| --- | --- |
+| Quran text (Tanzil Uthmani via api.alquran.cloud) | Sign-in and sign-up, password reset email |
+| Ayah audio (Mishary Alafasy via everyayah.com) | Uploading recordings, the teacher's voice note |
+| Microphone recording and playback (MediaRecorder) | Saving bookings, live video, notifications, downloads |
 
-## About the design files
+Everything is held in memory and is lost on reload. Quran text is only ever shown from
+the API. If it fails to load, the app shows an error state and never placeholder text.
 
-The design medium is **HTML/CSS/JS** — these are prototypes, not production code. Your job is to **recreate them pixel-perfectly** in whatever technology makes sense for the target codebase (React, Vue, native, whatever fits). Match the visual output; don't copy the prototype's internal structure unless it happens to fit.
+## Layout
 
-**Don't render these files in a browser or take screenshots unless the user asks you to.** Everything you need — dimensions, colors, layout rules — is spelled out in the source. Read the HTML and CSS directly; a screenshot won't tell you anything they don't.
+```
+src/
+  theme/tokens.ts        colours, fonts, radii (design tokens)
+  data/types.ts          domain models (Assignment, Review, Session, Slot…)
+  data/demo.ts           demo data layer — swap for API calls
+  services/quran.ts      alquran.cloud + everyayah.com
+  services/media.ts      shared <audio>, Mushaf audio, MediaRecorder
+  store/store.ts         app state (zustand) + actions: navigation, recorder, booking, reviews…
+  store/selectors.ts     derived data (sessions in the user's timezone, etc.)
+  components/            Icon, UI primitives (Badge, Segmented, Chips, Switch, PlayerBar…), Sheet
+  screens/auth|student|teacher|parent/
+  AppShell.tsx           status bar, nav, data-state views, toast, bottom sheet
+  demo/DemoPanel.tsx     prototype control panel (desktop only)
+```
 
-## Bundle contents
+Times are stored in Riyadh time (the demo's equivalent of UTC) and shown in the user's
+chosen timezone (`lib/format.ts → timeIn`). Task status moves
+`not_started → in_progress → submitted → reviewed`.
 
-- `README.md` — this file
-- `chats/` — conversation transcripts (read these!)
-- `project/` — the `Halqa Quran App Prototype` project files (HTML prototypes, assets, components)
+## Backend integration notes
+
+See `project/HANDOFF.md` for the suggested entities. The parts that need a backend are:
+authentication and role-based routing, recording upload (`store.submitRec`), booking
+persistence and slot locking (`store.confirmBooking`), review submission
+(`store.sendReview`), assignments (`store.sendAssign`), live sessions (a WebRTC
+provider), notifications, file storage for lessons, and the admin portal.
+
+## Not yet implemented
+
+- The desktop admin portal (`project/Halqa Admin.dc.html`)
+- The standalone design-system page (`project/Halqa Design System.dc.html`)
+
+## Design handoff
+
+`project/` holds the original Claude Design prototypes and assets. `chats/` holds the
+design conversation.
