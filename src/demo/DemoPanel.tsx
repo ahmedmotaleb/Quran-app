@@ -37,7 +37,7 @@ export default function DemoPanel() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <img src="/assets/halqa-mark.png" alt="" style={{ width: 44, height: 44, objectFit: 'contain' }} />
         <div>
-          <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: color.primary }}>حَلْقة · نموذج تفاعلي</p>
+          <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: color.primary }}>الحلقة · نموذج تفاعلي</p>
           <p style={{ margin: '2px 0 0', fontSize: 13, color: color.muted }}>بيانات عرض تجريبية — لا تُرسل أي بيانات إلى خادم</p>
         </div>
       </div>

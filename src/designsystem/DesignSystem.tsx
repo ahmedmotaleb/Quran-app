@@ -12,7 +12,7 @@ import { fetchAyah } from '@/services/quran';
 const card: CSSProperties = { background: color.card, border: `1px solid ${color.border}`, borderRadius: 16 };
 
 const COLORS: [string, string, string][] = [
-  ['أخضر حَلْقة', color.primary, 'الإجراءات الأساسية والتنقل'], ['أخضر عميق', color.liveBg, 'الجلسة المباشرة'],
+  ['أخضر الحلقة', color.primary, 'الإجراءات الأساسية والتنقل'], ['أخضر عميق', color.liveBg, 'الجلسة المباشرة'],
   ['مريمية', color.sage, 'خلفيات ثانوية ونجاح'], ['مريمية فاتحة', color.sageTint, 'بطاقات التوجيه'],
   ['عاجي', color.ivory, 'خلفية التطبيق'], ['ورقي', color.card, 'البطاقات والحقول'],
   ['ذهبي', color.gold, 'علامات التوقيت والمرجعيات فقط'], ['حبر', color.ink, 'النص الأساسي'],
@@ -57,15 +57,15 @@ export default function DesignSystem() {
   const [seg, setSeg] = useState<'hifz' | 'review' | 'tajweed'>('hifz');
   const [chips, setChips] = useState<string[]>(['الأحد']);
   const [sw, setSw] = useState(true);
-  useEffect(() => { document.title = 'حَلْقة | نظام التصميم'; return () => { document.title = 'حَلْقة | HALQA'; }; }, []);
+  useEffect(() => { document.title = 'الحلقة | نظام التصميم'; return () => { document.title = 'الحلقة | HALQA'; }; }, []);
 
   return (
     <div dir="rtl" lang="ar" style={{ minHeight: '100vh', background: color.ivory }}>
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '40px clamp(16px,4vw,48px) 64px', display: 'flex', flexDirection: 'column', gap: 40 }}>
         <header style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-          <img src="/assets/halqa-logo.png" alt="حَلْقة HALQA" style={{ width: 140, height: 140, objectFit: 'contain' }} />
+          <img src="/assets/halqa-logo.png" alt="الحلقة HALQA" style={{ width: 140, height: 140, objectFit: 'contain' }} />
           <div style={{ flex: 1, minWidth: 240 }}>
-            <h1 style={{ margin: 0, fontSize: 34, fontWeight: 800 }}>نظام تصميم حَلْقة</h1>
+            <h1 style={{ margin: 0, fontSize: 34, fontWeight: 800 }}>نظام تصميم الحلقة</h1>
             <p style={{ margin: '6px 0 0', fontSize: 16, color: color.muted, lineHeight: 1.7 }}>هادئ، واضح، عربي أولًا (RTL). اللون الأخضر للإجراءات، والذهبي للعلامات والتمييز فقط. تُعرض هنا المكوّنات الفعلية من شيفرة التطبيق.</p>
           </div>
           <a href="#/" style={{ fontSize: 15, fontWeight: 700, minHeight: 44, display: 'flex', alignItems: 'center' }}>← العودة إلى النموذج</a>

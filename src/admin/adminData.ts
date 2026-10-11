@@ -128,6 +128,6 @@ export function initialBookings(): AdminBooking[] {
 }
 
 export const initialSettings = (): AdminSettings => ({
-  orgName: 'حَلْقة لتعليم القرآن', supportEmail: 'support@halqa.app', tz: 'riyadh', cancelHours: 12, joinMinutes: 10,
+  orgName: 'الحلقة لتعليم القرآن', supportEmail: 'support@halqa.app', tz: 'riyadh', cancelHours: 12, joinMinutes: 10,
   durIndividual: 45, durGroup: 60, reminders: true, parentReports: true, openSignup: true,
 });

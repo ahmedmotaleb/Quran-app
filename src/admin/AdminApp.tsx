@@ -20,7 +20,7 @@ function useNarrow() {
 /* ------------------------------------------------------------------ */
 export default function AdminApp() {
   const authed = useAdmin((s) => s.authed);
-  useEffect(() => { document.title = 'حَلْقة | لوحة الإدارة'; return () => { document.title = 'حَلْقة | HALQA'; }; }, []);
+  useEffect(() => { document.title = 'الحلقة | لوحة الإدارة'; return () => { document.title = 'الحلقة | HALQA'; }; }, []);
   return <div dir="rtl" lang="ar" style={{ minHeight: '100vh', background: color.ivory }}>{authed ? <Portal /> : <AdminLogin />}</div>;
 }
 
@@ -33,7 +33,7 @@ function AdminLogin() {
       <form noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); adminLogin(); }}
         style={{ ...card, width: '100%', maxWidth: 420, padding: 28, display: 'flex', flexDirection: 'column', gap: 16, borderRadius: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-          <img src="/assets/halqa-logo.png" alt="حَلْقة HALQA" style={{ width: 120, height: 120, objectFit: 'contain' }} />
+          <img src="/assets/halqa-logo.png" alt="الحلقة HALQA" style={{ width: 120, height: 120, objectFit: 'contain' }} />
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>دخول الإدارة</h1>
           <p style={{ margin: 0, fontSize: 14, color: color.muted }}>بوابة منفصلة لحسابات الإدارة فقط</p>
         </div>
@@ -115,7 +115,7 @@ function Portal() {
   const brand = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: narrow ? '12px 16px' : '0 6px 18px' }}>
       <img src="/assets/halqa-mark-ivory.png" alt="" style={{ width: 40, height: 40, objectFit: 'contain' }} />
-      <div style={{ flex: 1 }}><p style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>حَلْقة</p><p style={{ margin: 0, fontSize: 12, color: color.liveSub }}>لوحة الإدارة</p></div>
+      <div style={{ flex: 1 }}><p style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>الحلقة</p><p style={{ margin: 0, fontSize: 12, color: color.liveSub }}>لوحة الإدارة</p></div>
       {narrow && <button onClick={adminLogout} aria-label="تسجيل الخروج" style={{ width: 44, height: 44, border: 'none', background: 'transparent', color: color.sage, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="leave" /></button>}
     </div>
   );

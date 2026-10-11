@@ -369,7 +369,7 @@ export function obNext() {
   if (o.step < 2) { up('ob', { step: o.step + 1, error: null }); return; }
   set((s) => ({ user: { ...s.user, level: o.level!, goal: o.goal! } }));
   reset('home', 'student');
-  toast('تم إعداد خطتك. مرحبًا بك في حَلْقة');
+  toast('تم إعداد خطتك. مرحبًا بك في الحلقة');
 }
 export function logout() {
   set({ sheet: null });

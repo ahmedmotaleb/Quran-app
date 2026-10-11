@@ -1,4 +1,4 @@
-# حَلْقة | HALQA — Quran learning app
+# الحلقة | HALQA — Quran learning app
 
 The mobile app (student, teacher and parent) built from the Claude Design handoff in
 `project/Halqa App.dc.html`. It is Arabic-first and fully RTL. The stack is React 18,
