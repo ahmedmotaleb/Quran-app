@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box}body{margin:0;background:#F7F3E8;font-family:Tajawal,sans-serif;color:#16302C}button,input,select{font-family:inherit}:focus-visible{outline:3px solid #C6A66B;outline-offset:2px}a{color:#124C46}a:hover{color:#0B332F}</style>
+</helmet>
+<div dir="rtl" lang="ar" style="min-height:100vh;display:flex;flex-wrap:wrap">
+  <aside style="flex:0 0 240px;background:#124C46;color:#F7F3E8;padding:20px 14px;display:flex;flex-direction:column;gap:6px;min-height:100vh">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 6px 18px">
+      <img src="assets/halqa-mark-ivory.png" alt="" style="width:40px;height:40px;object-fit:contain">
+      <div><p style="margin:0;font-size:18px;font-weight:800">حَلْقة</p><p style="margin:0;font-size:12px;color:#C9D8C8">لوحة الإدارة</p></div>
+    </div>
+    <nav aria-label="أقسام الإدارة" style="display:flex;flex-direction:column;gap:4px">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="5">
+        <button onClick="{{ n.click }}" aria-current="{{ n.cur }}" style="min-height:48px;padding:0 14px;border:none;border-radius:12px;background:{{ n.bg }};color:{{ n.fg }};font-size:15px;font-weight:700;text-align:right;display:flex;align-items:center;justify-content:space-between;cursor:pointer">{{ n.label }}<sc-if value="{{ n.hasCount }}"><span style="min-width:24px;height:24px;border-radius:999px;background:#C6A66B;color:#16302C;font-family:Manrope;font-size:12px;display:grid;place-items:center;padding:0 6px">{{ n.count }}</span></sc-if></button>
+      </sc-for>
+    </nav>
+    <a href="Halqa%20App.dc.html" style="margin-top:auto;color:#D8E5D7;font-size:14px;min-height:44px;display:flex;align-items:center;padding:0 14px">← العودة إلى نموذج الجوال</a>
+  </aside>
+  <main style="flex:1 1 600px;min-width:0;padding:28px clamp(16px,3vw,40px);display:flex;flex-direction:column;gap:20px">
+    <header style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div><h1 style="margin:0;font-size:28px;font-weight:800">{{ title }}</h1><p style="margin:4px 0 0;font-size:14px;color:#56665F">{{ sub }}</p></div>
+      <span style="font-size:13px;color:#56665F;background:#EEE8DA;padding:6px 12px;border-radius:999px">بيانات عرض تجريبية</span>
+    </header>
+
+    <sc-if value="{{ isOverview }}">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px">
+        <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+          <div style="background:#FFFDF8;border:1px solid #E6DFCF;border-radius:16px;padding:18px"><p style="margin:0;font-size:14px;color:#56665F">{{ k.l }}</p><p style="margin:6px 0 0;font-size:30px;font-weight:800;font-family:Manrope">{{ k.v }}</p><p style="margin:4px 0 0;font-size:13px;color:#124C46">{{ k.s }}</p></div>
+        </sc-for>
+      </div>
+      <section style="background:#FFFDF8;border:1px solid #E6DFCF;border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:10px">
+        <h2 style="margin:0;font-size:17px;font-weight:700">يحتاج إجراء</h2>
+        <sc-for list="{{ todo }}" as="t" hint-placeholder-count="3">
+          <button onClick="{{ t.click }}" style="min-height:52px;padding:0 14px;border-radius:12px;border:1px solid #EEE8DA;background:#F7F3E8;display:flex;align-items:center;gap:10px;text-align:right;cursor:pointer;color:#16302C;font-size:15px"><span style="flex:1">{{ t.l }}</span><span style="font-weight:700;color:#124C46">{{ t.a }} ←</span></button>
+        </sc-for>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ isTable }}">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <input type="search" aria-label="بحث" placeholder="ابحث بالاسم" value="{{ q }}" onChange="{{ setQ }}" style="flex:1 1 260px;min-height:48px;padding:0 14px;border-radius:12px;border:1.5px solid #D9D2C1;background:#FFFDF8;font-size:15px">
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="3"><button aria-pressed="{{ f.on }}" onClick="{{ f.click }}" style="min-height:48px;padding:0 16px;border-radius:12px;border:1.5px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};font-weight:700;cursor:pointer">{{ f.label }}</button></sc-for>
+      </div>
+      <div style="background:#FFFDF8;border:1px solid #E6DFCF;border-radius:16px;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:14px;min-width:680px">
+          <thead><tr style="background:#EEE8DA;text-align:right"><sc-for list="{{ cols }}" as="c" hint-placeholder-count="5"><th scope="col" style="padding:12px 16px;font-weight:700;color:#3E4F4A">{{ c }}</th></sc-for></tr></thead>
+          <tbody>
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="6">
+              <tr style="border-top:1px solid #EEE8DA">
+                <td style="padding:12px 16px;font-weight:700">{{ r.name }}</td>
+                <td style="padding:12px 16px;color:#3E4F4A">{{ r.c2 }}</td>
+                <td style="padding:12px 16px;color:#3E4F4A">{{ r.c3 }}</td>
+                <td style="padding:12px 16px"><span style="display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;background:{{ r.sbg }};color:{{ r.sfg }}">{{ r.status }}</span></td>
+                <td style="padding:8px 16px"><div style="display:flex;gap:6px"><sc-for list="{{ r.acts }}" as="a" hint-placeholder-count="1"><button onClick="{{ a.click }}" style="min-height:40px;padding:0 12px;border-radius:10px;border:1px solid {{ a.bd }};background:{{ a.bg }};color:{{ a.fg }};font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">{{ a.label }}</button></sc-for></div></td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+        <sc-if value="{{ noRows }}"><p style="margin:0;padding:28px;text-align:center;color:#56665F">لا توجد نتائج مطابقة.</p></sc-if>
+      </div>
+    </sc-if>
+  </main>
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div role="status" style="position:fixed;bottom:24px;left:24px;background:#16302C;color:#F7F3E8;padding:14px 18px;border-radius:14px;font-size:14px;box-shadow:0 12px 28px -12px rgba(0,0,0,.4)">{{ toast }}</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state={sec:'overview',q:'',f:'all',toast:null,
+    users:[{id:1,name:'يوسف أحمد',role:'طالب',extra:'الشيخ عبدالرحمن السالم',st:'active'},{id:2,name:'سارة أحمد',role:'طالبة',extra:'الأستاذة مريم القحطاني',st:'active'},{id:3,name:'أحمد العلي',role:'ولي أمر',extra:'يوسف، سارة',st:'active'},{id:4,name:'عمر الحربي',role:'طالب',extra:'الشيخ عبدالرحمن السالم',st:'active'},{id:5,name:'منى الشهري',role:'طالبة',extra:'غير مرتبطة',st:'pending'},{id:6,name:'سلمان القرشي',role:'ولي أمر',extra:'غير مرتبط',st:'pending'}],
+    teachers:[{id:1,name:'الشيخ عبدالرحمن السالم',spec:'حفظ وتجويد',n:'8 طلاب',st:'active'},{id:2,name:'الأستاذة مريم القحطاني',spec:'تحفيظ الأطفال',n:'5 طلاب',st:'active'},{id:3,name:'الشيخ خالد العمري',spec:'تجويد متقدم',n:'4 طلاب',st:'active'},{id:4,name:'الأستاذ ماجد الغامدي',spec:'قراءات',n:'—',st:'pending'}],
+    content:[{id:1,name:'مقدمة في أحكام النون الساكنة',by:'الشيخ عبدالرحمن السالم',k:'محاضرة فيديو',st:'pending'},{id:2,name:'اختبار المدود',by:'الشيخ خالد العمري',k:'اختبار',st:'pending'},{id:3,name:'آداب حامل القرآن',by:'الأستاذة هدى الزهراني',k:'محاضرة صوتية',st:'active'},{id:4,name:'نزول القرآن وجمعه',by:'الشيخ خالد العمري',k:'محاضرة فيديو',st:'active'}],
+    subs:[{id:1,name:'أحمد العلي',plan:'باقة الأسرة · طالبان',due:'1 نوفمبر 2026',st:'active'},{id:2,name:'عمر الحربي',plan:'فردية · 8 جلسات شهريًا',due:'15 أكتوبر 2026',st:'active'},{id:3,name:'منى الشهري',plan:'فردية · 4 جلسات',due:'—',st:'pending'},{id:4,name:'فيصل الدوسري',plan:'فردية · 8 جلسات',due:'منتهية 2 أكتوبر',st:'expired'}]};
+  t(m){ clearTimeout(this.tt); this.setState({toast:m}); this.tt=setTimeout(()=>this.setState({toast:null}),2600); }
+  set(list,id,st,msg){ this.setState(s=>({[list]:s[list].map(x=>x.id===id?{...x,st}:x)})); this.t(msg); }
+  renderVals(){
+    const s=this.state; const ST={active:['نشط','#D8E5D7','#124C46'],pending:['بانتظار المراجعة','#F3E6CC','#6B470C'],expired:['منتهي','#F5E1DC','#8E2F20'],off:['موقوف','#ECE7DB','#45534E']};
+    const pc=k=>s[k].filter(x=>x.st==='pending').length;
+    const secs=[['overview','نظرة عامة',0],['users','المستخدمون والربط',pc('users')],['teachers','المعلمون',pc('teachers')],['content','المحتوى',pc('content')],['subs','الاشتراكات',pc('subs')]];
+    const go=k=>this.setState({sec:k,q:'',f:'all'});
+    const nav=secs.map(([k,l,c])=>({label:l,count:String(c),hasCount:c>0,cur:s.sec===k?'page':undefined,bg:s.sec===k?'#F7F3E8':'transparent',fg:s.sec===k?'#124C46':'#F7F3E8',click:()=>go(k)}));
+    const A=(label,click,primary)=>({label,click,bg:primary?'#124C46':'transparent',fg:primary?'#F7F3E8':'#124C46',bd:primary?'#124C46':'#CFC7B3'});
+    let cols=[],rows=[];
+    const map={
+      users:()=>{cols=['الاسم','الدور','المعلم / الأبناء المرتبطون','الحالة','إجراء'];return s.users.map(x=>({name:x.name,c2:x.role,c3:x.extra,st:x.st,acts:x.st==='pending'?[A('اعتماد وربط',()=>this.set('users',x.id,'active','تم اعتماد '+x.name+' وربط الحساب'),true)]:[A('تعديل الربط',()=>this.t('فتح نافذة الربط (تجريبي)'))]}));},
+      teachers:()=>{cols=['المعلم','التخصص','الطلاب','الحالة','إجراء'];return s.teachers.map(x=>({name:x.name,c2:x.spec,c3:x.n,st:x.st,acts:x.st==='pending'?[A('اعتماد',()=>this.set('teachers',x.id,'active','تم اعتماد '+x.name),true),A('رفض',()=>this.set('teachers',x.id,'off','رُفض الطلب'))]:[A(x.st==='off'?'إعادة تفعيل':'إيقاف',()=>this.set('teachers',x.id,x.st==='off'?'active':'off','تم التحديث'))]}));},
+      content:()=>{cols=['العنوان','المعلم','النوع','الحالة','إجراء'];return s.content.map(x=>({name:x.name,c2:x.by,c3:x.k,st:x.st,acts:x.st==='pending'?[A('نشر',()=>this.set('content',x.id,'active','نُشر المحتوى للطلاب'),true),A('إعادة للمعلم',()=>this.set('content',x.id,'off','أُعيد للمعلم مع ملاحظة'))]:[A('إلغاء النشر',()=>this.set('content',x.id,'off','أُلغي النشر'))]}));},
+      subs:()=>{cols=['المشترك','الباقة','التجديد','الحالة','إجراء'];return s.subs.map(x=>({name:x.name,c2:x.plan,c3:x.due,st:x.st,acts:x.st==='active'?[A('تفاصيل',()=>this.t('سجل المدفوعات (تجريبي)'))]:[A('تفعيل',()=>this.set('subs',x.id,'active','تم تفعيل الاشتراك'),true)]}));}};
+    if(map[s.sec]){ const q=s.q.trim(); rows=map[s.sec]().filter(r=>(!q||r.name.includes(q))&&(s.f==='all'||r.st===s.f)).map(r=>{const t=ST[r.st];return {...r,status:t[0],sbg:t[1],sfg:t[2]};}); }
+    const T={overview:['نظرة عامة','الأحد 11 أكتوبر 2026'],users:['المستخدمون والربط','اعتماد الحسابات وربط الطلاب بالمعلمين وأولياء الأمور'],teachers:['المعلمون','اعتماد المعلمين ومتابعة أعداد طلابهم'],content:['المحتوى','مراجعة المحاضرات والاختبارات قبل نشرها للطلاب'],subs:['الاشتراكات','حالة الباقات ومواعيد التجديد']}[s.sec];
+    return {nav,title:T[0],sub:T[1],isOverview:s.sec==='overview',isTable:s.sec!=='overview',cols,rows,noRows:rows.length===0,q:s.q,setQ:e=>this.setState({q:e.target.value}),toast:s.toast,
+      filters:[['all','الكل'],['pending','بانتظار المراجعة'],['active','نشط']].map(([k,l])=>({label:l,on:s.f===k,bg:s.f===k?'#124C46':'#FFFDF8',fg:s.f===k?'#F7F3E8':'#124C46',bd:s.f===k?'#124C46':'#CFC7B3',click:()=>this.setState({f:k})})),
+      kpis:[{l:'طلاب نشطون',v:'142',s:'+9 هذا الشهر'},{l:'معلمون نشطون',v:String(s.teachers.filter(x=>x.st==='active').length),s:pc('teachers')+' بانتظار الاعتماد'},{l:'جلسات هذا الأسبوع',v:'318',s:'نسبة الحضور 91%'},{l:'تسجيلات بانتظار التقييم',v:'27',s:'متوسط الرد 18 ساعة'}],
+      todo:[{l:pc('users')+' حسابات بانتظار الاعتماد والربط',a:'المستخدمون',click:()=>go('users')},{l:pc('content')+' محتوى بانتظار النشر',a:'المحتوى',click:()=>go('content')},{l:pc('teachers')+' طلب انضمام معلم',a:'المعلمون',click:()=>go('teachers')}]};
+  }
+}
+</script>
+</body>
+</html>
