@@ -154,3 +154,18 @@ def test_csrf_token_in_body_works_for_cross_origin_web_app():
     token = c.get("/api/v1/auth/csrf").json()["csrfToken"]  # rotated on login
     assert c.patch("/api/v1/me", {"phone": "1"}, format="json").status_code == 403
     assert c.patch("/api/v1/me", {"phone": "1"}, format="json", HTTP_X_CSRFTOKEN=token).status_code == 200
+
+
+@pytest.mark.django_db
+def test_create_admin_command(monkeypatch):
+    from django.core.management import CommandError, call_command
+
+    monkeypatch.setenv("ADMIN_PASSWORD", "short")
+    with pytest.raises(CommandError):
+        call_command("create_admin", email="Boss@Example.com")
+    monkeypatch.setenv("ADMIN_PASSWORD", "a-long-and-unusual-passphrase-42")
+    call_command("create_admin", email="Boss@Example.com")
+    u = User.objects.get(email="boss@example.com")
+    assert u.role == Role.ADMIN and u.check_password("a-long-and-unusual-passphrase-42")
+    with pytest.raises(CommandError):
+        call_command("create_admin", email="boss@example.com")

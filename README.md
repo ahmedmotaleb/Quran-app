@@ -60,6 +60,12 @@ A style guide rendered with the app's real tokens and components (colours, type,
 buttons, badges, fields, tabs/chips/switch, icons, principles). Its Quran samples are
 loaded from the API like everywhere else, never hand-typed.
 
+## Deploying for free
+
+See **[docs/DEPLOY.md](docs/DEPLOY.md)**: Render (free web service, one Docker image serving the PWA
+and the API) + Neon (free PostgreSQL) + Cloudflare R2 (recordings). `render.yaml` is the blueprint;
+`.github/workflows/ops.yml` imports the Quran text and creates the first admin.
+
 ## Installable app (PWA)
 
 The mobile app is a Progressive Web App: the same build is a website and an app people install

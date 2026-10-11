@@ -30,6 +30,9 @@ INVALID_FILE = "الملف ليس تسجيلًا صوتيًا مدعومًا."
 
 def store_audio(*, owner, purpose: str, upload, duration_seconds) -> MediaObject:
     """Validates type (declared + magic bytes), size and duration; streams to private storage."""
+    if settings.MEDIA_STORAGE == "none":
+        # Honest failure: the server has no recordings storage yet (owner must configure STORAGE_*).
+        raise ApiError("storage_not_configured", "رفع التسجيلات غير مفعّل على الخادم بعد. سيتاح قريبًا بإذن الله.", 503)
     declared = (upload.content_type or "").split(";")[0].strip().lower()
     if declared not in AUDIO_TYPES:
         raise ApiError("invalid_file", INVALID_FILE, 400, {"file": [INVALID_FILE]})

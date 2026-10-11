@@ -30,4 +30,13 @@ def ready(request):
     except Exception:  # noqa: BLE001 — report state, never the error text
         checks.setdefault("database", "unavailable")
     ok = all(v == "ok" for v in checks.values())
-    return Response({"status": "ok" if ok else "unavailable", "checks": checks}, status=200 if ok else 503)
+    # What still needs owner configuration (informational; does not affect readiness).
+    features = {
+        "media_storage": "configured" if settings.MEDIA_STORAGE != "none" else "not_configured",
+        "email": "smtp" if "smtp" in settings.EMAIL_BACKEND else "log_only",
+    }
+    if checks.get("database") == "ok":
+        from apps.quran.models import QuranSource
+
+        features["quran_text"] = "imported" if QuranSource.objects.filter(is_active=True).exists() else "not_imported"
+    return Response({"status": "ok" if ok else "unavailable", "checks": checks, "features": features}, status=200 if ok else 503)

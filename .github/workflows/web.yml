@@ -3,7 +3,6 @@ name: Web (PWA)
 on:
   push:
     branches: [main, halqa-frontend]
-    paths-ignore: ['backend/**', '.github/workflows/backend.yml']
   pull_request:
   workflow_dispatch:
 
@@ -34,3 +33,30 @@ jobs:
           name: halqa-pwa-${{ github.sha }}
           path: dist
           retention-days: 14
+
+  docker:
+    # The same image Render builds from render.yaml: PWA + API in one container.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: halqa, POSTGRES_PASSWORD: halqa-ci-only, POSTGRES_DB: halqa_ci }
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U halqa" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t halqa:ci .
+      - name: Boot in production mode against an empty database
+        run: |
+          docker run -d --name halqa --network host -e PORT=8090 -e APP_ENV=production \
+            -e DJANGO_SECRET_KEY="$(python3 -c 'import secrets;print(secrets.token_urlsafe(64))')" \
+            -e DATABASE_URL=postgres://halqa:halqa-ci-only@127.0.0.1:5432/halqa_ci \
+            -e RENDER_EXTERNAL_HOSTNAME=localhost -e SECURE_SSL_REDIRECT=false halqa:ci
+          for i in $(seq 1 60); do curl -fs localhost:8090/api/ready && break; sleep 2; done
+          curl -fs localhost:8090/api/ready | grep -q '"status":"ok"'
+          curl -fs localhost:8090/ | grep -q 'manifest'
+          curl -fsI localhost:8090/sw.js | grep -qi 'cache-control: no-cache'
+          curl -fs localhost:8090/some/deep/link | grep -q '<div id="root">'
+      - if: failure()
+        run: docker logs halqa

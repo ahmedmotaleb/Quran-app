@@ -27,6 +27,10 @@ class StorageError(Exception):
     pass
 
 
+class StorageNotConfigured(StorageError):
+    """MEDIA_STORAGE=none: the deployment has no bucket yet."""
+
+
 class LocalStorage:
     name = "local"
 
@@ -98,6 +102,8 @@ class S3Storage:
 
 @functools.cache
 def get_storage() -> LocalStorage | S3Storage:
+    if settings.MEDIA_STORAGE == "none":
+        raise StorageNotConfigured("No media storage configured (MEDIA_STORAGE=none).")
     if settings.MEDIA_STORAGE == "local":
         return LocalStorage(settings.MEDIA_LOCAL_ROOT)
     return S3Storage()

@@ -43,6 +43,10 @@ if IS_DEPLOYED and (len(SECRET_KEY) < 50 or SECRET_KEY.startswith("dev-only")):
     raise ImproperlyConfigured("DJANGO_SECRET_KEY must be a unique random value of at least 50 characters.")
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "" if IS_DEPLOYED else "localhost,127.0.0.1,testserver")
+# Render (and similar hosts) expose the public hostname; trust it automatically.
+RENDER_HOST = env("RENDER_EXTERNAL_HOSTNAME", "")
+if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_HOST)
 if IS_DEPLOYED and not ALLOWED_HOSTS:
     raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS is required in staging and production.")
 
@@ -143,6 +147,17 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Single-origin deployment: the built PWA (dist/) is served by Django at "/" next to /api, so the
+# session cookie is first-party everywhere (Safari blocks third-party cookies).
+FRONTEND_DIST = Path(env("FRONTEND_DIST", str(BASE_DIR.parent / "dist")) or "")
+WHITENOISE_ROOT = FRONTEND_DIST if FRONTEND_DIST.is_dir() else None
+def _whitenoise_headers(headers, path, url):
+    from apps.core.spa import cache_headers  # imported lazily: settings load before apps
+
+    cache_headers(headers, path, url)
+
+
+WHITENOISE_ADD_HEADERS_FUNCTION = _whitenoise_headers
 
 # ---- Sessions, CSRF, CORS ------------------------------------------------------------
 SESSION_COOKIE_AGE = int(env("SESSION_COOKIE_AGE", str(14 * 24 * 3600)) or 0)
@@ -201,9 +216,16 @@ CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"
 if env("REDIS_URL"):
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": env("REDIS_URL")}}
 
-EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "noreply@halqa.app")
-FRONTEND_URL = env("FRONTEND_URL", "http://localhost:5173")
+# SMTP when EMAIL_HOST is set (e.g. a free transactional-email plan); otherwise mail is only logged.
+EMAIL_HOST = env("EMAIL_HOST", "")
+EMAIL_PORT = int(env("EMAIL_PORT", "587") or 587)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
+EMAIL_TIMEOUT = 10
+EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST else "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "") or "noreply@halqa.app"  # empty env var = default
+FRONTEND_URL = env("FRONTEND_URL", f"https://{RENDER_HOST}" if RENDER_HOST else "http://localhost:5173")  # password-reset links
 
 APP_VERSION = env("APP_VERSION", "0.1.0")
 
@@ -211,10 +233,12 @@ APP_VERSION = env("APP_VERSION", "0.1.0")
 # "s3": any S3-compatible bucket (Cloudflare R2 proposed). Required in staging/production.
 # "local": files under MEDIA_LOCAL_ROOT, development/test only (never served publicly; reads go
 # through short-lived signed URLs checked by the API).
-MEDIA_STORAGE = env("MEDIA_STORAGE", "s3" if IS_DEPLOYED else "local")
-if MEDIA_STORAGE not in {"s3", "local"}:
-    raise ImproperlyConfigured("MEDIA_STORAGE must be 's3' or 'local'.")
-if IS_DEPLOYED and MEDIA_STORAGE != "s3":
+# "none": no storage configured yet — the app runs, and uploads answer 503 "storage not configured"
+# instead of pretending to succeed (the default in deployments until STORAGE_* are set).
+MEDIA_STORAGE = env("MEDIA_STORAGE", ("s3" if env("STORAGE_BUCKET") else "none") if IS_DEPLOYED else "local")
+if MEDIA_STORAGE not in {"s3", "local", "none"}:
+    raise ImproperlyConfigured("MEDIA_STORAGE must be 's3', 'local' or 'none'.")
+if IS_DEPLOYED and MEDIA_STORAGE == "local":
     raise ImproperlyConfigured("MEDIA_STORAGE=local is for development only; configure S3-compatible storage.")
 MEDIA_LOCAL_ROOT = Path(env("MEDIA_LOCAL_ROOT", str(BASE_DIR / "var" / "private-media")) or "")
 STORAGE_ENDPOINT_URL = env("STORAGE_ENDPOINT_URL", "")  # e.g. https://<account>.r2.cloudflarestorage.com
