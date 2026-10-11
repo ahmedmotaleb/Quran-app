@@ -82,6 +82,14 @@ export const giveFeedback = (id: number, body: {
   general: string; needs_review: string; next_step: string; notes: { at_seconds: number; text: string }[];
 }) => api<ApiSubmission>('POST', `submissions/${id}/feedback`, body);
 export const teacherStudents = () => api<Page<ApiTeacherStudent>>('GET', 'teacher/students?page_size=100');
+export interface ApiTeacherOcc {
+  id: number; kind: 'individual' | 'group'; starts_at: string; ends_at: string; capacity: number; status: string;
+  bookings: { id: number; student: number; student_name: string; attendance: string; assignment_title: string; note: string }[];
+}
+export const teacherOccurrences = (days = 8) => api<ApiTeacherOcc[]>('GET', `teacher/occurrences?days=${days}`);
+export const openSlot = (starts_at: string, minutes = 45) => api<ApiTeacherOcc>('POST', 'teacher/occurrences', { starts_at, minutes });
+export const closeSlot = (id: number) => api<null>('POST', `teacher/occurrences/${id}/close`);
+export const markAttendance = (booking: number, attendance: string) => api<ApiBooking>('POST', `bookings/${booking}/attendance`, { attendance });
 export const parentChildren = () => api<Page<Me>>('GET', 'parent/children?page_size=50');
 export const createAssignment = (b: {
   student: number; kind: string; title: string; surah: number; ayah_from: number; ayah_to: number; instructions: string; due_at: string; requires_recording: boolean;

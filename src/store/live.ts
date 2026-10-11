@@ -66,7 +66,7 @@ export async function loadTeacherData() {
   if (get().me?.role !== 'teacher') return;
   setState({ net: { ...get().net, loading: true, error: null } });
   try {
-    const [st, a, sub] = await Promise.all([E.teacherStudents(), E.assignments(), E.submissions()]);
+    const [st, a, sub, occ] = await Promise.all([E.teacherStudents(), E.assignments(), E.submissions(), E.teacherOccurrences()]);
     const tz = iana();
     const reviews: ReviewItem[] = sub.results.map((x) => ({
       id: String(x.id), taskId: String(x.assignment), student: x.student_name, sid: String(x.student), title: x.assignment_title,
@@ -74,7 +74,7 @@ export async function loadTeacherData() {
       at: fmtRelative(x.created_at, tz), status: x.feedback ? 'reviewed' : 'submitted',
     }));
     setState((s) => ({
-      students: st.results.map(E.toStudent), tasks: a.results.map((x) => E.toTask(x, tz)), reviews,
+      students: st.results.map(E.toStudent), tasks: a.results.map((x) => E.toTask(x, tz)), reviews, tsched: occ,
       net: { ...s.net, loading: false, error: null },
     }));
   } catch (e) {
@@ -178,7 +178,7 @@ export async function logout() {
   await setToken(null);
   resetCsrf();
   // Nothing from the previous account stays in memory.
-  setState({ me: null, tasks: [], sessions: [], fb: {}, recs: {}, avail: {}, reviews: null, students: [], teachers: [], parent: null });
+  setState({ me: null, tasks: [], sessions: [], fb: {}, recs: {}, avail: {}, reviews: null, students: [], teachers: [], parent: null, tsched: null });
 }
 
 export async function saveTimezone(id: TzId) {
@@ -325,4 +325,28 @@ export async function createAssignment(f: AssignForm) {
     up('af', { errors: { from: err.field?.('ayah_from') ?? null, to: err.field?.('ayah_to') ?? null } });
     toast(msg(e), 'alert');
   }
+}
+
+/* ---------------- teacher schedule ---------------- */
+async function refreshSchedule() {
+  try { setState({ tsched: await E.teacherOccurrences() }); } catch (e) { toast(msg(e), 'alert'); }
+}
+
+/** Opens (on) or closes (off) the slot at a local date + "HH:MM" in the teacher's timezone. */
+export async function toggleSlot(dateKey: string, hhmm: string, existingId: number | null) {
+  try {
+    if (existingId) { await E.closeSlot(existingId); toast('أُغلق الموعد', 'cal'); }
+    else { await E.openSlot(zonedToIso(dateKey, hhmm, iana())); toast('فُتح الموعد للحجز', 'cal'); }
+  } catch (e) { toast(msg(e), 'alert'); }
+  await refreshSchedule();
+}
+
+export async function setAttendance(bookingId: number, value: string) {
+  try { await E.markAttendance(bookingId, value); toast('حُفظ الحضور'); } catch (e) { toast(msg(e), 'alert'); }
+  await refreshSchedule();
+}
+
+export async function teacherCancelBooking(bookingId: number) {
+  try { await E.cancelBooking(bookingId, 'ألغاه المعلم'); toast('أُلغي الحجز وأُبلغ الطالب'); } catch (e) { toast(msg(e), 'alert'); }
+  await refreshSchedule();
 }

@@ -5,7 +5,10 @@ import {
 } from '@/components/ui';
 import { DAYS, SUR, TODAY_LABEL } from '@/data/demo';
 import { fmt, scoreL, timeIn, typeIcon, tzLabel, tzOf } from '@/lib/format';
-import { fmtDay } from '@/lib/time';
+import { dateKey, dayLabel, fmtDay, fmtTime, zonedToIso as zonedIso } from '@/lib/time';
+import { setAttendance, teacherCancelBooking, toggleSlot as toggleLiveSlot } from '@/store/live';
+import { weekDays } from '@/store/selectors';
+import { openSheet } from '@/store/store';
 import {
   go, openAssign, openReview, playerSeek, selectReviews, sendAssign, sendReview, setState, tab, toast, up, useApp, back,
   type AppState, type ReviewItem,
@@ -61,7 +64,7 @@ export function TeacherDash() {
         ))}
         {pend.length > 0 && <button onClick={() => tab('treviews')} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.ivory, fontSize: 14, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>عرض كل المراجعات</button>}
       </section>
-      {/* Today's sessions for teachers are not served by the API yet; live mode omits the sample list. */}
+      {live && <TodayLive />}
       {!live && <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>جلسات اليوم</h2>
         {TODAY_SESSIONS.map((x, i) => (
@@ -394,6 +397,7 @@ function toggleSlot(s: AppState, day: number, h: number) {
 
 export function TeacherSchedule() {
   const s = useApp(); const SD = s.sched;
+  if (s.liveMode) return <ScheduleLive />;
   return (
     <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>المواعيد</h1>
@@ -517,6 +521,113 @@ export function TeacherContent() {
         )}
         <button onClick={save} style={primaryBtn()}>حفظ كمسودة</button>
       </div>
+    </div>
+  );
+}
+
+/* ---------------- Live schedule (teacher's real sessions) ---------------- */
+const ATT_OPTS = [['present', 'حضر'], ['late', 'متأخر'], ['absent', 'غاب'], ['excused', 'بعذر']] as const;
+const hhmm = (iso: string, tz: string) =>
+  new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
+const hoursToHHMM = (h: number) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
+const labelHHMM = (v: string) => { const [h, m] = v.split(':').map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'ص' : 'م'}`; };
+
+function TodayLive() {
+  const s = useApp(); const tz = tzOf(s.tz).iana;
+  const today = (s.tsched ?? []).filter((o) => o.bookings.length && dayLabel(o.starts_at, tz) === 'اليوم');
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>جلسات اليوم</h2>
+      {today.length === 0 && <p style={muted(14)}>لا توجد جلسات محجوزة اليوم.</p>}
+      {today.map((o) => (
+        <button key={o.id} onClick={() => { up('sched', { tab: 'sessions' }); tab('tschedule'); }} style={{ ...card, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', cursor: 'pointer', color: color.ink }}>
+          <span style={{ minWidth: 64, textAlign: 'center', fontSize: 16, fontWeight: 800 }}>{fmtTime(o.starts_at, tz)}</span>
+          <span style={{ flex: 1, minWidth: 0, borderRight: `1px solid ${color.divider}`, paddingRight: 12 }}>
+            <span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>{o.bookings.map((b) => b.student_name).join('، ')}</span>
+            <span style={{ display: 'block', fontSize: 12, color: color.muted, marginTop: 2 }}>{o.kind === 'group' ? 'جماعية' : 'فردية'} · {o.bookings[0].assignment_title || 'بدون مهمة محددة'}</span>
+          </span>
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function ScheduleLive() {
+  const s = useApp(); const SD = s.sched; const tz = tzOf(s.tz).iana; const occ = s.tsched ?? [];
+  const now = Date.now();
+  const booked = occ.filter((o) => o.bookings.length && new Date(o.ends_at).getTime() > now - 7 * 86_400_000);
+  const days = weekDays(s);
+  const dayIso = new Date(Date.now() + SD.day * 86_400_000).toISOString();
+  const key = dateKey(dayIso, tz);
+  const dayOcc = occ.filter((o) => dateKey(o.starts_at, tz) === key);
+  const times = [...new Set([...BASE_HOURS.map(hoursToHHMM), ...dayOcc.map((o) => hhmm(o.starts_at, tz))])].sort();
+  return (
+    <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>المواعيد</h1>
+      <Segmented role="tablist" options={[['sessions', 'الجلسات'], ['avail', 'الإتاحة']] as const} value={SD.tab} onChange={(k) => up('sched', { tab: k })} />
+      {SD.tab === 'sessions' && <>
+        {booked.length === 0 && <p style={muted(15, { padding: 24, textAlign: 'center' })}>لا توجد جلسات محجوزة.</p>}
+        {booked.map((o) => {
+          const started = new Date(o.starts_at).getTime() <= now;
+          return (
+            <div key={o.id} style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>{dayLabel(o.starts_at, tz)} · {fmtTime(o.starts_at, tz)} <span style={{ fontWeight: 500, color: color.muted, fontSize: 13 }}>· {o.kind === 'group' ? 'جماعية' : 'فردية'}</span></span>
+              {o.bookings.map((b) => (
+                <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${color.divider}`, paddingTop: 8 }}>
+                  <span style={{ fontSize: 14 }}><strong>{b.student_name}</strong>{b.assignment_title ? ` · ${b.assignment_title}` : ''}</span>
+                  {b.note && <span style={muted(13)}>ملاحظة الطالب: {b.note}</span>}
+                  {started ? (
+                    <div role="radiogroup" aria-label={`حضور ${b.student_name}`} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {ATT_OPTS.map(([v, l]) => {
+                        const on = b.attendance === v;
+                        return <button key={v} role="radio" aria-checked={on} onClick={() => setAttendance(b.id, v)} style={{ minHeight: 40, padding: '0 12px', borderRadius: 999, border: `1.5px solid ${on ? color.primary : color.borderStrong}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{l}</button>;
+                      })}
+                    </div>
+                  ) : (
+                    <button onClick={() => openSheet({ kind: 'confirm', title: 'إلغاء الحجز؟', body: `سيُلغى موعد ${b.student_name} ويصله إشعار بذلك.`, ok: 'نعم، ألغِ الحجز', danger: true, onOk: () => { setState({ sheet: null }); teacherCancelBooking(b.id); } })}
+                      style={{ alignSelf: 'flex-start', minHeight: 40, padding: '0 12px', borderRadius: 10, border: `1px solid ${color.dangerInk}`, background: 'transparent', color: color.dangerInk, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>إلغاء الحجز</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </>}
+      {SD.tab === 'avail' && <>
+        <p style={muted(13, { display: 'flex', gap: 6, alignItems: 'center' })}><Icon name="globe" size={18} /> الأوقات {tzLabel(s.tz)}، وتظهر لكل طالب بتوقيته.</p>
+        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', margin: '0 -16px', padding: '2px 16px' }}>
+          {days.map((d, i) => {
+            const on = SD.day === i;
+            return (
+              <button key={i} aria-pressed={on} onClick={() => up('sched', { day: i })} style={{ flexShrink: 0, width: 64, minHeight: 68, borderRadius: 14, border: `1.5px solid ${on ? color.primary : color.borderChip}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.ink, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                <span style={{ fontSize: 12, fontWeight: 700 }}>{d.label}</span>
+                <span style={{ fontFamily: font.latin, fontSize: 18, fontWeight: 700 }}>{d.num}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ ...card, padding: '4px 14px' }}>
+          {times.map((t) => {
+            const o = dayOcc.find((x) => hhmm(x.starts_at, tz) === t);
+            const isBooked = !!o?.bookings.length;
+            const past = new Date(zonedIso(key, t, tz)).getTime() < now + 60 * 60_000;
+            const stt = isBooked ? 'محجوز' : o ? 'متاح' : 'غير متاح';
+            const label = labelHHMM(t);
+            return (
+              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 56, borderBottom: `1px solid ${color.divider}` }}>
+                <span style={{ flex: 1, fontSize: 16, fontWeight: 700, color: past ? color.muted : color.ink }}>{label}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: isBooked ? color.warnInk : o ? color.primary : color.muted }}>{stt}</span>
+                <Switch on={!!o} label={`إتاحة ${label}`} onToggle={() => {
+                  if (isBooked) { toast('لا يمكن إغلاق موعد محجوز من هنا؛ ألغِ الحجز من تبويب الجلسات', 'alert'); return; }
+                  if (past) { toast('لا يمكن تعديل موعد مضى أو يبدأ خلال ساعة', 'alert'); return; }
+                  toggleLiveSlot(key, t, o?.id ?? null);
+                }} />
+              </div>
+            );
+          })}
+        </div>
+        <p style={muted(12)}>الإتاحة الأسبوعية الثابتة تضبطها الإدارة؛ هنا تفتح أو تغلق مواعيد محددة.</p>
+      </>}
     </div>
   );
 }

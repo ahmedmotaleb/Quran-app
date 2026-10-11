@@ -139,3 +139,66 @@ class BookingAttendance(APIView):
         b.save(update_fields=["attendance", "attendance_marked_by", "attendance_marked_at", "updated_at"])
         audit("booking.attendance", actor=request.user, target=b, request=request, old=old, new=b.attendance)
         return Response(BookingSerializer(b).data)
+
+
+# ---- Teacher's own schedule ------------------------------------------------------------
+from django.db import IntegrityError, transaction  # noqa: E402
+from django.db.models import Prefetch  # noqa: E402
+
+from .serializers import OpenSlotSerializer, TeacherOccurrenceSerializer  # noqa: E402
+
+
+class TeacherOccurrences(APIView):
+    """GET: the teacher's sessions from 7 days ago until `?days=` ahead (default 7, max 31).
+    POST: open one individual slot. The database refuses overlaps with the teacher's other sessions."""
+
+    permission_classes = [IsTeacher]
+
+    def get(self, request):
+        try:
+            days = min(31, max(1, int(request.query_params.get("days", 7))))
+        except ValueError:
+            days = 7
+        # The past week too, so attendance can still be recorded for recent sessions.
+        today = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+        qs = (SessionOccurrence.objects.filter(teacher=request.user, starts_at__gte=today - timedelta(days=7), starts_at__lt=today + timedelta(days=days + 1))
+              .exclude(status=SessionOccurrence.Status.CANCELLED)
+              .prefetch_related(Prefetch("bookings", queryset=Booking.objects.select_related("student", "assignment")))
+              .order_by("starts_at"))
+        return Response(TeacherOccurrenceSerializer(qs, many=True).data)
+
+    def post(self, request):
+        s = OpenSlotSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        start = s.validated_data["starts_at"].replace(second=0, microsecond=0)
+        cfg = AppSettings.load()
+        now = timezone.now()
+        if start < now + timedelta(minutes=cfg.booking_lead_minutes) or start > now + timedelta(days=cfg.booking_horizon_days):
+            raise ApiError("outside_window", "لا يمكن فتح موعد في هذا الوقت.", 400, {"starts_at": ["اختر وقتًا ضمن نافذة الحجز."]})
+        try:
+            with transaction.atomic():
+                o = SessionOccurrence.objects.create(teacher=request.user, starts_at=start, ends_at=start + timedelta(minutes=s.validated_data["minutes"]), capacity=1)
+        except IntegrityError:
+            raise ApiError("overlap", "يتعارض هذا الموعد مع جلسة أخرى لديك.", 409) from None
+        audit("occurrence.opened", actor=request.user, target=o, request=request)
+        return Response(TeacherOccurrenceSerializer(o).data, status=201)
+
+
+class TeacherOccurrenceClose(APIView):
+    """Close an open slot. Booked sessions must be cancelled per booking first (students are notified there)."""
+
+    permission_classes = [IsTeacher]
+
+    def post(self, request, pk):
+        with transaction.atomic():
+            o = SessionOccurrence.objects.select_for_update().filter(pk=pk, teacher=request.user).first()
+            if o is None:
+                raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
+            if o.bookings.filter(status=Booking.Status.CONFIRMED).exists():
+                raise ApiError("has_bookings", "لا يمكن إغلاق موعد محجوز؛ ألغِ الحجز أولًا.", 409)
+            if o.starts_at <= timezone.now():
+                raise ApiError("already_started", "لا يمكن إغلاق موعد بدأ أو انتهى.", 409)
+            o.status = SessionOccurrence.Status.CANCELLED
+            o.save(update_fields=["status", "updated_at"])
+        audit("occurrence.closed", actor=request.user, target=o, request=request)
+        return Response(status=204)

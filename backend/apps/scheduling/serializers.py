@@ -37,3 +37,23 @@ class BookingCreateSerializer(serializers.Serializer):
 
 class AttendanceSerializer(serializers.Serializer):
     attendance = serializers.ChoiceField(choices=[c for c in Booking.Attendance.values if c])
+
+
+class TeacherOccurrenceSerializer(serializers.ModelSerializer):
+    """The teacher's own session with who booked it (names and attendance only)."""
+
+    bookings = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SessionOccurrence
+        fields = ["id", "kind", "starts_at", "ends_at", "capacity", "status", "bookings"]
+
+    def get_bookings(self, o):
+        return [{"id": b.id, "student": b.student_id, "student_name": b.student.full_name, "attendance": b.attendance,
+                 "assignment_title": b.assignment.title if b.assignment else "", "note": b.note}
+                for b in o.bookings.all() if b.status == Booking.Status.CONFIRMED]
+
+
+class OpenSlotSerializer(serializers.Serializer):
+    starts_at = serializers.DateTimeField()
+    minutes = serializers.IntegerField(min_value=15, max_value=120, default=45)

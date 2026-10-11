@@ -89,6 +89,8 @@ def cancel(*, booking_id: int, by, reason: str = "", now: datetime | None = None
             raise ApiError("cancel_window", f"يمكن الإلغاء حتى {cfg.cancel_hours} ساعة قبل الموعد. تواصل مع معلمك.", 409)
         b.status, b.cancelled_at, b.cancelled_by, b.cancel_reason = Booking.Status.CANCELLED, now, by, reason[:200]
         b.save(update_fields=["status", "cancelled_at", "cancelled_by", "cancel_reason", "updated_at"])
+        if not is_owner and reason != "rescheduled":
+            transaction.on_commit(lambda: _notify_cancelled(b.pk))
         return b
 
 
@@ -106,6 +108,17 @@ def reschedule(*, booking_id: int, new_occurrence_id: int, by, idempotency_key: 
             new.rescheduled_from = old
             new.save(update_fields=["rescheduled_from"])
         return new
+
+
+def _notify_cancelled(booking_id: int) -> None:
+    """The teacher or an admin cancelled: tell the student (a student's own cancellation needs no message)."""
+    from apps.notifications.services import notify
+
+    b = Booking.objects.select_related("occurrence__teacher", "student").get(pk=booking_id)
+    tz = ZoneInfo(b.student.timezone or "Africa/Cairo")
+    when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+    notify(b.student, "booking_cancelled", "أُلغيت جلستك", f"مع {b.occurrence.teacher.full_name} · {when}. يمكنك حجز موعد آخر.",
+           link="/sessions", dedupe=f"booking:{b.pk}:cancelled")
 
 
 def _notify_booked(booking_id: int) -> None:
@@ -149,7 +162,8 @@ def generate_occurrences(teacher, *, start: date, days: int) -> int:
             if day.weekday() != rule.weekday or day < rule.valid_from or (rule.valid_until and day > rule.valid_until):
                 continue
             for s, e in _local_slots(rule, day):
-                if SessionOccurrence.objects.filter(teacher=teacher, starts_at=s).exclude(status="cancelled").exists():
+                # Any existing row wins, including a slot the teacher closed (cancelled) — never resurrect it.
+                if SessionOccurrence.objects.filter(teacher=teacher, starts_at=s).exists():
                     continue
                 try:
                     with transaction.atomic():

@@ -86,7 +86,7 @@ function DataStateView({ screen, ds }: { screen: Screen; ds: Exclude<DataState, 
 }
 
 // Teacher: students, assignments and reviews are live; today's sessions, schedule and content are not yet.
-const SAMPLE_SCREENS: Screen[] = ['live', 'lesson', 'quiz', 'progress', 'tschedule', 'tcontent'];
+const SAMPLE_SCREENS: Screen[] = ['live', 'lesson', 'quiz', 'progress', 'tcontent'];
 
 /**
  * The phone UI. `framed` renders the fake status bar + home indicator used inside the

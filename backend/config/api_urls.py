@@ -27,6 +27,8 @@ urlpatterns = [
     path("media/<uuid:pk>/content", media.MediaContent.as_view(), name="media-content"),
     # Scheduling & booking
     path("teachers/<int:pk>/slots", scheduling.TeacherSlots.as_view()),
+    path("teacher/occurrences", scheduling.TeacherOccurrences.as_view()),
+    path("teacher/occurrences/<int:pk>/close", scheduling.TeacherOccurrenceClose.as_view()),
     path("bookings", scheduling.BookingList.as_view()),
     path("bookings/<int:pk>", scheduling.BookingDetail.as_view()),
     path("bookings/<int:pk>/cancel", scheduling.BookingCancel.as_view()),
