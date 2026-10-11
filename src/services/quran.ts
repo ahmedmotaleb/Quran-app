@@ -35,3 +35,12 @@ export async function fetchSurahList(): Promise<SurahListItem[]> {
 /** Per-ayah recitation audio (Mishary Alafasy, 128kbps) from everyayah.com. */
 export const ayahAudioUrl = (surah: number, ayah: number) =>
   `https://everyayah.com/data/Alafasy_128kbps/${String(surah).padStart(3, '0')}${String(ayah).padStart(3, '0')}.mp3`;
+
+/** One ayah ("surah:ayah", e.g. "1:1") in Uthmani script. */
+export async function fetchAyah(ref: string): Promise<string> {
+  const r = await fetch(`${API}/ayah/${ref}/quran-uthmani`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const j = await r.json();
+  if (typeof j?.data?.text !== 'string') throw new Error('Malformed response');
+  return j.data.text;
+}

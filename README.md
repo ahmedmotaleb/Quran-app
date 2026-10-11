@@ -23,16 +23,30 @@ Demo accounts (password `halqa123`): `yousef@halqa.app` (student), `teacher@halq
 
 The desktop admin portal has its own sign-in (`admin@halqa.app` / `halqa123`). Admin
 accounts can't sign in to the mobile app, and other accounts can't sign in to the portal.
-You reach it from «دخول الإدارة» on the login screen, or from the demo panel. Sections:
-- **Overview:** KPIs and pending actions.
-- **Users & linking:** search, role and status filters, pagination over about 190 demo
-  accounts, approve-and-link (pick a teacher and a parent, or a parent's children; both
-  sides of a link stay in sync), add/edit user, suspend/reactivate.
-- **Teachers:** approve, reject, suspend.
-- **Content:** publish, return to teacher, unpublish.
+You reach it from «دخول الإدارة» on the login screen, or from the demo panel. Its sidebar
+follows the brief:
+- **Overview:** KPIs, pending actions per section, and today's sessions.
+- **Students:** about 185 demo accounts with search, a level filter, status filters and
+  pagination. Each student opens a detail drawer. Approve-and-link requires a teacher.
+  Add/edit and suspend (with confirmation) are available.
+- **Teachers:** approve or reject, suspend, and a detail drawer (students, circles, content).
+- **Parents:** link children (both sides of the link stay in sync), add/edit, suspend.
+- **Circles:** create as draft, edit (capacity is validated), publish, suspend.
+- **Bookings:** filter by teacher and status, cancel with confirmation.
+- **Lectures / Quizzes:** publish, return to teacher, unpublish, create a draft.
 - **Subscriptions:** activate, plus an expired filter.
+- **Settings:** organisation, timezone, session durations, cancellation window,
+  notification switches. Changes stay in a draft until saved, and errors show beside
+  each field.
 
-On narrow screens the sidebar stacks above the content, and tables scroll sideways.
+On narrow screens the sidebar becomes a top bar with a horizontal section list, and
+tables scroll sideways.
+
+## Design system (`#/design-system`)
+
+A style guide rendered with the app's real tokens and components (colours, type,
+buttons, badges, fields, tabs/chips/switch, icons, principles). Its Quran samples are
+loaded from the API like everywhere else, never hand-typed.
 
 ## What is real and what is simulated
 
@@ -60,7 +74,8 @@ src/
   screens/auth|student|teacher|parent/
   AppShell.tsx           status bar, nav, data-state views, toast, bottom sheet
   demo/DemoPanel.tsx     prototype control panel (desktop only)
-  admin/                 admin portal: data, store, UI (lazy-loaded)
+  admin/                 admin portal: data, store, tables, dialogs, settings (lazy-loaded)
+  designsystem/          living style guide (lazy-loaded)
 ```
 
 Times are stored in Riyadh time (the demo's equivalent of UTC) and shown in the user's
@@ -78,9 +93,8 @@ linking and approvals.
 
 ## Not yet implemented
 
-- Admin sections the brief lists but the design doesn't: separate students/parents pages,
-  circles, bookings, lectures, quizzes, settings
-- The standalone design-system page (`project/Halqa Design System.dc.html`)
+- Real payments and subscription billing
+- Server persistence. Every change is in memory and resets on reload.
 
 ## Design handoff
 

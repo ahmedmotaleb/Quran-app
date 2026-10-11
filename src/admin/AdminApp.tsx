@@ -1,14 +1,21 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { color, font } from '@/theme/tokens';
-import { Icon } from '@/components/Icon';
-import { FieldError, inputStyle, labelStyle, outlineBtn, primaryBtn } from '@/components/ui';
-import { STATUS, TEACHER_NAMES, type AdminUser, type Status, type UserRole } from './adminData';
-import {
-  PAGE_SIZE, adminLogin, adminLogout, goSection, saveLink, saveUser, setAdmin, setStatus, toast, useAdmin, type Section,
-} from './adminStore';
+import { Icon, type IconName } from '@/components/Icon';
+import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
+import type { Status } from './adminData';
+import { adminLogin, adminLogout, goSection, setAdmin, useAdmin, type AdminState, type Section } from './adminStore';
+import { StatusPill, TableSection, card } from './AdminTables';
+import AdminDialogs from './AdminDialogs';
+import AdminSettings from './AdminSettings';
 
-const card: CSSProperties = { background: color.card, border: `1px solid ${color.border}`, borderRadius: 16 };
 const toApp = () => { window.location.hash = '#/'; };
+
+function useNarrow() {
+  const q = '(max-width: 899px)';
+  const [m, setM] = useState(() => window.matchMedia(q).matches);
+  useEffect(() => { const mq = window.matchMedia(q); const on = () => setM(mq.matches); mq.addEventListener('change', on); return () => mq.removeEventListener('change', on); }, []);
+  return m;
+}
 
 /* ------------------------------------------------------------------ */
 export default function AdminApp() {
@@ -55,368 +62,154 @@ function AdminLogin() {
 }
 
 /* ---------------- Portal shell ---------------- */
-const TITLES: Record<Section, [string, string]> = {
-  overview: ['نظرة عامة', 'الأحد 11 أكتوبر 2026'],
-  users: ['المستخدمون والربط', 'اعتماد الحسابات وربط الطلاب بالمعلمين وأولياء الأمور'],
-  teachers: ['المعلمون', 'اعتماد المعلمين ومتابعة أعداد طلابهم'],
-  content: ['المحتوى', 'مراجعة المحاضرات والاختبارات قبل نشرها للطلاب'],
-  subs: ['الاشتراكات', 'حالة الباقات ومواعيد التجديد'],
+const NAV: [Section, string, IconName][] = [
+  ['overview', 'نظرة عامة', 'home'], ['students', 'الطلاب', 'user'], ['teachers', 'المعلمون', 'award'], ['parents', 'أولياء الأمور', 'users'],
+  ['circles', 'الحلقات', 'target'], ['bookings', 'الحجوزات', 'cal'], ['lectures', 'المحاضرات', 'video'], ['quizzes', 'الاختبارات', 'plan'],
+  ['subs', 'الاشتراكات', 'file'], ['settings', 'الإعدادات', 'settings'],
+];
+const TITLES: Record<Section, string> = {
+  overview: 'الأحد 11 أكتوبر 2026',
+  students: 'اعتماد حسابات الطلاب وربطهم بالمعلمين وأولياء الأمور',
+  teachers: 'اعتماد المعلمين ومتابعة طلابهم وحلقاتهم',
+  parents: 'ربط أولياء الأمور بأبنائهم؛ يرى كلٌّ منهم بيانات أبنائه فقط',
+  circles: 'الحلقات الجماعية ومواعيدها وسعتها',
+  bookings: 'كل الحجوزات على المنصة بتوقيت الرياض',
+  lectures: 'مراجعة المحاضرات قبل نشرها للطلاب',
+  quizzes: 'مراجعة الاختبارات قبل نشرها للطلاب',
+  subs: 'حالة الباقات ومواعيد التجديد',
+  settings: 'إعدادات المنصة العامة',
 };
+
+/** Items awaiting admin action, per section (shown as sidebar badges and on the overview). */
+function pendingCounts(s: AdminState): Partial<Record<Section, number>> {
+  const p = (xs: { st: Status }[]) => xs.filter((x) => x.st === 'pending').length;
+  return {
+    students: p(s.users.filter((u) => u.role !== 'ولي أمر')), parents: p(s.users.filter((u) => u.role === 'ولي أمر')),
+    teachers: p(s.teachers), lectures: p(s.content.filter((c) => c.kind === 'lecture')), quizzes: p(s.content.filter((c) => c.kind === 'quiz')),
+    subs: p(s.subs), circles: s.circles.filter((c) => c.st === 'draft').length,
+  };
+}
 
 function Portal() {
   const s = useAdmin();
-  const pc = (k: 'users' | 'teachers' | 'content' | 'subs') => (s[k] as { st: Status }[]).filter((x) => x.st === 'pending').length;
-  const secs: [Section, string, number][] = [['overview', 'نظرة عامة', 0], ['users', 'المستخدمون والربط', pc('users')], ['teachers', 'المعلمون', pc('teachers')], ['content', 'المحتوى', pc('content')], ['subs', 'الاشتراكات', pc('subs')]];
-  const [title, sub] = TITLES[s.sec];
+  const narrow = useNarrow();
+  const counts = pendingCounts(s);
+  const label = NAV.find((n) => n[0] === s.sec)![1];
+
+  const nav = (
+    <nav aria-label="أقسام الإدارة" style={narrow
+      ? { display: 'flex', gap: 4, overflowX: 'auto', padding: '0 12px 10px', margin: '0 -0px' }
+      : { display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {NAV.map(([k, l, ic]) => {
+        const cur = s.sec === k; const c = counts[k] ?? 0;
+        return (
+          <button key={k} onClick={() => goSection(k)} aria-current={cur ? 'page' : undefined}
+            style={{ minHeight: 48, padding: '0 14px', border: 'none', borderRadius: 12, background: cur ? color.ivory : 'transparent', color: cur ? color.primary : color.ivory, fontSize: 15, fontWeight: 700, textAlign: 'right', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+            <Icon name={ic} size={18} /><span style={{ flex: 1 }}>{l}</span>
+            {c > 0 && <span aria-label={`${c} بانتظار إجراء`} style={{ minWidth: 24, height: 24, borderRadius: 999, background: color.gold, color: color.ink, fontFamily: font.latin, fontSize: 12, display: 'grid', placeItems: 'center', padding: '0 6px' }}>{c}</span>}
+          </button>
+        );
+      })}
+    </nav>
+  );
+  const brand = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: narrow ? '12px 16px' : '0 6px 18px' }}>
+      <img src="/assets/halqa-mark-ivory.png" alt="" style={{ width: 40, height: 40, objectFit: 'contain' }} />
+      <div style={{ flex: 1 }}><p style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>حَلْقة</p><p style={{ margin: 0, fontSize: 12, color: color.liveSub }}>لوحة الإدارة</p></div>
+      {narrow && <button onClick={adminLogout} aria-label="تسجيل الخروج" style={{ width: 44, height: 44, border: 'none', background: 'transparent', color: color.sage, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="leave" /></button>}
+    </div>
+  );
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexWrap: 'wrap' }}>
-      <aside style={{ flex: '1 0 240px', maxWidth: '100%', background: color.primary, color: color.ivory, padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 6px 18px' }}>
-          <img src="/assets/halqa-mark-ivory.png" alt="" style={{ width: 40, height: 40, objectFit: 'contain' }} />
-          <div><p style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>حَلْقة</p><p style={{ margin: 0, fontSize: 12, color: color.liveSub }}>لوحة الإدارة</p></div>
-        </div>
-        <nav aria-label="أقسام الإدارة" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {secs.map(([k, l, c]) => {
-            const cur = s.sec === k;
-            return (
-              <button key={k} onClick={() => goSection(k)} aria-current={cur ? 'page' : undefined}
-                style={{ minHeight: 48, padding: '0 14px', border: 'none', borderRadius: 12, background: cur ? color.ivory : 'transparent', color: cur ? color.primary : color.ivory, fontSize: 15, fontWeight: 700, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-                {l}
-                {c > 0 && <span aria-label={`${c} بانتظار المراجعة`} style={{ minWidth: 24, height: 24, borderRadius: 999, background: color.gold, color: color.ink, fontFamily: font.latin, fontSize: 12, display: 'grid', placeItems: 'center', padding: '0 6px' }}>{c}</span>}
-              </button>
-            );
-          })}
-        </nav>
-        <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 16 }}>
-          <button onClick={toApp} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.sage, fontSize: 14, textAlign: 'right', padding: '0 14px', cursor: 'pointer', textDecoration: 'underline' }}>← العودة إلى نموذج الجوال</button>
-          <button onClick={adminLogout} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.sage, fontSize: 14, textAlign: 'right', padding: '0 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="leave" size={18} /> تسجيل الخروج</button>
-        </div>
-      </aside>
-      <main style={{ flex: '999 1 600px', minWidth: 0, padding: '28px clamp(16px,3vw,40px)', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: narrow ? 'column' : 'row' }}>
+      {narrow ? (
+        <header style={{ background: color.primary, color: color.ivory, position: 'sticky', top: 0, zIndex: 20 }}>{brand}{nav}</header>
+      ) : (
+        <aside style={{ flex: '0 0 248px', background: color.primary, color: color.ivory, padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 6, position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' }}>
+          {brand}{nav}
+          <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 16 }}>
+            <button onClick={toApp} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.sage, fontSize: 14, textAlign: 'right', padding: '0 14px', cursor: 'pointer', textDecoration: 'underline' }}>← العودة إلى نموذج الجوال</button>
+            <button onClick={adminLogout} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.sage, fontSize: 14, textAlign: 'right', padding: '0 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="leave" size={18} /> تسجيل الخروج</button>
+          </div>
+        </aside>
+      )}
+      <main style={{ flex: 1, minWidth: 0, padding: '28px clamp(16px,3vw,40px)', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div><h1 style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>{title}</h1><p style={{ margin: '4px 0 0', fontSize: 14, color: color.muted }}>{sub}</p></div>
+          <div><h1 style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>{label}</h1><p style={{ margin: '4px 0 0', fontSize: 14, color: color.muted }}>{TITLES[s.sec]}</p></div>
           <span style={{ fontSize: 13, color: color.muted, background: color.sand, padding: '6px 12px', borderRadius: 999 }}>بيانات عرض تجريبية</span>
         </header>
-        {s.sec === 'overview' ? <Overview pc={pc} /> : <TableSection />}
+        {s.sec === 'overview' ? <Overview counts={counts} /> : s.sec === 'settings' ? <AdminSettings /> : <TableSection key={s.sec} sec={s.sec} />}
       </main>
-      {s.dialog?.kind === 'link' && <LinkDialog id={s.dialog.id} approve={s.dialog.approve} />}
-      {s.dialog?.kind === 'user' && <UserDialog id={s.dialog.id} />}
+      <AdminDialogs />
       {s.toast && <div role="status" aria-live="polite" style={{ position: 'fixed', bottom: 24, left: 24, maxWidth: 'calc(100vw - 48px)', background: color.ink, color: color.ivory, padding: '14px 18px', borderRadius: 14, fontSize: 14, boxShadow: '0 12px 28px -12px rgba(0,0,0,.4)', zIndex: 60 }}>{s.toast}</div>}
     </div>
   );
 }
 
-function Overview({ pc }: { pc: (k: 'users' | 'teachers' | 'content' | 'subs') => number }) {
+/* ---------------- Overview ---------------- */
+const TODO: [Section, (n: number) => string][] = [
+  ['students', (n) => `${n} طلاب بانتظار الاعتماد والربط`],
+  ['parents', (n) => `${n} أولياء أمور بانتظار الاعتماد والربط`],
+  ['teachers', (n) => `${n} طلب انضمام معلم`],
+  ['lectures', (n) => `${n} محاضرات بانتظار النشر`],
+  ['quizzes', (n) => `${n} اختبارات بانتظار النشر`],
+  ['circles', (n) => `${n} حلقات مسودة لم تُنشر`],
+  ['subs', (n) => `${n} اشتراكات بانتظار التفعيل`],
+];
+
+function Overview({ counts }: { counts: Partial<Record<Section, number>> }) {
   const s = useAdmin();
-  const activeStudents = s.users.filter((u) => u.role !== 'ولي أمر' && u.st === 'active').length;
+  const students = s.users.filter((u) => u.role !== 'ولي أمر');
+  const unlinked = students.filter((u) => u.st === 'active' && !u.teacher).length;
+  const confirmed = s.bookings.filter((b) => b.st === 'confirmed');
+  const cancelled = s.bookings.filter((b) => b.st === 'cancelled').length;
+  const seats = s.circles.filter((c) => c.st === 'active' || c.st === 'full');
+  const fill = seats.length ? Math.round((seats.reduce((a, c) => a + c.members, 0) / seats.reduce((a, c) => a + c.capacity, 0)) * 100) : 0;
   const kpis = [
-    { l: 'طلاب نشطون', v: String(activeStudents), s: '+9 هذا الشهر' },
-    { l: 'معلمون نشطون', v: String(s.teachers.filter((x) => x.st === 'active').length), s: `${pc('teachers')} بانتظار الاعتماد` },
-    { l: 'جلسات هذا الأسبوع', v: '318', s: 'نسبة الحضور 91%' },
-    { l: 'تسجيلات بانتظار التقييم', v: '27', s: 'متوسط الرد 18 ساعة' },
+    { l: 'طلاب نشطون', v: students.filter((u) => u.st === 'active').length, s: unlinked ? `${unlinked} دون معلم مرتبط` : 'كلهم مرتبطون بمعلمين', go: 'students' as Section },
+    { l: 'معلمون نشطون', v: s.teachers.filter((x) => x.st === 'active').length, s: `${counts.teachers ?? 0} بانتظار الاعتماد`, go: 'teachers' as Section },
+    { l: 'حجوزات قادمة', v: confirmed.length, s: `${cancelled} حجوزات ملغاة`, go: 'bookings' as Section },
+    { l: 'إشغال الحلقات', v: `${fill}%`, s: `${seats.length} حلقات منشورة`, go: 'circles' as Section },
   ];
-  const todo: [string, string, Section, number][] = [
-    [`${pc('users')} حسابات بانتظار الاعتماد والربط`, 'المستخدمون', 'users', pc('users')],
-    [`${pc('content')} محتوى بانتظار النشر`, 'المحتوى', 'content', pc('content')],
-    [`${pc('teachers')} طلب انضمام معلم`, 'المعلمون', 'teachers', pc('teachers')],
-    [`${pc('subs')} اشتراكات بانتظار التفعيل`, 'الاشتراكات', 'subs', pc('subs')],
-  ];
-  const open = todo.filter((t) => t[3] > 0);
+  const open = TODO.filter(([k]) => (counts[k] ?? 0) > 0);
+  const today = confirmed.filter((b) => b.when.startsWith('الأحد 11 أكتوبر')).slice(0, 6);
+
   return (
     <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14 }}>
         {kpis.map((k) => (
-          <div key={k.l} style={{ ...card, padding: 18 }}>
+          <button key={k.l} onClick={() => goSection(k.go)} style={{ ...card, padding: 18, textAlign: 'right', cursor: 'pointer', color: color.ink }}>
             <p style={{ margin: 0, fontSize: 14, color: color.muted }}>{k.l}</p>
             <p style={{ margin: '6px 0 0', fontSize: 30, fontWeight: 800, fontFamily: font.latin }}>{k.v}</p>
             <p style={{ margin: '4px 0 0', fontSize: 13, color: color.primary }}>{k.s}</p>
-          </div>
-        ))}
-      </div>
-      <section style={{ ...card, padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>يحتاج إجراء</h2>
-        {open.length === 0 && <p style={{ margin: 0, fontSize: 15, color: color.muted, display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="check" size={18} /> لا توجد إجراءات معلقة.</p>}
-        {open.map(([l, a, k]) => (
-          <button key={k} onClick={() => goSection(k)} style={{ minHeight: 52, padding: '0 14px', borderRadius: 12, border: `1px solid ${color.divider}`, background: color.ivory, display: 'flex', alignItems: 'center', gap: 10, textAlign: 'right', cursor: 'pointer', color: color.ink, fontSize: 15 }}>
-            <span style={{ flex: 1 }}>{l}</span><span style={{ fontWeight: 700, color: color.primary }}>{a} ←</span>
           </button>
         ))}
-      </section>
-    </>
-  );
-}
-
-/* ---------------- Tables ---------------- */
-interface Act { label: string; click: () => void; primary?: boolean }
-interface Row { id: number; name: string; c2: ReactNode; c3: ReactNode; st: Status; role?: UserRole; acts: Act[] }
-
-function useRows(): { cols: string[]; rows: Row[] } {
-  const s = useAdmin();
-  switch (s.sec) {
-    case 'users': return {
-      cols: ['الاسم', 'الدور', 'المعلم / الأبناء المرتبطون', 'الحالة', 'إجراء'],
-      rows: s.users.map((x) => {
-        const links = x.role === 'ولي أمر' ? (x.children.length ? x.children.join('، ') : 'غير مرتبط') : [x.teacher, x.parent && `ولي الأمر: ${x.parent}`].filter(Boolean).join(' · ') || (x.role === 'طالبة' ? 'غير مرتبطة' : 'غير مرتبط');
-        return {
-          id: x.id, name: x.name, c2: x.role, c3: links, st: x.st, role: x.role,
-          acts: x.st === 'pending'
-            ? [{ label: 'اعتماد وربط', click: () => setAdmin({ dialog: { kind: 'link', id: x.id, approve: true } }), primary: true }]
-            : [{ label: 'تعديل الربط', click: () => setAdmin({ dialog: { kind: 'link', id: x.id, approve: false } }) },
-              { label: 'تعديل', click: () => setAdmin({ dialog: { kind: 'user', id: x.id } }) },
-              x.st === 'off' ? { label: 'إعادة تفعيل', click: () => setStatus('users', x.id, 'active', `أُعيد تفعيل ${x.name}`) } : { label: 'إيقاف', click: () => setStatus('users', x.id, 'off', `أُوقف حساب ${x.name}`) }],
-        };
-      }),
-    };
-    case 'teachers': return {
-      cols: ['المعلم', 'التخصص', 'الطلاب', 'الحالة', 'إجراء'],
-      rows: s.teachers.map((x) => ({
-        id: x.id, name: x.name, c2: x.spec, c3: x.n, st: x.st,
-        acts: x.st === 'pending'
-          ? [{ label: 'اعتماد', click: () => setStatus('teachers', x.id, 'active', 'تم اعتماد ' + x.name), primary: true }, { label: 'رفض', click: () => setStatus('teachers', x.id, 'off', 'رُفض الطلب') }]
-          : [{ label: x.st === 'off' ? 'إعادة تفعيل' : 'إيقاف', click: () => setStatus('teachers', x.id, x.st === 'off' ? 'active' : 'off', 'تم التحديث') }],
-      })),
-    };
-    case 'content': return {
-      cols: ['العنوان', 'المعلم', 'النوع', 'الحالة', 'إجراء'],
-      rows: s.content.map((x) => ({
-        id: x.id, name: x.name, c2: x.by, c3: x.k, st: x.st,
-        acts: x.st === 'pending'
-          ? [{ label: 'نشر', click: () => setStatus('content', x.id, 'active', 'نُشر المحتوى للطلاب'), primary: true }, { label: 'إعادة للمعلم', click: () => setStatus('content', x.id, 'off', 'أُعيد للمعلم مع ملاحظة') }]
-          : x.st === 'off' ? [{ label: 'نشر', click: () => setStatus('content', x.id, 'active', 'نُشر المحتوى للطلاب'), primary: true }]
-            : [{ label: 'إلغاء النشر', click: () => setStatus('content', x.id, 'off', 'أُلغي النشر') }],
-      })),
-    };
-    case 'subs': return {
-      cols: ['المشترك', 'الباقة', 'التجديد', 'الحالة', 'إجراء'],
-      rows: s.subs.map((x) => ({
-        id: x.id, name: x.name, c2: x.plan, c3: x.due, st: x.st,
-        acts: x.st === 'active' ? [{ label: 'تفاصيل', click: () => toast('سجل المدفوعات (تجريبي) — يحتاج ربطًا بمزود الدفع') }]
-          : [{ label: 'تفعيل', click: () => setStatus('subs', x.id, 'active', 'تم تفعيل الاشتراك'), primary: true }],
-      })),
-    };
-    default: return { cols: [], rows: [] };
-  }
-}
-
-const chip = (on: boolean): CSSProperties => ({ minHeight: 48, padding: '0 16px', borderRadius: 12, border: `1.5px solid ${on ? color.primary : color.borderStrong}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.primary, fontWeight: 700, cursor: 'pointer' });
-
-function TableSection() {
-  const s = useAdmin();
-  const { cols, rows: all } = useRows();
-  const q = s.q.trim();
-  const present = new Set(all.map((r) => r.st));
-  const filters: ['all' | Status, string][] = [['all', 'الكل'], ['pending', 'بانتظار المراجعة'], ['active', 'نشط'], ...(['expired', 'off'] as Status[]).filter((k) => present.has(k)).map((k) => [k, STATUS[k].label] as [Status, string])];
-  const rows = all.filter((r) => (!q || r.name.includes(q)) && (s.f === 'all' || r.st === s.f) && (s.sec !== 'users' || s.role === 'all' || (s.role === 'student' ? r.role !== 'ولي أمر' : r.role === 'ولي أمر')));
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const page = Math.min(s.page, pages);
-  const shown = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  return (
-    <>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <input type="search" aria-label="بحث" placeholder="ابحث بالاسم" value={s.q} onChange={(e) => setAdmin({ q: e.target.value, page: 1 })}
-          style={{ flex: '1 1 260px', minHeight: 48, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15 }} />
-        {s.sec === 'users' && (
-          <select aria-label="نوع الحساب" value={s.role} onChange={(e) => setAdmin({ role: e.target.value, page: 1 })}
-            style={{ minHeight: 48, padding: '0 12px', borderRadius: 12, border: `1.5px solid ${color.borderStrong}`, background: color.card, color: color.primary, fontWeight: 700, fontSize: 15 }}>
-            <option value="all">كل الأدوار</option><option value="student">الطلاب</option><option value="parent">أولياء الأمور</option>
-          </select>
-        )}
-        {filters.map(([k, l]) => <button key={k} aria-pressed={s.f === k} onClick={() => setAdmin({ f: k, page: 1 })} style={chip(s.f === k)}>{l}</button>)}
-        {s.sec === 'users' && <button onClick={() => setAdmin({ dialog: { kind: 'user', id: null } })} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6 })}><Icon name="plus" size={18} /> إضافة مستخدم</button>}
       </div>
-      <div style={{ ...card, overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, minWidth: 680 }}>
-          <thead><tr style={{ background: color.sand, textAlign: 'right' }}>{cols.map((c) => <th key={c} scope="col" style={{ padding: '12px 16px', fontWeight: 700, color: color.body }}>{c}</th>)}</tr></thead>
-          <tbody>
-            {shown.map((r) => {
-              const t = STATUS[r.st];
-              return (
-                <tr key={r.id} style={{ borderTop: `1px solid ${color.divider}` }}>
-                  <td style={{ padding: '12px 16px', fontWeight: 700 }}>{r.name}</td>
-                  <td style={{ padding: '12px 16px', color: color.body }}>{r.c2}</td>
-                  <td style={{ padding: '12px 16px', color: color.body }}>{r.c3}</td>
-                  <td style={{ padding: '12px 16px' }}><span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700, background: t.bg, color: t.fg, whiteSpace: 'nowrap' }}>{t.label}</span></td>
-                  <td style={{ padding: '8px 16px' }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {r.acts.map((a) => (
-                        <button key={a.label} onClick={a.click} aria-label={`${a.label}: ${r.name}`}
-                          style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: `1px solid ${a.primary ? color.primary : color.borderStrong}`, background: a.primary ? color.primary : 'transparent', color: a.primary ? color.ivory : color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{a.label}</button>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {rows.length === 0 && <p style={{ margin: 0, padding: 28, textAlign: 'center', color: color.muted }}>لا توجد نتائج مطابقة.</p>}
-      </div>
-      {rows.length > PAGE_SIZE && <Pager page={page} pages={pages} total={rows.length} />}
-    </>
-  );
-}
-
-function Pager({ page, pages, total }: { page: number; pages: number; total: number }) {
-  const go = (p: number) => setAdmin({ page: Math.max(1, Math.min(pages, p)) });
-  // Window of up to 5 page numbers around the current page.
-  const start = Math.max(1, Math.min(page - 2, pages - 4));
-  const nums = Array.from({ length: Math.min(5, pages) }, (_, i) => start + i);
-  const btn = (on: boolean, disabled = false): CSSProperties => ({ minWidth: 44, minHeight: 44, padding: '0 10px', borderRadius: 10, border: `1px solid ${on ? color.primary : color.borderStrong}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.primary, fontFamily: font.latin, fontWeight: 700, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.45 : 1 });
-  return (
-    <nav aria-label="الصفحات" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-      <p style={{ margin: 0, fontSize: 14, color: color.muted }}>عرض {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} من {total}</p>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button onClick={() => go(page - 1)} disabled={page === 1} aria-label="الصفحة السابقة" style={btn(false, page === 1)}><Icon name="chevR" size={18} /></button>
-        {nums.map((n) => <button key={n} onClick={() => go(n)} aria-label={`الصفحة ${n}`} aria-current={n === page ? 'page' : undefined} style={btn(n === page)}>{n}</button>)}
-        <button onClick={() => go(page + 1)} disabled={page === pages} aria-label="الصفحة التالية" style={btn(false, page === pages)}><Icon name="chevL" size={18} /></button>
-      </div>
-    </nav>
-  );
-}
-
-/* ---------------- Dialogs ---------------- */
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    (ref.current?.querySelector('input,select,button') as HTMLElement | null)?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => { window.removeEventListener('keydown', onKey); prev?.focus?.(); };
-  }, [onClose]);
-  return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'grid', placeItems: 'center', padding: 16 }}>
-      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(12,36,33,.45)' }} />
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={title}
-        style={{ position: 'relative', width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto', background: color.ivory, borderRadius: 20, padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{title}</h2>
-          <button onClick={onClose} aria-label="إغلاق" style={{ width: 44, height: 44, border: 'none', background: 'transparent', color: color.primary, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="x" /></button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-const close = () => setAdmin({ dialog: null });
-const selStyle: CSSProperties = { ...inputStyle(false), padding: '0 12px' };
-
-function LinkDialog({ id, approve }: { id: number; approve: boolean }) {
-  const users = useAdmin((s) => s.users);
-  const u = users.find((x) => x.id === id)!;
-  const isParent = u.role === 'ولي أمر';
-  const [teacher, setTeacher] = useState(u.teacher ?? '');
-  const [parent, setParent] = useState(u.parent ?? '');
-  const [children, setChildren] = useState<string[]>(u.children);
-  const [kq, setKq] = useState('');
-  const [err, setErr] = useState<string | null>(null);
-  const parents = users.filter((x) => x.role === 'ولي أمر' && x.st === 'active');
-  const students = users.filter((x) => x.role !== 'ولي أمر' && (!kq.trim() || x.name.includes(kq.trim()))).slice(0, 8);
-
-  const save = () => {
-    if (approve && !isParent && !teacher) { setErr('اختر معلمًا لربط الطالب قبل الاعتماد'); return; }
-    saveLink(id, isParent ? null : teacher || null, isParent ? null : parent || null, isParent ? children : [], approve);
-  };
-  return (
-    <Modal title={approve ? `اعتماد وربط: ${u.name}` : `تعديل الربط: ${u.name}`} onClose={close}>
-      <p style={{ margin: 0, fontSize: 14, color: color.muted }}>{u.role} · <bdi dir="ltr" style={{ fontFamily: font.latin }}>{u.email}</bdi></p>
-      {!isParent ? (
-        <>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="ln-teacher" style={labelStyle}>المعلم</label>
-            <select id="ln-teacher" value={teacher} onChange={(e) => { setTeacher(e.target.value); setErr(null); }} style={selStyle}>
-              <option value="">— بدون معلم —</option>
-              {TEACHER_NAMES.map((t) => <option key={t}>{t}</option>)}
-            </select>
-            <FieldError msg={err} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,360px),1fr))', gap: 14, alignItems: 'start' }}>
+        <section style={{ ...card, padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>يحتاج إجراء</h2>
+          {open.length === 0 && <p style={{ margin: 0, fontSize: 15, color: color.muted, display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="check" size={18} /> لا توجد إجراءات معلقة.</p>}
+          {open.map(([k, txt]) => (
+            <button key={k} onClick={() => goSection(k)} style={{ minHeight: 52, padding: '0 14px', borderRadius: 12, border: `1px solid ${color.divider}`, background: color.ivory, display: 'flex', alignItems: 'center', gap: 10, textAlign: 'right', cursor: 'pointer', color: color.ink, fontSize: 15 }}>
+              <span style={{ flex: 1 }}>{txt(counts[k]!)}</span><span style={{ fontWeight: 700, color: color.primary, whiteSpace: 'nowrap' }}>{NAV.find((n) => n[0] === k)![1]} ←</span>
+            </button>
+          ))}
+        </section>
+        <section style={{ ...card, padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>جلسات اليوم</h2>
+            <button onClick={() => goSection('bookings')} style={{ minHeight: 40, border: 'none', background: 'transparent', color: color.primary, fontWeight: 700, cursor: 'pointer' }}>كل الحجوزات ←</button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label htmlFor="ln-parent" style={labelStyle}>ولي الأمر</label>
-            <select id="ln-parent" value={parent} onChange={(e) => setParent(e.target.value)} style={selStyle}>
-              <option value="">— غير مرتبط —</option>
-              {parents.map((p) => <option key={p.id}>{p.name}</option>)}
-            </select>
-            <p style={{ margin: 0, fontSize: 12, color: color.muted }}>يرى ولي الأمر بيانات أبنائه المرتبطين فقط.</p>
-          </div>
-        </>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={labelStyle}>الأبناء المرتبطون</span>
-          {children.length > 0 ? (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {children.map((c) => (
-                <span key={c} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0 4px 0 12px', minHeight: 36, borderRadius: 999, background: color.sage, color: color.primary, fontSize: 14, fontWeight: 700 }}>
-                  {c}<button onClick={() => setChildren(children.filter((x) => x !== c))} aria-label={`إزالة ${c}`} style={{ width: 32, height: 32, border: 'none', background: 'transparent', color: color.primary, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="x" size={18} /></button>
-                </span>
-              ))}
+          {today.length === 0 && <p style={{ margin: 0, fontSize: 15, color: color.muted }}>لا توجد جلسات اليوم.</p>}
+          {today.map((b) => (
+            <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 48, borderTop: `1px solid ${color.divider}`, paddingTop: 8 }}>
+              <span style={{ minWidth: 64, fontWeight: 800, fontSize: 14 }}>{b.when.split(' · ')[1]}</span>
+              <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontSize: 14, fontWeight: 700 }}>{b.student}</span><span style={{ display: 'block', fontSize: 12, color: color.muted }}>{b.teacher} · {b.type}</span></span>
+              <StatusPill st={b.st} />
             </div>
-          ) : <p style={{ margin: 0, fontSize: 14, color: color.muted }}>لا يوجد أبناء مرتبطون بعد.</p>}
-          <input type="search" aria-label="ابحث عن طالب لربطه" placeholder="ابحث عن طالب لربطه" value={kq} onChange={(e) => setKq(e.target.value)} style={inputStyle(false, false, { minHeight: 48, fontSize: 15 })} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {students.map((x) => {
-              const on = children.includes(x.name);
-              return (
-                <button key={x.id} aria-pressed={on} onClick={() => setChildren(on ? children.filter((c) => c !== x.name) : [...children, x.name])}
-                  style={{ minHeight: 44, padding: '0 12px', borderRadius: 10, border: `1px solid ${on ? color.primary : color.border}`, background: on ? color.sageTint : color.card, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: color.ink, fontSize: 14, textAlign: 'right' }}>
-                  <span style={{ flex: 1 }}>{x.name}</span>
-                  <span style={{ fontSize: 12, color: color.muted }}>{x.parent && x.parent !== u.name ? `مرتبط بـ ${x.parent}` : x.role}</span>
-                  {on && <span style={{ color: color.primary }}><Icon name="check" size={18} /></span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-        <button onClick={close} style={outlineBtn(48, 15, { flex: 1 })}>إلغاء</button>
-        <button onClick={save} style={primaryBtn(48, 15, { flex: 1 })}>{approve ? 'اعتماد وحفظ الربط' : 'حفظ الربط'}</button>
+          ))}
+        </section>
       </div>
-    </Modal>
-  );
-}
-
-const ROLES: UserRole[] = ['طالب', 'طالبة', 'ولي أمر'];
-
-function UserDialog({ id }: { id: number | null }) {
-  const users = useAdmin((s) => s.users);
-  const u: AdminUser | undefined = id === null ? undefined : users.find((x) => x.id === id);
-  const [name, setName] = useState(u?.name ?? '');
-  const [email, setEmail] = useState(u?.email ?? '');
-  const [role, setRole] = useState<UserRole>(u?.role ?? 'طالب');
-  const [errs, setErrs] = useState<Record<string, string | null>>({});
-  const save = () => {
-    const e: Record<string, string> = {}; const em = email.trim().toLowerCase();
-    if (name.trim().length < 2) e.name = 'أدخل الاسم الكامل';
-    if (!em) e.email = 'أدخل البريد الإلكتروني'; else if (!/^\S+@\S+\.\S+$/.test(em)) e.email = 'صيغة البريد الإلكتروني غير صحيحة';
-    else if (users.some((x) => x.email === em && x.id !== id)) e.email = 'هذا البريد مستخدم لحساب آخر';
-    if (Object.keys(e).length) { setErrs(e); return; }
-    saveUser(id, { name: name.trim(), email: em, role });
-  };
-  return (
-    <Modal title={id === null ? 'إضافة مستخدم' : `تعديل: ${u?.name}`} onClose={close}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <label htmlFor="us-name" style={labelStyle}>الاسم الكامل</label>
-        <input id="us-name" value={name} aria-invalid={!!errs.name} onChange={(e) => { setName(e.target.value); setErrs({ ...errs, name: null }); }} style={inputStyle(errs.name)} />
-        <FieldError msg={errs.name} />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <label htmlFor="us-email" style={labelStyle}>البريد الإلكتروني</label>
-        <input id="us-email" type="email" dir="ltr" value={email} aria-invalid={!!errs.email} placeholder="name@example.com" onChange={(e) => { setEmail(e.target.value); setErrs({ ...errs, email: null }); }} style={inputStyle(errs.email, true)} />
-        <FieldError msg={errs.email} />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <label htmlFor="us-role" style={labelStyle}>نوع الحساب</label>
-        <select id="us-role" value={role} onChange={(e) => setRole(e.target.value as UserRole)} disabled={id !== null && u?.role === 'ولي أمر' && u.children.length > 0} style={selStyle}>
-          {ROLES.map((r) => <option key={r}>{r}</option>)}
-        </select>
-        <p style={{ margin: 0, fontSize: 12, color: color.muted }}>حسابات المعلمين تُعتمد من قسم «المعلمون». تُرسل دعوة الدخول بالبريد بعد الحفظ (تجريبي).</p>
-      </div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-        <button onClick={close} style={outlineBtn(48, 15, { flex: 1 })}>إلغاء</button>
-        <button onClick={save} style={primaryBtn(48, 15, { flex: 1 })}>{id === null ? 'إضافة' : 'حفظ'}</button>
-      </div>
-    </Modal>
+    </>
   );
 }

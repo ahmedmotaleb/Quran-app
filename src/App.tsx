@@ -4,6 +4,7 @@ import DemoPanel from './demo/DemoPanel';
 import { startSplash, tick, useApp } from './store/store';
 
 const AdminApp = lazy(() => import('./admin/AdminApp'));
+const DesignSystem = lazy(() => import('./designsystem/DesignSystem'));
 
 function useHash() {
   const [h, setH] = useState(() => window.location.hash);
@@ -22,10 +23,12 @@ function useMedia(q: string) {
   return m;
 }
 
-/** `#/admin` opens the desktop admin portal; everything else is the mobile app. */
+/** `#/admin` → admin portal, `#/design-system` → living style guide, anything else → the mobile app. */
 export default function App() {
-  const isAdmin = useHash().startsWith('#/admin');
-  return isAdmin ? <Suspense fallback={null}><AdminApp /></Suspense> : <MobileApp />;
+  const h = useHash();
+  if (h.startsWith('#/admin')) return <Suspense fallback={null}><AdminApp /></Suspense>;
+  if (h.startsWith('#/design-system')) return <Suspense fallback={null}><DesignSystem /></Suspense>;
+  return <MobileApp />;
 }
 
 /**
