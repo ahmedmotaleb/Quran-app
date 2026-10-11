@@ -17,3 +17,33 @@ def transition(assignment: Assignment, to_status: str, *, actor) -> Assignment:
         a.status = to_status
         a.save(update_fields=["status", "updated_at"])
         return a
+
+
+def _media_url(media, user, request):
+    from apps.media import services as media_services
+
+    if media is None or not media_services.can_read(user, media):
+        return None
+    return media_services.read_url(media, request)
+
+
+def submission_out(s, user, request) -> dict:
+    """Submission + feedback as the API returns them. Audio URLs only for people allowed to hear them."""
+    a = s.assignment
+    fb = getattr(s, "feedback", None)
+    out = {
+        "id": s.id, "assignment": a.id, "assignment_title": a.title, "kind": a.kind, "surah": a.surah, "ayah_from": a.ayah_from,
+        "ayah_to": a.ayah_to, "student": s.student_id, "student_name": s.student.full_name, "attempt": s.attempt,
+        "duration_seconds": s.duration_seconds, "created_at": s.created_at.isoformat(), "audio": _media_url(s.media, user, request),
+        "feedback": None,
+    }
+    if fb is not None:
+        out["feedback"] = {
+            "id": fb.id, "teacher": fb.teacher_id, "teacher_name": fb.teacher.full_name, "created_at": fb.created_at.isoformat(),
+            "score_hifz": fb.score_hifz, "score_tajweed": fb.score_tajweed, "score_fluency": fb.score_fluency,
+            "decision": fb.decision, "general": fb.general, "needs_review": fb.needs_review, "next_step": fb.next_step,
+            "notes": [{"at_seconds": n.at_seconds, "text": n.text, "category": n.category} for n in fb.notes.all()],
+            "voice": _media_url(fb.voice, user, request),
+            "voice_seconds": fb.voice.duration_seconds if fb.voice else None,
+        }
+    return out

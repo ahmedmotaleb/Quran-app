@@ -1,6 +1,7 @@
 from django.urls import include, path
 
 from apps.learning import views as learning
+from apps.media import views as media
 from apps.notifications import views as notifications
 from apps.quran import views as quran
 from apps.scheduling import views as scheduling
@@ -15,6 +16,15 @@ urlpatterns = [
     path("assignments", learning.AssignmentList.as_view()),
     path("assignments/<int:pk>", learning.AssignmentDetail.as_view()),
     path("assignments/<int:pk>/start", learning.AssignmentStart.as_view()),
+    path("assignments/<int:pk>/submissions", learning.SubmissionCreate.as_view()),
+    path("submissions", learning.SubmissionList.as_view()),
+    path("submissions/<int:pk>", learning.SubmissionDetail.as_view()),
+    path("submissions/<int:pk>/feedback", learning.FeedbackCreate.as_view()),
+    # Private media
+    path("media/recitations", media.RecitationUpload.as_view()),
+    path("media/voice-feedback", media.VoiceFeedbackUpload.as_view()),
+    path("media/<uuid:pk>", media.MediaDetail.as_view()),
+    path("media/<uuid:pk>/content", media.MediaContent.as_view(), name="media-content"),
     # Scheduling & booking
     path("teachers/<int:pk>/slots", scheduling.TeacherSlots.as_view()),
     path("bookings", scheduling.BookingList.as_view()),

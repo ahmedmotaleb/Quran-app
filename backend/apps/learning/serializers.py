@@ -37,3 +37,28 @@ class AssignmentSerializer(serializers.ModelSerializer):
         if errors:
             raise serializers.ValidationError(errors)
         return attrs
+
+
+class FeedbackNoteSerializer(serializers.Serializer):
+    at_seconds = serializers.FloatField(min_value=0)
+    text = serializers.CharField(max_length=500)
+    category = serializers.CharField(max_length=32, required=False, allow_blank=True, default="")
+
+
+class FeedbackInSerializer(serializers.Serializer):
+    score_hifz = serializers.IntegerField(min_value=1, max_value=5)
+    score_tajweed = serializers.IntegerField(min_value=1, max_value=5)
+    score_fluency = serializers.IntegerField(min_value=1, max_value=5)
+    decision = serializers.ChoiceField(choices=["accept", "repeat"])
+    general = serializers.CharField(required=False, allow_blank=True, max_length=2000, default="")
+    needs_review = serializers.CharField(required=False, allow_blank=True, max_length=200, default="")
+    next_step = serializers.CharField(required=False, allow_blank=True, max_length=200, default="")
+    notes = FeedbackNoteSerializer(many=True, required=False, default=list)
+    voice = serializers.UUIDField(required=False, allow_null=True, default=None)
+
+    def validate(self, attrs):
+        if attrs["decision"] == "repeat" and not attrs["needs_review"].strip():
+            raise serializers.ValidationError({"needs_review": ["حدّد ما يحتاج الطالب إلى إعادته."]})
+        if len(attrs["notes"]) > 50:
+            raise serializers.ValidationError({"notes": ["50 ملاحظة كحد أقصى."]})
+        return attrs

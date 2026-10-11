@@ -71,3 +71,15 @@ apps/notifications/ in-app notifications
 ```
 
 See `../docs/API.md` for endpoints, permissions and status transitions.
+
+## Private media (recordings)
+
+`MEDIA_STORAGE=s3` (required in staging/production) stores files in a private S3-compatible
+bucket — Cloudflare R2 is proposed. Set `STORAGE_ENDPOINT_URL`, `STORAGE_BUCKET`,
+`STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` (`STORAGE_REGION=auto` for R2). Reads use
+presigned URLs valid for `MEDIA_URL_TTL_SECONDS` (default 600). The bucket must not be public.
+
+`MEDIA_STORAGE=local` (development/test default) keeps files in `var/private-media/` and
+serves them only through signed, expiring URLs. Settings refuse it in deployed environments.
+
+Run `python manage.py purge_orphan_media` daily to delete uploads never submitted (48 h).

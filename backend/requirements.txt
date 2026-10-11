@@ -6,3 +6,4 @@ django-cors-headers==4.9.0
 argon2-cffi==25.1.0
 gunicorn==26.2.0
 whitenoise==6.12.0
+boto3==1.40.70  # S3-compatible private media (R2)

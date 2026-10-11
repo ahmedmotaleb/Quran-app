@@ -185,6 +185,7 @@ REST_FRAMEWORK = {
         "auth": env("THROTTLE_AUTH", "10/min"),
         "recovery": env("THROTTLE_RECOVERY", "5/hour"),
         "booking": env("THROTTLE_BOOKING", "30/min"),
+        "upload": env("THROTTLE_UPLOAD", "20/hour"),
     },
     "EXCEPTION_HANDLER": "apps.core.exceptions.api_exception_handler",
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
@@ -205,6 +206,26 @@ DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "noreply@halqa.app")
 FRONTEND_URL = env("FRONTEND_URL", "http://localhost:5173")
 
 APP_VERSION = env("APP_VERSION", "0.1.0")
+
+# ---- Private media (recitations, voice feedback) --------------------------------------
+# "s3": any S3-compatible bucket (Cloudflare R2 proposed). Required in staging/production.
+# "local": files under MEDIA_LOCAL_ROOT, development/test only (never served publicly; reads go
+# through short-lived signed URLs checked by the API).
+MEDIA_STORAGE = env("MEDIA_STORAGE", "s3" if IS_DEPLOYED else "local")
+if MEDIA_STORAGE not in {"s3", "local"}:
+    raise ImproperlyConfigured("MEDIA_STORAGE must be 's3' or 'local'.")
+if IS_DEPLOYED and MEDIA_STORAGE != "s3":
+    raise ImproperlyConfigured("MEDIA_STORAGE=local is for development only; configure S3-compatible storage.")
+MEDIA_LOCAL_ROOT = Path(env("MEDIA_LOCAL_ROOT", str(BASE_DIR / "var" / "private-media")) or "")
+STORAGE_ENDPOINT_URL = env("STORAGE_ENDPOINT_URL", "")  # e.g. https://<account>.r2.cloudflarestorage.com
+STORAGE_BUCKET = env("STORAGE_BUCKET", "")
+STORAGE_REGION = env("STORAGE_REGION", "auto")
+STORAGE_ACCESS_KEY_ID = env("STORAGE_ACCESS_KEY_ID", "")
+STORAGE_SECRET_ACCESS_KEY = env("STORAGE_SECRET_ACCESS_KEY", "")
+MEDIA_URL_TTL_SECONDS = int(env("MEDIA_URL_TTL_SECONDS", "600") or 600)
+MEDIA_MAX_BYTES = {"recitation": 25 * 1024 * 1024, "voice_feedback": 10 * 1024 * 1024}
+MEDIA_MAX_SECONDS = {"recitation": 20 * 60, "voice_feedback": 5 * 60}
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024  # larger uploads spool to a temp file
 
 # ---- Logging: one JSON object per line, with the request id --------------------------
 LOGGING = {

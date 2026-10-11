@@ -17,3 +17,4 @@ __pycache__/
 .venv/
 backend/staticfiles/
 .pytest_cache/
+backend/var/

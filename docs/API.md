@@ -47,6 +47,12 @@ server logs.
 | `GET, POST assignments` | list: scoped; create: teacher for assigned students | range validated against Hafs ayah counts |
 | `GET assignments/{id}` | scoped | 404 if not visible |
 | `POST assignments/{id}/start` | owning student | `not_started`/`needs_repeat` → `in_progress` |
+| `POST media/recitations` | student | multipart `file` + `duration_seconds`; type checked by declared type **and** file signature; size/duration limits; stored privately under a server-generated key |
+| `POST media/voice-feedback` | teacher | same rules, for a review's voice note |
+| `GET media/{uuid}` | owner; assigned teacher once submitted; the student a voice note answers; admin | returns a short-lived read URL (presigned on S3/R2). Parents never get audio |
+| `POST assignments/{id}/submissions` | owning student | `{media}` + `Idempotency-Key`; task → `submitted`; teacher notified |
+| `GET submissions`, `GET submissions/{id}` | scoped | `?state=pending|reviewed`, `?assignment=`; includes feedback and audio URLs the caller may use |
+| `POST submissions/{id}/feedback` | the student's assigned teacher | scores 1–5, `accept|repeat` (repeat needs `needs_review`), timed notes, optional voice; latest attempt only, once |
 | `GET, POST bookings` | list: scoped; create: student | create needs `Idempotency-Key` header; `?when=upcoming|past`, `?status=` |
 | `GET bookings/{id}` | scoped | |
 | `POST bookings/{id}/cancel` | owner (outside cancel window), session teacher, admin | idempotent |
