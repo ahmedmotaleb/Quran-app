@@ -22,3 +22,25 @@ class RequestIdMiddleware:
             request_id_var.reset(token)
         response["X-Request-ID"] = rid
         return response
+
+
+class HealthCheckMiddleware:
+    """Answers GET/HEAD /api/health before host validation and the HTTPS redirect.
+
+    Platform health checks (e.g. Render) call the container directly on its internal address over
+    plain HTTP, so ALLOWED_HOSTS would reject them with 400 and the deploy never goes live. This
+    endpoint exposes nothing but liveness; everything else keeps the normal checks.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.path == "/api/health" and request.method in ("GET", "HEAD"):
+            from django.conf import settings
+            from django.http import JsonResponse
+
+            resp = JsonResponse({"status": "ok", "version": settings.APP_VERSION})
+            resp["Cache-Control"] = "no-store"
+            return resp
+        return self.get_response(request)

@@ -95,6 +95,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "apps.core.middleware.RequestIdMiddleware",
+    "apps.core.middleware.HealthCheckMiddleware",  # before Security/Common: platform health checks skip host/HTTPS rules
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",

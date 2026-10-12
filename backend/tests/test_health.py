@@ -61,3 +61,13 @@ def test_db_problem_categories_never_echo_secrets():
     assert _db_problem('could not translate host name "ep-x.neon.tech"') == "unknown host in DATABASE_URL"
     assert _db_problem("connection timeout expired") .startswith("connection timed out")
     assert _db_problem("something else") == "cannot connect"
+
+
+def test_health_answers_platform_checks_on_internal_host(client, settings):
+    # Render's health checker uses the container's internal address over plain HTTP.
+    settings.ALLOWED_HOSTS = ["halqa-xzum.onrender.com"]
+    settings.SECURE_SSL_REDIRECT = True
+    r = client.get("/api/health", HTTP_HOST="10.0.0.5:10000")
+    assert r.status_code == 200 and r.json()["status"] == "ok"
+    # Other endpoints keep host validation.
+    assert client.get("/api/ready", HTTP_HOST="10.0.0.5:10000").status_code == 400
