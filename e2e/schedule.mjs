@@ -75,4 +75,5 @@ await step(Y.page, 'attendance on a past session', async () => {
 });
 await Y.page.screenshot({ path: out + '/t2-sessions.png' });
 console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no page errors');
-console.log(fails ? `${fails} FAILED` : 'ALL PASSED'); await b.close();
+console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
+process.exitCode = fails ? 1 : 0; await b.close();

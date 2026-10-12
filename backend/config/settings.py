@@ -56,6 +56,8 @@ def parse_database_url(url: str) -> dict:
     if u.scheme not in {"postgres", "postgresql"}:
         raise ImproperlyConfigured("DATABASE_URL must be a PostgreSQL URL (postgres://…). SQLite is not supported.")
     opts = {k: v[-1] for k, v in parse_qs(u.query).items()}
+    # Fail fast with a clear error instead of hanging if the database is unreachable (e.g. a bad host).
+    opts.setdefault("connect_timeout", env("DATABASE_CONNECT_TIMEOUT", "10"))
     return {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": unquote(u.path.lstrip("/")),

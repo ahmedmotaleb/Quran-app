@@ -93,4 +93,5 @@ await step(lp, 'live: offline shows the shell, not stale learner data', async ()
   await lctx.setOffline(false);
 });
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
+process.exitCode = fails ? 1 : 0;
 await ctx.close(); await lctx.close();

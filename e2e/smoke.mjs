@@ -14,13 +14,15 @@ const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'h
 });
 const page = ctx.pages()[0] ?? await ctx.newPage(); page.setDefaultTimeout(60000); // a free server may need ~1 min to wake
 const app = page.locator('main#scr'); let fails = 0;
-const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await page.screenshot({ path: `${out}/smoke-fail-${name.replace(/\W+/g, '_')}.png` }); } };
+const gh = (level, msg) => { if (process.env.GITHUB_ACTIONS) console.log(`::${level} title=smoke::${msg.replace(/\n/g, ' ')}`); };
+const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); gh('notice', `OK ${name}`); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); gh('error', `FAIL ${name}: ${e.message.split('\n')[0]}`); await page.screenshot({ path: `${out}/smoke-fail-${name.replace(/\W+/g, '_')}.png` }); } };
 let ready = {};
 await step('server ready', async () => {
   const r = await page.request.get(new URL('/api/ready', BASE).href, { timeout: 90000 });
   ready = await r.json();
   if (ready.status !== 'ok') throw new Error(JSON.stringify(ready));
   console.log('      features:', JSON.stringify(ready.features));
+  gh('notice', `features ${JSON.stringify(ready.features)}`);
 });
 await page.goto(BASE);
 await step('PWA installable (service worker + manifest)', async () => {
@@ -49,4 +51,5 @@ await step('Mushaf reports Quran text honestly', async () => {
   else await app.getByText('النص القرآني غير متاح حاليًا من المصدر المعتمد.').waitFor();
 });
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
+process.exitCode = fails ? 1 : 0;
 await ctx.close();

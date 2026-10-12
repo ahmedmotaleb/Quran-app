@@ -119,4 +119,5 @@ await page.screenshot({ path: out + '/l8-onboard.png' });
 console.log('\nAPI calls:\n ' + [...new Set(api)].join('\n '));
 console.log(errs.length ? '\nERRORS:\n' + errs.join('\n') : '\nno page errors');
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED');
+process.exitCode = fails ? 1 : 0;
 await b.close();

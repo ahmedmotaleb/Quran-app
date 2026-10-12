@@ -74,4 +74,5 @@ await step(S.page, 'student sees final score; progress from real records', async
 });
 await S.page.screenshot({ path: out + '/q3-progress.png', fullPage: true });
 console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no page errors');
-console.log(fails ? `${fails} FAILED` : 'ALL PASSED'); await b.close();
+console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
+process.exitCode = fails ? 1 : 0; await b.close();

@@ -41,4 +41,5 @@ if (process.env.REVOKE_CMD) {
   });
 }
 console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no page errors');
-console.log(fails ? `${fails} FAILED` : 'ALL PASSED'); await b.close();
+console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
+process.exitCode = fails ? 1 : 0; await b.close();
