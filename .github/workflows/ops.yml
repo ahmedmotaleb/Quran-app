@@ -77,6 +77,11 @@ jobs:
         working-directory: .
         run: |
           test -n "${{ inputs.url }}" || { echo "Give the app address in 'url'."; exit 1; }
+          # Raw probe first (status, timing, first bytes) so network problems are distinguishable from app problems.
+          for path in api/health api/ready; do
+            out=$(curl -sS -m 150 -o body.txt -w '%{http_code} %{time_total}s' "${{ inputs.url }}$path" 2>&1 || true)
+            echo "::notice title=probe::$path -> $out :: $(head -c 300 body.txt 2>/dev/null | tr '\n' ' ')"
+          done
           npm i --no-save playwright@1.56.1 >/dev/null && npx playwright install --with-deps chromium >/dev/null
           mkdir -p shots && node e2e/smoke.mjs shots "${{ inputs.url }}"
       - uses: actions/upload-artifact@v4
