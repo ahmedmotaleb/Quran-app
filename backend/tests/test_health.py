@@ -51,3 +51,13 @@ def test_spa_cache_headers():
     h = {}
     cache_headers(h, "", "/assets/index-bFFAwA91.js")
     assert "immutable" in h["Cache-Control"]
+
+
+def test_db_problem_categories_never_echo_secrets():
+    from apps.core.views import _db_problem
+
+    assert _db_problem('FATAL: password authentication failed for user "neondb_owner"') == "wrong password or user in DATABASE_URL"
+    assert "neondb_owner" not in _db_problem('FATAL: password authentication failed for user "neondb_owner"')
+    assert _db_problem('could not translate host name "ep-x.neon.tech"') == "unknown host in DATABASE_URL"
+    assert _db_problem("connection timeout expired") .startswith("connection timed out")
+    assert _db_problem("something else") == "cannot connect"

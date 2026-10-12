@@ -27,8 +27,8 @@ def ready(request):
         executor = MigrationExecutor(connection)
         pending = executor.migration_plan(executor.loader.graph.leaf_nodes())
         checks["migrations"] = "ok" if not pending else f"{len(pending)} pending"
-    except Exception:  # noqa: BLE001 — report state, never the error text
-        checks.setdefault("database", "unavailable")
+    except Exception as e:  # noqa: BLE001 — report a category, never the error text (it can contain hosts/users)
+        checks.setdefault("database", "unavailable: " + _db_problem(str(e)))
     ok = all(v == "ok" for v in checks.values())
     # What still needs owner configuration (informational; does not affect readiness).
     features = {
@@ -40,3 +40,17 @@ def ready(request):
 
         features["quran_text"] = "imported" if QuranSource.objects.filter(is_active=True).exists() else "not_imported"
     return Response({"status": "ok" if ok else "unavailable", "checks": checks, "features": features}, status=200 if ok else 503)
+
+
+def _db_problem(msg: str) -> str:
+    m = msg.lower()
+    for needle, label in (("password authentication failed", "wrong password or user in DATABASE_URL"),
+                          ("could not translate host name", "unknown host in DATABASE_URL"),
+                          ("name or service not known", "unknown host in DATABASE_URL"),
+                          ("timeout", "connection timed out (check host/region, pooling off)"),
+                          ("does not exist", "database name in DATABASE_URL does not exist"),
+                          ("ssl", "SSL problem (add ?sslmode=require)"),
+                          ("connection refused", "connection refused")):
+        if needle in m:
+            return label
+    return "cannot connect"
