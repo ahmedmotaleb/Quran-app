@@ -103,4 +103,5 @@ await step(S.page, 'student sees the newly assigned task', async () => {
 });
 console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no page errors');
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
+process.exitCode = fails ? 1 : 0;
 await b.close();
