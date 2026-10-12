@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Manrope:wght@500;600;700&family=Amiri+Quran&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box}body{margin:0;background:#F7F3E8;font-family:Tajawal,sans-serif;color:#16302C}a{color:#124C46}a:hover{color:#0B332F}</style>
+</helmet>
+<div dir="rtl" lang="ar" style="max-width:1100px;margin:0 auto;padding:40px clamp(16px,4vw,48px) 64px;display:flex;flex-direction:column;gap:40px">
+  <header style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+    <img src="assets/halqa-logo.png" alt="حَلْقة HALQA" style="width:140px;height:140px;object-fit:contain">
+    <div style="flex:1;min-width:240px"><h1 style="margin:0;font-size:34px;font-weight:800">نظام تصميم حَلْقة</h1><p style="margin:6px 0 0;font-size:16px;color:#56665F;line-height:1.7">هادئ، واضح، عربي أولًا (RTL). اللون الأخضر للإجراءات، والذهبي للعلامات والتمييز فقط.</p></div>
+    <a href="Halqa%20App.dc.html" style="font-size:15px;font-weight:700">← العودة إلى النموذج</a>
+  </header>
+
+  <section style="display:flex;flex-direction:column;gap:14px">
+    <h2 style="margin:0;font-size:22px;font-weight:800">الألوان</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
+      <sc-for list="{{ colors }}" as="c" hint-placeholder-count="10">
+        <div style="background:#FFFDF8;border:1px solid #E6DFCF;border-radius:16px;overflow:hidden">
+          <div style="height:72px;background:{{ c.hex }}"></div>
+          <div style="padding:10px 12px"><p style="margin:0;font-size:14px;font-weight:700">{{ c.name }}</p><p dir="ltr" style="margin:2px 0 0;font-family:Manrope;font-size:12px;color:#56665F;text-align:right">{{ c.hex }}</p><p style="margin:4px 0 0;font-size:12px;color:#3E4F4A">{{ c.use }}</p></div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:14px">
+    <h2 style="margin:0;font-size:22px;font-weight:800">الخطوط</h2>
+    <div style="background:#FFFDF8;border:1px solid #E6DFCF;border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:14px">
+      <sc-for list="{{ type }}" as="t" hint-placeholder-count="6">
+        <div style="display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;border-bottom:1px solid #EEE8DA;padding-bottom:12px">
+          <span dir="ltr" style="width:150px;font-family:Manrope;font-size:12px;color:#56665F">{{ t.spec }}</span>
+          <span style="flex:1;font-family:{{ t.ff }};font-size:{{ t.size }}px;font-weight:{{ t.w }}">{{ t.sample }}</span>
+        </div>
+      </sc-for>
+      <p style="margin:0;font-size:13px;color:#56665F;line-height:1.7">Tajawal للواجهة، Amiri Quran للنص القرآني فقط، Manrope للأرقام اللاتينية والأوقات والمدد. الحد الأدنى للنص 12px، ونص الجسم 15–16px.</p>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:14px">
+    <h2 style="margin:0;font-size:22px;font-weight:800">المكوّنات الأساسية</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
+      <div style="background:#FFFDF8;border:1px solid #E6DFCF;border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:10px">
+        <p style="margin:0;font-size:14px;font-weight:700;color:#56665F">الأزرار · ارتفاع 52–54px · زوايا 14px</p>
+        <button style="min-height:54px;border:none;border-radius:14px;background:#124C46;color:#F7F3E8;font-size:17px;font-weight:700">أساسي</button>
+        <button style="min-height:52px;border:none;border-radius:14px;background:#D8E5D7;color:#124C46;font-size:16px;font-weight:700">ثانوي</button>
+        <button style="min-height:52px;border-radius:14px;border:1.5px solid #CFC7B3;background:transparent;color:#124C46;font-size:16px;font-weight:700">محدّد</button>
+        <button style="min-height:52px;border-radius:14px;border:1.5px solid #E3BDB4;background:transparent;color:#8E2F20;font-size:16px;font-weight:700">إجراء حساس</button>
+      </div>
+      <div style="background:#FFFDF8;border:1px solid #E6DFCF;border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:10px">
+        <p style="margin:0;font-size:14px;font-weight:700;color:#56665F">شارات الحالة · نص + أيقونة دائمًا</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <sc-for list="{{ badges }}" as="b" hint-placeholder-count="8"><span style="padding:5px 12px;border-radius:999px;font-size:13px;font-weight:700;background:{{ b.bg }};color:{{ b.fg }}">{{ b.l }}</span></sc-for>
+        </div>
+        <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:#56665F">حقل إدخال · خطأ</p>
+        <input aria-label="مثال" value="name@" style="min-height:52px;padding:0 14px;border-radius:12px;border:1.5px solid #A23B2A;background:#FFFDF8;font-size:16px">
+        <p style="margin:0;font-size:13px;color:#A23B2A">صيغة البريد الإلكتروني غير صحيحة</p>
+      </div>
+      <div style="background:#FFFDF8;border:1px solid #E6DFCF;border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:10px">
+        <p style="margin:0;font-size:14px;font-weight:700;color:#56665F">النص القرآني</p>
+        <p lang="ar" style="margin:0;font-family:'Amiri Quran',serif;font-size:26px;line-height:2.2;background:#E5EEE3;border-radius:10px;padding:4px 10px">بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ</p>
+        <p style="margin:0;font-size:13px;color:#56665F;line-height:1.7">يُحمَّل النص من مصدر معتمد فقط (Tanzil عبر alquran.cloud) ولا يُكتب يدويًا. التمييز بخلفية خضراء هادئة؛ الآية المُشغَّلة بخط ذهبي سفلي.</p>
+      </div>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:10px">
+    <h2 style="margin:0;font-size:22px;font-weight:800">المبادئ</h2>
+    <sc-for list="{{ rules }}" as="r" hint-placeholder-count="6"><p style="margin:0;font-size:15px;line-height:1.8;background:#FFFDF8;border:1px solid #E6DFCF;border-radius:12px;padding:12px 16px"><strong>{{ r.t }}</strong> — {{ r.d }}</p></sc-for>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals(){
+    return {
+      colors:[['أخضر حَلْقة','#124C46','الإجراءات الأساسية والتنقل'],['أخضر عميق','#0C2421','الجلسة المباشرة'],['مريمية','#D8E5D7','خلفيات ثانوية ونجاح'],['مريمية فاتحة','#EAF1E9','بطاقات التوجيه'],['عاجي','#F7F3E8','خلفية التطبيق'],['ورقي','#FFFDF8','البطاقات والحقول'],['ذهبي','#C6A66B','علامات التوقيت والمرجعيات فقط'],['حبر','#16302C','النص الأساسي'],['رمادي مخضر','#56665F','النص الثانوي'],['طوبي','#8E2F20','الأخطاء والإجراءات الحساسة']].map(([name,hex,use])=>({name,hex,use})),
+      type:[['Tajawal 800 / 28','Tajawal',28,800,'عنوان الشاشة'],['Tajawal 700 / 18','Tajawal',18,700,'عنوان البطاقة'],['Tajawal 500 / 16','Tajawal',16,500,'نص الجسم والتوجيهات'],['Tajawal 500 / 13','Tajawal',13,500,'نص مساعد وتوقيت'],['Amiri Quran / 26','Amiri Quran',26,400,'ٱلَّذِي خَلَقَ ٱلۡمَوۡتَ وَٱلۡحَيَوٰةَ'],['Manrope 600 / 20','Manrope',20,600,'05:42 · 9:41']].map(([spec,ff,size,w,sample])=>({spec,ff,size,w,sample})),
+      badges:[['لم تبدأ','#ECE7DB','#45534E'],['قيد التنفيذ','#F3E6CC','#6B470C'],['تم التسليم','#D8E5D7','#124C46'],['تمت المراجعة','#124C46','#F7F3E8'],['مؤكدة','#D8E5D7','#124C46'],['ملغاة','#F5E1DC','#8E2F20'],['متأخر','#F5E1DC','#8E2F20'],['تسليم جديد','#F3E6CC','#6B470C']].map(([l,bg,fg])=>({l,bg,fg})),
+      rules:[['RTL أولًا','التخطيط والأيقونات الاتجاهية معكوسة؛ الأرقام والأوقات في عزل LTR.'],['أهداف لمس 44px+','وأغلب الأزرار الأساسية 52–54px.'],['الحالة ليست لونًا فقط','كل شارة تحمل نصًا واضحًا وأيقونة.'],['تحفيز هادئ','لا مقارنة بين الطلاب، ولا لوحات صدارة، ولا ألعاب.'],['الوقت مع المنطقة الزمنية','كل موعد يُعرض بتوقيت المستخدم مع ذكر المنطقة.'],['صدق النموذج','كل ما لا يعمل فعليًا (رفع، اتصال، دفع) موسوم كتجريبي.']].map(([t,d])=>({t,d}))
+    };
+  }
+}
+</script>
+</body>
+</html>

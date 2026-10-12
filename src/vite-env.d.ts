@@ -1,0 +1,7 @@
+/// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/react" />
+
+interface ImportMetaEnv {
+  /** Backend origin, e.g. https://api.example.com. Unset → demo mode. */
+  readonly VITE_API_BASE_URL?: string;
+}

@@ -1,0 +1,61 @@
+# One-off production tasks, run by hand from the Actions tab (Render's free plan has no shell).
+# Needs the repository secret PROD_DATABASE_URL (the Neon connection string).
+name: Ops (production database)
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: What to run
+        type: choice
+        options: [import-quran, verify-quran, create-admin]
+      admin_email:
+        description: create-admin only — the admin's email (password comes from the ADMIN_PASSWORD secret)
+        required: false
+      accept_tanzil_terms:
+        description: import/verify only — I accept the Tanzil Quran Text license (verbatim text, attribution, link to tanzil.net)
+        type: boolean
+        default: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    defaults: { run: { working-directory: backend } }
+    env:
+      APP_ENV: production
+      DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+      DJANGO_ALLOWED_HOSTS: ops.invalid
+      MEDIA_STORAGE: none
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.13', cache: pip, cache-dependency-path: backend/requirements.txt }
+      - run: pip install -r requirements.txt
+      - name: Throwaway signing key (management commands only)
+        run: echo "DJANGO_SECRET_KEY=$(python -c 'import secrets;print(secrets.token_urlsafe(64))')" >> "$GITHUB_ENV"
+      - run: python manage.py migrate --noinput
+
+      - name: Download the Tanzil Uthmani text (verbatim)
+        if: inputs.task == 'import-quran' || inputs.task == 'verify-quran'
+        run: |
+          test "${{ inputs.accept_tanzil_terms }}" = "true" || { echo "Tick 'accept_tanzil_terms' to download the text."; exit 1; }
+          curl -fsSL -o quran-uthmani.txt "https://tanzil.net/pub/download/index.php?marks=true&sajdah=true&rub=false&tatweel=true&quranType=uthmani&outType=txt-2&agree=true"
+          curl -fsSL -o quran-data.xml "https://tanzil.net/res/text/metadata/quran-data.xml"
+          sha256sum quran-uthmani.txt quran-data.xml
+          grep -m1 -i "version" quran-uthmani.txt || true
+      - name: Import (rejected unless every surah has the Hafs ayah count)
+        if: inputs.task == 'import-quran'
+        run: |
+          VERSION=$(grep -m1 -oiE 'version:? *[0-9.]+' quran-uthmani.txt | grep -oE '[0-9.]+' || echo unknown)
+          python manage.py import_quran quran-uthmani.txt --metadata quran-data.xml --version "$VERSION" --activate
+      - name: Verify the stored text byte-for-byte
+        if: inputs.task == 'import-quran' || inputs.task == 'verify-quran'
+        run: python manage.py import_quran quran-uthmani.txt --verify
+
+      - name: Create the first admin
+        if: inputs.task == 'create-admin'
+        env:
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: python manage.py create_admin --email "${{ inputs.admin_email }}"
