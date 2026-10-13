@@ -94,10 +94,44 @@ class S3Storage:
     def delete(self, key: str) -> None:
         self.client.delete_object(Bucket=self.bucket, Key=key)
 
+    def check(self) -> str:
+        """Can we reach the bucket with these credentials? Returns "ok" or a category (never the raw error)."""
+        try:
+            self.client.head_bucket(Bucket=self.bucket)
+            return "ok"
+        except Exception as e:  # noqa: BLE001
+            code = str(getattr(e, "response", {}).get("Error", {}).get("Code", ""))
+            if code in ("403", "AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch"):
+                return "access denied (check the access key, secret and that the token covers this bucket)"
+            if code in ("404", "NoSuchBucket"):
+                return "bucket not found (check STORAGE_BUCKET)"
+            return "cannot reach the storage endpoint (check STORAGE_ENDPOINT_URL)"
+
     def read_url(self, key: str, *, media_id: str, request=None) -> tuple[str, datetime]:
         ttl = settings.MEDIA_URL_TTL_SECONDS
         url = self.client.generate_presigned_url("get_object", Params={"Bucket": self.bucket, "Key": key}, ExpiresIn=ttl)
         return url, datetime.now(dt_tz.utc) + timedelta(seconds=ttl)
+
+
+_check_cache: dict = {}
+
+
+def storage_status() -> str:
+    """For /api/ready: "not_configured", "configured" (local) or the S3 bucket check, cached for a minute."""
+    if settings.MEDIA_STORAGE == "none":
+        return "not_configured"
+    if settings.MEDIA_STORAGE == "local":
+        return "configured"
+    import time
+
+    now = time.monotonic()
+    if _check_cache.get("at", -1e9) + 60 < now:
+        try:
+            result = get_storage().check()
+        except ImproperlyConfigured:
+            result = "incomplete settings (STORAGE_BUCKET, STORAGE_ACCESS_KEY_ID, STORAGE_SECRET_ACCESS_KEY)"
+        _check_cache.update(at=now, result="configured" if result == "ok" else "error: " + result)
+    return _check_cache["result"]
 
 
 @functools.cache
