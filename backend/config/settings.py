@@ -43,10 +43,11 @@ if IS_DEPLOYED and (len(SECRET_KEY) < 50 or SECRET_KEY.startswith("dev-only")):
     raise ImproperlyConfigured("DJANGO_SECRET_KEY must be a unique random value of at least 50 characters.")
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "" if IS_DEPLOYED else "localhost,127.0.0.1,testserver")
-# Render (and similar hosts) expose the public hostname; trust it automatically.
-RENDER_HOST = env("RENDER_EXTERNAL_HOSTNAME", "")
-if RENDER_HOST and RENDER_HOST not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(RENDER_HOST)
+# APP_URL is the public address (e.g. https://halqa-123.europe-west1.run.app); its host is trusted automatically.
+APP_URL = env("APP_URL", "").rstrip("/")
+APP_HOST = urlparse(APP_URL).hostname or ""
+if APP_HOST and APP_HOST not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(APP_HOST)
 if IS_DEPLOYED and not ALLOWED_HOSTS:
     raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS is required in staging and production.")
 
@@ -168,8 +169,9 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", "" if IS_DEPLOYED else "http://localhost:5173,http://localhost:4173")
+if APP_URL and APP_URL not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(APP_URL)
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "" if IS_DEPLOYED else "http://localhost:5173,http://localhost:4173")
-# The Android app (Capacitor serves from https://localhost) authenticates with bearer tokens, not cookies.
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = ["accept", "authorization", "content-type", "x-csrftoken", "x-request-id", "idempotency-key"]
 CORS_EXPOSE_HEADERS = ["x-request-id"]
@@ -228,7 +230,7 @@ EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
 EMAIL_TIMEOUT = 10
 EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST else "django.core.mail.backends.console.EmailBackend")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "") or "noreply@halqa.app"  # empty env var = default
-FRONTEND_URL = env("FRONTEND_URL", f"https://{RENDER_HOST}" if RENDER_HOST else "http://localhost:5173")  # password-reset links
+FRONTEND_URL = env("FRONTEND_URL", APP_URL or "http://localhost:5173")  # password-reset links
 
 APP_VERSION = env("APP_VERSION", "0.1.0")
 

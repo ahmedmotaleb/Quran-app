@@ -27,7 +27,7 @@ class RequestIdMiddleware:
 class HealthCheckMiddleware:
     """Answers GET/HEAD /api/health before host validation and the HTTPS redirect.
 
-    Platform health checks (e.g. Render) call the container directly on its internal address over
+    Platform health checks (load balancers, uptime monitors) call the container directly on its internal address over
     plain HTTP, so ALLOWED_HOSTS would reject them with 400 and the deploy never goes live. This
     endpoint exposes nothing but liveness; everything else keeps the normal checks.
     """

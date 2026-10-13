@@ -60,10 +60,11 @@ A style guide rendered with the app's real tokens and components (colours, type,
 buttons, badges, fields, tabs/chips/switch, icons, principles). Its Quran samples are
 loaded from the API like everywhere else, never hand-typed.
 
-## Deploying for free
+## Deploying
 
-See **[docs/DEPLOY.md](docs/DEPLOY.md)**: Render (free web service, one Docker image serving the PWA
-and the API) + Neon (free PostgreSQL) + Cloudflare R2 (recordings). `render.yaml` is the blueprint;
+See **[docs/DEPLOY.md](docs/DEPLOY.md)**: Google Cloud Run (one Docker image serving the PWA and the
+API, free tier) + Neon (free PostgreSQL) + Cloudflare R2 (recordings). `deploy/gcp-setup.sh` is the
+one-time Cloud Shell setup; `.github/workflows/deploy-cloudrun.yml` deploys every merge to `main`;
 `.github/workflows/ops.yml` imports the Quran text and creates the first admin.
 
 ## Installable app (PWA)
