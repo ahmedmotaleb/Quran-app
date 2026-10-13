@@ -169,3 +169,20 @@ def test_create_admin_command(monkeypatch):
     assert u.role == Role.ADMIN and u.check_password("a-long-and-unusual-passphrase-42")
     with pytest.raises(CommandError):
         call_command("create_admin", email="boss@example.com")
+
+
+@pytest.mark.django_db
+def test_promote_admin_command(world):
+    from django.core.management import CommandError, call_command
+
+    from apps.accounts.models import Role
+
+    c = client_for(world.s1)
+    assert c.get("/api/v1/me").status_code == 200
+    call_command("promote_admin", "--email", world.s1.email.upper())
+    world.s1.refresh_from_db()
+    assert world.s1.role == Role.ADMIN and world.s1.is_staff and world.s1.is_superuser
+    assert c.get("/api/v1/me").status_code == 401  # signed out everywhere
+    call_command("promote_admin", "--email", world.s1.email)  # idempotent
+    with pytest.raises(CommandError):
+        call_command("promote_admin", "--email", "nobody@example.com")

@@ -71,3 +71,24 @@ def test_health_answers_platform_checks_on_internal_host(client, settings):
     assert r.status_code == 200 and r.json()["status"] == "ok"
     # Other endpoints keep host validation.
     assert client.get("/api/ready", HTTP_HOST="10.0.0.5:10000").status_code == 400
+
+
+def test_ready_reports_storage_problems_by_category(settings, monkeypatch):
+    from apps.media import storage
+
+    settings.MEDIA_STORAGE = "none"
+    assert storage.storage_status() == "not_configured"
+
+    class Denied(Exception):
+        response = {"Error": {"Code": "InvalidAccessKeyId"}}
+
+    class Fake(storage.S3Storage):
+        def __init__(self):
+            self.bucket = "b"
+            self.client = type("C", (), {"head_bucket": lambda *a, **k: (_ for _ in ()).throw(Denied())})()
+
+    settings.MEDIA_STORAGE = "s3"
+    monkeypatch.setattr(storage, "get_storage", lambda: Fake())
+    storage._check_cache.clear()
+    assert storage.storage_status().startswith("error: access denied")
+    storage._check_cache.clear()

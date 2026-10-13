@@ -19,6 +19,8 @@ def health(request):
 @permission_classes([AllowAny])
 def ready(request):
     """Readiness: database reachable and all migrations applied."""
+    from apps.media.storage import storage_status
+
     checks = {}
     try:
         with connection.cursor() as c:
@@ -32,7 +34,7 @@ def ready(request):
     ok = all(v == "ok" for v in checks.values())
     # What still needs owner configuration (informational; does not affect readiness).
     features = {
-        "media_storage": "configured" if settings.MEDIA_STORAGE != "none" else "not_configured",
+        "media_storage": storage_status(),
         "email": "smtp" if "smtp" in settings.EMAIL_BACKEND else "log_only",
     }
     if checks.get("database") == "ok":

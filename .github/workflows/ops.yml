@@ -8,9 +8,9 @@ on:
       task:
         description: What to run
         type: choice
-        options: [import-quran, verify-quran, create-admin, smoke-test]
+        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test]
       admin_email:
-        description: create-admin only — the admin's email (password comes from the ADMIN_PASSWORD secret)
+        description: create-admin / promote-admin — the admin's email (create-admin takes the password from the ADMIN_PASSWORD secret; promote-admin keeps the account's password)
         required: false
       url:
         description: smoke-test only — the app address, e.g. https://halqa-<number>.europe-west1.run.app/
@@ -79,6 +79,12 @@ jobs:
         run: |
           python manage.py create_admin --email "${{ inputs.admin_email }}" 2>&1 | tee /tmp/ops-6-admin.log
           echo "::notice title=admin::$(tail -1 /tmp/ops-6-admin.log)"
+
+      - name: Promote an existing account to admin
+        if: inputs.task == 'promote-admin'
+        run: |
+          python manage.py promote_admin --email "${{ inputs.admin_email }}" 2>&1 | tee /tmp/ops-7-promote.log
+          echo "::notice title=admin::$(tail -1 /tmp/ops-7-promote.log)"
 
       # Job logs are not always readable where this is operated from, so failures are also reported as annotations.
       - name: Report the failure
