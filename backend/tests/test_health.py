@@ -64,8 +64,8 @@ def test_db_problem_categories_never_echo_secrets():
 
 
 def test_health_answers_platform_checks_on_internal_host(client, settings):
-    # Render's health checker uses the container's internal address over plain HTTP.
-    settings.ALLOWED_HOSTS = ["halqa-xzum.onrender.com"]
+    # Platform health checkers use the container's internal address over plain HTTP.
+    settings.ALLOWED_HOSTS = ["halqa-123.europe-west1.run.app"]
     settings.SECURE_SSL_REDIRECT = True
     r = client.get("/api/health", HTTP_HOST="10.0.0.5:10000")
     assert r.status_code == 200 and r.json()["status"] == "ok"

@@ -35,7 +35,7 @@ jobs:
           retention-days: 14
 
   docker:
-    # The same image Render builds from render.yaml: PWA + API in one container.
+    # The same image the Cloud Run deploy builds: PWA + API in one container.
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -52,7 +52,7 @@ jobs:
           docker run -d --name halqa --network host -e PORT=8090 -e APP_ENV=production \
             -e DJANGO_SECRET_KEY="$(python3 -c 'import secrets;print(secrets.token_urlsafe(64))')" \
             -e DATABASE_URL=postgres://halqa:halqa-ci-only@127.0.0.1:5432/halqa_ci \
-            -e RENDER_EXTERNAL_HOSTNAME=localhost -e SECURE_SSL_REDIRECT=false halqa:ci
+            -e APP_URL=http://localhost -e SECURE_SSL_REDIRECT=false halqa:ci
           for i in $(seq 1 60); do curl -fs localhost:8090/api/ready && break; sleep 2; done
           curl -fs localhost:8090/api/ready | grep -q '"status":"ok"'
           curl -fs localhost:8090/ | grep -q 'manifest'

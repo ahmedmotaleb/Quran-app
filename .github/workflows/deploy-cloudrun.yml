@@ -1,0 +1,91 @@
+# Builds the one image (PWA + API), applies database migrations, and deploys it to Google Cloud Run.
+# Runs on every push to main and by hand. Needs the one-time setup in docs/DEPLOY.md (deploy/gcp-setup.sh):
+#   repository variables GCP_PROJECT_ID, GCP_WIF_PROVIDER, GCP_DEPLOY_SA and the secret PROD_DATABASE_URL.
+# Until the variables exist the job is skipped, so merges keep working before hosting is set up.
+name: Deploy (Cloud Run)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-cloudrun
+  cancel-in-progress: false
+
+env:
+  REGION: europe-west1
+  SERVICE: halqa
+
+jobs:
+  deploy:
+    if: vars.GCP_PROJECT_ID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      id-token: write   # keyless login to Google Cloud (Workload Identity Federation)
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out the app address
+        env:
+          HAS_DB: ${{ secrets.PROD_DATABASE_URL != '' }}
+        run: |
+          # The provider name contains the project number: projects/<number>/locations/global/...
+          PNUM=$(echo "${{ vars.GCP_WIF_PROVIDER }}" | cut -d/ -f2)
+          echo "$PNUM" | grep -qE '^[0-9]+$' || { echo "::error::GCP_WIF_PROVIDER does not look like projects/<number>/locations/global/workloadIdentityPools/..."; exit 1; }
+          echo "APP_URL=https://$SERVICE-$PNUM.$REGION.run.app" >> "$GITHUB_ENV"
+          echo "IMAGE=$REGION-docker.pkg.dev/$PROJECT/$SERVICE/$SERVICE:${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+          test "$HAS_DB" = "true" || { echo "::error::Add the repository secret PROD_DATABASE_URL (the Neon connection string)."; exit 1; }
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push the image
+        run: |
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Apply database migrations
+        env:
+          APP_ENV: production
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          DJANGO_ALLOWED_HOSTS: ops.invalid
+          MEDIA_STORAGE: none
+        run: |
+          docker run --rm -e APP_ENV -e DATABASE_URL -e DJANGO_ALLOWED_HOSTS -e MEDIA_STORAGE \
+            -e DJANGO_SECRET_KEY="$(python3 -c 'import secrets;print(secrets.token_urlsafe(64))')" \
+            "$IMAGE" python manage.py migrate --noinput
+
+      - name: Deploy to Cloud Run
+        run: |
+          # Free-tier friendly: scales to zero, at most 2 instances, 512 MB, CPU only while serving requests.
+          # STORAGE_* / EMAIL_* are added later with "gcloud run services update" (docs/DEPLOY.md); --update-env-vars keeps them.
+          gcloud run deploy "$SERVICE" --project "$PROJECT" --region "$REGION" --image "$IMAGE" \
+            --service-account "$SERVICE-run@$PROJECT.iam.gserviceaccount.com" \
+            --allow-unauthenticated --port 8080 --memory 512Mi --cpu 1 --cpu-boost \
+            --min-instances 0 --max-instances 2 --concurrency 40 --timeout 120 \
+            --update-env-vars "APP_ENV=production,SKIP_MIGRATE=1,APP_URL=$APP_URL" \
+            --update-secrets "DATABASE_URL=$SERVICE-database-url:latest,DJANGO_SECRET_KEY=$SERVICE-secret-key:latest" \
+            --quiet
+          URL=$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format 'value(status.url)')
+          echo "Cloud Run reports: $URL   (app address: $APP_URL)"
+
+      - name: Check the live app
+        run: |
+          for i in $(seq 1 30); do
+            body=$(curl -s --max-time 20 "$APP_URL/api/ready" || true)
+            echo "$body" | grep -q '"status":"ok"' && { echo "ready: $body"; break; }
+            sleep 5
+          done
+          echo "$body" | grep -q '"status":"ok"' || { echo "::error::$APP_URL/api/ready is not ok: $body"; exit 1; }
+          curl -fs "$APP_URL/" | grep -q 'manifest'
+          echo "::notice title=Deployed::$APP_URL"

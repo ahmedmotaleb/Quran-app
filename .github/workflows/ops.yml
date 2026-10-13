@@ -1,4 +1,4 @@
-# One-off production tasks, run by hand from the Actions tab (Render's free plan has no shell).
+# One-off production tasks, run by hand from the Actions tab (the database is reached from GitHub; Cloud Run has no shell).
 # Needs the repository secret PROD_DATABASE_URL (the Neon connection string).
 name: Ops (production database)
 
@@ -13,7 +13,7 @@ on:
         description: create-admin only — the admin's email (password comes from the ADMIN_PASSWORD secret)
         required: false
       url:
-        description: smoke-test only — the app address, e.g. https://halqa-xxxx.onrender.com/
+        description: smoke-test only — the app address, e.g. https://halqa-<number>.europe-west1.run.app/
         required: false
       accept_tanzil_terms:
         description: import/verify only — I accept the Tanzil Quran Text license (verbatim text, attribution, link to tanzil.net)
