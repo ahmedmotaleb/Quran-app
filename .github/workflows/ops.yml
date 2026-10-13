@@ -25,7 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production
-    defaults: { run: { working-directory: backend } }
+    # shell: bash adds pipefail, so a failing command piped into tee still fails the step.
+    defaults: { run: { working-directory: backend, shell: bash } }
     env:
       APP_ENV: production
       DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
@@ -64,7 +65,7 @@ jobs:
         if: inputs.task == 'import-quran'
         run: |
           VERSION=$(grep -m1 -oiE 'version:? *[0-9.]+' quran-uthmani.txt | grep -oE '[0-9.]+' || echo unknown)
-          python manage.py import_quran quran-uthmani.txt --metadata quran-data.xml --version "$VERSION" --activate 2>&1 | tee /tmp/ops-4-import.log
+          python manage.py import_quran quran-uthmani.txt --metadata quran-data.xml --source-version "$VERSION" --activate 2>&1 | tee /tmp/ops-4-import.log
       - name: Verify the stored text byte-for-byte
         if: inputs.task == 'import-quran' || inputs.task == 'verify-quran'
         run: |

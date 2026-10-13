@@ -47,7 +47,7 @@ Download the Tanzil Uthmani text ("Text with aya numbers") and, optionally,
 `quran-data.xml` from https://tanzil.net/download/. Then:
 
 ```bash
-python manage.py import_quran quran-uthmani.txt --metadata quran-data.xml --version 1.1 --activate
+python manage.py import_quran quran-uthmani.txt --metadata quran-data.xml --source-version 1.1 --activate
 python manage.py import_quran quran-uthmani.txt --verify      # byte-for-byte integrity check
 ```
 
