@@ -19,8 +19,10 @@ class Command(BaseCommand):
     def handle(self, email, name, **_):
         password = os.environ.get("ADMIN_PASSWORD", "")
         email = email.strip().lower()
-        if User.objects.filter(email=email).exists():
-            raise CommandError(f"{email} already exists; nothing changed.")
+        existing = User.objects.filter(email=email).first()
+        if existing:
+            raise CommandError(f"{email} already exists (role {existing.role}, active={existing.is_active}, "
+                               f"joined {existing.date_joined:%Y-%m-%d %H:%M} UTC); nothing changed.")
         try:
             validate_password(password)
         except ValidationError as e:
