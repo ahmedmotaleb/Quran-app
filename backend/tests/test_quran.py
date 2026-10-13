@@ -50,3 +50,18 @@ def test_import_verify_and_serve_verbatim(world):
 def test_no_active_source_returns_clear_error(world):
     r = client_for(world.s1).get("/api/v1/quran/surahs")
     assert r.status_code == 503 and r.json()["code"] == "quran_unavailable"
+
+
+@pytest.mark.django_db
+def test_import_command_end_to_end(tmp_path):
+    # Runs the management command exactly as the Ops workflow does (argument parsing included).
+    from django.core.management import call_command
+
+    from apps.quran.models import QuranSource
+
+    f = tmp_path / "quran.txt"
+    f.write_bytes(fixture_file())
+    call_command("import_quran", str(f), "--source-version", "1.1", "--activate")
+    src = QuranSource.objects.get(slug="tanzil-uthmani")
+    assert src.is_active and src.version == "1.1"
+    call_command("import_quran", str(f), "--verify")

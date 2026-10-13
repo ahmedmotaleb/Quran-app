@@ -13,11 +13,13 @@ class Command(BaseCommand):
         p.add_argument("file", type=Path)
         p.add_argument("--metadata", type=Path, help="Tanzil quran-data.xml for surah names")
         p.add_argument("--slug", default="tanzil-uthmani")
-        p.add_argument("--version", required=False, default="")
+        # Not --version: Django reserves that flag for its own version.
+        p.add_argument("--source-version", dest="source_version", default="")
         p.add_argument("--activate", action="store_true")
         p.add_argument("--verify", action="store_true", help="Compare an existing import with the file instead of importing")
 
-    def handle(self, file, metadata, slug, version, activate, verify, **_):
+    def handle(self, file, metadata, slug, source_version, activate, verify, **_):
+        version = source_version
         raw = file.read_bytes()
         try:
             if verify:
@@ -28,7 +30,7 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f"{slug}: all {src.ayahs.count()} ayahs match (sha256 {src.sha256[:12]}…)"))
                 return
             if not version:
-                raise CommandError("--version is required (the Tanzil version shown in the file header)")
+                raise CommandError("--source-version is required (the Tanzil version shown in the file header)")
             parsed = parse_tanzil(raw)
             meta = parse_metadata(metadata.read_bytes() if metadata else None)
             src = import_source(parsed=parsed, slug=slug, name="Tanzil Quran Text", edition="Uthmani", version=version,
