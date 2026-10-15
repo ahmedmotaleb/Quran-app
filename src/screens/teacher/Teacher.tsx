@@ -17,6 +17,53 @@ import {
 } from '@/store/store';
 import { useEvals } from '@/screens/student/Progress';
 import { BRAND } from '@/theme/brand';
+import { useEffect } from 'react';
+import { ProgressCards } from '@/components/ProgressCards';
+import { api } from '@/api/client';
+import { studentProgress, type ApiProgress } from '@/api/endpoints';
+
+interface Dash {
+  awaiting_review: { submission: number; student: { id: number; name: string }; title: string; age_hours: number }[];
+  overdue: { assignment: number; student: { id: number; name: string }; title: string; days_late: number }[];
+  repeated_needs_repeat: { student: { id: number; name: string }; needs_repeat_30d: number }[];
+  falling_scores: { student: { id: number; name: string }; recent_avg: number; previous_avg: number }[];
+  rules: Record<string, string>;
+}
+
+/** Observable signals for the teacher's own students (dates and counts, no hidden scoring). Each item opens the
+ * student's file, where the exact task or submission is. */
+function AttentionLive() {
+  const [d, setD] = useState<Dash | null>(null);
+  useEffect(() => { let on = true; api<Dash>('GET', 'teacher/dashboard').then((x) => on && setD(x)).catch(() => {}); return () => { on = false; }; }, []);
+  if (!d) return null;
+  const items: { key: string; sid: number; name: string; text: string }[] = [
+    ...d.overdue.map((x) => ({ key: `o${x.assignment}`, sid: x.student.id, name: x.student.name, text: `متأخرة ${x.days_late} يوم: ${x.title}` })),
+    ...d.repeated_needs_repeat.map((x) => ({ key: `r${x.student.id}`, sid: x.student.id, name: x.student.name, text: `طلبتَ الإعادة ${x.needs_repeat_30d} مرات خلال 30 يومًا` })),
+    ...d.falling_scores.map((x) => ({ key: `f${x.student.id}`, sid: x.student.id, name: x.student.name, text: `متوسط آخر التقييمات ${x.recent_avg} (كان ${x.previous_avg})` })),
+  ];
+  const oldest = d.awaiting_review[0];
+  if (!items.length && !oldest) return null;
+  return (
+    <section style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }} aria-labelledby="att-h">
+      <h2 id="att-h" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>يحتاج انتباهك</h2>
+      {oldest && <p style={muted(13)}>أقدم تسجيل ينتظر المراجعة منذ {oldest.age_hours < 24 ? `${Math.round(oldest.age_hours)} ساعة` : `${Math.round(oldest.age_hours / 24)} يوم`} ({oldest.student.name}).</p>}
+      {items.slice(0, 8).map((x) => (
+        <button key={x.key} onClick={() => go('tstudent', { id: String(x.sid) })} style={{ minHeight: 52, padding: '8px 12px', borderRadius: 12, border: `1px solid ${color.divider}`, background: color.ivory, textAlign: 'right', cursor: 'pointer', color: color.ink, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ flex: 1 }}><span style={{ display: 'block', fontWeight: 700, fontSize: 14 }}>{x.name}</span><span style={{ display: 'block', fontSize: 12, color: color.body }}>{x.text}</span></span>
+          <Icon name="chevL" size={18} />
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function StudentProgressLive({ id }: { id: number }) {
+  const [p, setP] = useState<ApiProgress | null>(null); const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { let on = true; studentProgress(id).then((x) => on && setP(x)).catch((e) => on && setErr((e as Error).message)); return () => { on = false; }; }, [id]);
+  if (err) return <p role="alert" style={muted(13)}>تعذّر تحميل التقدّم: {err}</p>;
+  if (!p) return <p role="status" style={muted(13)}>جارٍ تحميل التقدّم…</p>;
+  return <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}><h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>التقدّم (آخر 30 يومًا)</h3><ProgressCards p={p} who="teacher" /></section>;
+}
 
 function useReviews() {
   const s = useApp();
@@ -66,6 +113,7 @@ export function TeacherDash() {
         ))}
         {pend.length > 0 && <button onClick={() => tab('treviews')} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.ivory, fontSize: 14, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>عرض كل المراجعات</button>}
       </section>
+      {live && <AttentionLive />}
       {live && <TodayLive />}
       {!live && <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>جلسات اليوم</h2>
@@ -153,6 +201,7 @@ export function TeacherStudent() {
           <div style={{ ...card, borderRadius: 14, padding: 12 }}><p style={muted(12)}>الحضور</p><p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 800 }}>{u.att}</p></div>
           <div style={{ ...card, borderRadius: 14, padding: 12 }}><p style={muted(12)}>الخطة الحالية</p><p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 700 }}>{u.plan}</p></div>
         </div>}
+        {live && <StudentProgressLive key={u.id} id={Number(u.id)} />}
         <button onClick={() => openAssign(u.id)} style={primaryBtn(52, 16)}><Icon name="plus" /> أنشئ واجبًا لـ {u.name}</button>
         <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>الخطة</h3>

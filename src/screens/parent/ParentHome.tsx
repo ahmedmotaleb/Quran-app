@@ -8,6 +8,18 @@ import { go, setState, useApp } from '@/store/store';
 import { teacherById, upcomingSessions } from '@/store/selectors';
 import { AttendancePill } from '@/screens/student/Progress';
 import { BRAND } from '@/theme/brand';
+import { useEffect, useState } from 'react';
+import { ProgressCards } from '@/components/ProgressCards';
+import { childProgress, type ApiProgress } from '@/api/endpoints';
+
+/** Server Progress API for one linked child (404 for anyone else). No audio is ever included. */
+function ChildProgress({ id }: { id: number }) {
+  const [p, setP] = useState<ApiProgress | null>(null); const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { let on = true; childProgress(id).then((x) => on && setP(x)).catch((e) => on && setErr((e as Error).message)); return () => { on = false; }; }, [id]);
+  if (err) return <p role="alert" style={muted(14)}>تعذّر تحميل التقدّم: {err}</p>;
+  if (!p) return <p role="status" style={muted(14)}>جارٍ التحميل…</p>;
+  return <ProgressCards p={p} who="parent" />;
+}
 
 const KIDS = [['u1', 'يوسف', '14 سنة'], ['u2', 'سارة', '10 سنوات']] as const;
 
@@ -144,14 +156,6 @@ function ParentLive() {
   const subs = P.subs.filter((x) => String(x.student) === kid.id);
   const fbs = subs.filter((x) => x.feedback);
   const last = fbs[0];
-  const by = (k: string) => tasks.filter((t) => t.type === k);
-  const done = (k: string) => by(k).filter((t) => t.status === 'reviewed').length;
-  const avgTaj = fbs.length ? fbs.reduce((a, x) => a + x.feedback!.score_tajweed, 0) / fbs.length : 0;
-  const prog = [
-    { l: 'الحفظ المعتمد', v: `${done('hifz')} من ${by('hifz').length} مهام`, p: by('hifz').length ? (done('hifz') / by('hifz').length) * 100 : 0 },
-    { l: 'المراجعة', v: `${done('review')} من ${by('review').length} مهام`, p: by('review').length ? (done('review') / by('review').length) * 100 : 0 },
-    { l: 'التجويد (متوسط تقييم المعلم)', v: fbs.length ? `${avgTaj.toFixed(1)} من 5` : 'لا تقييمات بعد', p: (avgTaj / 5) * 100 },
-  ];
   const first = kid.name.split(' ')[0];
 
   return wrap(<>
@@ -198,14 +202,10 @@ function ParentLive() {
         </div>
       ))}
     </section>
-    <section style={{ ...card, borderRadius: 18, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>التقدّم</h2>
-      {prog.map((p) => (
-        <div key={p.l} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}><span>{p.l}</span><strong>{p.v}</strong></div>
-          <ProgressBar pct={p.p} h={6} />
-        </div>
-      ))}
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>التقدّم في آخر 30 يومًا</h2>
+      {/* Keyed by child: switching children never shows the previous child's numbers. */}
+      <ChildProgress key={kid.id} id={Number(kid.id)} />
     </section>
     {last?.feedback && (
       <section style={{ background: color.sageTint, borderRadius: 18, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>

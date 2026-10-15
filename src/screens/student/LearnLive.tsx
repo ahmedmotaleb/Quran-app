@@ -12,6 +12,8 @@ import { back, go, openSheet, setState, useApp } from '@/store/store';
 import { answerQuiz, completeLesson, openLesson, openResult, startQuiz, submitQuiz } from '@/store/live';
 import * as media from '@/services/media';
 import { AttendancePill, useEvals } from './Progress';
+import { ProgressCards } from '@/components/ProgressCards';
+import { myProgress, type ApiProgress } from '@/api/endpoints';
 
 const TOPICS = [['all', 'الكل'], ['tajweed', 'التجويد'], ['hifz', 'الحفظ والمراجعة'], ['adab', 'آداب التلاوة'], ['ulum', 'علوم القرآن']] as const;
 const KIND_ICON = { video: 'video', audio: 'headphones', text: 'book', pdf: 'file' } as const;
@@ -247,17 +249,15 @@ const RANGE_DAYS = { week: 7, month: 28, q: 90 } as const;
 
 export function ProgressLive() {
   const s = useApp(); const pr = s.progRange; const tz = tzOf(s.tz).iana; const evals = useEvals();
+  const [srv, setSrv] = useState<ApiProgress | null>(null); const [srvErr, setSrvErr] = useState<string | null>(null);
+  useEffect(() => {
+    let on = true;
+    const from = dateKey(new Date(Date.now() - (RANGE_DAYS[pr] - 1) * 86_400_000).toISOString(), tz);
+    myProgress(from).then((x) => { if (on) { setSrv(x); setSrvErr(null); } }).catch((e) => { if (on) setSrvErr((e as Error).message); });
+    return () => { on = false; };
+  }, [pr, tz, s.subs.length, s.tasks.length]);
   const since = Date.now() - RANGE_DAYS[pr] * 86_400_000;
   const inRange = (iso: string) => new Date(iso).getTime() >= since;
-  const by = (k: string) => s.tasks.filter((t) => t.type === k);
-  const ok = (k: string) => by(k).filter((t) => t.status === 'reviewed').length;
-  const fbs = Object.values(s.fb);
-  const taj = fbs.length ? fbs.reduce((a, f) => a + f.scores.tajweed, 0) / fbs.length : 0;
-  const metrics = [
-    { label: 'الحفظ', val: `${ok('hifz')} من ${by('hifz').length}`, sub: 'مهام حفظ اعتمدها المعلم', pct: by('hifz').length ? (ok('hifz') / by('hifz').length) * 100 : 0 },
-    { label: 'المراجعة', val: `${ok('review')} من ${by('review').length}`, sub: 'مهام مراجعة معتمدة', pct: by('review').length ? (ok('review') / by('review').length) * 100 : 0 },
-    { label: 'التجويد', val: fbs.length ? `${taj.toFixed(1)} من 5` : '—', sub: 'متوسط تقييم المعلم', pct: (taj / 5) * 100 },
-  ];
   // Activity = minutes of recitation actually recorded and submitted.
   const buckets: { l: string; n: number }[] = [];
   const subs = s.subs.filter((x) => inRange(x.created_at));
@@ -286,16 +286,10 @@ export function ProgressLive() {
     <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
       <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>تقدمي</h1>
       <Segmented role="group" label="الفترة الزمنية" options={[['week', 'أسبوع'], ['month', 'شهر'], ['q', '3 أشهر']] as const} value={pr} onChange={(k) => setState({ progRange: k })} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,150px),1fr))', gap: 10 }}>
-        {metrics.map((m) => (
-          <div key={m.label} style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 13, color: color.muted, fontWeight: 700 }}>{m.label}</span>
-            <span style={{ fontSize: 20, fontWeight: 800 }}>{m.val}</span>
-            <span style={{ fontSize: 12, color: color.muted }}>{m.sub}</span>
-            <ProgressBar pct={m.pct} h={6} />
-          </div>
-        ))}
-      </div>
+      {srv ? <>
+        {srv.streak_days > 1 && <p style={{ margin: 0, fontSize: 14, color: color.primary, fontWeight: 700 }}>{srv.streak_days} أيام متتالية من التدرّب</p>}
+        <ProgressCards p={srv} />
+      </> : srvErr ? <p role="alert" style={muted(14)}>تعذّر تحميل التقدّم: {srvErr}</p> : <p role="status" style={muted(14)}>جارٍ تحميل التقدّم…</p>}
       <section style={{ ...card, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>النشاط</h2>
         <p style={muted(12)}>دقائق التلاوة التي سجّلتها وسلّمتها</p>

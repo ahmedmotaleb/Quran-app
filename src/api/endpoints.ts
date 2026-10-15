@@ -179,3 +179,22 @@ export function toStudent(u: ApiTeacherStudent): Student {
   const age = u.birth_year ? new Date().getFullYear() - u.birth_year : 0;
   return { id: String(u.id), name: u.full_name, ini: u.full_name.trim().charAt(0) || '؟', age, level: u.level || '—', plan: '—', att: '—', guardian: u.guardian_linked };
 }
+
+/* ---- Progress (one server calculation for every role; pack prompt 11) ---- */
+export interface ApiProgress {
+  student: { id: number; name: string; timezone: string }; range: { from: string; to: string };
+  memorization: { assigned_ayahs: number; accepted_ayahs: number; pct: number | null };
+  review: { due_today: number; overdue: number; completed: number };
+  scores: { points: { date: string; hifz: number; tajweed: number; fluency: number; decision: 'accept' | 'repeat'; assignment: string }[];
+    avg: { hifz: number | null; tajweed: number | null; fluency: number | null }; needs_repeat: number };
+  latest_feedback: null | { date: string; teacher: string; assignment: string; decision: 'accept' | 'repeat'; general: string; next_step: string; needs_review: string; scores: { hifz: number; tajweed: number; fluency: number } };
+  attendance: { present: number; late: number; absent: number; excused: number; unmarked: number; sessions: number; rate: number | null };
+  practice: { submissions: number; minutes: number; reviewed: number };
+  learning: { lessons_completed: number; quiz_attempts: number; quiz_avg_pct: number | null };
+  assignments: { open: number; overdue: number; awaiting_review: number; accepted_in_range: number };
+  streak_days: number; rules: Record<'memorization' | 'review' | 'attendance' | 'streak', string>;
+}
+const rangeQs = (from?: string, to?: string) => [from && `from=${from}`, to && `to=${to}`].filter(Boolean).join('&');
+export const myProgress = (from?: string, to?: string) => api<ApiProgress>('GET', `progress/me?${rangeQs(from, to)}`);
+export const studentProgress = (id: number, from?: string, to?: string) => api<ApiProgress>('GET', `teacher/students/${id}/progress?${rangeQs(from, to)}`);
+export const childProgress = (id: number, from?: string, to?: string) => api<ApiProgress>('GET', `parent/children/${id}/progress?${rangeQs(from, to)}`);

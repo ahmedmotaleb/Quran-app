@@ -12,7 +12,8 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 | Student | Sign-up, sign-in, onboarding, session restore | live | `e2e/smoke.mjs` passes on production | — |
 | Student | Tasks, recording upload, submission, feedback | live | `test_media_submissions.py`; smoke upload/playback step passes on R2 | — |
 | Student | Teachers, slots, book/cancel/reschedule | implemented | `test_booking.py` (concurrency, idempotency); `e2e/schedule.mjs` locally | Verify on production with a real teacher |
-| Student | Lessons, quizzes, progress | implemented | `test_lessons_quizzes.py`; `e2e/learn.mjs` locally | Production has no content yet (needs admin content tools) |
+| Student | Lessons, quizzes | implemented | `test_lessons_quizzes.py`; `e2e/learn.mjs` | Add content via the admin console |
+| All roles | Progress analytics (one server calculation) | implemented | `apps/learning/progress.py`: `progress/me`, `teacher/students/<id>/progress`, `parent/children/<id>/progress`, `admin/progress`, `teacher/dashboard`, `parent/weekly-summary`; `test_progress.py`, `e2e/progress.mjs` | Weekly summary delivery (pack 18) |
 | Student | Mushaf (verified text) | live | 6,236 ayahs imported and byte-verified (Ops run); smoke step passes | — |
 | Teacher | Students, assignments, review queue, scores, notes | implemented | `test_media_submissions.py`, `e2e/loop.mjs` | — |
 | Teacher | Schedule, occurrences, attendance, grading | implemented | `test_teacher_schedule.py`, `test_lessons_quizzes.py` | — |
@@ -50,4 +51,4 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 9. Teacher content authoring still sample (07, teacher side).
 10. Live video sessions undecided (19).
 
-The admin portal is live except subscriptions (no payments yet). Next prompt: **11** (progress analytics).
+The admin portal is live except subscriptions (no payments yet). Next prompt: **15** (spaced repetition).
