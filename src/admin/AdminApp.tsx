@@ -10,7 +10,11 @@ const PeopleLive = lazy(() => import('./live/People'));
 const CirclesLive = lazy(() => import('./live/Scheduling').then((m) => ({ default: m.CirclesLive })));
 const BookingsLive = lazy(() => import('./live/Scheduling').then((m) => ({ default: m.BookingsLive })));
 /** Non-people sections that run on the API in live mode. */
-const LIVE_OTHER: Partial<Record<Section, () => JSX.Element>> = { circles: () => <CirclesLive />, bookings: () => <BookingsLive /> };
+const CoursesLive = lazy(() => import('./live/Content').then((m) => ({ default: m.CoursesLive })));
+const QuizzesLive = lazy(() => import('./live/Content').then((m) => ({ default: m.QuizzesLive })));
+const LIVE_OTHER: Partial<Record<Section, () => JSX.Element>> = {
+  circles: () => <CirclesLive />, bookings: () => <BookingsLive />, lectures: () => <CoursesLive />, quizzes: () => <QuizzesLive />,
+};
 
 /** Sections that run on the real API in live mode; the rest still show demo data (labelled). */
 const LIVE_SECTIONS: Partial<Record<Section, LA.Role>> = { students: 'student', teachers: 'teacher', parents: 'parent' };
@@ -299,7 +303,7 @@ function OverviewLive({ c }: { c: LiveCounts }) {
           </button>
         ))}
       </section>
-      <p style={{ margin: 0, fontSize: 14, color: color.muted }}>المحاضرات والاختبارات والاشتراكات والإعدادات ما زالت ببيانات عرض تجريبية، وتُربط بالخادم في المراحل التالية.</p>
+      <p style={{ margin: 0, fontSize: 14, color: color.muted }}>الاشتراكات والإعدادات ما زالت ببيانات عرض تجريبية، وتُربط بالخادم في المراحل التالية.</p>
     </>
   );
 }

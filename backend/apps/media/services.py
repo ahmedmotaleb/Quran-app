@@ -96,8 +96,12 @@ def can_read(user, m: MediaObject) -> bool:
     if m.purpose in (MediaObject.Purpose.LESSON_FILE, MediaObject.Purpose.COURSE_COVER):
         from apps.learning.models import Lesson
 
-        # Learning content: any active user may read files of published lessons.
-        return Lesson.objects.filter(media=m, state="published", course__state="published").exists()
+        from django.db.models import Q
+
+        # Learning content: files of published lessons the user may read (restricted courses: enrolled only).
+        return Lesson.objects.filter(media=m, state="published", course__state="published").filter(
+            Q(course__restricted=False) | Q(course__teacher=user)
+            | Q(course__enrollments__student=user, course__enrollments__status="active")).exists()
     if m.purpose == MediaObject.Purpose.VOICE_FEEDBACK and user.role == Role.STUDENT:
         return Feedback.objects.filter(voice=m, submission__student=user).exists()
     return False
