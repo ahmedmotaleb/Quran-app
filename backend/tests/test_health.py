@@ -1,5 +1,7 @@
 import pytest
 
+from .test_media_submissions import _private_root  # noqa: F401 (uploads go to a temporary folder)
+
 
 @pytest.mark.django_db
 def test_health_and_ready(client):
@@ -137,3 +139,26 @@ def test_ready_reports_storage_problems_by_category(settings, monkeypatch):
     Fake.__init__ = lambda self: (setattr(self, "bucket", "b"), setattr(self, "client", type("C", (), {"head_object": lambda *a, **k: (_ for _ in ()).throw(Missing())})()))[0]
     assert storage.storage_status() == "configured"
     storage._check_cache.clear()
+
+
+@pytest.mark.django_db
+def test_verify_restore_checks_a_copy_and_refuses_production(world, settings, capsys):
+    import json
+
+    from django.core.management import CommandError, call_command
+
+    from .test_progress import review, task
+
+    review(world, task(world), "accept")  # one submission with feedback
+    with pytest.raises(CommandError):     # no Quran text imported in the test database
+        call_command("verify_restore")
+    out = json.loads(capsys.readouterr().out)
+    c = out["checks"]
+    assert c["migrations"] == "ok" and c["sign_in_teacher"] == "ok" and c["sign_in_student"] == "ok"
+    assert c["parent_sees_linked_child"] == "ok" and c["teacher_sees_assigned_student"] == "ok"
+    assert c["student_sees_feedback"] == "ok" and c["submission_media_metadata"] == "ok"
+    assert c["quran"].startswith("failed") and out["counts"]["feedback"] == 1
+    assert "@" not in json.dumps(out)  # no email addresses in the report
+    settings.APP_ENV = "production"
+    with pytest.raises(CommandError, match="refuses"):
+        call_command("verify_restore")

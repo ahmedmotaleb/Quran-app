@@ -23,6 +23,8 @@ jobs:
       LOAD_PASSWORD: load-test-only-1
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.13' }
 
       - name: Database and object storage
         run: |
@@ -35,9 +37,9 @@ jobs:
           # S3 API stand-in (moto); real R2 timing comes from the production smoke test.
           pip install -q "moto[server]==5.0.28" || fail "moto install failed"
           nohup moto_server -H 127.0.0.1 -p 9000 > moto.log 2>&1 &
-          for i in $(seq 1 30); do curl -fs localhost:9000 >/dev/null && break; sleep 1; done
-          AWS_ACCESS_KEY_ID=loadtest AWS_SECRET_ACCESS_KEY=loadtest-secret aws --endpoint-url http://localhost:9000 --region us-east-1 \
-            s3 mb s3://halqa-load || fail "bucket creation failed"
+          for i in $(seq 1 30); do curl -s -o /dev/null localhost:9000 && break; sleep 1; done
+          python3 -c "import boto3;boto3.client('s3',endpoint_url='http://localhost:9000',aws_access_key_id='loadtest',aws_secret_access_key='loadtest-secret',region_name='us-east-1').create_bucket(Bucket='halqa-load')" \
+            || fail "bucket creation failed: $(tail -3 moto.log | tr '\n' ' ')"
 
       - name: Build the production image
         run: docker build -t halqa:load .
