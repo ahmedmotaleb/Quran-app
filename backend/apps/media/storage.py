@@ -95,17 +95,21 @@ class S3Storage:
         self.client.delete_object(Bucket=self.bucket, Key=key)
 
     def check(self) -> str:
-        """Can we reach the bucket with these credentials? Returns "ok" or a category (never the raw error)."""
+        """Can we use the bucket with these credentials? Returns "ok" or a category with the S3 error code
+        (codes are safe to show; messages are not). Uses an object-level request because R2 tokens scoped to
+        one bucket with Object Read & Write may not be allowed bucket-level calls such as HeadBucket."""
         try:
-            self.client.head_bucket(Bucket=self.bucket)
+            self.client.head_object(Bucket=self.bucket, Key="_halqa_storage_check")
             return "ok"
         except Exception as e:  # noqa: BLE001
-            code = str(getattr(e, "response", {}).get("Error", {}).get("Code", ""))
-            if code in ("403", "AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch"):
-                return "access denied (check the access key, secret and that the token covers this bucket)"
-            if code in ("404", "NoSuchBucket"):
-                return "bucket not found (check STORAGE_BUCKET)"
-            return "cannot reach the storage endpoint (check STORAGE_ENDPOINT_URL)"
+            code = str(getattr(e, "response", {}).get("Error", {}).get("Code", "")) or type(e).__name__
+            if code in ("404", "NoSuchKey", "NotFound"):
+                return "ok"  # authorised; the probe object simply does not exist
+            if code in ("401", "403", "AccessDenied", "Unauthorized", "InvalidAccessKeyId", "SignatureDoesNotMatch"):
+                return f"access denied [{code}] (check the access key, secret and that the token covers this bucket)"
+            if code == "NoSuchBucket":
+                return f"bucket not found [{code}] (check STORAGE_BUCKET and, for EU buckets, the .eu endpoint)"
+            return f"cannot use the storage endpoint [{code}] (check STORAGE_ENDPOINT_URL)"
 
     def read_url(self, key: str, *, media_id: str, request=None) -> tuple[str, datetime]:
         ttl = settings.MEDIA_URL_TTL_SECONDS
