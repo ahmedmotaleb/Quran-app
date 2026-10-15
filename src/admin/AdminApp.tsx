@@ -192,7 +192,8 @@ function Portal() {
           </span>
         </header>
         {LIVE && s.me && !s.me.mfa_enabled && <MfaSetup />}
-        {liveRole ? <Suspense fallback={null}><PeopleLive key={liveRole} role={liveRole} /></Suspense>
+        {LIVE && s.me && !s.me.mfa_enabled && s.me.mfa_required ? <p style={{ margin: 0, fontSize: 15, color: color.muted }}>تُفتح أقسام الإدارة بعد تفعيل التحقق بخطوتين.</p>
+          : liveRole ? <Suspense fallback={null}><PeopleLive key={liveRole} role={liveRole} /></Suspense>
           : liveOther ? <Suspense fallback={null}>{liveOther()}</Suspense>
           : s.sec === 'overview' ? (LIVE ? <OverviewLive c={lc} /> : <Overview counts={counts} />)
             : s.sec === 'settings' ? <AdminSettings /> : <TableSection key={s.sec} sec={s.sec} />}

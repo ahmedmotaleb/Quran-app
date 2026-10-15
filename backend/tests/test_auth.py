@@ -187,3 +187,32 @@ def test_promote_admin_command(world):
     call_command("promote_admin", "--email", world.s1.email)  # idempotent
     with pytest.raises(CommandError):
         call_command("promote_admin", "--email", "nobody@example.com")
+
+
+def test_password_reset_lifecycle_and_no_secret_in_logs(world, settings, caplog):
+    """Pack prompt 23: generic response, single-use link, old password stops working, sessions signed out, and the
+    deployed no-provider backend never writes the reset link to the logs."""
+    import logging
+    import re
+
+    settings.EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+    anon = APIClient()
+    same = anon.post("/api/v1/auth/password/forgot", {"email": "nobody@x.test"}, format="json").json()
+    r = anon.post("/api/v1/auth/password/forgot", {"email": "s1@x.test"}, format="json").json()
+    assert r == same  # no account-existence leak
+    assert len(mail.outbox) == 1
+    link = re.search(r"https?://\S+#/reset\?\S+", mail.outbox[0].body).group(0)
+    q = dict(x.split("=", 1) for x in link.split("?", 1)[1].split("&"))
+    old_client = client_for(world.s1)
+    new_pw = PW + "-new"
+    assert anon.post("/api/v1/auth/password/reset", {**q, "password": new_pw}, format="json").status_code == 200
+    assert anon.post("/api/v1/auth/password/reset", {**q, "password": new_pw + "2"}, format="json").json()["code"] == "reset_invalid"
+    assert anon.post("/api/v1/auth/login", {"email": "s1@x.test", "password": PW}, format="json").status_code == 400
+    assert anon.post("/api/v1/auth/login", {"email": "s1@x.test", "password": new_pw}, format="json").status_code == 200
+    assert old_client.get("/api/v1/me").status_code == 401  # existing device tokens revoked
+    # Deployed without a provider: the message is suppressed and nothing secret is logged.
+    settings.EMAIL_BACKEND = "apps.core.mail.SuppressedBackend"
+    with caplog.at_level(logging.INFO):
+        anon.post("/api/v1/auth/password/forgot", {"email": "s1@x.test"}, format="json")
+    text = " ".join(f"{r.getMessage()} {r.__dict__}" for r in caplog.records)
+    assert "email_not_sent_no_provider" in text and "token=" not in text and "#/reset" not in text

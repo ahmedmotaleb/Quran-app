@@ -47,6 +47,9 @@ await step('admin signs in and sees their name', async () => {
 await step('refresh keeps the session', async () => {
   await page.reload(); await page.getByText(/مدير المنصة · بيانات حقيقية/).waitFor();
 });
+if (process.env.MFA_ENFORCED) await step('sections stay locked until two-step verification is on', async () => {
+  await page.getByText('تُفتح أقسام الإدارة بعد تفعيل التحقق بخطوتين.').waitFor();
+});
 let secret = '';
 await step('turn on two-step verification', async () => {
   await page.getByRole('button', { name: 'ابدأ التفعيل' }).click();
@@ -55,6 +58,7 @@ await step('turn on two-step verification', async () => {
   await page.getByText('رمز التحقق غير صحيح.').waitFor();
   await page.locator('#mfa-otp').fill(totp(secret)); await page.getByRole('button', { name: 'تأكيد التفعيل' }).click();
   await page.getByRole('heading', { name: 'فعّل التحقق بخطوتين' }).waitFor({ state: 'detached' });
+  if (await page.getByText('تُفتح أقسام الإدارة بعد تفعيل التحقق بخطوتين.').count()) throw new Error('still locked');
 });
 await page.screenshot({ path: out + '/admin-portal.png' });
 await step('sign out clears the portal; refresh stays signed out', async () => {

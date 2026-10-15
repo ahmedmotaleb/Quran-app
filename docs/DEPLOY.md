@@ -89,11 +89,35 @@ submits a recording — it never pretends to upload.
 
 ## 6. Email (optional, for password resets)
 
-Pick any provider with a free SMTP plan, verify your sender address or domain there, then set
-`EMAIL_HOST`, `EMAIL_HOST_USER` (and `EMAIL_PORT` if not 587) with `gcloud run services update halqa
---region europe-west1 --update-env-vars ...`, and the password as a secret `EMAIL_HOST_PASSWORD` the same way
-as the storage key above.
-`/api/ready` then shows `"email":"smtp"`.
+Pick any provider with a free SMTP plan and verify your sender address or domain there. Then, in Cloud Shell:
+
+```bash
+bash deploy/gcp-email.sh
+```
+
+It asks for the SMTP host, port, user, sender address and password; the password is stored in Secret Manager
+(`halqa-email-password`), never in the service settings. `/api/ready` then shows `"email":"smtp"`.
+Until then the app sends no email at all (it records `email_not_sent_no_provider` in the log, without the
+link) and admins hand out set-password links from the console instead.
+
+## 6b. Hourly maintenance job
+
+Every deploy also updates a Cloud Run **job** `halqa-tasks` (same image and settings as the service) that runs
+`python manage.py run_scheduled`: session reminders, due review tasks, and removal of abandoned uploads. The
+GitHub workflow **Scheduled maintenance** starts it at minute 23 of every hour; a failed step fails the run, so
+GitHub emails the repository owner. Run it by hand from **Actions → Scheduled maintenance → Run workflow**.
+
+## 6c. Security settings
+
+| Setting | Default when deployed | Purpose |
+| --- | --- | --- |
+| `ADMIN_REQUIRE_MFA` | `true` | Admin APIs refuse an admin who has not turned on two-step verification; the portal shows only the setup card until then. |
+| `LOGIN_LOCKOUT_FAILURES` / `LOGIN_LOCKOUT_MINUTES` | `10` / `15` | Wrong passwords (or wrong admin codes) for one account, from any address, lock that account's sign-in for 15 minutes. |
+| `THROTTLE_AUTH` / `THROTTLE_RECOVERY` | `10/min` / `5/hour` | Per-address limits on sign-in, password change, MFA codes and recovery. |
+
+Rate limits and lockouts are stored in a database table (`halqa_cache`, created by `createcachetable` during
+deploy) so every instance shares them. Every response carries a Content-Security-Policy that allows only this
+site, Google Fonts, ayah audio from everyayah.com and signed recording links on Cloudflare R2.
 
 ## 7. Check the deployment
 

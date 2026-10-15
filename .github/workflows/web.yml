@@ -17,6 +17,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Known vulnerabilities in shipped dependencies
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - name: Build (demo mode)
         run: npm run build
@@ -58,5 +60,8 @@ jobs:
           curl -fs localhost:8090/ | grep -q 'manifest'
           curl -fsI localhost:8090/sw.js | grep -qi 'cache-control: no-cache'
           curl -fs localhost:8090/some/deep/link | grep -q '<div id="root">'
+          # Security headers on pages, static files and the API (Content-Security-Policy, HSTS-ready, no framing).
+          for u in / /sw.js /api/health; do curl -fsI localhost:8090$u | grep -qi "content-security-policy: default-src 'self'" || { echo "no CSP on $u"; exit 1; }; done
+          curl -fsI localhost:8090/ | grep -qi 'x-frame-options: deny'
       - if: failure()
         run: docker logs halqa

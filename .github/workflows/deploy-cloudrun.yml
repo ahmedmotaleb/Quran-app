@@ -63,7 +63,7 @@ jobs:
         run: |
           docker run --rm -e APP_ENV -e DATABASE_URL -e DJANGO_ALLOWED_HOSTS -e MEDIA_STORAGE \
             -e DJANGO_SECRET_KEY="$(python3 -c 'import secrets;print(secrets.token_urlsafe(64))')" \
-            "$IMAGE" python manage.py migrate --noinput
+            "$IMAGE" sh -c 'python manage.py migrate --noinput && python manage.py createcachetable'
 
       - name: Deploy to Cloud Run
         run: |
@@ -78,6 +78,24 @@ jobs:
             --quiet
           URL=$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format 'value(status.url)')
           echo "Cloud Run reports: $URL   (app address: $APP_URL)"
+
+      - name: Deploy the hourly maintenance job (same image, same settings and secrets)
+        run: |
+          # Copy the service's current env vars and secret references (including STORAGE_* / EMAIL_* added later).
+          gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format json > /tmp/svc.json
+          python3 - <<'PY' > /tmp/jobflags
+          import json
+          env = json.load(open("/tmp/svc.json"))["spec"]["template"]["spec"]["containers"][0].get("env", [])
+          plain = [f'{e["name"]}={e["value"]}' for e in env if "value" in e and e["name"] not in ("PORT",)]
+          secret = [f'{e["name"]}={e["valueFrom"]["secretKeyRef"]["name"]}:{e["valueFrom"]["secretKeyRef"]["key"]}' for e in env if "valueFrom" in e]
+          print("^@^" + "@".join(plain))
+          print(",".join(secret))
+          PY
+          ENVS=$(sed -n 1p /tmp/jobflags); SECRETS=$(sed -n 2p /tmp/jobflags)
+          gcloud run jobs deploy "$SERVICE-tasks" --project "$PROJECT" --region "$REGION" --image "$IMAGE" \
+            --service-account "$SERVICE-run@$PROJECT.iam.gserviceaccount.com" \
+            --command python --args manage.py,run_scheduled --memory 512Mi --cpu 1 --max-retries 0 --task-timeout 600 \
+            --set-env-vars "$ENVS" --set-secrets "$SECRETS" --quiet
 
       - name: Check the live app
         run: |
