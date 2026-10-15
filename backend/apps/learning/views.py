@@ -199,8 +199,13 @@ from .models import Course, Lesson, LessonCompletion, PublishState  # noqa: E402
 TOPIC_LABELS = {"tajweed": "التجويد", "hifz": "الحفظ والمراجعة", "adab": "آداب التلاوة", "ulum": "علوم القرآن"}
 
 
-def _published_lessons():
-    return Lesson.objects.filter(state=PublishState.PUBLISHED, course__state=PublishState.PUBLISHED).select_related("course", "media")
+def _published_lessons(user=None):
+    """Published lessons of published courses that `user` may read (restricted courses need an active enrollment)."""
+    qs = Lesson.objects.filter(state=PublishState.PUBLISHED, course__state=PublishState.PUBLISHED).select_related("course", "media")
+    if user is not None:
+        qs = qs.filter(Q(course__restricted=False) | Q(course__teacher=user)
+                       | Q(course__enrollments__student=user, course__enrollments__status="active")).distinct()
+    return qs
 
 
 def _lesson_out(l: Lesson, done: set, request, full=False) -> dict:
@@ -222,7 +227,7 @@ class LessonList(APIView):
     permission_classes = [IsLearningUser]
 
     def get(self, request):
-        qs = _published_lessons().order_by("course__title", "order", "id")
+        qs = _published_lessons(request.user).order_by("course__title", "order", "id")
         if request.query_params.get("topic"):
             qs = qs.filter(course__topic=request.query_params["topic"])
         done = set(LessonCompletion.objects.filter(student=request.user).values_list("lesson_id", flat=True))
@@ -233,11 +238,11 @@ class LessonDetail(APIView):
     permission_classes = [IsLearningUser]
 
     def get(self, request, pk):
-        l = _published_lessons().filter(pk=pk).first()
+        l = _published_lessons(request.user).filter(pk=pk).first()
         if l is None:
             raise NOT_FOUND
         done = set(LessonCompletion.objects.filter(student=request.user, lesson=l).values_list("lesson_id", flat=True))
-        nxt = _published_lessons().filter(course=l.course).filter(Q(order__gt=l.order) | Q(order=l.order, id__gt=l.id)).order_by("order", "id").first()
+        nxt = _published_lessons(request.user).filter(course=l.course).filter(Q(order__gt=l.order) | Q(order=l.order, id__gt=l.id)).order_by("order", "id").first()
         return Response({**_lesson_out(l, done, request, full=True), "next": {"id": nxt.id, "title": nxt.title} if nxt else None})
 
 
@@ -247,7 +252,7 @@ class LessonComplete(APIView):
     permission_classes = [IsStudent]
 
     def post(self, request, pk):
-        l = _published_lessons().filter(pk=pk).first()
+        l = _published_lessons(request.user).filter(pk=pk).first()
         if l is None:
             raise NOT_FOUND
         LessonCompletion.objects.get_or_create(student=request.user, lesson=l)

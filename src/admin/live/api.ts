@@ -56,3 +56,39 @@ export const scheduleCircle = (id: number, d: { weekday: number; time: string; m
 export const cancelSession = (id: number, reason: string) => api<{ bookings_cancelled: number }>('POST', `admin/sessions/${id}/cancel`, { reason });
 export const listBookings = (p: { when: 'upcoming' | 'past'; status?: string; q?: string; page?: number }) => api<Page<Booking>>('GET', `admin/bookings?${qs(p)}`);
 export const cancelBooking = (id: number, reason: string) => api<Booking>('POST', `admin/bookings/${id}/cancel`, { reason });
+
+/* ---- Courses, lessons, enrollments, quizzes (prompt 07) ---- */
+export type PubState = 'draft' | 'pending' | 'published' | 'archived';
+export interface Course {
+  id: number; title: string; description: string; topic: string; level: string; teacher: { id: number; name: string }; state: PubState;
+  restricted: boolean; lessons: number; published_lessons: number; enrolled: number; updated_at: string;
+}
+export interface Lesson { id: number; course: number; order: number; title: string; kind: 'text' | 'video' | 'audio' | 'pdf'; body: string; external_url: string; duration_minutes: number | null; state: PubState; has_file: boolean }
+export interface Enrollment { id: number; student: { id: number; name: string; email: string }; status: 'active' | 'completed' | 'withdrawn'; starts_on: string | null; ends_on: string | null }
+export type TestState = 'draft' | 'pending' | 'published' | 'closed';
+export interface Quiz {
+  id: number; title: string; course: { id: number; title: string } | null; topic: string; level: string; state: TestState; duration_minutes: number | null;
+  max_attempts: number; opens_at: string | null; closes_at: string | null; release_results: boolean; questions: number; attempts: number;
+}
+export type QKind = 'mcq' | 'true_false' | 'short' | 'recitation';
+export interface Question { id: number; order: number; version: number; kind: QKind; prompt: string; options: string[] | { surah?: number; ayah_from?: number; ayah_to?: number }; answer_key: unknown; points: number; used: number | null }
+
+export const listCourses = (p: { q?: string; state?: string; page?: number }) => api<Page<Course>>('GET', `admin/courses?${qs(p)}`);
+export const getCourse = (id: number) => api<Course & { lesson_list: Lesson[] }>('GET', `admin/courses/${id}`);
+export const saveCourse = (id: number | null, d: Partial<{ title: string; description: string; topic: string; level: string; teacher: number; restricted: boolean }>) =>
+  id ? api<Course>('PATCH', `admin/courses/${id}`, d) : api<Course>('POST', 'admin/courses', d);
+export const setCourseState = (id: number, state: PubState, reason = '') => api<Course>('POST', `admin/courses/${id}/state`, { state, reason });
+export const saveLesson = (courseId: number, id: number | null, d: Partial<{ title: string; kind: string; body: string; external_url: string; duration_minutes: number | null }>) =>
+  id ? api<Lesson>('PATCH', `admin/lessons/${id}`, d) : api<Lesson>('POST', `admin/courses/${courseId}/lessons`, d);
+export const setLessonState = (id: number, state: PubState) => api<Lesson>('POST', `admin/lessons/${id}/state`, { state });
+export const listEnrollments = (courseId: number, page = 1) => api<Page<Enrollment>>('GET', `admin/courses/${courseId}/enrollments?page=${page}`);
+export const enroll = (courseId: number, student: number) => api<Enrollment>('POST', `admin/courses/${courseId}/enrollments`, { student });
+export const endEnrollment = (id: number, status: 'withdrawn' | 'completed', reason = '') => api<Enrollment>('POST', `admin/enrollments/${id}/end`, { status, reason });
+export const listQuizzes = (p: { q?: string; state?: string; page?: number }) => api<Page<Quiz>>('GET', `admin/tests?${qs(p)}`);
+export const getQuiz = (id: number) => api<Quiz & { question_list: Question[] }>('GET', `admin/tests/${id}`);
+export const saveQuiz = (id: number | null, d: Partial<{ title: string; course: number | null; topic: string; level: string; duration_minutes: number | null; max_attempts: number }>) =>
+  id ? api<Quiz>('PATCH', `admin/tests/${id}`, d) : api<Quiz>('POST', 'admin/tests', d);
+export const setQuizState = (id: number, state: TestState) => api<Quiz>('POST', `admin/tests/${id}/state`, { state });
+export const saveQuestion = (testId: number, id: number | null, d: Partial<Omit<Question, 'id' | 'version' | 'used'>>) =>
+  id ? api<Question>('PATCH', `admin/questions/${id}`, d) : api<Question>('POST', `admin/tests/${testId}/questions`, d);
+export const removeQuestion = (id: number) => api<null>('DELETE', `admin/questions/${id}`);

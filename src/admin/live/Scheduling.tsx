@@ -1,15 +1,13 @@
 /** Live Circles and Bookings sections (pack prompt 06). Every action is a server call; lists re-read after writes. */
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { color, font } from '@/theme/tokens';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import { Icon } from '@/components/Icon';
-import type { ApiError, Page } from '@/api/client';
-import { card } from '../AdminTables';
+import type { ApiError } from '@/api/client';
 import { toast } from '../adminStore';
 import * as A from './api';
-import { chip, dateTime, errMsg, Modal, ReasonDialog, smallBtn } from './ui';
+import { chip, dateTime, errMsg, Modal, Pager, ReasonDialog, SearchBar, smallBtn, Table, useDebounced, usePaged } from './ui';
 
-const PAGE = 20;
 const CIRCLE_ST: Record<A.CircleState, { l: string; bg: string; fg: string }> = {
   draft: { l: 'مسودة', bg: '#ECE7DB', fg: '#45534E' }, published: { l: 'منشورة', bg: '#D8E5D7', fg: '#124C46' }, off: { l: 'موقوفة', bg: '#F5E1DC', fg: '#8E2F20' },
 };
@@ -19,61 +17,6 @@ const BOOK_ST: Record<string, { l: string; bg: string; fg: string }> = {
 const ATT: Record<string, string> = { present: 'حضر', late: 'متأخر', absent: 'غاب', excused: 'غاب بعذر' };
 const DAYS = ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد']; // Python weekday order (0 = Monday)
 const pill = (t: { l: string; bg: string; fg: string }) => <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700, background: t.bg, color: t.fg, whiteSpace: 'nowrap' }}>{t.l}</span>;
-
-/** Server-paged list with a stale-response guard. */
-function usePaged<T>(fetcher: (page: number) => Promise<Page<T>>, deps: unknown[]) {
-  const [page, setPage] = useState(1); const [data, setData] = useState<Page<T> | null>(null);
-  const [err, setErr] = useState<string | null>(null); const [loading, setLoading] = useState(true); const seq = useRef(0);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const load = useCallback(async () => {
-    const my = ++seq.current; setLoading(true); setErr(null);
-    try { const d = await fetcher(page); if (my === seq.current) setData(d); } catch (e) { if (my === seq.current) setErr(errMsg(e)); }
-    finally { if (my === seq.current) setLoading(false); }
-  }, [page, ...deps]);
-  useEffect(() => { void load(); }, [load]);
-  useEffect(() => { setPage(1); }, deps); // eslint-disable-line react-hooks/exhaustive-deps
-  return { page, setPage, data, err, loading, reload: load };
-}
-
-function Table({ cols, children, loading, err, empty, retry }: { cols: string[]; children: ReactNode; loading: boolean; err: string | null; empty: boolean; retry: () => void }) {
-  return (
-    <div style={{ ...card, overflowX: 'auto' }} aria-busy={loading}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, minWidth: 760 }}>
-        <thead><tr style={{ background: color.sand, textAlign: 'right' }}>{cols.map((c) => <th key={c} scope="col" style={{ padding: '12px 16px', fontWeight: 700, color: color.body, whiteSpace: 'nowrap' }}>{c}</th>)}</tr></thead>
-        <tbody>{children}</tbody>
-      </table>
-      {loading && empty && !err && <p role="status" style={{ margin: 0, padding: 28, textAlign: 'center', color: color.muted }}>جارٍ التحميل…</p>}
-      {err && <div role="alert" style={{ padding: 20, display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}><span style={{ color: color.danger }}>{err}</span><button onClick={retry} style={smallBtn('primary')}>إعادة المحاولة</button></div>}
-      {!loading && !err && empty && <p style={{ margin: 0, padding: 28, textAlign: 'center', color: color.muted }}>لا توجد نتائج مطابقة.</p>}
-    </div>
-  );
-}
-
-function Pager({ page, total, setPage }: { page: number; total: number; setPage: (p: number) => void }) {
-  const pages = Math.max(1, Math.ceil(total / PAGE));
-  if (!total) return null;
-  return (
-    <nav aria-label="الصفحات" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-      <p style={{ margin: 0, fontSize: 14, color: color.muted }}>عرض {(page - 1) * PAGE + 1}–{Math.min(page * PAGE, total)} من {total}</p>
-      {pages > 1 && <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        <button disabled={page === 1} onClick={() => setPage(page - 1)} aria-label="الصفحة السابقة" style={smallBtn()}><Icon name="chevR" size={18} /></button>
-        <span style={{ fontFamily: font.latin, minWidth: 64, textAlign: 'center' }}>{page} / {pages}</span>
-        <button disabled={page === pages} onClick={() => setPage(page + 1)} aria-label="الصفحة التالية" style={smallBtn()}><Icon name="chevL" size={18} /></button>
-      </div>}
-    </nav>
-  );
-}
-
-function SearchBar({ q, setQ, label, action }: { q: string; setQ: (v: string) => void; label: string; action?: ReactNode }) {
-  return (
-    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-      <input type="search" aria-label={label} placeholder={label} value={q} onChange={(e) => setQ(e.target.value)}
-        style={{ flex: '1 1 240px', minHeight: 48, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15 }} />
-      {action}
-    </div>
-  );
-}
-function useDebounced(v: string) { const [d, setD] = useState(v); useEffect(() => { const t = setTimeout(() => setD(v.trim()), 300); return () => clearTimeout(t); }, [v]); return d; }
 
 /* =============================== Circles =============================== */
 export function CirclesLive() {

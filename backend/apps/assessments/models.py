@@ -1,6 +1,7 @@
 """Tests with versioned questions. Answer keys never leave the server; grading happens server-side."""
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 from django.db.models import Q
 
 from apps.core.models import TimeStamped
@@ -44,6 +45,8 @@ class Question(models.Model):
     answer_key = models.JSONField(null=True, blank=True)  # server only
     points = models.PositiveSmallIntegerField(default=1)
     retired = models.BooleanField(default=False)  # edits create a new version; old one is retired
+    created_at = models.DateTimeField(default=timezone.now)
+    retired_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["order", "id"]

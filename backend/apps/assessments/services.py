@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.core.exceptions import ApiError
@@ -16,14 +17,26 @@ AUTO = {Question.Kind.MCQ, Question.Kind.TRUE_FALSE}
 GRACE = timedelta(minutes=2)  # network delay after the timer ends
 
 
-def open_tests():
+def open_tests(user=None):
+    """Published tests open now. Tests of a restricted course are only for its actively enrolled students."""
     now = timezone.now()
-    return (Test.objects.filter(state=Test.State.PUBLISHED)
-            .exclude(opens_at__gt=now).exclude(closes_at__lt=now))
+    qs = (Test.objects.filter(state=Test.State.PUBLISHED)
+          .exclude(opens_at__gt=now).exclude(closes_at__lt=now))
+    if user is not None:
+        qs = qs.filter(Q(course__isnull=True) | Q(course__restricted=False) | Q(course__state="published",
+                       course__enrollments__student=user, course__enrollments__status="active")).distinct()
+    return qs
 
 
 def live_questions(test: Test):
     return test.questions.filter(retired=False).order_by("order", "id")
+
+
+def attempt_questions(attempt: Attempt):
+    """The question versions the student was given when the attempt started. An admin edit made during the
+    attempt creates a new version for later attempts; it never invalidates or changes this one."""
+    return (attempt.test.questions.filter(created_at__lte=attempt.started_at)
+            .filter(Q(retired=False) | Q(retired_at__gt=attempt.started_at)).order_by("order", "id"))
 
 
 def start_attempt(test: Test, student) -> Attempt:
@@ -52,7 +65,7 @@ def submit(attempt: Attempt, answers: list[dict], student) -> Attempt:
             return a  # idempotent: a retried submit returns the stored result
         if a.deadline_at and timezone.now() > a.deadline_at + GRACE:
             raise ApiError("deadline_passed", "انتهى وقت الاختبار.", 409)
-        qs = {q.id: q for q in live_questions(a.test)}
+        qs = {q.id: q for q in attempt_questions(a)}
         seen = set()
         for item in answers:
             q = qs.get(item.get("question"))

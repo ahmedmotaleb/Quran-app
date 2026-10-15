@@ -25,9 +25,9 @@ def _test_out(t, attempts) -> dict:
             "closes_at": t.closes_at, "attempts": [_attempt_summary(a) for a in attempts]}
 
 
-def _annotated():
+def _annotated(user):
     live = Q(questions__retired=False)
-    return services.open_tests().annotate(q_count=Count("questions", filter=live),
+    return services.open_tests(user).annotate(q_count=Count("questions", filter=live),
                                           rec_count=Count("questions", filter=live & Q(questions__kind=Question.Kind.RECITATION)))
 
 
@@ -37,7 +37,7 @@ class TestList(APIView):
     permission_classes = [IsStudent]
 
     def get(self, request):
-        tests = list(_annotated().order_by("-created_at")[:100])
+        tests = list(_annotated(request.user).order_by("-created_at")[:100])
         mine = {}
         for a in Attempt.objects.filter(student=request.user, test__in=tests).order_by("number"):
             mine.setdefault(a.test_id, []).append(a)
@@ -50,11 +50,14 @@ class TestDetail(APIView):
     permission_classes = [IsStudent]
 
     def get(self, request, pk):
-        t = _annotated().filter(pk=pk).first()
+        t = _annotated(request.user).filter(pk=pk).first()
         if t is None:
             raise NOT_FOUND
-        qs = [{"id": q.id, "kind": q.kind, "prompt": q.prompt, "options": q.options, "points": q.points} for q in services.live_questions(t)]
         attempts = Attempt.objects.filter(student=request.user, test=t).order_by("number")
+        current = next((a for a in attempts if a.status == Attempt.Status.IN_PROGRESS), None)
+        # An attempt in progress keeps the exact question versions it started with.
+        src = services.attempt_questions(current) if current else services.live_questions(t)
+        qs = [{"id": q.id, "kind": q.kind, "prompt": q.prompt, "options": q.options, "points": q.points} for q in src]
         return Response({**_test_out(t, attempts), "questions": qs})
 
 
@@ -62,7 +65,7 @@ class AttemptStart(APIView):
     permission_classes = [IsStudent]
 
     def post(self, request, pk):
-        t = services.open_tests().filter(pk=pk).first()
+        t = services.open_tests(request.user).filter(pk=pk).first()
         if t is None:
             raise NOT_FOUND
         a = services.start_attempt(t, request.user)

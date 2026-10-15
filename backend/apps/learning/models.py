@@ -23,6 +23,8 @@ class Course(TimeStamped):
     teacher = models.ForeignKey(User, on_delete=models.PROTECT, related_name="courses")
     cover = models.ForeignKey("media.MediaObject", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     state = models.CharField(max_length=16, choices=PublishState.choices, default=PublishState.DRAFT)
+    # False: an open library course any learner may read. True: only actively enrolled students (and its teacher).
+    restricted = models.BooleanField(default=False)
 
     class Meta:
         indexes = [models.Index(fields=["state", "topic", "level"])]

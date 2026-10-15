@@ -23,7 +23,7 @@ await page.getByText(/بيانات حقيقية/).waitFor();
 
 await step('overview shows real counts', async () => {
   await page.getByText('طلاب نشطون').waitFor();
-  await page.getByText('المحاضرات والاختبارات والاشتراكات').waitFor();
+  await page.getByText(/ما زالت ببيانات عرض تجريبية/).waitFor();
 });
 await step('students list comes from the server', async () => {
   await nav('الطلاب'); await page.getByRole('button', { name: 'يوسف أحمد', exact: true }).waitFor();

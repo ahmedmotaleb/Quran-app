@@ -1,6 +1,8 @@
 from django.urls import include, path
 
+from apps.assessments import admin_views as assess_admin
 from apps.assessments import views as assessments
+from apps.learning import admin_views as learn_admin
 from apps.learning import views as learning
 from apps.media import views as media
 from apps.notifications import views as notifications
@@ -56,6 +58,20 @@ urlpatterns = [
     path("admin/bookings", sched_admin.AdminBookings.as_view()),
     path("admin/bookings/counts", sched_admin.AdminBookingCounts.as_view()),
     path("admin/bookings/<int:pk>/cancel", sched_admin.AdminBookingCancel.as_view()),
+    # Admin: courses, lessons, enrollments, quizzes
+    path("admin/courses", learn_admin.AdminCourses.as_view()),
+    path("admin/courses/<int:pk>", learn_admin.AdminCourseDetail.as_view()),
+    path("admin/courses/<int:pk>/state", learn_admin.AdminCourseState.as_view()),
+    path("admin/courses/<int:pk>/lessons", learn_admin.AdminLessons.as_view()),
+    path("admin/courses/<int:pk>/enrollments", learn_admin.AdminEnrollments.as_view()),
+    path("admin/lessons/<int:pk>", learn_admin.AdminLessonDetail.as_view()),
+    path("admin/lessons/<int:pk>/state", learn_admin.AdminLessonState.as_view()),
+    path("admin/enrollments/<int:pk>/end", learn_admin.AdminEnrollmentEnd.as_view()),
+    path("admin/tests", assess_admin.AdminTests.as_view()),
+    path("admin/tests/<int:pk>", assess_admin.AdminTestDetail.as_view()),
+    path("admin/tests/<int:pk>/state", assess_admin.AdminTestState.as_view()),
+    path("admin/tests/<int:pk>/questions", assess_admin.AdminQuestions.as_view()),
+    path("admin/questions/<int:pk>", assess_admin.AdminQuestionDetail.as_view()),
     # Notifications
     path("notifications", notifications.NotificationList.as_view()),
     path("notifications/read", notifications.NotificationRead.as_view()),
