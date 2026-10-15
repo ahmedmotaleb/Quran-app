@@ -7,6 +7,10 @@ import { adminLogin, adminLogout, adminRestore, goSection, mfaFinish, mfaStart, 
 import { LIVE, type ApiError } from '@/api/client';
 import * as LA from './live/api';
 const PeopleLive = lazy(() => import('./live/People'));
+const CirclesLive = lazy(() => import('./live/Scheduling').then((m) => ({ default: m.CirclesLive })));
+const BookingsLive = lazy(() => import('./live/Scheduling').then((m) => ({ default: m.BookingsLive })));
+/** Non-people sections that run on the API in live mode. */
+const LIVE_OTHER: Partial<Record<Section, () => JSX.Element>> = { circles: () => <CirclesLive />, bookings: () => <BookingsLive /> };
 
 /** Sections that run on the real API in live mode; the rest still show demo data (labelled). */
 const LIVE_SECTIONS: Partial<Record<Section, LA.Role>> = { students: 'student', teachers: 'teacher', parents: 'parent' };
@@ -134,7 +138,8 @@ function Portal() {
     ? { students: (lc.student?.pending ?? 0) + (lc.student?.unlinked ?? 0), teachers: (lc.teacher?.pending ?? 0) + (lc.teacher?.unapproved ?? 0), parents: lc.parent?.pending ?? 0 }
     : pendingCounts(s);
   const liveRole = LIVE ? LIVE_SECTIONS[s.sec] : undefined;
-  const demoBadge = LIVE && !liveRole;
+  const liveOther = LIVE ? LIVE_OTHER[s.sec] : undefined;
+  const demoBadge = LIVE && !liveRole && !liveOther && s.sec !== 'overview';
   const label = NAV.find((n) => n[0] === s.sec)![1];
 
   const nav = (
@@ -178,11 +183,12 @@ function Portal() {
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div><h1 style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>{label}</h1><p style={{ margin: '4px 0 0', fontSize: 14, color: color.muted }}>{TITLES[s.sec]}</p></div>
           <span style={{ fontSize: 13, color: demoBadge ? color.dangerInk : color.muted, background: color.sand, padding: '6px 12px', borderRadius: 999 }}>
-            {!LIVE ? 'بيانات عرض تجريبية' : liveRole || s.sec === 'overview' ? `${s.me?.full_name ?? ''} · بيانات حقيقية` : 'هذا القسم ما زال ببيانات عرض تجريبية — لا تُحفظ التغييرات'}
+            {!LIVE ? 'بيانات عرض تجريبية' : !demoBadge ? `${s.me?.full_name ?? ''} · بيانات حقيقية` : 'هذا القسم ما زال ببيانات عرض تجريبية — لا تُحفظ التغييرات'}
           </span>
         </header>
         {LIVE && s.me && !s.me.mfa_enabled && <MfaSetup />}
         {liveRole ? <Suspense fallback={null}><PeopleLive key={liveRole} role={liveRole} /></Suspense>
+          : liveOther ? <Suspense fallback={null}>{liveOther()}</Suspense>
           : s.sec === 'overview' ? (LIVE ? <OverviewLive c={lc} /> : <Overview counts={counts} />)
             : s.sec === 'settings' ? <AdminSettings /> : <TableSection key={s.sec} sec={s.sec} />}
       </main>
@@ -293,7 +299,7 @@ function OverviewLive({ c }: { c: LiveCounts }) {
           </button>
         ))}
       </section>
-      <p style={{ margin: 0, fontSize: 14, color: color.muted }}>الحلقات والحجوزات والمحاضرات والاختبارات والاشتراكات والإعدادات ما زالت ببيانات عرض تجريبية، وتُربط بالخادم في المراحل التالية.</p>
+      <p style={{ margin: 0, fontSize: 14, color: color.muted }}>المحاضرات والاختبارات والاشتراكات والإعدادات ما زالت ببيانات عرض تجريبية، وتُربط بالخادم في المراحل التالية.</p>
     </>
   );
 }

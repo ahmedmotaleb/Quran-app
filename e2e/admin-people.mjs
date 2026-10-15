@@ -23,7 +23,7 @@ await page.getByText(/بيانات حقيقية/).waitFor();
 
 await step('overview shows real counts', async () => {
   await page.getByText('طلاب نشطون').waitFor();
-  await page.getByText('الحلقات والحجوزات والمحاضرات').waitFor();
+  await page.getByText('المحاضرات والاختبارات والاشتراكات').waitFor();
 });
 await step('students list comes from the server', async () => {
   await nav('الطلاب'); await page.getByRole('button', { name: 'يوسف أحمد', exact: true }).waitFor();
@@ -81,8 +81,7 @@ await step('link the student to a teacher and a parent; both persist', async () 
 await step('the parent sees the new child; unlink from the parent side persists', async () => {
   await page.keyboard.press('Escape'); await nav('أولياء الأمور'); await openPerson('أحمد العلي');
   await dialog().getByText(SN2).waitFor();
-  const row = dialog().locator('div', { hasText: SN2 }).last();
-  await row.getByRole('button', { name: 'فك الربط' }).click();
+  await dialog().getByRole('button', { name: `فك ربط ${SN2}` }).click();
   await dialog().locator('#rs').fill('اختبار فك الربط'); await dialog().getByRole('button', { name: 'فك الربط' }).click();
   await reopen('أولياء الأمور', 'أحمد العلي');
   if (await dialog().getByText(SN2).count()) throw new Error('child still linked');

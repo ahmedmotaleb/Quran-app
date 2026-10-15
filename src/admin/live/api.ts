@@ -32,3 +32,27 @@ export const linkGuardian = (guardian: number, student: number) => api<{ id: num
 export const revokeGuardian = (id: number, reason: string) => api<null>('POST', `admin/guardian-links/${id}/revoke`, { reason });
 export const inviteTeacher = (email: string) =>
   api<{ id: number; link: string; expires_at: string }>('POST', 'invitations', { purpose: 'teacher_account', email, days: 7 });
+
+/* ---- Circles, sessions, bookings (prompt 06) ---- */
+export type CircleState = 'draft' | 'published' | 'off';
+export interface Circle {
+  id: number; name: string; teacher: { id: number; name: string }; level: string; capacity: number; schedule_note: string; state: CircleState;
+  upcoming_sessions: number; upcoming_booked_seats: number; updated_at: string;
+}
+export interface SessionRow { id: number; starts_at: string; ends_at: string; status: 'scheduled' | 'cancelled' | 'completed'; capacity: number; booked: number }
+export interface PlanItem { starts_at: string; ends_at: string; ok: boolean; problem: string }
+export interface Booking {
+  id: number; status: 'confirmed' | 'cancelled'; attendance: string; starts_at: string; ends_at: string; kind: 'individual' | 'group';
+  circle: string | null; session_status: string; teacher: { id: number; name: string }; student: { id: number; name: string };
+  cancel_reason: string; cancelled_at: string | null; cancelled_by: string | null;
+}
+export const listCircles = (p: { q?: string; state?: string; page?: number }) => api<Page<Circle>>('GET', `admin/circles?${qs(p)}`);
+export const getCircle = (id: number) => api<Circle & { sessions: SessionRow[] }>('GET', `admin/circles/${id}`);
+export const createCircle = (d: { name: string; teacher: number; capacity: number; level: string; schedule_note: string }) => api<Circle>('POST', 'admin/circles', d);
+export const updateCircle = (id: number, d: Partial<{ name: string; capacity: number; level: string; schedule_note: string }>) => api<Circle>('PATCH', `admin/circles/${id}`, d);
+export const setCircleState = (id: number, state: CircleState, reason = '') => api<Circle>('POST', `admin/circles/${id}/state`, { state, reason });
+export const scheduleCircle = (id: number, d: { weekday: number; time: string; minutes: number; weeks: number; start?: string; timezone: string; dry_run: boolean }) =>
+  api<{ dry_run: boolean; created: number; replaced_open_slots: number; timezone: string; plan: PlanItem[] }>('POST', `admin/circles/${id}/sessions`, d);
+export const cancelSession = (id: number, reason: string) => api<{ bookings_cancelled: number }>('POST', `admin/sessions/${id}/cancel`, { reason });
+export const listBookings = (p: { when: 'upcoming' | 'past'; status?: string; q?: string; page?: number }) => api<Page<Booking>>('GET', `admin/bookings?${qs(p)}`);
+export const cancelBooking = (id: number, reason: string) => api<Booking>('POST', `admin/bookings/${id}/cancel`, { reason });

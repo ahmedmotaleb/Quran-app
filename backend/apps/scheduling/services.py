@@ -42,10 +42,12 @@ def book(*, student, occurrence_id: int, idempotency_key: str, assignment=None, 
         if existing:
             return existing, False
         try:
-            occ = SessionOccurrence.objects.select_for_update().select_related("teacher").get(pk=occurrence_id)
+            occ = SessionOccurrence.objects.select_for_update(of=("self",)).select_related("teacher__teacher_profile", "circle").get(pk=occurrence_id)
         except SessionOccurrence.DoesNotExist:
             raise ApiError("slot_unavailable", "لم يعد هذا الموعد متاحًا. اختر موعدًا آخر.", 409)
-        if occ.status != SessionOccurrence.Status.SCHEDULED or occ.teacher.status != AccountStatus.ACTIVE:
+        prof = getattr(occ.teacher, "teacher_profile", None)
+        if (occ.status != SessionOccurrence.Status.SCHEDULED or occ.teacher.status != AccountStatus.ACTIVE
+                or prof is None or prof.approved_at is None or (occ.circle_id and occ.circle.state != "published")):
             raise ApiError("slot_unavailable", "لم يعد هذا الموعد متاحًا. اختر موعدًا آخر.", 409)
         if occ.starts_at < now + timedelta(minutes=cfg.booking_lead_minutes):
             raise ApiError("too_late", "لا يمكن حجز موعد يبدأ قريبًا جدًا. اختر موعدًا لاحقًا.", 409)
@@ -129,6 +131,26 @@ def _notify_booked(booking_id: int) -> None:
     when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
     notify(b.student, "booking_confirmed", "تم تأكيد حجزك", f"مع {b.occurrence.teacher.full_name} · {when}", link=f"/sessions/{b.pk}", dedupe=f"booking:{b.pk}:confirmed")
     notify(b.occurrence.teacher, "booking_new", "حجز جديد", f"{b.student.full_name} · {when}", link=f"/teacher/schedule", dedupe=f"booking:{b.pk}:teacher")
+
+
+def cancel_occurrence(*, occurrence_id: int, by, reason: str, now: datetime | None = None) -> tuple[SessionOccurrence, int]:
+    """Admin: cancel a whole session. Every confirmed booking is cancelled with the reason and its student is
+    notified; bookings and attendance history are kept (nothing is deleted)."""
+    now = now or timezone.now()
+    with transaction.atomic():
+        o = SessionOccurrence.objects.select_for_update().get(pk=occurrence_id)
+        if o.status == SessionOccurrence.Status.CANCELLED:
+            return o, 0
+        if o.starts_at <= now:
+            raise ApiError("already_started", "لا يمكن إلغاء جلسة بدأت أو انتهت.", 409)
+        ids = list(o.bookings.select_for_update().filter(status=Booking.Status.CONFIRMED).values_list("pk", flat=True))
+        Booking.objects.filter(pk__in=ids).update(status=Booking.Status.CANCELLED, cancelled_at=now, cancelled_by=by,
+                                                   cancel_reason=reason[:200], updated_at=now)
+        o.status = SessionOccurrence.Status.CANCELLED
+        o.save(update_fields=["status", "updated_at"])
+        for bid in ids:
+            transaction.on_commit(lambda bid=bid: _notify_cancelled(bid))
+    return o, len(ids)
 
 
 # ---- Occurrence generation (Prompt 10) -------------------------------------------------

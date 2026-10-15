@@ -30,8 +30,10 @@ class TeacherSlots(generics.ListAPIView):
         now = timezone.now()
         qs = (SessionOccurrence.objects.filter(
             teacher_id=self.kwargs["pk"], status=SessionOccurrence.Status.SCHEDULED,
+            teacher__teacher_profile__approved_at__isnull=False,
             starts_at__gte=now + timedelta(minutes=cfg.booking_lead_minutes), starts_at__lte=now + timedelta(days=cfg.booking_horizon_days))
-            .select_related("teacher")
+            .filter(Q(circle__isnull=True) | Q(circle__state="published"))
+            .select_related("teacher", "circle")
             .annotate(confirmed_count=Count("bookings", filter=Q(bookings__status=Booking.Status.CONFIRMED)))
             .order_by("starts_at"))
         return qs

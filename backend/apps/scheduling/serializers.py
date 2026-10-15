@@ -6,10 +6,11 @@ from .models import Booking, SessionOccurrence
 class SlotSerializer(serializers.ModelSerializer):
     teacher_name = serializers.CharField(source="teacher.full_name")
     seats_left = serializers.SerializerMethodField()
+    circle_name = serializers.CharField(source="circle.name", default=None)
 
     class Meta:
         model = SessionOccurrence
-        fields = ["id", "teacher", "teacher_name", "kind", "starts_at", "ends_at", "capacity", "seats_left"]
+        fields = ["id", "teacher", "teacher_name", "kind", "starts_at", "ends_at", "capacity", "seats_left", "circle_name"]
 
     def get_seats_left(self, o):
         return max(0, o.capacity - getattr(o, "confirmed_count", 0))

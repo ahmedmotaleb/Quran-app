@@ -22,7 +22,7 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 | Admin | Portal sign-in | implemented | Real `admin/auth/login`, OTP step, session restore; `e2e/admin.mjs` | — |
 | Admin | Users, teachers, parents | implemented | Live sections on `admin/users*`, approval, links, setup links, teacher invitations; `test_admin_people.py`, `e2e/admin-people.mjs` | — |
 | Auth | Set-password and invitation pages | implemented | `#/reset`, `#/invite` (`src/screens/auth/LinkPages.tsx`) | Email delivery (pack 23) |
-| Admin | Circles, bookings | simulated | UI reads `initialCircles`/`initialBookings` | Pack prompt 06 |
+| Admin | Circles, bookings | implemented | `admin/circles*`, `admin/sessions/<id>/cancel`, `admin/bookings*`; `test_admin_scheduling.py`, `e2e/admin-scheduling.mjs` | — |
 | Admin | Courses, lessons, quizzes | simulated | UI reads `initialContent`; no admin content API on `main` (draft on branch `admin-console-wip`) | Pack prompt 07 |
 | Admin | Settings, audit log | simulated (UI) | `AppSettings` model exists; no admin API on `main` | Pack prompt 08 |
 | Backend | Auth, roles, CSRF, throttles, audit events | implemented | `test_auth.py`, `test_permissions.py` | Pack prompt 24 re-check |
@@ -41,7 +41,7 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 
 1. ~~Admin sign-in (04)~~ and ~~users/teachers/parents (05)~~ — done.
 3. No way to create courses/lessons/quizzes in production (07) — learners see an empty library.
-4. Admin bookings/circles simulated (06).
+4. ~~Admin bookings/circles (06)~~ — done.
 5. Settings not editable (08).
 6. Password-reset email not delivered (23) — a user who forgets a password is stuck.
 7. No tested backup/restore (27).
@@ -49,4 +49,4 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 9. Teacher content authoring still sample (07, teacher side).
 10. Live video sessions undecided (19).
 
-The rest of the live Admin Portal (06–08) remains the highest-priority gap. Next prompt: **06**.
+The rest of the live Admin Portal (06–08) remains the highest-priority gap. Next prompt: **07**.

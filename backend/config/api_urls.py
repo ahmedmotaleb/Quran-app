@@ -5,6 +5,7 @@ from apps.learning import views as learning
 from apps.media import views as media
 from apps.notifications import views as notifications
 from apps.quran import views as quran
+from apps.scheduling import admin_views as sched_admin
 from apps.scheduling import views as scheduling
 
 urlpatterns = [
@@ -46,6 +47,15 @@ urlpatterns = [
     path("bookings/<int:pk>/cancel", scheduling.BookingCancel.as_view()),
     path("bookings/<int:pk>/reschedule", scheduling.BookingReschedule.as_view()),
     path("bookings/<int:pk>/attendance", scheduling.BookingAttendance.as_view()),
+    # Admin: circles, sessions, bookings
+    path("admin/circles", sched_admin.AdminCircles.as_view()),
+    path("admin/circles/<int:pk>", sched_admin.AdminCircleDetail.as_view()),
+    path("admin/circles/<int:pk>/state", sched_admin.AdminCircleState.as_view()),
+    path("admin/circles/<int:pk>/sessions", sched_admin.AdminCircleSessions.as_view()),
+    path("admin/sessions/<int:pk>/cancel", sched_admin.AdminOccurrenceCancel.as_view()),
+    path("admin/bookings", sched_admin.AdminBookings.as_view()),
+    path("admin/bookings/counts", sched_admin.AdminBookingCounts.as_view()),
+    path("admin/bookings/<int:pk>/cancel", sched_admin.AdminBookingCancel.as_view()),
     # Notifications
     path("notifications", notifications.NotificationList.as_view()),
     path("notifications/read", notifications.NotificationRead.as_view()),
