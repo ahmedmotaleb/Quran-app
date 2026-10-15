@@ -49,8 +49,16 @@ class AppSettings(models.Model):
     parent_weekly_report = models.BooleanField(default=True)
     max_recording_seconds = models.PositiveSmallIntegerField(default=900)
     max_upload_mb = models.PositiveSmallIntegerField(default=25)
+    # Spaced-repetition intervals in days (product defaults, not a pedagogical guarantee).
+    review_intervals = models.JSONField(default=list, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+
+    DEFAULT_REVIEW_INTERVALS = [1, 3, 7, 14, 30]
+
+    @property
+    def intervals(self) -> list[int]:
+        return self.review_intervals or self.DEFAULT_REVIEW_INTERVALS
 
     @classmethod
     def load(cls) -> "AppSettings":

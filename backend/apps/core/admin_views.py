@@ -29,12 +29,21 @@ class SettingsSerializer(serializers.ModelSerializer):
         model = AppSettings
         fields = ["org_name", "support_email", "support_whatsapp", "show_support_button", "default_timezone", "cancel_hours",
                   "join_minutes", "individual_minutes", "group_minutes", "booking_horizon_days", "booking_lead_minutes",
-                  "open_signup", "session_reminders", "parent_weekly_report", "max_recording_seconds", "max_upload_mb", "updated_at"]
+                  "open_signup", "session_reminders", "parent_weekly_report", "max_recording_seconds", "max_upload_mb", "review_intervals",
+                  "updated_at"]
         read_only_fields = ["updated_at"]
         extra_kwargs = {"cancel_hours": {"max_value": 168}, "booking_horizon_days": {"min_value": 1, "max_value": 90},
                         "booking_lead_minutes": {"max_value": 10080}, "max_recording_seconds": {"min_value": 30, "max_value": 3600},
                         "max_upload_mb": {"min_value": 1, "max_value": 100}, "individual_minutes": {"min_value": 10, "max_value": 240},
                         "group_minutes": {"min_value": 10, "max_value": 240}, "join_minutes": {"max_value": 60}}
+
+    def validate_review_intervals(self, v):
+        if v in (None, []):
+            return []
+        if (not isinstance(v, list) or not 1 <= len(v) <= 10 or any(not isinstance(x, int) or isinstance(x, bool) or not 1 <= x <= 365 for x in v)
+                or any(b <= a for a, b in zip(v, v[1:]))):
+            raise serializers.ValidationError("من 1 إلى 10 أعداد صحيحة متزايدة بين 1 و365 يومًا.")
+        return v
 
     def validate_default_timezone(self, v):
         from zoneinfo import ZoneInfo, ZoneInfoNotFoundError

@@ -2,7 +2,7 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.models import Role
+from apps.accounts.models import User, Role
 from apps.accounts.permissions import IsLearningUser, IsStudent, IsTeacher, assigned_student_ids, scope_by_student
 from apps.core.audit import audit
 from apps.core.exceptions import ApiError
@@ -17,6 +17,16 @@ class AssignmentList(generics.ListCreateAPIView):
 
     permission_classes = [IsLearningUser]
     serializer_class = AssignmentSerializer
+
+    def list(self, request, *args, **kwargs):
+        # Due spaced-repetition reviews become tasks when someone who can see them looks (idempotent).
+        from apps.accounts.permissions import visible_student_ids
+
+        from . import reviews
+        ids = visible_student_ids(request.user)
+        for st in (User.objects.filter(pk__in=ids) if ids is not None else []):
+            reviews.ensure_due(st)
+        return super().list(request, *args, **kwargs)
 
     def get_queryset(self):
         qs = scope_by_student(Assignment.objects.select_related("teacher", "student"), self.request.user)
@@ -187,6 +197,11 @@ class FeedbackCreate(APIView):
             FeedbackNote.objects.bulk_create([FeedbackNote(feedback=fb, at_seconds=min(n["at_seconds"], s.duration_seconds or n["at_seconds"]),
                                                             text=n["text"].strip(), category=n["category"]) for n in d["notes"]])
             services.transition(a, AssignmentStatus.ACCEPTED if d["decision"] == "accept" else AssignmentStatus.NEEDS_REPEAT, actor=request.user)
+            # Spaced repetition: accepted memorization starts a schedule; a reviewed review task moves it.
+            from . import reviews
+            if d["decision"] == "accept":
+                reviews.on_hifz_accepted(a, request.user)
+            reviews.on_review_feedback(a, fb, request.user)
             student, title, sid = s.student, a.title, s.pk
             transaction.on_commit(lambda: notify(student, "feedback_new", "وصل تقييم معلمك", title, link=f"/feedback/{sid}", dedupe=f"feedback:{sid}"))
         audit("feedback.created", actor=request.user, target=fb, request=request, decision=fb.decision)
