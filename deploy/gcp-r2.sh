@@ -25,7 +25,9 @@ KEY_ID="${KEY_ID// /}"
 echo "Secret Access Key (hidden):"
 read -rs KEY_SECRET; echo
 [ -n "$KEY_SECRET" ] || { echo "Secret Access Key is required."; exit 1; }
-ENDPOINT="https://$ACCOUNT.r2.cloudflarestorage.com"
+read -rp "Did you pick the EU jurisdiction when creating the bucket? [y/N]: " EU
+case "$EU" in [yY]*) ENDPOINT="https://$ACCOUNT.eu.r2.cloudflarestorage.com";; *) ENDPOINT="https://$ACCOUNT.r2.cloudflarestorage.com";; esac
+echo "Endpoint: $ENDPOINT"
 
 echo "▸ Storing the secret key in Secret Manager…"
 if gcloud secrets describe "$SECRET" --project "$PROJECT" >/dev/null 2>&1; then
@@ -45,7 +47,7 @@ gcloud run services update "$SERVICE" --project "$PROJECT" --region "$REGION" --
 URL="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format 'value(status.url)')"
 echo "▸ Checking the bucket from the app…"
 sleep 10
-curl -s "$URL/api/ready"; echo
+curl -s "$URL/api/ready" | grep -o '"media_storage":"[^"]*"' || curl -s "$URL/api/ready"; echo
 cat <<EOF
 
 Above, "media_storage" should say "configured". If it says "error: …", the message names what to fix

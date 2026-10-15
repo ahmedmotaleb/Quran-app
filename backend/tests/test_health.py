@@ -85,10 +85,17 @@ def test_ready_reports_storage_problems_by_category(settings, monkeypatch):
     class Fake(storage.S3Storage):
         def __init__(self):
             self.bucket = "b"
-            self.client = type("C", (), {"head_bucket": lambda *a, **k: (_ for _ in ()).throw(Denied())})()
+            self.client = type("C", (), {"head_object": lambda *a, **k: (_ for _ in ()).throw(Denied())})()
 
     settings.MEDIA_STORAGE = "s3"
     monkeypatch.setattr(storage, "get_storage", lambda: Fake())
     storage._check_cache.clear()
-    assert storage.storage_status().startswith("error: access denied")
+    assert storage.storage_status() == "error: access denied [InvalidAccessKeyId] (check the access key, secret and that the token covers this bucket)"
+    storage._check_cache.clear()
+
+    class Missing(Exception):
+        response = {"Error": {"Code": "404"}}
+
+    Fake.__init__ = lambda self: (setattr(self, "bucket", "b"), setattr(self, "client", type("C", (), {"head_object": lambda *a, **k: (_ for _ in ()).throw(Missing())})()))[0]
+    assert storage.storage_status() == "configured"
     storage._check_cache.clear()
