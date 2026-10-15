@@ -1,8 +1,8 @@
-// Post-deploy smoke test against any URL (e.g. https://<name>.onrender.com/):
+// Post-deploy smoke test against any URL (e.g. https://halqa-<number>.europe-west1.run.app/):
 //   node e2e/smoke.mjs <shots-dir> <base-url>
 // Signs up a throwaway student (needs open sign-up), checks the PWA is installable and that the
 // configured/unconfigured features behave honestly. Creates one test account per run.
-const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { chromium, request } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -49,6 +49,31 @@ await step('Mushaf reports Quran text honestly', async () => {
   await app.getByRole('button', { name: /افتح المصحف/ }).click();
   if (ready.features?.quran_text === 'imported') await app.locator('[id^="ayah-"]').first().waitFor();
   else await app.getByText('النص القرآني غير متاح حاليًا من المصدر المعتمد.').waitFor();
+});
+if (ready.features?.media_storage === 'configured') await step('private recording: upload, owner playback, anonymous refused', async () => {
+  // A tiny stand-in recording (Ogg signature + padding). It is never attached to a submission, so the
+  // purge_orphan_media job removes it later.
+  const api = (p) => new URL(`/api/v1/${p}`, BASE).href;
+  const { csrfToken } = await (await page.request.get(api('auth/csrf'))).json();
+  const bytes = Buffer.concat([Buffer.from('OggS'), Buffer.alloc(2044, 7)]);
+  const up = await page.request.post(api('media/recitations'), {
+    headers: { 'X-CSRFToken': csrfToken, Referer: BASE },
+    multipart: { file: { name: 'smoke.ogg', mimeType: 'audio/ogg', buffer: bytes }, duration_seconds: '2' },
+  });
+  if (up.status() !== 201) throw new Error(`upload ${up.status()} ${(await up.text()).slice(0, 200)}`);
+  const { id } = await up.json();
+  const det = await page.request.get(api(`media/${id}`));
+  const { url } = await det.json();
+  if (!url || !/r2\.cloudflarestorage\.com/.test(url)) throw new Error(`unexpected read URL host: ${url && new URL(url).host}`);
+  const got = await page.request.get(url);
+  const body = await got.body();
+  if (got.status() !== 200 || !body.equals(bytes)) throw new Error(`playback ${got.status()} (${body.length} bytes)`);
+  const anon = await request.newContext();
+  const a = await anon.get(api(`media/${id}`));
+  if (a.status() < 400) throw new Error(`anonymous read allowed (${a.status()})`);
+  const bare = await anon.get(url.split('?')[0]);
+  if (bare.status() < 400) throw new Error(`unsigned bucket URL readable (${bare.status()})`);
+  await anon.dispose();
 });
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
 process.exitCode = fails ? 1 : 0;
