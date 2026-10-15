@@ -4,6 +4,8 @@ import {
   type AdminCircle, type AdminContent, type AdminSettings, type AdminUser, type Status, type UserRole,
 } from './adminData';
 import { DEMO_PASSWORD } from '@/data/demo';
+import { LIVE, ApiError, resetCsrf } from '@/api/client';
+import * as E from '@/api/endpoints';
 
 /** Sidebar sections, in the order the brief lists them. */
 export type Section = 'overview' | 'students' | 'teachers' | 'parents' | 'circles' | 'bookings' | 'lectures' | 'quizzes' | 'subs' | 'settings';
@@ -19,7 +21,10 @@ export type Dialog =
 
 const initial = () => ({
   authed: false,
-  login: { email: '', pw: '', errors: {} as Record<string, string | null>, loading: false },
+  /** Live mode: the signed-in admin as the server reports it; `restoring` while the session is checked. */
+  me: null as E.Me | null,
+  restoring: LIVE,
+  login: { email: '', pw: '', otp: '', needOtp: false, errors: {} as Record<string, string | null>, loading: false },
   sec: 'overview' as Section,
   q: '', f: 'all' as 'all' | Status, extra: 'all', page: 1,
   toast: null as string | null,
@@ -58,17 +63,64 @@ export function setStatus(list: ListKey, id: number, st: Status, msg: string) {
 }
 export const confirmAction = (title: string, body: string, ok: string, onOk: () => void) => set({ dialog: { kind: 'confirm', title, body, ok, onOk } });
 
-/** Simulated admin sign-in: separate from the app login, admin role only. */
+const NET = 'تعذّر الاتصال بالخادم. تحقق من الإنترنت وحاول مرة أخرى.';
+
+/** Live mode: restore an existing server session (admins only) after a refresh. */
+export async function adminRestore() {
+  if (!LIVE) return;
+  try {
+    const u = await E.me();
+    if (u.role === 'admin') set({ authed: true, me: u, restoring: false });
+    else set({ restoring: false, login: { ...get().login, errors: { email: 'أنت مسجّل الدخول بحساب ليس للإدارة. سجّل الدخول بحساب الإدارة للمتابعة.' } } });
+  } catch {
+    set({ restoring: false }); // 401/403: no session — show the sign-in form
+  }
+}
+
+/** Live mode: real admin sign-in (POST admin/auth/login), with the two-step code when the account has it on. */
+async function adminLoginLive() {
+  const L = get().login; const e: Record<string, string> = {}; const em = L.email.trim().toLowerCase();
+  if (!em) e.email = 'أدخل البريد الإلكتروني'; else if (!/^\S+@\S+\.\S+$/.test(em)) e.email = 'صيغة البريد الإلكتروني غير صحيحة';
+  if (!L.pw) e.pw = 'أدخل كلمة المرور';
+  if (L.needOtp && !/^\d{6}$/.test(L.otp.trim())) e.otp = 'أدخل الرمز المكوّن من 6 أرقام';
+  if (Object.keys(e).length) { set({ login: { ...L, errors: e } }); return; }
+  set({ login: { ...L, errors: {}, loading: true } });
+  try {
+    const r = await E.adminLogin(em, L.pw, L.otp.trim());
+    resetCsrf(); // Django rotates the CSRF token on sign-in
+    set({ authed: true, me: r.user, login: initial().login });
+  } catch (err) {
+    const x = err as ApiError; const cur = get().login;
+    if (x.code === 'mfa_required') { set({ login: { ...cur, loading: false, needOtp: true, errors: {} } }); return; }
+    const where = x.code === 'mfa_invalid' ? 'otp' : x.code === 'bad_credentials' ? 'pw'
+      : ['not_admin', 'account_suspended', 'account_pending'].includes(x.code) ? 'email' : null;
+    const m = x.status === 0 || x.code === 'network' ? NET : x.status === 429 ? 'محاولات كثيرة. انتظر دقيقة ثم حاول مرة أخرى.' : x.message;
+    set({ login: { ...cur, loading: false, otp: where === 'otp' ? '' : cur.otp, errors: where ? { [where]: m } : { form: m } } });
+  }
+}
+
+/** Separate admin sign-in: the real backend in live mode, a local simulation in demo mode. */
 export function adminLogin() {
+  if (LIVE) { void adminLoginLive(); return; }
   const L = get().login; const e: Record<string, string> = {}; const em = L.email.trim().toLowerCase();
   if (!em) e.email = 'أدخل البريد الإلكتروني'; else if (!/^\S+@\S+\.\S+$/.test(em)) e.email = 'صيغة البريد الإلكتروني غير صحيحة';
   else if (em !== ADMIN_EMAIL) e.email = 'هذا الحساب لا يملك صلاحيات الإدارة.';
   if (!L.pw) e.pw = 'أدخل كلمة المرور'; else if (!e.email && L.pw !== DEMO_PASSWORD) e.pw = 'كلمة المرور غير صحيحة';
   if (Object.keys(e).length) { set({ login: { ...L, errors: e } }); return; }
   set({ login: { ...L, errors: {}, loading: true } });
-  setTimeout(() => set({ authed: true, login: { email: '', pw: '', errors: {}, loading: false } }), 600);
+  setTimeout(() => set({ authed: true, login: initial().login }), 600);
 }
-export function adminLogout() { set({ ...initial() }); }
+export async function adminLogout() {
+  if (LIVE) { try { await E.logout(); } catch { /* already signed out */ } resetCsrf(); }
+  set({ ...initial(), restoring: false }); // clears every piece of admin data held in memory
+}
+
+/** Two-step verification setup for the signed-in admin (live mode). */
+export const mfaStart = () => E.mfaSetup();
+export async function mfaFinish(otp: string) {
+  await E.mfaConfirm(otp);
+  const me = get().me; if (me) set({ me: { ...me, mfa_enabled: true } });
+}
 
 export function saveLink(id: number, teacher: string | null, parent: string | null, children: string[], approve: boolean) {
   const u = get().users.find((x) => x.id === id)!;

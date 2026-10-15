@@ -92,6 +92,7 @@ def test_admin_mfa_flow(world):
     anon = APIClient()
     assert anon.post("/api/v1/admin/auth/login", {"email": "admin@x.test", "password": PW}).json()["code"] == "mfa_required"
     assert anon.post("/api/v1/admin/auth/login", {"email": "admin@x.test", "password": PW, "otp": "123456"}).status_code == 401
+    assert AuditEvent.objects.filter(action="auth.mfa_failed").exists()
     assert anon.post("/api/v1/admin/auth/login", {"email": "admin@x.test", "password": PW, "otp": code}).status_code == 200
 
 

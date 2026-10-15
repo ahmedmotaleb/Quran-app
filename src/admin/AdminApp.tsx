@@ -3,7 +3,8 @@ import { color, font } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import type { Status } from './adminData';
-import { adminLogin, adminLogout, goSection, setAdmin, useAdmin, type AdminState, type Section } from './adminStore';
+import { adminLogin, adminLogout, adminRestore, goSection, mfaFinish, mfaStart, setAdmin, useAdmin, type AdminState, type Section } from './adminStore';
+import { LIVE, type ApiError } from '@/api/client';
 import { StatusPill, TableSection, card } from './AdminTables';
 import AdminDialogs from './AdminDialogs';
 import AdminSettings from './AdminSettings';
@@ -22,8 +23,14 @@ function useNarrow() {
 /* ------------------------------------------------------------------ */
 export default function AdminApp() {
   const authed = useAdmin((s) => s.authed);
-  useEffect(() => { document.title = pageTitle('لوحة الإدارة'); return () => { document.title = pageTitle(); }; }, []);
-  return <div dir="rtl" lang="ar" style={{ minHeight: '100vh', background: color.ivory }}>{authed ? <Portal /> : <AdminLogin />}</div>;
+  const restoring = useAdmin((s) => s.restoring);
+  useEffect(() => { document.title = pageTitle('لوحة الإدارة'); void adminRestore(); return () => { document.title = pageTitle(); }; }, []);
+  return (
+    <div dir="rtl" lang="ar" style={{ minHeight: '100vh', background: color.ivory }}>
+      {restoring ? <p role="status" style={{ margin: 0, padding: 40, textAlign: 'center', color: color.muted }}>جارٍ التحقق من الجلسة…</p>
+        : authed ? <Portal /> : <AdminLogin />}
+    </div>
+  );
 }
 
 /* ---------------- Separate admin sign-in ---------------- */
@@ -51,12 +58,22 @@ function AdminLogin() {
             onChange={(e) => up({ pw: e.target.value, errors: { ...L.errors, pw: null } })} style={inputStyle(L.errors.pw, true)} />
           <FieldError msg={L.errors.pw} />
         </div>
-        <button type="submit" disabled={L.loading} style={primaryBtn(52, 16)}>{L.loading ? 'جارٍ الدخول…' : 'دخول'}</button>
-        <div style={{ background: color.sand, borderRadius: 12, padding: 12, fontSize: 13, color: color.subtle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        {L.needOtp && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="ad-otp" style={labelStyle}>رمز التحقق</label>
+            <p style={{ margin: 0, fontSize: 13, color: color.muted }}>افتح تطبيق المصادقة وأدخل الرمز المكوّن من 6 أرقام.</p>
+            <input id="ad-otp" inputMode="numeric" autoComplete="one-time-code" dir="ltr" maxLength={6} autoFocus value={L.otp} aria-invalid={!!L.errors.otp}
+              onChange={(e) => up({ otp: e.target.value.replace(/\D/g, ''), errors: { ...L.errors, otp: null } })} style={inputStyle(L.errors.otp, true)} />
+            <FieldError msg={L.errors.otp} />
+          </div>
+        )}
+        {L.errors.form && <p role="alert" style={{ margin: 0, fontSize: 14, color: color.danger }}>{L.errors.form}</p>}
+        <button type="submit" disabled={L.loading} style={primaryBtn(52, 16)}>{L.loading ? 'جارٍ الدخول…' : L.needOtp ? 'تحقق ودخول' : 'دخول'}</button>
+        {!LIVE && <div style={{ background: color.sand, borderRadius: 12, padding: 12, fontSize: 13, color: color.subtle, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
           <span>حساب تجريبي: <bdi dir="ltr" style={{ fontFamily: font.latin }}>admin@halqa.app</bdi> / <bdi dir="ltr" style={{ fontFamily: font.latin }}>halqa123</bdi></span>
           <button type="button" onClick={() => up({ email: 'admin@halqa.app', pw: 'halqa123', errors: {} })}
             style={{ minHeight: 40, padding: '0 12px', borderRadius: 999, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>تعبئة</button>
-        </div>
+        </div>}
         <button type="button" onClick={toApp} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.muted, fontSize: 13, textDecoration: 'underline', cursor: 'pointer' }}>العودة إلى تطبيق الجوال</button>
       </form>
     </div>
@@ -138,8 +155,11 @@ function Portal() {
       <main style={{ flex: 1, minWidth: 0, padding: '28px clamp(16px,3vw,40px)', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div><h1 style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>{label}</h1><p style={{ margin: '4px 0 0', fontSize: 14, color: color.muted }}>{TITLES[s.sec]}</p></div>
-          <span style={{ fontSize: 13, color: color.muted, background: color.sand, padding: '6px 12px', borderRadius: 999 }}>بيانات عرض تجريبية</span>
+          <span style={{ fontSize: 13, color: color.muted, background: color.sand, padding: '6px 12px', borderRadius: 999 }}>
+            {LIVE ? `${s.me?.full_name ?? ''} · الأقسام ما زالت ببيانات عرض تجريبية` : 'بيانات عرض تجريبية'}
+          </span>
         </header>
+        {LIVE && s.me && !s.me.mfa_enabled && <MfaSetup />}
         {s.sec === 'overview' ? <Overview counts={counts} /> : s.sec === 'settings' ? <AdminSettings /> : <TableSection key={s.sec} sec={s.sec} />}
       </main>
       <AdminDialogs />
@@ -213,5 +233,44 @@ function Overview({ counts }: { counts: Partial<Record<Section, number>> }) {
         </section>
       </div>
     </>
+  );
+}
+
+/* ---------------- Two-step verification (live mode) ---------------- */
+function MfaSetup() {
+  const [st, setSt] = useState<{ step: 'idle' | 'code'; secret?: string; uri?: string; otp: string; err?: string; busy?: boolean }>({ step: 'idle', otp: '' });
+  const start = async () => {
+    setSt({ ...st, busy: true, err: undefined });
+    try { const r = await mfaStart(); setSt({ step: 'code', secret: r.secret, uri: r.otpauth_uri, otp: '' }); }
+    catch (e) { setSt({ ...st, busy: false, err: (e as ApiError).message }); }
+  };
+  const confirm = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(st.otp)) { setSt({ ...st, err: 'أدخل الرمز المكوّن من 6 أرقام' }); return; }
+    setSt({ ...st, busy: true, err: undefined });
+    try { await mfaFinish(st.otp); } catch (x) { setSt({ ...st, busy: false, otp: '', err: (x as ApiError).message }); }
+  };
+  return (
+    <section aria-labelledby="mfa-h" style={{ ...card, padding: 18, display: 'flex', flexDirection: 'column', gap: 10, borderColor: color.gold }}>
+      <h2 id="mfa-h" style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>فعّل التحقق بخطوتين</h2>
+      {st.step === 'idle' ? (
+        <>
+          <p style={{ margin: 0, fontSize: 14, color: color.muted }}>يحمي حساب الإدارة إذا تسرّبت كلمة المرور. ستحتاج تطبيق مصادقة مثل Google Authenticator أو Microsoft Authenticator.</p>
+          <button onClick={start} disabled={st.busy} style={{ ...primaryBtn(48, 15), alignSelf: 'flex-start', padding: '0 20px' }}>{st.busy ? 'جارٍ التحضير…' : 'ابدأ التفعيل'}</button>
+        </>
+      ) : (
+        <form noValidate onSubmit={confirm} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <p style={{ margin: 0, fontSize: 14 }}>١. في تطبيق المصادقة اختر «إدخال مفتاح الإعداد» واكتب هذا المفتاح (نوع المفتاح: مبني على الوقت):</p>
+          <code dir="ltr" style={{ fontFamily: 'monospace', fontSize: 16, letterSpacing: 2, background: color.sand, padding: '10px 12px', borderRadius: 10, wordBreak: 'break-all', userSelect: 'all' }}>{st.secret}</code>
+          {st.uri && <a href={st.uri} style={{ fontSize: 13, color: color.primary }}>أو افتح الرابط مباشرة إن كان تطبيق المصادقة على هذا الجهاز</a>}
+          <label htmlFor="mfa-otp" style={labelStyle}>٢. أدخل الرمز الذي يظهر في التطبيق</label>
+          <input id="mfa-otp" inputMode="numeric" autoComplete="one-time-code" dir="ltr" maxLength={6} value={st.otp} aria-invalid={!!st.err}
+            onChange={(e) => setSt({ ...st, otp: e.target.value.replace(/\D/g, ''), err: undefined })} style={{ ...inputStyle(st.err, true), maxWidth: 220 }} />
+          <FieldError msg={st.err ?? null} />
+          <button type="submit" disabled={st.busy} style={{ ...primaryBtn(48, 15), alignSelf: 'flex-start', padding: '0 20px' }}>{st.busy ? 'جارٍ التحقق…' : 'تأكيد التفعيل'}</button>
+        </form>
+      )}
+      {st.step === 'idle' && st.err && <p role="alert" style={{ margin: 0, color: color.danger, fontSize: 14 }}>{st.err}</p>}
+    </section>
   );
 }

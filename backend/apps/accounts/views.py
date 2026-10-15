@@ -117,6 +117,8 @@ class AdminLoginView(_BaseLogin):
         if user.role != Role.ADMIN:
             raise ApiError("not_admin", "هذا الحساب لا يملك صلاحيات الإدارة.", 403)
         if user.mfa_enabled and not totp.verify(user.mfa_secret, d["otp"]):
+            if d["otp"]:
+                audit("auth.mfa_failed", actor=user, target=user, request=self.request, portal="admin")
             raise ApiError("mfa_required" if not d["otp"] else "mfa_invalid",
                            "أدخل رمز التحقق من تطبيق المصادقة." if not d["otp"] else "رمز التحقق غير صحيح.", 401)
 
@@ -221,6 +223,7 @@ class PasswordChangeView(APIView):
 # ---- Admin MFA -------------------------------------------------------------------------
 class MfaSetupView(APIView):
     permission_classes = [IsAdminRole]
+    throttle_scope = "auth"
 
     def post(self, request):
         u = request.user
@@ -233,10 +236,12 @@ class MfaSetupView(APIView):
 
 class MfaConfirmView(APIView):
     permission_classes = [IsAdminRole]
+    throttle_scope = "auth"  # six-digit codes: limit guessing
 
     def post(self, request):
         u = request.user
         if not u.mfa_secret or not totp.verify(u.mfa_secret, str(request.data.get("otp", ""))):
+            audit("auth.mfa_failed", actor=u, target=u, request=request, step="confirm")
             raise ApiError("mfa_invalid", "رمز التحقق غير صحيح.", 400)
         u.mfa_enabled = True
         u.save(update_fields=["mfa_enabled"])

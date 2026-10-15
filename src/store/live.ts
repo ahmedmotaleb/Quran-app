@@ -1,10 +1,10 @@
 /**
  * Live mode (VITE_API_BASE_URL set): store actions backed by the Django API.
  * Wired: auth (login/register/logout/session restore/forgot), onboarding, profile timezone,
- * student tasks, teacher directory, slots, booking/cancel/reschedule.
- * recording upload + submission, teacher feedback (student view), teacher students/assign/reviews.
- * Not wired yet (screens keep demo content, labelled): parent app, teacher schedule & content,
- * live video, lessons, quizzes, progress.
+ * student tasks, teacher directory, slots, booking/cancel/reschedule, recording upload + submission,
+ * teacher feedback, teacher students/assign/reviews/schedule/attendance/grading, parent app,
+ * lessons, quizzes and progress.
+ * Not wired (screens keep demo content, labelled): teacher content authoring, live video.
  */
 import * as E from '@/api/endpoints';
 import { ApiError, resetCsrf } from '@/api/client';
