@@ -259,7 +259,7 @@ export function TeacherPage() {
 }
 
 export function BookingReview() {
-  const s = useApp(); const B = s.bk; const t = teacherById(B.t);
+  const s = useApp(); const B = s.bk; const t = teacherById(B.t); const cancelH = s.pub.cancel_hours;
   const chosen = s.avail[B.t]?.[B.day]?.find((x) => x.h === B.h && (!x.kind || x.kind === B.type));
   const chips = [...s.tasks.filter((x) => x.status !== 'reviewed' && x.status !== 'submitted').slice(0, 3).map((x) => [x.id, x.title] as const), ['none', 'بدون مهمة'] as const];
   return (
@@ -287,7 +287,7 @@ export function BookingReview() {
           <textarea id="bk-note" rows={3} value={B.note} onChange={(e) => up('bk', { note: e.target.value })} placeholder="مثال: أحتاج مساعدة في الآيات المتشابهة"
             style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15, color: color.ink, resize: 'vertical' }} />
         </div>
-        <p style={muted(13, { lineHeight: 1.7, display: 'flex', gap: 6 })}><Icon name="clock" size={18} /> يمكنك الإلغاء أو إعادة الجدولة مجانًا قبل الموعد بـ 12 ساعة.</p>
+        <p style={muted(13, { lineHeight: 1.7, display: 'flex', gap: 6 })}><Icon name="clock" size={18} /> يمكنك الإلغاء أو إعادة الجدولة مجانًا قبل الموعد بـ {cancelH} ساعة.</p>
         <button onClick={confirmBooking} disabled={B.busy} style={primaryBtn(54, 17, { marginTop: 'auto' })}>{B.busy ? 'جارٍ التأكيد…' : B.resched ? 'تأكيد الموعد الجديد' : 'تأكيد الحجز'}</button>
       </div>
     </div>
@@ -321,7 +321,7 @@ export function SessionDetails() {
   if (!x0) return <BackHeader title="تفاصيل الجلسة" />;
   const x = decoSession(x0, s);
   const cancel = () => openSheet({
-    kind: 'confirm', title: 'إلغاء الحجز؟', body: `سيُلغى موعدك مع ${x.teacherName} (${x.when}). الإلغاء مجاني قبل الموعد بـ 12 ساعة.`, ok: 'نعم، ألغِ الحجز', danger: true,
+    kind: 'confirm', title: 'إلغاء الحجز؟', body: `سيُلغى موعدك مع ${x.teacherName} (${x.when}). الإلغاء مجاني قبل الموعد بـ ${useApp.getState().pub.cancel_hours} ساعة.`, ok: 'نعم، ألغِ الحجز', danger: true,
     onOk: () => cancelSession(x0),
   });
   return (

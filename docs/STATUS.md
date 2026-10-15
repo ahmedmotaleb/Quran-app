@@ -24,7 +24,8 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 | Auth | Set-password and invitation pages | implemented | `#/reset`, `#/invite` (`src/screens/auth/LinkPages.tsx`) | Email delivery (pack 23) |
 | Admin | Circles, bookings | implemented | `admin/circles*`, `admin/sessions/<id>/cancel`, `admin/bookings*`; `test_admin_scheduling.py`, `e2e/admin-scheduling.mjs` | — |
 | Admin | Courses, lessons, enrollments, quizzes | implemented | `admin/courses*`, `admin/lessons*`, `admin/enrollments*`, `admin/tests*`, `admin/questions*` (versioned); `test_admin_content.py`, `e2e/admin-content.mjs` | Lesson file uploads (PDF/audio) from the console |
-| Admin | Settings, audit log | simulated (UI) | `AppSettings` model exists; no admin API on `main` | Pack prompt 08 |
+| Admin | Settings, audit log | implemented | `admin/settings` (password re-entry for sensitive keys), `admin/audit`, public `settings/public` read by the app; `test_admin_settings.py`, `e2e/admin-settings.mjs` | — |
+| Admin | Subscriptions | simulated | Demo only; no payment provider | Pack prompts 09–10 (optional) |
 | Backend | Auth, roles, CSRF, throttles, audit events | implemented | `test_auth.py`, `test_permissions.py` | Pack prompt 24 re-check |
 | PWA | Installable, offline shell, update prompt | live | Smoke "PWA installable" passes on production | Pack prompt 29 device QA |
 | Deployment | Cloud Run, deploy on merge, migrations before release | live | `deploy-cloudrun.yml` runs green; `/api/ready` ok | — |
@@ -42,11 +43,11 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 1. ~~Admin sign-in (04)~~ and ~~users/teachers/parents (05)~~ — done.
 3. ~~Courses/lessons/quizzes authoring (07)~~ — done in the admin console.
 4. ~~Admin bookings/circles (06)~~ — done.
-5. Settings not editable (08).
+5. ~~Settings (08)~~ — done.
 6. Password-reset email not delivered (23) — a user who forgets a password is stuck.
 7. No tested backup/restore (27).
 8. No error tracking or alerting (26).
 9. Teacher content authoring still sample (07, teacher side).
 10. Live video sessions undecided (19).
 
-The rest of the live Admin Portal (06–08) remains the highest-priority gap. Next prompt: **08**.
+The admin portal is live except subscriptions (no payments yet). Next prompt: **11** (progress analytics).

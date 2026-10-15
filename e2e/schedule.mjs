@@ -1,5 +1,7 @@
 // Live teacher schedule: open a slot → student books it → teacher sees it, cancels (student notified); attendance on a past session.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { execSync } from 'node:child_process';
+// PAST_CMD (optional): creates a booked session that already happened for teacher@halqa.app (needed for attendance).
 const out = process.argv[2]; const BASE = process.argv[3] || 'http://localhost:5174/';
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 let fails = 0; const errs = [];
@@ -66,6 +68,7 @@ await step(T.page, 'teacher closes the now-free slot', async () => {
   await T.app.getByRole('switch', { name: 'إتاحة 4:00 م' }).click();
   await T.page.getByText('أُغلق الموعد').waitFor();
 });
+if (process.env.PAST_CMD) execSync(process.env.PAST_CMD, { stdio: 'inherit' });
 const Y = await session('teacher@halqa.app');
 await step(Y.page, 'attendance on a past session', async () => {
   await Y.page.getByRole('navigation').getByRole('button', { exact: true, name: 'المواعيد' }).click();

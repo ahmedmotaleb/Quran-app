@@ -92,3 +92,15 @@ export const setQuizState = (id: number, state: TestState) => api<Quiz>('POST', 
 export const saveQuestion = (testId: number, id: number | null, d: Partial<Omit<Question, 'id' | 'version' | 'used'>>) =>
   id ? api<Question>('PATCH', `admin/questions/${id}`, d) : api<Question>('POST', `admin/tests/${testId}/questions`, d);
 export const removeQuestion = (id: number) => api<null>('DELETE', `admin/questions/${id}`);
+
+/* ---- Settings and audit (prompt 08) ---- */
+export interface Settings {
+  org_name: string; support_email: string; support_whatsapp: string; show_support_button: boolean; default_timezone: string;
+  cancel_hours: number; join_minutes: number; individual_minutes: number; group_minutes: number; booking_horizon_days: number;
+  booking_lead_minutes: number; open_signup: boolean; session_reminders: boolean; parent_weekly_report: boolean;
+  max_recording_seconds: number; max_upload_mb: number; updated_at: string; sensitive: string[];
+}
+export interface AuditRow { id: number; at: string; action: string; actor: string | null; target: string; data: Record<string, unknown> }
+export const getSettings = () => api<Settings>('GET', 'admin/settings');
+export const saveSettings = (d: Partial<Settings> & { current_password?: string }) => api<Settings>('PATCH', 'admin/settings', d);
+export const listAudit = (p: { action?: string; page?: number }) => api<Page<AuditRow>>('GET', `admin/audit?${qs(p)}`);

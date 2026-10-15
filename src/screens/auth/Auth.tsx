@@ -56,6 +56,7 @@ const prevent = (fn: () => void) => (e: FormEvent) => { e.preventDefault(); fn()
 
 export function Login() {
   const L = useApp((s) => s.login);
+  const openSignup = useApp((s) => s.pub.open_signup);
   const E = L.errors;
   return (
     <form onSubmit={prevent(doLogin)} noValidate style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '12px 20px 24px', gap: 18 }}>
@@ -94,7 +95,8 @@ export function Login() {
         </div>
       </div>}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-        <p style={muted(15)}>ليس لديك حساب؟ <button type="button" onClick={() => go('signup')} style={linkBtn(15, { fontWeight: 800, padding: '0 4px' })}>أنشئ حساب طالب</button></p>
+        {openSignup ? <p style={muted(15)}>ليس لديك حساب؟ <button type="button" onClick={() => go('signup')} style={linkBtn(15, { fontWeight: 800, padding: '0 4px' })}>أنشئ حساب طالب</button></p>
+          : <p style={muted(14, { textAlign: 'center' })}>التسجيل مغلق حاليًا. تواصل مع إدارة الحلقة لإنشاء حسابك.</p>}
         <button type="button" onClick={() => { window.location.hash = '#/admin'; }} style={{ fontSize: 13, color: color.muted, minHeight: 44, display: 'flex', alignItems: 'center', border: 'none', background: 'transparent', textDecoration: 'underline', cursor: 'pointer' }}>دخول الإدارة</button>
       </div>
     </form>

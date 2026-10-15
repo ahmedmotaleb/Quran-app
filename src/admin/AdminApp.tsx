@@ -12,8 +12,9 @@ const BookingsLive = lazy(() => import('./live/Scheduling').then((m) => ({ defau
 /** Non-people sections that run on the API in live mode. */
 const CoursesLive = lazy(() => import('./live/Content').then((m) => ({ default: m.CoursesLive })));
 const QuizzesLive = lazy(() => import('./live/Content').then((m) => ({ default: m.QuizzesLive })));
+const SettingsLive = lazy(() => import('./live/Settings'));
 const LIVE_OTHER: Partial<Record<Section, () => JSX.Element>> = {
-  circles: () => <CirclesLive />, bookings: () => <BookingsLive />, lectures: () => <CoursesLive />, quizzes: () => <QuizzesLive />,
+  settings: () => <SettingsLive />, circles: () => <CirclesLive />, bookings: () => <BookingsLive />, lectures: () => <CoursesLive />, quizzes: () => <QuizzesLive />,
 };
 
 /** Sections that run on the real API in live mode; the rest still show demo data (labelled). */
@@ -303,7 +304,7 @@ function OverviewLive({ c }: { c: LiveCounts }) {
           </button>
         ))}
       </section>
-      <p style={{ margin: 0, fontSize: 14, color: color.muted }}>الاشتراكات والإعدادات ما زالت ببيانات عرض تجريبية، وتُربط بالخادم في المراحل التالية.</p>
+      <p style={{ margin: 0, fontSize: 14, color: color.muted }}>الاشتراكات ما زالت ببيانات عرض تجريبية؛ الدفع والاشتراكات الحقيقية غير مفعّلة بعد.</p>
     </>
   );
 }

@@ -28,6 +28,18 @@ AUDIO_TYPES = {
 INVALID_FILE = "الملف ليس تسجيلًا صوتيًا مدعومًا."
 
 
+def limits(purpose: str) -> tuple[int, int]:
+    """Effective size/length limits: the admin setting for recitations, never above the server's hard cap."""
+    from apps.core.models import AppSettings
+
+    max_bytes, max_secs = settings.MEDIA_MAX_BYTES[purpose], settings.MEDIA_MAX_SECONDS[purpose]
+    if purpose == MediaObject.Purpose.RECITATION:
+        cfg = AppSettings.load()
+        max_bytes = min(max_bytes, cfg.max_upload_mb * 1024 * 1024)
+        max_secs = min(max_secs, cfg.max_recording_seconds)
+    return max_bytes, max_secs
+
+
 def store_audio(*, owner, purpose: str, upload, duration_seconds) -> MediaObject:
     """Validates type (declared + magic bytes), size and duration; streams to private storage."""
     if settings.MEDIA_STORAGE == "none":
@@ -36,7 +48,7 @@ def store_audio(*, owner, purpose: str, upload, duration_seconds) -> MediaObject
     declared = (upload.content_type or "").split(";")[0].strip().lower()
     if declared not in AUDIO_TYPES:
         raise ApiError("invalid_file", INVALID_FILE, 400, {"file": [INVALID_FILE]})
-    max_bytes = settings.MEDIA_MAX_BYTES[purpose]
+    max_bytes, max_secs = limits(purpose)
     if upload.size == 0:
         raise ApiError("empty_file", "التسجيل فارغ.", 400, {"file": ["التسجيل فارغ."]})
     if upload.size > max_bytes:
@@ -46,7 +58,7 @@ def store_audio(*, owner, purpose: str, upload, duration_seconds) -> MediaObject
         dur = float(duration_seconds)
     except (TypeError, ValueError):
         raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"duration_seconds": ["أدخل مدة صحيحة."]}) from None
-    if not 1 <= dur <= settings.MEDIA_MAX_SECONDS[purpose]:
+    if not 1 <= dur <= max_secs:
         raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"duration_seconds": ["مدة التسجيل خارج الحد المسموح."]})
 
     ext, sniff = AUDIO_TYPES[declared]
