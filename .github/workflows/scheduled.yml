@@ -1,0 +1,36 @@
+# Hourly maintenance for production: runs the Cloud Run Job deployed by "Deploy (Cloud Run)"
+# (session reminders, due spaced-repetition reviews, orphan upload cleanup). Keyless login, like the deploy.
+name: Scheduled maintenance
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: scheduled-maintenance
+  cancel-in-progress: false
+
+jobs:
+  run:
+    if: vars.GCP_PROJECT_ID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Run the maintenance job and wait for it
+        run: |
+          if gcloud run jobs execute halqa-tasks --project "${{ vars.GCP_PROJECT_ID }}" --region europe-west1 --wait --quiet; then
+            echo "::notice title=Scheduled maintenance::OK"
+          else
+            echo "::error title=Scheduled maintenance::The halqa-tasks job failed. Cloud Run → Jobs → halqa-tasks → latest execution → Logs."
+            exit 1
+          fi

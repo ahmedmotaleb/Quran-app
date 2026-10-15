@@ -3,6 +3,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout, password_validation, update_session_auth_hash
 from django.contrib.auth.tokens import default_token_generator
+from django.core.cache import cache
 from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
@@ -36,6 +37,31 @@ from .serializers import (
 log = logging.getLogger(__name__)
 
 BAD_CREDENTIALS = ApiError("bad_credentials", "البريد الإلكتروني أو كلمة المرور غير صحيحة.", 400)
+LOCKED = ApiError("account_locked", "محاولات دخول كثيرة غير ناجحة. انتظر ربع ساعة ثم حاول مجددًا أو أعد تعيين كلمة المرور.", 429)
+
+
+def _lock_key(email: str) -> str:
+    import hashlib
+
+    return "login-fail:" + hashlib.sha256(email.encode()).hexdigest()[:32]  # no address in the cache table
+
+
+def _locked(email: str) -> bool:
+    return (cache.get(_lock_key(email)) or 0) >= settings.LOGIN_LOCKOUT_FAILURES
+
+
+def _record_failure(email: str) -> None:
+    """Per-account counter, independent of IP, so a spread-out guessing attack is stopped too."""
+    k = _lock_key(email)
+    if cache.add(k, 1, settings.LOGIN_LOCKOUT_MINUTES * 60):
+        return
+    try:
+        n = cache.incr(k)
+    except ValueError:
+        n = 1
+        cache.set(k, 1, settings.LOGIN_LOCKOUT_MINUTES * 60)
+    if n == settings.LOGIN_LOCKOUT_FAILURES:
+        audit("auth.locked", email_domain=email.split("@")[-1], minutes=settings.LOGIN_LOCKOUT_MINUTES)
 
 
 def _session_payload(request, user, client: str, device: str):
@@ -89,15 +115,20 @@ class _BaseLogin(APIView):
         s = LoginSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
-        user = authenticate(request, username=d["email"].strip().lower(), password=d["password"])
+        email = d["email"].strip().lower()
+        if _locked(email):
+            raise LOCKED
+        user = authenticate(request, username=email, password=d["password"])
         if user is None:
-            audit("auth.login_failed", request=request, email_domain=d["email"].split("@")[-1], portal=self.portal)
+            audit("auth.login_failed", request=request, email_domain=email.split("@")[-1], portal=self.portal)
+            _record_failure(email)
             raise BAD_CREDENTIALS
         if user.status == AccountStatus.SUSPENDED:
             raise ApiError("account_suspended", "تم إيقاف هذا الحساب. تواصل مع إدارة الحلقة.", 403)
         if not user.can_sign_in:
             raise ApiError("account_pending", "حسابك بانتظار اعتماد الإدارة.", 403)
         self.check_portal(user, d)
+        cache.delete(_lock_key(email))
         audit("auth.login", actor=user, target=user, request=request, client=d["client"], portal=self.portal)
         return Response(_session_payload(request, user, d["client"], d["device"]))
 
@@ -119,6 +150,7 @@ class AdminLoginView(_BaseLogin):
         if user.mfa_enabled and not totp.verify(user.mfa_secret, d["otp"]):
             if d["otp"]:
                 audit("auth.mfa_failed", actor=user, target=user, request=self.request, portal="admin")
+                _record_failure(user.email)
             raise ApiError("mfa_required" if not d["otp"] else "mfa_invalid",
                            "أدخل رمز التحقق من تطبيق المصادقة." if not d["otp"] else "رمز التحقق غير صحيح.", 401)
 
@@ -174,8 +206,11 @@ class PasswordForgotView(APIView):
         user = User.objects.filter(email=email, is_active=True).first()
         if user and user.status != AccountStatus.SUSPENDED:
             link = password_link(user)
-            send_mail("استعادة كلمة المرور — الحلقة", f"لتعيين كلمة مرور جديدة افتح الرابط:\n{link}\n\nإن لم تطلب ذلك فتجاهل الرسالة.",
-                      settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
+            try:
+                send_mail("استعادة كلمة المرور — الحلقة", f"لتعيين كلمة مرور جديدة افتح الرابط:\n{link}\n\nالرابط صالح لمرة واحدة. إن لم تطلب ذلك فتجاهل الرسالة.",
+                          settings.DEFAULT_FROM_EMAIL, [user.email])
+            except Exception as e:  # noqa: BLE001 — the response stays generic; log only the error type, never the link
+                log.error("recovery_email_failed", extra={"error": type(e).__name__})
             audit("auth.recovery_requested", actor=user, target=user, request=request)
         return Response({"message": "إن كان البريد مسجلًا لدينا فستصلك رسالة خلال دقائق."})
 
@@ -207,6 +242,7 @@ class PasswordResetView(APIView):
 
 class PasswordChangeView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = "auth"  # it checks the current password: limit guessing with a stolen session
 
     def post(self, request):
         user = request.user
@@ -231,6 +267,7 @@ class PasswordChangeView(APIView):
 # ---- Admin MFA -------------------------------------------------------------------------
 class MfaSetupView(APIView):
     permission_classes = [IsAdminRole]
+    mfa_setup_view = True
     throttle_scope = "auth"
 
     def post(self, request):
@@ -244,6 +281,7 @@ class MfaSetupView(APIView):
 
 class MfaConfirmView(APIView):
     permission_classes = [IsAdminRole]
+    mfa_setup_view = True
     throttle_scope = "auth"  # six-digit codes: limit guessing
 
     def post(self, request):
@@ -384,8 +422,10 @@ def _setup_link(request, user) -> dict:
     link = password_link(user)
     sent = False
     if email_configured():
-        sent = send_mail("مرحبًا بك في الحلقة", f"أنشئ كلمة مرور لحسابك من الرابط:\n{link}", settings.DEFAULT_FROM_EMAIL,
-                         [user.email], fail_silently=True) == 1
+        try:
+            sent = send_mail("مرحبًا بك في الحلقة", f"أنشئ كلمة مرور لحسابك من الرابط:\n{link}", settings.DEFAULT_FROM_EMAIL, [user.email]) == 1
+        except Exception as e:  # noqa: BLE001
+            log.error("setup_email_failed", extra={"error": type(e).__name__})
     audit("admin.setup_link_issued", actor=request.user, target=user, request=request, emailed=sent)
     return {"setup_email_sent": sent, "setup_link": None if sent else link}
 

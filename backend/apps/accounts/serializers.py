@@ -15,11 +15,17 @@ def validate_tz(value: str) -> str:
 class MeSerializer(serializers.ModelSerializer):
     level = serializers.CharField(source="student_profile.level", read_only=True, default="")
     daily_goal = serializers.CharField(source="student_profile.daily_goal", read_only=True, default="")
+    mfa_required = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "mfa_enabled", "level", "daily_goal", "date_joined"]
+        fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "mfa_enabled", "mfa_required", "level", "daily_goal", "date_joined"]
         read_only_fields = ["id", "email", "role", "status", "mfa_enabled", "date_joined"]
+
+    def get_mfa_required(self, u) -> bool:
+        from django.conf import settings
+
+        return u.role == "admin" and settings.ADMIN_REQUIRE_MFA
 
     def validate_timezone(self, v):
         return validate_tz(v)

@@ -44,3 +44,32 @@ class HealthCheckMiddleware:
             resp["Cache-Control"] = "no-store"
             return resp
         return self.get_response(request)
+
+
+# Exact sources the app uses: own origin; Google Fonts; ayah audio (everyayah.com) and private recordings via
+# short-lived signed links on Cloudflare R2. No inline scripts are needed (Vite emits external modules only).
+CSP = "; ".join([
+    "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:", "img-src 'self' data: blob:",
+    "media-src 'self' blob: https://everyayah.com https://*.r2.cloudflarestorage.com",
+    "connect-src 'self' https://*.r2.cloudflarestorage.com https://api.alquran.cloud https://everyayah.com",
+    "worker-src 'self'", "manifest-src 'self'", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
+])
+PERMISSIONS = "microphone=(self), camera=(), geolocation=(), payment=(), usb=()"
+
+
+class SecurityHeadersMiddleware:
+    """Content-Security-Policy and Permissions-Policy on every response (pages, static files and API)."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        resp = self.get_response(request)
+        resp.setdefault("Content-Security-Policy", CSP)
+        resp.setdefault("Permissions-Policy", PERMISSIONS)
+        resp.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        # Also on responses that return before Django's SecurityMiddleware (the health check).
+        resp.setdefault("X-Frame-Options", "DENY")
+        resp.setdefault("X-Content-Type-Options", "nosniff")
+        return resp

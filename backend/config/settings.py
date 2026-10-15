@@ -96,6 +96,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "apps.core.middleware.RequestIdMiddleware",
+    "apps.core.middleware.SecurityHeadersMiddleware",
     "apps.core.middleware.HealthCheckMiddleware",  # before Security/Common: platform health checks skip host/HTTPS rules
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
@@ -217,9 +218,18 @@ if DEBUG:
 # Bearer tokens for native clients (Android).
 NATIVE_TOKEN_TTL_DAYS = int(env("NATIVE_TOKEN_TTL_DAYS", "30") or 30)
 
+# Rate limits and lockouts must be shared by every worker and instance: deployments use a database table
+# (created by `createcachetable` during deploy) unless REDIS_URL is set. Per-process memory only in development.
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+if IS_DEPLOYED:
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "halqa_cache"}}
 if env("REDIS_URL"):
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": env("REDIS_URL")}}
+
+# Admin accounts must have two-step verification before using admin APIs (default on in staging/production).
+ADMIN_REQUIRE_MFA = env_bool("ADMIN_REQUIRE_MFA", IS_DEPLOYED)
+LOGIN_LOCKOUT_FAILURES = int(env("LOGIN_LOCKOUT_FAILURES", "10") or 10)  # per account, any IP, within the window
+LOGIN_LOCKOUT_MINUTES = int(env("LOGIN_LOCKOUT_MINUTES", "15") or 15)
 
 # SMTP when EMAIL_HOST is set (e.g. a free transactional-email plan); otherwise mail is only logged.
 EMAIL_HOST = env("EMAIL_HOST", "")
@@ -228,7 +238,10 @@ EMAIL_HOST_USER = env("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", True)
 EMAIL_TIMEOUT = 10
-EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST else "django.core.mail.backends.console.EmailBackend")
+# Without a provider: development prints mail to the console; deployments never log message bodies (they contain
+# reset links), they only record that nothing was sent (apps.core.mail.SuppressedBackend).
+EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST else (
+    "apps.core.mail.SuppressedBackend" if IS_DEPLOYED else "django.core.mail.backends.console.EmailBackend"))
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "") or "noreply@halqa.app"  # empty env var = default
 FRONTEND_URL = env("FRONTEND_URL", APP_URL or "http://localhost:5173")  # password-reset links
 

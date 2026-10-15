@@ -215,3 +215,34 @@ def test_purge_orphan_media_keeps_submitted(world, settings):
     assert MediaObject.objects.get(pk=orphan).state == "deleted"
     assert not (settings.MEDIA_LOCAL_ROOT / MediaObject.objects.get(pk=orphan).key).exists()
     assert MediaObject.objects.get(pk=kept).state == "validated"
+
+
+def test_storage_provider_failure_is_reported_and_nothing_is_claimed(world, monkeypatch):
+    """Pack prompt 22: a provider outage returns an honest Arabic 503; the media is not usable for a submission."""
+    from apps.media import storage
+
+    class Down:
+        def save(self, *a, **k):
+            raise storage.StorageError("connection reset")
+
+    monkeypatch.setattr("apps.media.services.get_storage", lambda: Down())
+    s1 = client_for(world.s1)
+    r = upload(s1)
+    assert r.status_code == 503 and r.json()["code"] == "storage_unavailable" and "حاول" in r.json()["message"]
+    m = MediaObject.objects.get(owner=world.s1)
+    assert m.state == MediaObject.State.REJECTED
+    a = assignment(world)
+    assert submit(s1, a, str(m.id)).status_code == 400  # a rejected upload can never be submitted
+    a.refresh_from_db()
+    assert a.status == "in_progress" and not Submission.objects.exists()
+
+
+def test_teacher_plays_submitted_recording_parent_and_strangers_cannot(world):
+    s1 = client_for(world.s1)
+    a = assignment(world)
+    mid = upload(s1).json()["id"]
+    submit(s1, a, mid)
+    assert client_for(world.t1).get(f"/api/v1/media/{mid}").json()["url"]  # assigned teacher: short-lived link
+    for u in (world.p1, world.t2, world.s2):
+        assert client_for(u).get(f"/api/v1/media/{mid}").status_code == 404
+    assert APIClient().get(f"/api/v1/media/{mid}").status_code in (401, 403)

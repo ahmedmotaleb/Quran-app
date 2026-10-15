@@ -8,7 +8,7 @@ set -e
 if [ "${SKIP_MIGRATE:-0}" != "1" ]; then
   (
     echo "start: applying database migrations"
-    if python manage.py migrate --noinput; then
+    if python manage.py migrate --noinput && python manage.py createcachetable; then
       echo "start: migrations done"
     else
       echo "start: MIGRATIONS FAILED - check DATABASE_URL (see /api/ready)"
