@@ -101,6 +101,9 @@ def ensure_due(student) -> int:
                     ayah_from=sch.ayah_from, ayah_to=sch.ayah_to, due_at=_due_end(sch.student, sch.next_due),
                     instructions="مراجعة مجدولة لحفظ اعتمده معلمك.", review_schedule=sch, review_cycle=sch.cycle)
                 ReviewEvent.objects.create(schedule=sch, kind=ReviewEvent.Kind.GENERATED, due_on=sch.next_due, step=sch.step, assignment=t)
+                from apps.notifications.services import after_commit
+                after_commit(sch.student, "review_due", "حان موعد مراجعة", t.title, link=f"/tasks/{t.pk}", dedupe=f"assignment:{t.pk}:review",
+                             data={"assignment": t.pk})
                 made += 1
         except IntegrityError:
             continue  # a concurrent request created this cycle's task first

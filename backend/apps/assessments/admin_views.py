@@ -180,6 +180,9 @@ class AdminTestState(AdminView):
         t.state = new
         t.save(update_fields=["state", "updated_at"])
         audit("admin.test_state", actor=request.user, target=t, request=request, old=old, new=new)
+        if new == Test.State.PUBLISHED and old != new and t.course_id:
+            from apps.learning.admin_views import notify_enrolled
+            notify_enrolled(t.course, "quiz_published", "اختبار جديد في دورتك", t.title, dedupe=f"test:{t.pk}:published", data={"test": t.pk})
         return Response(_test_out(_tests().get(pk=t.pk)))
 
 

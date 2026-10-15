@@ -19,6 +19,7 @@ import { useEvals } from '@/screens/student/Progress';
 import { BRAND } from '@/theme/brand';
 import { useEffect } from 'react';
 import { ProgressCards } from '@/components/ProgressCards';
+import { InboxBell } from '@/screens/common/Inbox';
 import { api } from '@/api/client';
 import { studentProgress, type ApiProgress } from '@/api/endpoints';
 
@@ -146,6 +147,7 @@ export function TeacherDash() {
           <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800 }}>مرحبًا، {live ? name : 'الشيخ عبدالرحمن'}</h1>
           <p style={muted(13)}>{live ? fmtDay(new Date().toISOString(), tzOf(tz).iana) : TODAY_LABEL.replace(' 2026', '')} · {tzLabel(tz)}</p>
         </div>
+        {live && <InboxBell />}
       </header>
       <section style={{ background: color.primary, color: color.ivory, borderRadius: 20, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

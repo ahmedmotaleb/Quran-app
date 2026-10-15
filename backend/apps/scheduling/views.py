@@ -140,6 +140,11 @@ class BookingAttendance(APIView):
         b.attendance, b.attendance_marked_by, b.attendance_marked_at = s.validated_data["attendance"], request.user, timezone.now()
         b.save(update_fields=["attendance", "attendance_marked_by", "attendance_marked_at", "updated_at"])
         audit("booking.attendance", actor=request.user, target=b, request=request, old=old, new=b.attendance)
+        if b.attendance != old:
+            from django.db import transaction as tx
+
+            from .services import notify_attendance
+            tx.on_commit(lambda: notify_attendance(b.pk))
         return Response(BookingSerializer(b).data)
 
 

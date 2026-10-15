@@ -9,6 +9,8 @@ class Notification(models.Model):
     title = models.CharField(max_length=160)
     body = models.CharField(max_length=500, blank=True)
     link = models.CharField(max_length=200, blank=True)  # in-app route, authorization re-checked on open
+    # Safe structured metadata for navigation (ids only — never media URLs or private content).
+    data = models.JSONField(default=dict, blank=True)
     dedupe_key = models.CharField(max_length=120)
     read_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

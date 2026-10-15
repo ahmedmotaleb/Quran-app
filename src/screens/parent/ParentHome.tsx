@@ -10,6 +10,7 @@ import { AttendancePill } from '@/screens/student/Progress';
 import { BRAND } from '@/theme/brand';
 import { useEffect, useState } from 'react';
 import { ProgressCards } from '@/components/ProgressCards';
+import { InboxBell } from '@/screens/common/Inbox';
 import { childProgress, type ApiProgress } from '@/api/endpoints';
 
 /** Server Progress API for one linked child (404 for anyone else). No audio is ever included. */
@@ -132,6 +133,7 @@ function ParentLive() {
         <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800 }}>متابعة الأبناء</h1>
         <p style={muted(13)}>تظهر بيانات أبنائك المرتبطين فقط</p>
       </div>
+      <InboxBell />
       <button onClick={() => go('account')} aria-label="حسابي" style={{ width: 48, height: 48, borderRadius: 14, border: `1px solid ${color.border}`, background: color.card, color: color.primary, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="user" /></button>
     </header>
   );

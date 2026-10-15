@@ -9,14 +9,30 @@ from .models import Notification
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
-        fields = ["id", "kind", "title", "body", "link", "read_at", "created_at"]
+        fields = ["id", "kind", "title", "body", "link", "data", "read_at", "created_at"]
 
 
 class NotificationList(generics.ListAPIView):
+    """Newest first, paginated. `?unread=1` for unread only. Due session reminders are created on the way in."""
+
     serializer_class = NotificationSerializer
 
     def get_queryset(self):
-        return Notification.objects.filter(recipient=self.request.user)
+        from .services import ensure_session_reminders
+
+        ensure_session_reminders(self.request.user)
+        qs = Notification.objects.filter(recipient=self.request.user).order_by("-created_at", "-id")
+        if self.request.query_params.get("unread") == "1":
+            qs = qs.filter(read_at__isnull=True)
+        return qs
+
+
+class UnreadCount(APIView):
+    def get(self, request):
+        from .services import ensure_session_reminders
+
+        ensure_session_reminders(request.user)
+        return Response({"unread": Notification.objects.filter(recipient=request.user, read_at__isnull=True).count()})
 
 
 class NotificationRead(APIView):

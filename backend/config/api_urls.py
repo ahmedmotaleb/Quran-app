@@ -94,4 +94,5 @@ urlpatterns = [
     # Notifications
     path("notifications", notifications.NotificationList.as_view()),
     path("notifications/read", notifications.NotificationRead.as_view()),
+    path("notifications/unread", notifications.UnreadCount.as_view()),
 ]
