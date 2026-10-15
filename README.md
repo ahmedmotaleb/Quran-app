@@ -1,9 +1,13 @@
 # الحلقة | HALQA — Quran learning app
 
-Arabic Quran memorization and Tajweed LMS. The planned production stack is Django,
-PostgreSQL and a responsive Arabic interface delivered as an installable PWA. This repository
-currently holds the **frontend**; the Django/PostgreSQL backend is not built yet (see
-"Backend integration notes" below for the contract it needs to fulfil).
+Arabic Quran memorization and Tajweed LMS: React + TypeScript (Vite) installable PWA, and a
+Django + DRF + PostgreSQL API in `backend/`. Production runs on Google Cloud Run (see
+`docs/DEPLOY.md`); the current, evidence-based status of every area is in `docs/STATUS.md`.
+
+**Current state, in short:** the student, teacher and parent apps run on the real API in live
+mode. The product admin portal (`#/admin`) is still **partially simulated**: its screens use
+in-memory demo data until they are connected to the admin APIs. The installable client is a
+PWA; there is no native Android app (optional, future).
 
 The mobile app (student, teacher and parent) built from the Claude Design handoff in
 `project/Halqa App.dc.html`. It is Arabic-first and fully RTL. The stack is React 18,
@@ -26,7 +30,12 @@ Demo accounts (password `halqa123`): `yousef@halqa.app` (student), `teacher@halq
 
 ## Admin portal (`#/admin`)
 
-The desktop admin portal has its own sign-in (`admin@halqa.app` / `halqa123`). Admin
+**Partially simulated:** the portal below still runs on in-memory demo data (it shows a
+«بيانات عرض تجريبية» badge). The backend already has the admin sign-in with two-step
+verification, user status, teacher-student assignment and guardian-link APIs; connecting the
+portal to them is in progress (see `docs/STATUS.md`).
+
+The desktop admin portal has its own sign-in (demo: `admin@halqa.app` / `halqa123`). Admin
 accounts can't sign in to the mobile app, and other accounts can't sign in to the portal.
 You reach it from «دخول الإدارة» on the login screen, or from the demo panel. Its sidebar
 follows the brief:
@@ -158,19 +167,14 @@ In live mode times are real instants from the server, shown in the user's IANA t
 (`lib/time.ts`). Demo data keeps hours in Riyadh time (`lib/format.ts → timeIn`). Task
 status moves `not_started → in_progress → submitted → reviewed | needs_repeat`.
 
-## Backend integration notes
-
-See `project/HANDOFF.md` for the suggested entities. The parts that need a backend are:
-authentication and role-based routing, recording upload (`store.submitRec`), booking
-persistence and slot locking (`store.confirmBooking`), review submission
-(`store.sendReview`), assignments (`store.sendAssign`), live sessions (a WebRTC
-provider), notifications, file storage for lessons, and the admin portal's server-side pagination,
-linking and approvals.
-
 ## Not yet implemented
 
-- Real payments and subscription billing
-- Server persistence for the teacher, parent and admin apps (they still use demo data).
+- Product admin portal on live data (screens still simulated; backend partly ready)
+- Teacher content authoring (lectures, quizzes) in the app
+- Live video sessions (needs a provider decision)
+- Password-reset email delivery in production (needs an email provider; links are logged until then)
+- Subscriptions and payments
+- Native Android app (the PWA is the mobile client)
 
 ## Design handoff
 

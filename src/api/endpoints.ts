@@ -30,6 +30,11 @@ export const login = (email: string, password: string) => api<LoginResult>('POST
 export const register = (full_name: string, email: string, password: string, timezone: string) =>
   api<LoginResult>('POST', 'auth/register', { full_name, email, password, client: 'web', timezone });
 export const logout = () => api<null>('POST', 'auth/logout');
+// Admin portal (separate sign-in; the server rejects non-admin accounts).
+export const adminLogin = (email: string, password: string, otp: string) =>
+  api<LoginResult>('POST', 'admin/auth/login', { email, password, otp, client: 'web' });
+export const mfaSetup = () => api<{ secret: string; otpauth_uri: string }>('POST', 'admin/mfa/setup');
+export const mfaConfirm = (otp: string) => api<{ mfa_enabled: boolean }>('POST', 'admin/mfa/confirm', { otp });
 export const me = () => api<Me>('GET', 'me');
 export const updateMe = (patch: Partial<Pick<Me, 'full_name' | 'timezone' | 'phone'>>) => api<Me>('PATCH', 'me', patch);
 export const saveOnboarding = (d: { level: string; daily_goal: string; preferred_days: string[]; preferred_period: string }) =>

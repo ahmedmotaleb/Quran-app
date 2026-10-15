@@ -1,7 +1,7 @@
 # الحلقة API (Django)
 
 Django 5.2 LTS + Django REST Framework 3.18 + PostgreSQL 16, Python 3.13. One API serves
-the web app, the admin portal and the Android app.
+the PWA (student, teacher and parent apps) and the admin portal.
 
 ## Local setup
 
