@@ -1,6 +1,6 @@
 # Load test (pack prompt 25) in an isolated, throwaway environment — never against production.
 # The production image runs with Cloud Run's limits (1 CPU, 512 MB, 2 workers x 4 threads) against a fresh
-# PostgreSQL 16 (pg_stat_statements on) and MinIO (S3 API, like R2). Dataset: `seed_load` (500 students, 10
+# PostgreSQL 16 (pg_stat_statements on) and an S3 API stand-in (moto; R2 timing comes from the smoke test). Dataset: `seed_load` (500 students, 10
 # teachers, 250 parents) plus the verified Quran text. Results: job summary + artifact.
 name: Load test
 
@@ -26,15 +26,18 @@ jobs:
 
       - name: Database and object storage
         run: |
+          fail() { echo "::error title=Load test setup::$1"; exit 1; }
           docker run -d --name pg --network host -e POSTGRES_USER=halqa -e POSTGRES_PASSWORD=halqa-load-only -e POSTGRES_DB=halqa_load \
-            postgres:16 -c shared_preload_libraries=pg_stat_statements -c log_min_duration_statement=200 -c max_connections=100
-          docker run -d --name minio --network host -e MINIO_ROOT_USER=loadtest -e MINIO_ROOT_PASSWORD=loadtest-secret \
-            minio/minio:RELEASE.2024-10-13T13-34-11Z server /data --address :9000
-          for i in $(seq 1 30); do docker exec pg pg_isready -U halqa && break; sleep 2; done
-          docker exec pg psql -U halqa -d halqa_load -c 'create extension pg_stat_statements'
-          for i in $(seq 1 30); do curl -fs localhost:9000/minio/health/live && break; sleep 2; done
-          docker run --rm --network host --entrypoint sh minio/mc:RELEASE.2024-10-08T09-37-26Z -c \
-            'mc alias set l http://localhost:9000 loadtest loadtest-secret && mc mb l/halqa-load'
+            postgres:16 -c shared_preload_libraries=pg_stat_statements -c log_min_duration_statement=200 -c max_connections=100 \
+            || fail "postgres container did not start"
+          for i in $(seq 1 30); do docker exec pg pg_isready -U halqa -h 127.0.0.1 >/dev/null 2>&1 && break; sleep 2; done
+          docker exec pg psql -U halqa -d halqa_load -c 'create extension pg_stat_statements' || fail "pg_stat_statements unavailable"
+          # S3 API stand-in (moto); real R2 timing comes from the production smoke test.
+          pip install -q "moto[server]==5.0.28" || fail "moto install failed"
+          nohup moto_server -H 127.0.0.1 -p 9000 > moto.log 2>&1 &
+          for i in $(seq 1 30); do curl -fs localhost:9000 >/dev/null && break; sleep 1; done
+          AWS_ACCESS_KEY_ID=loadtest AWS_SECRET_ACCESS_KEY=loadtest-secret aws --endpoint-url http://localhost:9000 --region us-east-1 \
+            s3 mb s3://halqa-load || fail "bucket creation failed"
 
       - name: Build the production image
         run: docker build -t halqa:load .
@@ -49,19 +52,22 @@ jobs:
             -e STORAGE_ENDPOINT_URL=http://localhost:9000 -e STORAGE_BUCKET=halqa-load -e STORAGE_REGION=us-east-1 \
             -e STORAGE_ACCESS_KEY_ID=loadtest -e STORAGE_SECRET_ACCESS_KEY=loadtest-secret \
             -e THROTTLE_AUTH=100000/min -e THROTTLE_UPLOAD=100000/hour -e THROTTLE_BOOKING=100000/min \
-            halqa:load
-          docker exec app python manage.py migrate --noinput -v0
+            halqa:load || { echo "::error title=Load test setup::app container did not start"; exit 1; }
+          docker exec app python manage.py migrate --noinput -v0 || { echo "::error title=Load test setup::migrate failed"; docker logs app | tail -20; exit 1; }
           docker exec app python manage.py createcachetable
           for i in $(seq 1 30); do curl -fs localhost:8090/api/ready && break; sleep 2; done; echo
+          curl -fs localhost:8090/api/ready | grep -q '"media_storage":"configured"' || { echo "::error title=Load test setup::not ready: $(curl -s localhost:8090/api/ready)"; exit 1; }
 
       - name: Synthetic dataset and verified Quran text
         run: |
           docker exec -e LOAD_TEST_DATASET=1 -e LOAD_TEST_PASSWORD="$LOAD_PASSWORD" app python manage.py seed_load | tee seed.txt
+          grep -q race_occurrence seed.txt || { echo "::error title=Load test setup::seed_load failed"; exit 1; }
           curl -sSL -A "halqa-loadtest (+https://github.com/ahmedmotaleb/Quran-app)" -o quran.txt \
             "https://tanzil.net/pub/download/index.php?marks=true&sajdah=true&rub=false&tatweel=true&quranType=uthmani&outType=txt-2&agree=true"
           curl -sSL -o meta.xml https://tanzil.net/res/text/metadata/quran-data.xml
           docker cp quran.txt app:/tmp/quran.txt && docker cp meta.xml app:/tmp/meta.xml
-          docker exec app python manage.py import_quran /tmp/quran.txt --metadata /tmp/meta.xml --source-version loadtest --activate | tail -2
+          docker exec app python manage.py import_quran /tmp/quran.txt --metadata /tmp/meta.xml --source-version loadtest --activate | tail -2 \
+            || echo "::warning title=Load test setup::Quran import failed; surah reads will count as errors"
           curl -fs localhost:8090/api/ready; echo
           docker exec pg psql -U halqa -d halqa_load -c 'select pg_stat_statements_reset()' >/dev/null
 
@@ -90,7 +96,7 @@ jobs:
           {
             echo "## Load test result"
             echo "Environment: GitHub-hosted runner; app image from this commit with --cpus 1 --memory 512m (Cloud Run size), gunicorn 2 workers x 4 threads;"
-            echo "PostgreSQL 16 on the same runner (not Neon); MinIO as S3 (not R2). Dataset: $(cat seed.txt)."
+            echo "PostgreSQL 16 on the same runner (not Neon); moto as S3 (not R2). Dataset: $(cat seed.txt 2>/dev/null)."
             echo
             cat loadtest/loadtest-summary.md 2>/dev/null || echo "k6 did not produce a summary"
             echo
@@ -121,6 +127,8 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY" > report.md
           echo "::notice title=Load test::$(head -c 600 loadtest/loadtest-summary.md 2>/dev/null | head -2 | tr '\n' ' ')"
           docker logs app > app.log 2>&1 || true
+          echo "::notice title=Resources::$(sed -n '/### Resources/,/Container restarts/p' report.md | tail -2 | tr '\n' ' ')"
+          echo "::notice title=Slow queries::$(sed -n '/by mean time/,/Most total/p' report.md | sed -n '4,8p' | tr -s ' ' | tr '\n' ';' | head -c 900)"
           test -z "${K6_EXIT:-}" || { echo "::error title=Load test::k6 thresholds failed (exit ${K6_EXIT})"; exit 1; }
 
       - uses: actions/upload-artifact@v4

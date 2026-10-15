@@ -8,7 +8,7 @@ on:
       task:
         description: What to run
         type: choice
-        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test]
+        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill]
       admin_email:
         description: create-admin / promote-admin — the admin's email (create-admin takes the password from the ADMIN_PASSWORD secret; promote-admin keeps the account's password)
         required: false
@@ -21,7 +21,40 @@ on:
         default: false
 
 jobs:
+  # Monitoring drill (pack prompt 26): the production maintenance job logs one synthetic event per monitored
+  # failure path; this checks they reached Cloud Logging. The owner should then get the alert emails.
+  # Needs deploy/gcp-ops.sh to have run (alert policies + read-only log access for the deploy account).
+  drill:
+    if: inputs.task == 'alert-drill'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Emit synthetic failures from production and find them in the logs
+        run: |
+          P="${{ vars.GCP_PROJECT_ID }}"
+          START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          gcloud run jobs execute halqa-tasks --project "$P" --region europe-west1 --args manage.py,emit_test_alert --wait --quiet
+          for i in $(seq 1 12); do
+            n=$(gcloud logging read "jsonPayload.synthetic=true AND timestamp>=\"$START\"" --project "$P" --format 'value(jsonPayload.msg)' 2>/tmp/err | sort -u | tr '\n' ' ')
+            [ "$(wc -w <<<"$n")" -ge 6 ] && break; sleep 20
+          done
+          if [ -s /tmp/err ] && grep -q PERMISSION_DENIED /tmp/err; then
+            echo "::error title=Alert drill::The deploy account cannot read logs yet. Run deploy/gcp-ops.sh in Cloud Shell first."; exit 1
+          fi
+          echo "::notice title=Alert drill::events in Cloud Logging: ${n:-none}"
+          [ "$(wc -w <<<"$n")" -ge 6 ] || { echo "::error title=Alert drill::expected 6 synthetic events"; exit 1; }
+          policies=$(gcloud alpha monitoring policies list --project "$P" --filter 'displayName:"Halqa:"' --format 'value(displayName)' 2>/dev/null | wc -l)
+          echo "::notice title=Alert drill::$policies Halqa alert policies exist. Expect emails for 'operational failure' and 'sign-in abuse' within ~10 minutes."
+
   run:
+    if: inputs.task != 'alert-drill'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: production

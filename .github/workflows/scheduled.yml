@@ -28,6 +28,12 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
       - name: Run the maintenance job and wait for it
         run: |
+          # Once deploy/gcp-ops.sh has created the Cloud Scheduler trigger, that runs the job; this workflow stays
+          # only as a manual button (GitHub pauses scheduled workflows in public repositories after 60 idle days).
+          if [ "${{ github.event_name }}" = schedule ] && gcloud scheduler jobs describe halqa-tasks-hourly \
+               --project "${{ vars.GCP_PROJECT_ID }}" --location europe-west1 >/dev/null 2>&1; then
+            echo "::notice title=Scheduled maintenance::Cloud Scheduler runs the job now; nothing to do."; exit 0
+          fi
           if gcloud run jobs execute halqa-tasks --project "${{ vars.GCP_PROJECT_ID }}" --region europe-west1 --wait --quiet; then
             echo "::notice title=Scheduled maintenance::OK"
           else

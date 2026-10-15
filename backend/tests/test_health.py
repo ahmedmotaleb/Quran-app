@@ -8,7 +8,45 @@ def test_health_and_ready(client):
     assert "X-Request-ID" in r
     r = client.get("/api/ready")
     assert r.status_code == 200
-    assert r.json()["checks"] == {"database": "ok", "migrations": "ok"}
+    assert r.json()["checks"] == {"database": "ok", "migrations": "ok", "cache": "ok"}
+
+
+@pytest.mark.django_db
+def test_ready_fails_without_the_shared_cache_table(client, caplog, monkeypatch):
+    from django.core.cache import cache
+    from django.db import connection
+
+    def missing_table(*a, **k):  # what DatabaseCache does when `createcachetable` never ran
+        with connection.cursor() as c:
+            c.execute("SELECT 1 FROM no_such_cache_table")
+
+    monkeypatch.setattr(cache, "get", missing_table)
+    r = client.get("/api/ready")
+    assert r.status_code == 503 and r.json()["checks"]["cache"].startswith("unavailable")
+    assert r.json()["checks"]["database"] == "ok"  # the failed query did not break the rest of the check
+    assert any(rec.msg == "ready_check_failed" for rec in caplog.records)
+
+
+@pytest.mark.django_db
+def test_monitoring_events_are_logged_without_personal_data(world, client, caplog, settings):
+    import logging
+
+    from django.core.management import call_command
+
+    settings.LOGIN_LOCKOUT_FAILURES = 2
+    caplog.set_level(logging.INFO)
+    for _ in range(2):
+        client.post("/api/v1/auth/login", {"email": "s1@x.test", "password": "wrong"}, format="json")
+    call_command("run_scheduled")
+    call_command("emit_test_alert")
+    msgs = [r.msg for r in caplog.records]
+    assert msgs.count("login_failed") == 2 and "auth_locked" in msgs and "ops_stats" in msgs
+    stats = next(r for r in caplog.records if r.msg == "ops_stats")
+    assert stats.db_size_mb > 0 and stats.db_connections >= 1
+    synthetic = [r for r in caplog.records if getattr(r, "synthetic", False)]
+    assert {r.msg for r in synthetic} >= {"media_store_failed", "ready_check_failed", "scheduled_step_failed", "unhandled_error"}
+    text = " ".join(str(vars(r)) for r in caplog.records if r.msg in ("login_failed", "auth_locked", "ops_stats"))
+    assert "s1@x.test" not in text and "x.test" not in text
 
 
 @pytest.mark.django_db

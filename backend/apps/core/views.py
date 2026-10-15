@@ -1,9 +1,13 @@
+import logging
+
 from django.conf import settings
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+
+log = logging.getLogger(__name__)
 
 
 @api_view(["GET"])
@@ -31,7 +35,21 @@ def ready(request):
         checks["migrations"] = "ok" if not pending else f"{len(pending)} pending"
     except Exception as e:  # noqa: BLE001 — report a category, never the error text (it can contain hosts/users)
         checks.setdefault("database", "unavailable: " + _db_problem(str(e)))
+    if checks.get("database") == "ok":
+        # Sign-in limits and lockouts live in the shared cache (a database table when deployed): without it every
+        # sign-in would fail, so readiness must say so.
+        from django.core.cache import cache
+        from django.db import transaction
+
+        try:
+            with transaction.atomic():  # a savepoint: a missing table must not break the queries below
+                cache.get("ready-probe")
+            checks["cache"] = "ok"
+        except Exception:  # noqa: BLE001
+            checks["cache"] = "unavailable: run `python manage.py createcachetable`"
     ok = all(v == "ok" for v in checks.values())
+    if not ok:
+        log.error("ready_check_failed", extra={"checks": checks})
     # What still needs owner configuration (informational; does not affect readiness).
     features = {
         "media_storage": storage_status(),

@@ -22,6 +22,7 @@ class JsonFormatter(logging.Formatter):
         out = {
             "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec="milliseconds"),
             "level": record.levelname,
+            "severity": record.levelname,  # Google Cloud Logging uses this field for the entry's severity
             "logger": record.name,
             "request_id": getattr(record, "request_id", "-"),
             "msg": record.getMessage(),
