@@ -79,7 +79,8 @@ class S3Storage:
             region_name=settings.STORAGE_REGION or None,
             aws_access_key_id=settings.STORAGE_ACCESS_KEY_ID,
             aws_secret_access_key=settings.STORAGE_SECRET_ACCESS_KEY,
-            config=Config(signature_version="s3v4", retries={"max_attempts": 3, "mode": "standard"}, connect_timeout=5, read_timeout=30),
+            # Path-style URLs (endpoint/bucket/key): the endpoint's TLS certificate always matches, whatever the bucket name.
+            config=Config(signature_version="s3v4", s3={"addressing_style": "path"}, retries={"max_attempts": 3, "mode": "standard"}, connect_timeout=5, read_timeout=30),
         )
 
     def save(self, key: str, fileobj: BinaryIO, content_type: str) -> None:
@@ -103,6 +104,14 @@ class S3Storage:
             return "ok"
         except Exception as e:  # noqa: BLE001
             code = str(getattr(e, "response", {}).get("Error", {}).get("Code", "")) or type(e).__name__
+            if "SSL" in code:
+                import re
+
+                # e.g. SSLV3_ALERT_HANDSHAKE_FAILURE: Cloudflare refuses TLS for an unknown account ID.
+                reason = re.findall(r"[A-Z][A-Z0-9_]{6,}", str(e))
+                code += f" {reason[0]}" if reason else ""
+                return (f"cannot use the storage endpoint [{code}] (usually a wrong account ID in "
+                        "STORAGE_ENDPOINT_URL: use the 32-character Account ID from the R2 overview page)")
             if code in ("404", "NoSuchKey", "NotFound"):
                 return "ok"  # authorised; the probe object simply does not exist
             if code in ("401", "403", "AccessDenied", "Unauthorized", "InvalidAccessKeyId", "SignatureDoesNotMatch"):
