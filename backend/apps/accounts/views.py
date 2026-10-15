@@ -62,6 +62,7 @@ def _record_failure(email: str) -> None:
         cache.set(k, 1, settings.LOGIN_LOCKOUT_MINUTES * 60)
     if n == settings.LOGIN_LOCKOUT_FAILURES:
         audit("auth.locked", email_domain=email.split("@")[-1], minutes=settings.LOGIN_LOCKOUT_MINUTES)
+        log.warning("auth_locked", extra={"minutes": settings.LOGIN_LOCKOUT_MINUTES})
 
 
 def _session_payload(request, user, client: str, device: str):
@@ -121,6 +122,7 @@ class _BaseLogin(APIView):
         user = authenticate(request, username=email, password=d["password"])
         if user is None:
             audit("auth.login_failed", request=request, email_domain=email.split("@")[-1], portal=self.portal)
+            log.warning("login_failed", extra={"portal": self.portal})
             _record_failure(email)
             raise BAD_CREDENTIALS
         if user.status == AccountStatus.SUSPENDED:
@@ -150,6 +152,7 @@ class AdminLoginView(_BaseLogin):
         if user.mfa_enabled and not totp.verify(user.mfa_secret, d["otp"]):
             if d["otp"]:
                 audit("auth.mfa_failed", actor=user, target=user, request=self.request, portal="admin")
+                log.warning("mfa_failed", extra={"portal": "admin"})
                 _record_failure(user.email)
             raise ApiError("mfa_required" if not d["otp"] else "mfa_invalid",
                            "أدخل رمز التحقق من تطبيق المصادقة." if not d["otp"] else "رمز التحقق غير صحيح.", 401)

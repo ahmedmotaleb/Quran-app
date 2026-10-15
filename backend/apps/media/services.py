@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
 
 from django.conf import settings
@@ -12,6 +13,8 @@ from apps.core.exceptions import ApiError
 
 from .models import MediaObject
 from .storage import StorageError, get_storage
+
+log = logging.getLogger(__name__)
 
 # Declared type → (file extension, signature check). The bytes must match the declared type.
 AUDIO_TYPES = {
@@ -79,7 +82,8 @@ def store_audio(*, owner, purpose: str, upload, duration_seconds) -> MediaObject
                                    size_bytes=upload.size, sha256=digest.hexdigest(), duration_seconds=dur)
     try:
         get_storage().save(key, f, declared)
-    except StorageError:
+    except StorageError as e:
+        log.error("media_store_failed", extra={"purpose": purpose, "error": type(e.__cause__ or e).__name__, "bytes": upload.size})
         m.state = MediaObject.State.REJECTED
         m.rejection_reason = "storage_error"
         m.save(update_fields=["state", "rejection_reason", "updated_at"])
