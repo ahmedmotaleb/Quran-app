@@ -9,6 +9,7 @@ import { homeHifz, upcomingSessions } from '@/store/selectors';
 import { BRAND } from '@/theme/brand';
 import { useEffect, useState } from 'react';
 import { api } from '@/api/client';
+import { InboxBell } from '@/screens/common/Inbox';
 
 interface PlanItem { priority: number; kind: string; title: string; ref: number; due: string | null; state: 'todo' | 'done'; reason: string; est_minutes: number | null; subtitle: string }
 interface Plan { date: string; items: PlanItem[]; counts: { todo: number; done: number; overdue: number }; est_minutes: number | null; rules: string[] }
@@ -87,10 +88,10 @@ export default function Home() {
           <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800 }}>السلام عليكم، {s.user.first}</h1>
           <p style={muted(13)}>{s.liveMode ? fmtDay(new Date().toISOString(), tzOf(s.tz).iana) : TODAY_LABEL}</p>
         </div>
-        <button onClick={() => toast('لا توجد إشعارات جديدة', 'bell')} aria-label="الإشعارات"
+        {s.liveMode ? <InboxBell /> : <button onClick={() => toast('لا توجد إشعارات جديدة', 'bell')} aria-label="الإشعارات"
           style={{ width: 48, height: 48, borderRadius: 14, border: `1px solid ${color.border}`, background: color.card, color: color.primary, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
           <Icon name="bell" />
-        </button>
+        </button>}
       </header>
 
       {newFb && (

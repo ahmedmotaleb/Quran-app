@@ -93,6 +93,8 @@ def cancel(*, booking_id: int, by, reason: str = "", now: datetime | None = None
         b.save(update_fields=["status", "cancelled_at", "cancelled_by", "cancel_reason", "updated_at"])
         if not is_owner and reason != "rescheduled":
             transaction.on_commit(lambda: _notify_cancelled(b.pk))
+        elif is_owner and reason != "rescheduled":
+            transaction.on_commit(lambda: _notify_teacher(b.pk, "booking_cancelled_by_student", "ألغى طالب حجزه"))
         return b
 
 
@@ -109,6 +111,7 @@ def reschedule(*, booking_id: int, new_occurrence_id: int, by, idempotency_key: 
         if new.rescheduled_from_id is None:
             new.rescheduled_from = old
             new.save(update_fields=["rescheduled_from"])
+            transaction.on_commit(lambda: _notify_teacher(old.pk, "booking_rescheduled", "غيّر طالب موعد جلسته"))
         return new
 
 
@@ -120,7 +123,34 @@ def _notify_cancelled(booking_id: int) -> None:
     tz = ZoneInfo(b.student.timezone or "Africa/Cairo")
     when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
     notify(b.student, "booking_cancelled", "أُلغيت جلستك", f"مع {b.occurrence.teacher.full_name} · {when}. يمكنك حجز موعد آخر.",
-           link="/sessions", dedupe=f"booking:{b.pk}:cancelled")
+           link="/sessions", dedupe=f"booking:{b.pk}:cancelled", data={"booking": b.pk})
+
+
+def _notify_teacher(booking_id: int, kind: str, title: str) -> None:
+    from apps.notifications.services import notify
+
+    b = Booking.objects.select_related("occurrence__teacher", "student").get(pk=booking_id)
+    tz = ZoneInfo(b.occurrence.teacher.timezone or "Africa/Cairo")
+    when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+    notify(b.occurrence.teacher, kind, title, f"{b.student.full_name} · {when}", link="/teacher/schedule",
+           dedupe=f"booking:{b.pk}:{kind}", data={"booking": b.pk})
+
+
+def notify_attendance(booking_id: int) -> None:
+    """Absence is worth knowing about: the student and their verified guardians are told (once per value)."""
+    from apps.accounts.models import GuardianLink, LinkStatus
+    from apps.notifications.services import notify
+
+    b = Booking.objects.select_related("occurrence__teacher", "student").get(pk=booking_id)
+    if b.attendance not in (Booking.Attendance.ABSENT,):
+        return
+    tz = ZoneInfo(b.student.timezone or "Africa/Cairo")
+    when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+    notify(b.student, "attendance_absent", "سُجّل غيابك عن جلسة", f"مع {b.occurrence.teacher.full_name} · {when}", link="/sessions",
+           dedupe=f"booking:{b.pk}:att:{b.attendance}", data={"booking": b.pk})
+    for g in GuardianLink.objects.filter(student=b.student, status=LinkStatus.ACTIVE).select_related("guardian"):
+        notify(g.guardian, "child_absent", f"غياب {b.student.full_name} عن جلسة", f"مع {b.occurrence.teacher.full_name} · {when}",
+               link="/parent", dedupe=f"booking:{b.pk}:att:{b.attendance}:g{g.guardian_id}", data={"booking": b.pk, "child": b.student_id})
 
 
 def _notify_booked(booking_id: int) -> None:
@@ -129,8 +159,8 @@ def _notify_booked(booking_id: int) -> None:
     b = Booking.objects.select_related("occurrence__teacher", "student").get(pk=booking_id)
     tz = ZoneInfo(b.student.timezone)
     when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
-    notify(b.student, "booking_confirmed", "تم تأكيد حجزك", f"مع {b.occurrence.teacher.full_name} · {when}", link=f"/sessions/{b.pk}", dedupe=f"booking:{b.pk}:confirmed")
-    notify(b.occurrence.teacher, "booking_new", "حجز جديد", f"{b.student.full_name} · {when}", link=f"/teacher/schedule", dedupe=f"booking:{b.pk}:teacher")
+    notify(b.student, "booking_confirmed", "تم تأكيد حجزك", f"مع {b.occurrence.teacher.full_name} · {when}", link=f"/sessions/{b.pk}", dedupe=f"booking:{b.pk}:confirmed", data={"booking": b.pk})
+    notify(b.occurrence.teacher, "booking_new", "حجز جديد", f"{b.student.full_name} · {when}", link="/teacher/schedule", dedupe=f"booking:{b.pk}:teacher", data={"booking": b.pk})
 
 
 def cancel_occurrence(*, occurrence_id: int, by, reason: str, now: datetime | None = None) -> tuple[SessionOccurrence, int]:

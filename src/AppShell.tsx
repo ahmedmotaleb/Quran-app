@@ -21,6 +21,7 @@ import {
   TeacherAssign, TeacherContent, TeacherDash, TeacherReview, TeacherReviews, TeacherSchedule, TeacherStudent, TeacherStudents,
 } from '@/screens/teacher/Teacher';
 import ParentHome from '@/screens/parent/ParentHome';
+import Inbox from '@/screens/common/Inbox';
 
 const SCREENS: Record<Screen, ComponentType> = {
   splash: Splash, intro: Intro, login: Login, signup: Signup, forgot: Forgot, onboard: Onboard,
@@ -28,7 +29,7 @@ const SCREENS: Record<Screen, ComponentType> = {
   circles: Circles, teacher: TeacherPage, bkreview: BookingReview, bkdone: BookingDone, session: SessionDetails,
   live: Live, lesson: LessonPage, quiz: QuizPage, progress: Progress, account: Account,
   tdash: TeacherDash, tstudents: TeacherStudents, tstudent: TeacherStudent, tassign: TeacherAssign,
-  treviews: TeacherReviews, treview: TeacherReview, tschedule: TeacherSchedule, tcontent: TeacherContent, phome: ParentHome,
+  treviews: TeacherReviews, treview: TeacherReview, tschedule: TeacherSchedule, tcontent: TeacherContent, phome: ParentHome, inbox: Inbox,
 };
 
 const TABS_STUDENT: [Screen, string, IconName][] = [['home', 'الرئيسية', 'home'], ['plan', 'تعلمي', 'plan'], ['circles', 'الجلسات', 'users'], ['progress', 'تقدمي', 'chart'], ['account', 'حسابي', 'user']];

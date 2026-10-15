@@ -44,6 +44,14 @@ class AdminView(APIView):
     permission_classes = [IsAdminRole]
 
 
+def notify_enrolled(course, kind: str, title: str, body: str, *, dedupe: str, data: dict) -> None:
+    """Only learners actively enrolled in the course hear about its new content (relevant, not broadcast)."""
+    from apps.notifications.services import after_commit
+
+    for e in Enrollment.objects.filter(course=course, status=Enrollment.Status.ACTIVE).select_related("student"):
+        after_commit(e.student, kind, title, f"{body} · {course.title}", dedupe=dedupe, data=data)
+
+
 # ---- Courses, lessons, enrollments ----------------------------------------------------
 class CourseIn(serializers.Serializer):
     title = serializers.CharField(min_length=2, max_length=160)
@@ -192,6 +200,9 @@ class AdminLessonState(AdminView):
             if l.course.state == PublishState.PUBLISHED and not l.course.lessons.filter(state=PublishState.PUBLISHED).exists():
                 raise ApiError("last_published_lesson", "هذا آخر درس منشور في دورة منشورة. أعد الدورة إلى مسودة أولًا.", 409)
             audit("admin.lesson_state", actor=request.user, target=l, request=request, old=old, new=new)
+            if new == PublishState.PUBLISHED and old != new and l.course.state == PublishState.PUBLISHED:
+                notify_enrolled(l.course, "lesson_published", "درس جديد في دورتك", l.title, dedupe=f"lesson:{l.pk}:published",
+                                data={"lesson": l.pk})
         return Response(_lesson_out(l))
 
 

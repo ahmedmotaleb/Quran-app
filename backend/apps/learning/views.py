@@ -48,6 +48,9 @@ class AssignmentList(generics.ListCreateAPIView):
             raise ApiError("not_your_student", "هذا الطالب غير مرتبط بك.", 403)
         a = serializer.save(teacher=u)
         audit("assignment.created", actor=u, target=a, request=self.request)
+        from apps.notifications.services import after_commit
+        after_commit(a.student, "assignment_new", "واجب جديد من معلمك", f"{a.title} · {u.full_name}", link=f"/tasks/{a.pk}",
+                     dedupe=f"assignment:{a.pk}:new", data={"assignment": a.pk})
 
 
 class AssignmentDetail(generics.RetrieveAPIView):
@@ -156,7 +159,8 @@ class SubmissionCreate(APIView):
                 services.transition(a, AssignmentStatus.SUBMITTED, actor=request.user)
                 teacher, title, sid = a.teacher, a.title, s.pk
                 transaction.on_commit(lambda: notify(teacher, "submission_new", "تسليم جديد", f"{request.user.full_name} · {title}",
-                                                     link=f"/teacher/reviews/{sid}", dedupe=f"submission:{sid}"))
+                                                     link=f"/teacher/reviews/{sid}", dedupe=f"submission:{sid}",
+                                                     data={"submission": sid}))
         except IntegrityError:
             # Same key raced in from a retry: return the stored result.
             existing = Submission.objects.filter(student=request.user, idempotency_key=key).first()
@@ -203,7 +207,8 @@ class FeedbackCreate(APIView):
                 reviews.on_hifz_accepted(a, request.user)
             reviews.on_review_feedback(a, fb, request.user)
             student, title, sid = s.student, a.title, s.pk
-            transaction.on_commit(lambda: notify(student, "feedback_new", "وصل تقييم معلمك", title, link=f"/feedback/{sid}", dedupe=f"feedback:{sid}"))
+            transaction.on_commit(lambda: notify(student, "feedback_new", "وصل تقييم معلمك", title, link=f"/feedback/{sid}", dedupe=f"feedback:{sid}",
+                                                         data={"submission": sid, "assignment": a.pk}))
         audit("feedback.created", actor=request.user, target=fb, request=request, decision=fb.decision)
         return Response(services.submission_out(_submissions(request.user).get(pk=s.pk), request.user, request), status=201)
 
