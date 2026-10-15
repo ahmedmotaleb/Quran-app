@@ -51,6 +51,8 @@ const REC_LIVE = { live: LIVE, key: null as string | null, mediaId: null as stri
 const initial = () => ({
   /** True when a backend is configured (VITE_API_BASE_URL); demo data otherwise. */
   liveMode: LIVE,
+  /** Public platform settings from the server (live mode); safe defaults until loaded. */
+  pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, org_name: '', support_whatsapp: '', show_support_button: false },
   me: null as Me | null,
   net: { loading: false, error: null as string | null },
   teachers: [...TEACHERS] as Teacher[],
@@ -241,7 +243,11 @@ export function tick() {
     o.player = pos >= p.dur ? { ...p, pos: p.dur, playing: false } : { ...p, pos };
   }
   const r = s.rec;
-  if (r.phase === 'recording') o.rec = { ...r, secs: r.secs + 0.25 };
+  if (r.phase === 'recording') {
+    o.rec = { ...r, secs: r.secs + 0.25 };
+    // The admin's maximum recording length (live mode): stop cleanly instead of failing on upload.
+    if (s.liveMode && r.secs + 0.25 >= s.pub.max_recording_seconds) { setTimeout(() => { stopRec(); toast(`وصلت إلى أقصى مدة للتسجيل (${Math.round(s.pub.max_recording_seconds / 60)} دقيقة).`); }, 0); }
+  }
   if (r.phase === 'uploading' && s.liveMode) {
     // Real upload: creep towards 90% until the server answers (fetch has no upload progress).
     if (r.prog < 90) o.rec = { ...r, prog: r.prog + (90 - r.prog) * 0.04 };

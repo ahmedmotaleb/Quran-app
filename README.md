@@ -32,7 +32,7 @@ Demo accounts (password `halqa123`): `yousef@halqa.app` (student), `teacher@halq
 
 **Partially simulated:** in live mode, sign-in (with two-step verification), the overview,
 students, teachers, parents, circles, bookings, lectures (courses, lessons, enrollments) and
-quizzes run on the real API. Subscriptions and settings still show in-memory demo data and say so on screen (see
+quizzes, settings and the audit log run on the real API. Subscriptions still show in-memory demo data and say so on screen (see
 `docs/STATUS.md`). The description below is of the demo portal.
 
 The desktop admin portal has its own sign-in (demo: `admin@halqa.app` / `halqa123`). Admin

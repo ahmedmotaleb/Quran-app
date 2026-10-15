@@ -1,6 +1,7 @@
 from django.urls import include, path
 
 from apps.assessments import admin_views as assess_admin
+from apps.core import admin_views as core_admin
 from apps.assessments import views as assessments
 from apps.learning import admin_views as learn_admin
 from apps.learning import views as learning
@@ -72,6 +73,10 @@ urlpatterns = [
     path("admin/tests/<int:pk>/state", assess_admin.AdminTestState.as_view()),
     path("admin/tests/<int:pk>/questions", assess_admin.AdminQuestions.as_view()),
     path("admin/questions/<int:pk>", assess_admin.AdminQuestionDetail.as_view()),
+    # Settings: admin-managed, and the public subset the apps read
+    path("admin/settings", core_admin.AdminSettingsView.as_view()),
+    path("admin/audit", core_admin.AdminAudit.as_view()),
+    path("settings/public", core_admin.PublicSettings.as_view()),
     # Notifications
     path("notifications", notifications.NotificationList.as_view()),
     path("notifications/read", notifications.NotificationRead.as_view()),

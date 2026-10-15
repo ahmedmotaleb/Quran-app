@@ -104,6 +104,11 @@ export const loadData = () => {
   return r === 'teacher' ? loadTeacherData() : r === 'parent' ? loadParentData() : loadStudentData();
 };
 
+/** Admin-managed settings the learner app follows (cancel window, open sign-up, recording length, support). */
+export async function loadPublicSettings() {
+  try { const p = await E.publicSettings(); setState({ pub: { ...get().pub, ...p } }); } catch { /* keep defaults */ }
+}
+
 /** On startup: restore the session (cookie on web, stored token on Android). Runs once even if called twice
  * (React StrictMode re-runs effects in development), so a late duplicate can't yank the user back to home. */
 let booting: Promise<boolean> | null = null;
@@ -112,6 +117,7 @@ export function bootstrap(): Promise<boolean> {
   return booting;
 }
 async function restoreSession(): Promise<boolean> {
+  void loadPublicSettings();
   try {
     const u = await E.me();
     if (u.role === 'admin') return false;
