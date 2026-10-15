@@ -2,7 +2,7 @@
  * Live Students / Teachers / Parents sections: server-side search, status filter and pagination; a detail
  * panel whose every action is a server call. The screen only changes after the server confirms.
  */
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { color, font } from '@/theme/tokens';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import { Icon } from '@/components/Icon';
@@ -10,6 +10,7 @@ import type { ApiError } from '@/api/client';
 import { card } from '../AdminTables';
 import { toast } from '../adminStore';
 import * as A from './api';
+import { chip, date, errMsg, LinkBox, Modal, ReasonDialog, smallBtn } from './ui';
 
 const PAGE = 20;
 const ROLE_L: Record<A.Role, { one: string; many: string; search: string }> = {
@@ -22,19 +23,11 @@ const ST: Record<A.AccountStatus, { l: string; bg: string; fg: string }> = {
   pending: { l: 'بانتظار الاعتماد', bg: '#F3E6CC', fg: '#6B470C' },
   suspended: { l: 'موقوف', bg: '#F5E1DC', fg: '#8E2F20' },
 };
-const errMsg = (e: unknown) => (e as ApiError)?.message || 'تعذّر تنفيذ الطلب.';
-const date = (iso: string | null) => (iso ? new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium', timeZone: 'Africa/Cairo' }).format(new Date(iso)) : '—');
 
 function Pill({ st }: { st: A.AccountStatus }) {
   const t = ST[st];
   return <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700, background: t.bg, color: t.fg, whiteSpace: 'nowrap' }}>{t.l}</span>;
 }
-const chip = (on: boolean): CSSProperties => ({ minHeight: 40, padding: '0 14px', borderRadius: 999, border: `1px solid ${on ? color.primary : color.borderStrong}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.primary, fontWeight: 700, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' });
-const smallBtn = (tone: 'primary' | 'danger' | 'plain' = 'plain'): CSSProperties => ({
-  minHeight: 40, padding: '0 12px', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer',
-  border: `1px solid ${tone === 'danger' ? color.danger : tone === 'primary' ? color.primary : color.borderStrong}`,
-  background: tone === 'primary' ? color.primary : color.card, color: tone === 'primary' ? color.ivory : tone === 'danger' ? color.danger : color.primary,
-});
 
 /* ---------------- Section ---------------- */
 export default function PeopleLive({ role }: { role: A.Role }) {
@@ -129,67 +122,6 @@ export default function PeopleLive({ role }: { role: A.Role }) {
       {open !== null && <PersonPanel id={open} onClose={() => setOpen(null)} onChanged={() => void load()} />}
       {adding && <AddDialog role={role} onClose={() => setAdding(false)} onDone={() => void load()} />}
     </>
-  );
-}
-
-/* ---------------- Modal shell ---------------- */
-function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    ref.current?.querySelector<HTMLElement>('input,select,textarea,button')?.focus();
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', esc);
-    return () => { window.removeEventListener('keydown', esc); prev?.focus(); };
-  }, [onClose]);
-  return (
-    <div onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ position: 'fixed', inset: 0, background: 'rgba(20,33,31,.45)', zIndex: 50, display: 'grid', placeItems: 'center', padding: 16 }}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} style={{ ...card, background: color.ivory, width: '100%', maxWidth: wide ? 640 : 440, maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800, flex: 1 }}>{title}</h2>
-          <button onClick={onClose} aria-label="إغلاق" style={{ width: 44, height: 44, border: 'none', background: 'transparent', cursor: 'pointer', color: color.muted }}><Icon name="x" /></button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-/** Asks for a reason, then runs the action; shows the server's error if it fails. */
-function ReasonDialog({ title, body, ok, required = true, onClose, run }: {
-  title: string; body: string; ok: string; required?: boolean; onClose: () => void; run: (reason: string) => Promise<void>;
-}) {
-  const [r, setR] = useState(''); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (required && r.trim().length < 3) return setErr('اكتب السبب (3 أحرف على الأقل).');
-    setBusy(true); setErr(null);
-    try { await run(r.trim()); onClose(); } catch (x) { setErr(errMsg(x)); setBusy(false); }
-  };
-  return (
-    <Modal title={title} onClose={onClose}>
-      <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <p style={{ margin: 0, fontSize: 15 }}>{body}</p>
-        <label htmlFor="rs" style={labelStyle}>السبب{required ? '' : ' (اختياري)'}</label>
-        <textarea id="rs" rows={3} value={r} onChange={(e) => setR(e.target.value)} maxLength={200} style={{ ...inputStyle(err), minHeight: 88, paddingTop: 10 }} />
-        <FieldError msg={err} />
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button type="submit" disabled={busy} style={{ ...smallBtn('danger'), minHeight: 48, flex: 1, background: color.danger, color: color.ivory }}>{busy ? 'جارٍ التنفيذ…' : ok}</button>
-          <button type="button" onClick={onClose} style={{ ...smallBtn(), minHeight: 48 }}>إلغاء</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function LinkBox({ link, note }: { link: string; note: string }) {
-  const copy = async () => { try { await navigator.clipboard.writeText(link); toast('نُسخ الرابط'); } catch { /* user can select it */ } };
-  return (
-    <div style={{ background: color.sand, borderRadius: 12, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <p style={{ margin: 0, fontSize: 14 }}>{note}</p>
-      <code dir="ltr" style={{ fontSize: 12, wordBreak: 'break-all', userSelect: 'all', background: color.card, padding: 8, borderRadius: 8 }}>{link}</code>
-      <button onClick={copy} style={{ ...smallBtn('primary'), alignSelf: 'flex-start' }}>نسخ الرابط</button>
-    </div>
   );
 }
 
@@ -334,7 +266,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
           {u.teachers.length === 0 && <p style={{ margin: 0, color: color.danger, fontSize: 14 }}>غير مرتبط بأي معلم.</p>}
           {u.teachers.map((t) => (
             <div key={t.assignment_id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ flex: 1 }}>{t.name}</span>
-              <button disabled={busy} onClick={() => reasonRun('إنهاء الربط بالمعلم', `سيتوقف ${t.name} عن رؤية مهام ${u.full_name} وتسجيلاته الجديدة. السجل السابق يبقى.`, 'إنهاء الربط', 'أُنهي الربط', () => A.endAssignment(t.assignment_id), false)} style={smallBtn('danger')}>إنهاء الربط</button></div>
+              <button disabled={busy} onClick={() => reasonRun('إنهاء الربط بالمعلم', `سيتوقف ${t.name} عن رؤية مهام ${u.full_name} وتسجيلاته الجديدة. السجل السابق يبقى.`, 'إنهاء الربط', 'أُنهي الربط', () => A.endAssignment(t.assignment_id), false)} aria-label={`إنهاء الربط بـ${t.name}`} style={smallBtn('danger')}>إنهاء الربط</button></div>
           ))}
           <button disabled={busy} onClick={() => setSub({ kind: 'pick', target: 'teacher' })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>ربط بمعلم</button>
         </>))}
@@ -343,7 +275,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
           {u.guardians.length === 0 && <p style={{ margin: 0, color: color.muted, fontSize: 14 }}>لا يوجد ولي أمر مرتبط.</p>}
           {u.guardians.map((g) => (
             <div key={g.link_id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ flex: 1 }}>{g.name}</span>
-              <button disabled={busy} onClick={() => reasonRun('فك ربط ولي الأمر', `لن يرى ${g.name} بيانات ${u.full_name} بعد الآن.`, 'فك الربط', 'فُكّ الربط', (r) => A.revokeGuardian(g.link_id, r))} style={smallBtn('danger')}>فك الربط</button></div>
+              <button disabled={busy} onClick={() => reasonRun('فك ربط ولي الأمر', `لن يرى ${g.name} بيانات ${u.full_name} بعد الآن.`, 'فك الربط', 'فُكّ الربط', (r) => A.revokeGuardian(g.link_id, r))} aria-label={`فك ربط ${g.name}`} style={smallBtn('danger')}>فك الربط</button></div>
           ))}
           <button disabled={busy} onClick={() => setSub({ kind: 'pick', target: 'parent' })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>ربط بولي أمر</button>
         </>))}
@@ -352,7 +284,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
           {u.children.length === 0 && <p style={{ margin: 0, color: color.muted, fontSize: 14 }}>لا يوجد أبناء مرتبطون.</p>}
           {u.children.map((c) => (
             <div key={c.link_id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ flex: 1 }}>{c.name}</span>
-              <button disabled={busy} onClick={() => reasonRun('فك ربط الابن', `لن يرى ${u.full_name} بيانات ${c.name} بعد الآن.`, 'فك الربط', 'فُكّ الربط', (r) => A.revokeGuardian(c.link_id, r))} style={smallBtn('danger')}>فك الربط</button></div>
+              <button disabled={busy} onClick={() => reasonRun('فك ربط الابن', `لن يرى ${u.full_name} بيانات ${c.name} بعد الآن.`, 'فك الربط', 'فُكّ الربط', (r) => A.revokeGuardian(c.link_id, r))} aria-label={`فك ربط ${c.name}`} style={smallBtn('danger')}>فك الربط</button></div>
           ))}
           <button disabled={busy} onClick={() => setSub({ kind: 'pick', target: 'student' })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>ربط بابن</button>
         </>))}
