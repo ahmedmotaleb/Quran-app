@@ -42,10 +42,10 @@ await step('a student account is refused', async () => {
 });
 await step('admin signs in and sees their name', async () => {
   await signIn('admin@halqa.app', 'halqa123');
-  await page.getByText(/مدير المنصة · الأقسام/).waitFor();
+  await page.getByText(/مدير المنصة · بيانات حقيقية/).waitFor();
 });
 await step('refresh keeps the session', async () => {
-  await page.reload(); await page.getByText(/مدير المنصة · الأقسام/).waitFor();
+  await page.reload(); await page.getByText(/مدير المنصة · بيانات حقيقية/).waitFor();
 });
 let secret = '';
 await step('turn on two-step verification', async () => {
@@ -67,7 +67,7 @@ await step('sign-in now asks for the code, refuses a wrong one, accepts the righ
   await page.locator('#ad-otp').fill('000000'); await page.getByRole('button', { name: 'تحقق ودخول' }).click();
   await page.getByText('رمز التحقق غير صحيح.').waitFor();
   await page.locator('#ad-otp').fill(totp(secret)); await page.getByRole('button', { name: 'تحقق ودخول' }).click();
-  await page.getByText(/مدير المنصة · الأقسام/).waitFor();
+  await page.getByText(/مدير المنصة · بيانات حقيقية/).waitFor();
 });
 await page.screenshot({ path: out + '/admin-mfa-signed-in.png' });
 if (process.env.RESET_CMD) execSync(process.env.RESET_CMD, { stdio: 'inherit' });

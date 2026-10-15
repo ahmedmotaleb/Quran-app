@@ -5,7 +5,7 @@ from django.contrib.auth import authenticate, login, logout, password_validation
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import send_mail
 from django.db import transaction
-from django.db.models import Prefetch, Q
+from django.db.models import Count, Prefetch, Q
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -28,7 +28,7 @@ from .models import (
 )
 from .permissions import IsAdminRole, IsLearningUser, IsParent, IsStudent, IsTeacher, assigned_student_ids, linked_child_ids
 from .serializers import (
-    AcceptInvitationSerializer, AdminCreateUserSerializer, AdminUserSerializer, GuardianLinkSerializer, InvitationCreateSerializer,
+    AcceptInvitationSerializer, AdminCreateUserSerializer, AdminUserSerializer, AdminUserUpdateSerializer, GuardianLinkSerializer, InvitationCreateSerializer,
     LoginSerializer, MeSerializer, OnboardingSerializer, RegisterSerializer, StatusChangeSerializer, TeacherAssignmentSerializer,
     TeacherPublicSerializer, TeacherStudentSerializer, arabic_password_error,
 )
@@ -152,6 +152,16 @@ class OnboardingView(APIView):
         return Response(MeSerializer(request.user).data)
 
 
+def password_link(user) -> str:
+    """One-use link (expires after PASSWORD_RESET_TIMEOUT) to set a password; used by recovery and admin onboarding."""
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    return f"{settings.FRONTEND_URL}/#/reset?uid={uid}&token={default_token_generator.make_token(user)}"
+
+
+def email_configured() -> bool:
+    return "smtp" in settings.EMAIL_BACKEND
+
+
 class PasswordForgotView(APIView):
     """Always answers the same way, whether or not the email exists."""
 
@@ -163,9 +173,7 @@ class PasswordForgotView(APIView):
         email = str(request.data.get("email", "")).strip().lower()
         user = User.objects.filter(email=email, is_active=True).first()
         if user and user.status != AccountStatus.SUSPENDED:
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            token = default_token_generator.make_token(user)  # expires after PASSWORD_RESET_TIMEOUT
-            link = f"{settings.FRONTEND_URL}/#/reset?uid={uid}&token={token}"
+            link = password_link(user)
             send_mail("استعادة كلمة المرور — الحلقة", f"لتعيين كلمة مرور جديدة افتح الرابط:\n{link}\n\nإن لم تطلب ذلك فتجاهل الرسالة.",
                       settings.DEFAULT_FROM_EMAIL, [user.email], fail_silently=True)
             audit("auth.recovery_requested", actor=user, target=user, request=request)
@@ -268,7 +276,8 @@ class InvitationCreateView(APIView):
             teacher=user if purpose == Invitation.Purpose.STUDENT_TEACHER else None,
         )
         audit("invitation.created", actor=user, target=inv, request=request, purpose=purpose)
-        return Response({"id": inv.pk, "code": raw, "expires_at": inv.expires_at, "purpose": purpose}, status=201)
+        return Response({"id": inv.pk, "code": raw, "expires_at": inv.expires_at, "purpose": purpose,
+                         "link": f"{settings.FRONTEND_URL}/#/invite?code={raw}"}, status=201)
 
 
 class AcceptInvitationView(APIView):
@@ -330,6 +339,14 @@ class AcceptInvitationView(APIView):
 
 
 # ---- Admin: users, assignments, guardian links -----------------------------------------
+def _admin_users():
+    return User.objects.exclude(role=Role.ADMIN).select_related("student_profile", "teacher_profile").prefetch_related(
+        Prefetch("teacher_assignments", queryset=TeacherAssignment.objects.select_related("teacher")),
+        Prefetch("guardians", queryset=GuardianLink.objects.select_related("guardian")),
+        Prefetch("guardian_links", queryset=GuardianLink.objects.select_related("student")),
+    )
+
+
 class AdminUserList(generics.ListCreateAPIView):
     permission_classes = [IsAdminRole]
 
@@ -337,11 +354,7 @@ class AdminUserList(generics.ListCreateAPIView):
         return AdminCreateUserSerializer if self.request.method == "POST" else AdminUserSerializer
 
     def get_queryset(self):
-        qs = User.objects.exclude(role=Role.ADMIN).prefetch_related(
-            Prefetch("teacher_assignments", queryset=TeacherAssignment.objects.select_related("teacher")),
-            Prefetch("guardians", queryset=GuardianLink.objects.select_related("guardian")),
-            Prefetch("guardian_links", queryset=GuardianLink.objects.select_related("student")),
-        ).order_by("-date_joined", "id")
+        qs = _admin_users().order_by("-date_joined", "id")
         p = self.request.query_params
         if p.get("role"):
             qs = qs.filter(role=p["role"])
@@ -363,7 +376,92 @@ class AdminUserList(generics.ListCreateAPIView):
             if user.role == Role.STUDENT:
                 StudentProfile.objects.create(user=user)
             audit("admin.user_created", actor=request.user, target=user, request=request, role=user.role)
-        return Response(AdminUserSerializer(user).data, status=201)
+        return Response({**AdminUserSerializer(user).data, **_setup_link(request, user)}, status=201)
+
+
+def _setup_link(request, user) -> dict:
+    """Email the password-setup link; without an email provider the admin gets it to pass on in person."""
+    link = password_link(user)
+    sent = False
+    if email_configured():
+        sent = send_mail("مرحبًا بك في الحلقة", f"أنشئ كلمة مرور لحسابك من الرابط:\n{link}", settings.DEFAULT_FROM_EMAIL,
+                         [user.email], fail_silently=True) == 1
+    audit("admin.setup_link_issued", actor=request.user, target=user, request=request, emailed=sent)
+    return {"setup_email_sent": sent, "setup_link": None if sent else link}
+
+
+class AdminUserDetail(APIView):
+    """Edit a learner/teacher/parent profile (not email, role or password)."""
+
+    permission_classes = [IsAdminRole]
+
+    def get(self, request, pk):
+        return Response(AdminUserSerializer(generics.get_object_or_404(_admin_users(), pk=pk)).data)
+
+    def patch(self, request, pk):
+        user = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN), pk=pk)
+        s = AdminUserUpdateSerializer(data=request.data, partial=True)
+        s.is_valid(raise_exception=True)
+        changed = sorted(k for k, v in s.validated_data.items() if getattr(user, k) != v)
+        for k in changed:
+            setattr(user, k, s.validated_data[k])
+        if changed:
+            user.save(update_fields=changed)
+            audit("admin.user_updated", actor=request.user, target=user, request=request, fields=changed)
+        return Response(AdminUserSerializer(_admin_users().get(pk=pk)).data)
+
+
+class AdminUserSetupLink(APIView):
+    """New password-setup link for a user (e.g. a parent who never set one, or lost access)."""
+
+    permission_classes = [IsAdminRole]
+
+    def post(self, request, pk):
+        user = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN), pk=pk, is_active=True)
+        if user.status == AccountStatus.SUSPENDED:
+            raise ApiError("suspended", "الحساب موقوف. أعد تفعيله أولًا.", 409)
+        return Response(_setup_link(request, user))
+
+
+class AdminUserCounts(APIView):
+    """Status counts per role, for the filter chips."""
+
+    permission_classes = [IsAdminRole]
+
+    def get(self, request):
+        qs = User.objects.exclude(role=Role.ADMIN)
+        if request.query_params.get("role"):
+            qs = qs.filter(role=request.query_params["role"])
+        out = {s: 0 for s in AccountStatus.values}
+        for r in qs.values("status").annotate(n=Count("id")):
+            out[r["status"]] = r["n"]
+        out["all"] = sum(out.values())
+        if request.query_params.get("role") == Role.TEACHER:
+            out["unapproved"] = qs.filter(Q(teacher_profile__isnull=True) | Q(teacher_profile__approved_at__isnull=True)).count()
+        if request.query_params.get("role") == Role.STUDENT:
+            out["unlinked"] = qs.exclude(teacher_assignments__active=True).count()
+        return Response(out)
+
+
+class AdminTeacherApproval(APIView):
+    """Approve a teacher so learners can find and book them; `{"approved": false, "reason": …}` withdraws it."""
+
+    permission_classes = [IsAdminRole]
+
+    def post(self, request, pk):
+        t = generics.get_object_or_404(User, pk=pk, role=Role.TEACHER)
+        approve = request.data.get("approved", True) not in (False, "false", 0, "0")
+        reason = str(request.data.get("reason", "")).strip()[:200]
+        if not approve and len(reason) < 3:
+            raise ApiError("invalid", "اكتب سبب سحب الاعتماد.", 400, {"reason": ["اكتب سبب سحب الاعتماد."]})
+        prof, _ = TeacherProfile.objects.get_or_create(user=t)
+        prof.approved_at = timezone.now() if approve else None
+        prof.save(update_fields=["approved_at"])
+        if approve and t.status == AccountStatus.PENDING:
+            t.status = AccountStatus.ACTIVE
+            t.save(update_fields=["status"])
+        audit("admin.teacher_approval", actor=request.user, target=t, request=request, approved=approve, reason=reason)
+        return Response(AdminUserSerializer(_admin_users().get(pk=pk)).data)
 
 
 class AdminUserStatus(APIView):
@@ -380,7 +478,7 @@ class AdminUserStatus(APIView):
             # Sessions are re-checked on every request; native tokens are revoked outright.
             AuthToken.objects.filter(user=user, revoked_at__isnull=True).update(revoked_at=timezone.now())
         audit("admin.user_status", actor=request.user, target=user, request=request, old=old, new=user.status, reason=s.validated_data["reason"])
-        return Response(AdminUserSerializer(user).data)
+        return Response(AdminUserSerializer(_admin_users().get(pk=pk)).data)
 
 
 class AdminAssignmentCreate(generics.CreateAPIView):
