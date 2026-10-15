@@ -150,3 +150,35 @@ def test_parent_weekly_summary_linked_children_only(world):
     assert [c["child"]["id"] for c in w["children"]] == [world.s1.id]
     assert w["children"][0]["submissions"] == 1 and "audio" not in str(w)
     assert client_for(world.s1).get("/api/v1/parent/weekly-summary").status_code == 403
+
+
+def _scored(w, student, scores):
+    """Feedback rows directly (oldest first), each on its own task; media is a validated placeholder object."""
+    from apps.learning.models import Feedback, Submission
+    from apps.media.models import MediaObject
+
+    for i, sc in enumerate(scores):
+        t = task(w, student=student)
+        m = MediaObject.objects.create(owner=student, purpose="recitation", state="validated", content_type="audio/webm", size_bytes=10, key=f"k{student.pk}-{i}")
+        sub = Submission.objects.create(assignment=t, student=student, media=m, attempt=1, duration_seconds=30, idempotency_key=f"f{student.pk}-{i}")
+        fb = Feedback.objects.create(submission=sub, teacher=w.t1, score_hifz=sc, score_tajweed=sc, score_fluency=sc, decision="accept")
+        Feedback.objects.filter(pk=fb.pk).update(created_at=timezone.now() - timedelta(days=len(scores) - i))
+
+
+def test_falling_scores_rule_and_query_count_does_not_grow_with_class_size(world, django_assert_max_num_queries):
+    from apps.accounts.models import TeacherAssignment
+
+    _scored(world, world.s1, [5, 5, 5, 3, 3, 3])          # previous avg 5, recent 3 → falling
+    steady = make_user("steady@x.test")
+    TeacherAssignment.objects.create(teacher=world.t1, student=steady)
+    _scored(world, steady, [4, 4, 4, 4, 4, 4])
+    few = make_user("few@x.test")
+    TeacherAssignment.objects.create(teacher=world.t1, student=few)
+    _scored(world, few, [5, 5, 3, 3, 3])                    # only five: not enough history
+    c = client_for(world.t1)
+    d = c.get("/api/v1/teacher/dashboard").json()
+    assert [(x["student"]["id"], x["recent_avg"], x["previous_avg"]) for x in d["falling_scores"]] == [(world.s1.id, 3.0, 5.0)]
+    for i in range(30):  # a larger class must not add queries
+        TeacherAssignment.objects.create(teacher=world.t1, student=make_user(f"extra{i}@x.test"))
+    with django_assert_max_num_queries(12):
+        assert c.get("/api/v1/teacher/dashboard").status_code == 200

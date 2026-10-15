@@ -23,7 +23,8 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Avg, Count, F, Q, Sum, Window
+from django.db.models.functions import RowNumber
 from django.utils import timezone
 
 from apps.assessments.models import Attempt
@@ -272,16 +273,23 @@ def teacher_dashboard(teacher) -> dict:
     repeats = (Feedback.objects.filter(submission__student_id__in=sids, decision=Feedback.Decision.REPEAT, created_at__gte=since)
                .values("submission__student_id", "submission__student__full_name").annotate(n=Count("id")).filter(n__gte=2))
     repeat_l = [{"student": {"id": r["submission__student_id"], "name": r["submission__student__full_name"]}, "needs_repeat_30d": r["n"]} for r in repeats]
+    # Each student's six latest scores in one query (a per-student loop made this endpoint grow with class size).
+    latest = (Feedback.objects.filter(submission__student_id__in=sids)
+              .annotate(rn=Window(RowNumber(), partition_by=F("submission__student_id"), order_by=F("created_at").desc()))
+              .filter(rn__lte=6).order_by("submission__student_id", "rn")
+              .values_list("submission__student_id", "submission__student__full_name", "score_hifz", "score_tajweed", "score_fluency", "created_at"))
+    by_student: dict[int, list] = {}
+    for row in latest:
+        by_student.setdefault(row[0], []).append(row)
     falling = []
     for sid in sids:
-        sc = list(Feedback.objects.filter(submission__student_id=sid).order_by("-created_at")
-                  .values_list("score_hifz", "score_tajweed", "score_fluency", "created_at")[:6])
+        sc = by_student.get(sid, [])
         if len(sc) == 6:
-            recent = sum(sum(x[:3]) for x in sc[:3]) / 9
-            before = sum(sum(x[:3]) for x in sc[3:]) / 9
+            recent = sum(sum(x[2:5]) for x in sc[:3]) / 9
+            before = sum(sum(x[2:5]) for x in sc[3:]) / 9
             if before - recent >= 1:
-                falling.append({"student": {"id": sid, "name": User.objects.get(pk=sid).full_name}, "recent_avg": round(recent, 2),
-                                "previous_avg": round(before, 2), "last_feedback": sc[0][3].isoformat()})
+                falling.append({"student": {"id": sid, "name": sc[0][1]}, "recent_avg": round(recent, 2),
+                                "previous_avg": round(before, 2), "last_feedback": sc[0][5].isoformat()})
     day0 = datetime.combine(now.astimezone(tz).date(), time.min, tz)
     today = (Booking.objects.filter(occurrence__teacher=teacher, status=Booking.Status.CONFIRMED,
                                     occurrence__starts_at__gte=day0, occurrence__starts_at__lt=day0 + timedelta(days=1))
