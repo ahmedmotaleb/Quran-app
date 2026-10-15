@@ -126,3 +126,19 @@ def test_no_role_can_reach_another_learners_objects(world, quiz):  # noqa: F811
     assert s1.get(f"/api/v1/submissions/{sub}").status_code == 200
     assert client_for(world.t1).get(f"/api/v1/teacher/students/{sid}/progress").status_code == 200
     assert client_for(world.p1).get(f"/api/v1/parent/children/{sid}/progress").status_code == 200
+
+
+def test_password_hash_fits_small_instances_and_old_hashes_upgrade(settings):
+    from django.contrib.auth.hashers import Argon2PasswordHasher, check_password, identify_hasher, make_password
+
+    from apps.accounts.hashers import SmallArgon2PasswordHasher
+
+    settings.PASSWORD_HASHERS = ["apps.accounts.hashers.SmallArgon2PasswordHasher", "django.contrib.auth.hashers.PBKDF2PasswordHasher"]
+    new = make_password("correct horse 9")
+    assert identify_hasher(new).algorithm == "argon2" and "m=19456,t=2,p=1" in new
+    old = Argon2PasswordHasher().encode("correct horse 9", "saltsaltsalt")  # Django default (m=102400, p=8)
+    upgraded = []
+    assert check_password("correct horse 9", old, setter=lambda raw: upgraded.append(make_password(raw)))
+    assert upgraded and "m=19456" in upgraded[0]
+    assert not check_password("wrong", new)
+    assert SmallArgon2PasswordHasher.memory_cost <= 32 * 1024

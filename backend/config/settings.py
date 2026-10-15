@@ -131,7 +131,7 @@ TEMPLATES = [
 
 # Passwords: Argon2 first; existing hashes upgrade on next login.
 PASSWORD_HASHERS = [
-    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "apps.accounts.hashers.SmallArgon2PasswordHasher",  # Argon2id, OWASP parameters (see the module)
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
 ]
 if APP_ENV == "test":

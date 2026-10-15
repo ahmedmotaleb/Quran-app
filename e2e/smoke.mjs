@@ -55,18 +55,23 @@ if (ready.features?.media_storage === 'configured') await step('private recordin
   // purge_orphan_media job removes it later.
   const api = (p) => new URL(`/api/v1/${p}`, BASE).href;
   const { csrfToken } = await (await page.request.get(api('auth/csrf'))).json();
-  const bytes = Buffer.concat([Buffer.from('OggS'), Buffer.alloc(2044, 7)]);
+  // ~200 KB, about the size of a short compressed recitation, so the timings below are representative.
+  const bytes = Buffer.concat([Buffer.from('OggS'), Buffer.alloc(200 * 1024, 7)]);
+  const t0 = Date.now();
   const up = await page.request.post(api('media/recitations'), {
     headers: { 'X-CSRFToken': csrfToken, Referer: BASE },
-    multipart: { file: { name: 'smoke.ogg', mimeType: 'audio/ogg', buffer: bytes }, duration_seconds: '2' },
+    multipart: { file: { name: 'smoke.ogg', mimeType: 'audio/ogg', buffer: bytes }, duration_seconds: '20' },
   });
+  const uploadMs = Date.now() - t0;
   if (up.status() !== 201) throw new Error(`upload ${up.status()} ${(await up.text()).slice(0, 200)}`);
   const { id } = await up.json();
   const det = await page.request.get(api(`media/${id}`));
   const { url } = await det.json();
   if (!url || !/r2\.cloudflarestorage\.com/.test(url)) throw new Error(`unexpected read URL host: ${url && new URL(url).host}`);
+  const t1 = Date.now();
   const got = await page.request.get(url);
   const body = await got.body();
+  gh('notice', `storage timing: upload 200 KB via the API (validated, stored in R2) ${uploadMs} ms; signed read from R2 ${Date.now() - t1} ms`);
   if (got.status() !== 200 || !body.equals(bytes)) throw new Error(`playback ${got.status()} (${body.length} bytes)`);
   const anon = await request.newContext();
   const a = await anon.get(api(`media/${id}`));
