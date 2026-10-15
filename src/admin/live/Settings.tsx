@@ -33,7 +33,7 @@ export default function SettingsLive() {
   if (loadErr) return <p role="alert" style={{ color: color.danger }}>{loadErr} <button onClick={() => void load()} style={smallBtn('primary')}>إعادة المحاولة</button></p>;
   if (!saved || !v) return <p role="status" style={{ color: color.muted }}>جارٍ التحميل…</p>;
 
-  const changed = (Object.keys(v) as (keyof Draft)[]).filter((k) => v[k] !== (saved as unknown as Draft)[k]);
+  const changed = (Object.keys(v) as (keyof Draft)[]).filter((k) => JSON.stringify(v[k]) !== JSON.stringify((saved as unknown as Draft)[k]));
   const sensitive = changed.filter((k) => saved.sensitive.includes(k));
   const up = (o: Partial<Draft>) => { setV({ ...v, ...o }); setErr({}); };
   const submit = async (pw?: string) => {
@@ -86,6 +86,7 @@ export default function SettingsLive() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 14 }}>
           {NUM.slice(6).map(([k, l, unit]) => <Num key={k} k={k} label={l} unit={unit} v={v} up={up} err={err[k]} sensitive={saved.sensitive.includes(k)} />)}
         </div>
+        <Intervals v={v.review_intervals} onChange={(x) => up({ review_intervals: x })} err={err.review_intervals} />
         {sw('open_signup', 'يسمح لأي شخص بإنشاء حساب طالب من التطبيق')}
         {sw('session_reminders', 'تذكير الطالب والمعلم قبل الجلسة (يُفعَّل عند ربط الإشعارات)')}
         {sw('parent_weekly_report', 'ملخص أسبوعي لأولياء الأمور (يُفعَّل عند ربط الإشعارات)')}
@@ -98,6 +99,21 @@ export default function SettingsLive() {
       </div>
       {askPw && <PasswordDialog fields={sensitive.map((k) => LABEL[k])} onClose={() => setAskPw(false)} run={(pw) => submit(pw)} />}
       <AuditLog key={auditKey} />
+    </div>
+  );
+}
+
+/** Spaced-repetition intervals as a comma-separated list of days; empty = the defaults (1, 3, 7, 14, 30). */
+function Intervals({ v, onChange, err }: { v: number[]; onChange: (x: number[]) => void; err?: string | null }) {
+  const [txt, setTxt] = useState(v.join('، '));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label htmlFor="st-review_intervals" style={labelStyle}>فواصل المراجعة المتباعدة (بالأيام)</label>
+      <input id="st-review_intervals" dir="ltr" value={txt} placeholder="1, 3, 7, 14, 30" aria-invalid={!!err}
+        onChange={(e) => { setTxt(e.target.value); onChange(e.target.value.split(/[,،\s]+/).filter(Boolean).map(Number).filter((n) => Number.isFinite(n))); }}
+        style={inputStyle(err, true, { maxWidth: 320 })} />
+      <span style={{ fontSize: 12, color: color.muted, lineHeight: 1.6 }}>بعد اعتماد حفظ مقطع تُجدول مراجعته بعد الفاصل الأول، ثم ينتقل للتالي عند الإتقان (كل الدرجات 4+)، ويتكرر عند الدرجة 3، ويعود لفاصل أقصر عند الإعادة أو الدرجة 2 أو أقل. اتركه فارغًا للقيم الافتراضية.</span>
+      <FieldError msg={err} />
     </div>
   );
 }

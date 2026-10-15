@@ -5,6 +5,7 @@ from apps.core import admin_views as core_admin
 from apps.assessments import views as assessments
 from apps.learning import admin_views as learn_admin
 from apps.learning import progress
+from apps.learning import reviews
 from apps.learning import views as learning
 from apps.media import views as media
 from apps.notifications import views as notifications
@@ -31,11 +32,16 @@ urlpatterns = [
     path("lessons/<int:pk>/complete", learning.LessonComplete.as_view()),
     # Progress (one calculation for every role)
     path("progress/me", progress.MyProgress.as_view()),
+    path("today", progress.TodayPlan.as_view()),
     path("teacher/students/<int:pk>/progress", progress.TeacherStudentProgress.as_view()),
     path("parent/children/<int:pk>/progress", progress.ChildProgress.as_view()),
     path("admin/progress", progress.AdminProgressSummary.as_view()),
     path("parent/weekly-summary", progress.ParentWeeklySummary.as_view()),
     path("teacher/dashboard", progress.TeacherDashboard.as_view()),
+    # Spaced-repetition review schedules
+    path("review-schedules", reviews.MyReviewSchedules.as_view()),
+    path("teacher/students/<int:pk>/review-schedules", reviews.TeacherReviewSchedules.as_view()),
+    path("teacher/review-schedules/<int:pk>", reviews.TeacherReviewOverride.as_view()),
     # Quizzes
     path("tests", assessments.TestList.as_view()),
     path("tests/<int:pk>", assessments.TestDetail.as_view()),

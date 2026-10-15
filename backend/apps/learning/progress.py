@@ -299,3 +299,84 @@ class TeacherDashboard(APIView):
 
     def get(self, request):
         return Response(teacher_dashboard(request.user))
+
+
+# ---- Today plan (pack prompt 16) ---------------------------------------------------------
+TODAY_RULES = [
+    "1) واجبات المعلم المتأخرة أولًا (المراجعة قبل غيرها، الأقدم أولًا).",
+    "2) المراجعات المستحقة اليوم.",
+    "3) واجبات الحفظ والتجويد المستحقة اليوم، ثم ما طلب المعلم إعادته.",
+    "4) جلسات اليوم بترتيب الوقت.",
+    "5) اقتراح: الدرس التالي غير المكتمل، والاختبارات المفتوحة التي لم تُحاوَل.",
+    "ما أُنجز اليوم يبقى ظاهرًا مع علامة الإنجاز ولا يُحسب مرتين. المدة التقديرية تظهر فقط إن حدّدها المعلم أو الدرس أو الاختبار.",
+]
+
+
+def today_plan(student) -> dict:
+    from apps.assessments.models import Attempt
+    from apps.assessments.services import open_tests
+
+    from . import reviews
+    from .models import Lesson, PublishState
+
+    reviews.ensure_due(student)
+    tz = ZoneInfo(student.timezone or "Africa/Cairo")
+    now = timezone.now()
+    today = now.astimezone(tz).date()
+    d0 = datetime.combine(today, time.min, tz)
+    d1 = d0 + timedelta(days=1)
+    items: list[dict] = []
+
+    def add(prio, kind, title, ref, due=None, state="todo", reason="", minutes=None, sub=""):
+        items.append({"priority": prio, "kind": kind, "title": title, "ref": ref, "due": due.isoformat() if due else None,
+                      "state": state, "reason": reason, "est_minutes": minutes, "subtitle": sub})
+
+    tasks = Assignment.objects.filter(student=student).select_related("teacher")
+    for t in tasks.exclude(status=AssignmentStatus.ACCEPTED):
+        rng = f"سورة {t.surah}: {t.ayah_from}–{t.ayah_to}"
+        if t.status == AssignmentStatus.SUBMITTED:
+            if Submission.objects.filter(assignment=t, created_at__gte=d0).exists():
+                add(9, t.kind, t.title, t.id, t.due_at, "done", "سُلِّم اليوم وينتظر المعلم", sub=rng)
+            continue
+        if t.due_at < d0:
+            add(1, t.kind, t.title, t.id, t.due_at, reason="متأخر", sub=rng)
+        elif t.due_at < d1:
+            add(2 if t.kind == AssignmentType.REVIEW else 3, t.kind, t.title, t.id, t.due_at, reason="مستحق اليوم", sub=rng)
+        elif t.status == AssignmentStatus.NEEDS_REPEAT:
+            add(3, t.kind, t.title, t.id, t.due_at, reason="طلب المعلم الإعادة", sub=rng)
+    for f in Feedback.objects.filter(submission__student=student, decision=Feedback.Decision.ACCEPT, created_at__gte=d0).select_related("submission__assignment"):
+        a = f.submission.assignment
+        add(9, a.kind, a.title, a.id, a.due_at, "done", "اعتمده المعلم اليوم", sub=f"سورة {a.surah}: {a.ayah_from}–{a.ayah_to}")
+    for b in Booking.objects.filter(student=student, status=Booking.Status.CONFIRMED, occurrence__starts_at__gte=d0,
+                                    occurrence__starts_at__lt=d1).select_related("occurrence__teacher").order_by("occurrence__starts_at"):
+        o = b.occurrence
+        ended = o.ends_at <= now
+        add(9 if ended else 4, "session", f"جلسة مع {o.teacher.full_name}", b.id, o.starts_at, "done" if ended else "todo",
+            "انتهت" if ended else "اليوم", int((o.ends_at - o.starts_at).total_seconds() // 60))
+    done_lessons = set(LessonCompletion.objects.filter(student=student).values_list("lesson_id", flat=True))
+    for lc in LessonCompletion.objects.filter(student=student, completed_at__gte=d0).select_related("lesson"):
+        add(9, "lesson", lc.lesson.title, lc.lesson_id, state="done", reason="أكملته اليوم", minutes=lc.lesson.duration_minutes)
+    from .views import _published_lessons
+
+    started_courses = Lesson.objects.filter(pk__in=done_lessons).values("course_id")
+    nxt = (_published_lessons(student).filter(course_id__in=started_courses).exclude(pk__in=done_lessons)
+           .order_by("course_id", "order", "id").first())
+    if nxt:
+        add(5, "lesson", nxt.title, nxt.id, reason="الدرس التالي في دورتك", minutes=nxt.duration_minutes, sub=nxt.course.title)
+    tried = set(Attempt.objects.filter(student=student).values_list("test_id", flat=True))
+    for t in open_tests(student).exclude(pk__in=tried).order_by("closes_at", "id")[:2]:
+        add(6, "quiz", t.title, t.id, t.closes_at, reason="اختبار مفتوح", minutes=t.duration_minutes)
+    # Within overdue items reviews come first (rule 1); then oldest due first; ties by kind and id (deterministic).
+    items.sort(key=lambda x: (x["priority"], 0 if x["priority"] == 1 and x["kind"] == AssignmentType.REVIEW else 1,
+                              x["due"] or "9999", x["kind"], x["ref"]))
+    todo = [i for i in items if i["state"] == "todo"]
+    return {"date": today.isoformat(), "timezone": str(tz), "items": items,
+            "counts": {"todo": len(todo), "done": len(items) - len(todo), "overdue": sum(1 for i in todo if i["priority"] == 1)},
+            "est_minutes": sum(i["est_minutes"] or 0 for i in todo) or None, "rules": TODAY_RULES}
+
+
+class TodayPlan(APIView):
+    permission_classes = [IsStudent]
+
+    def get(self, request):
+        return Response(today_plan(request.user))

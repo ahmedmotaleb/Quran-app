@@ -55,8 +55,9 @@ const initial = () => ({
   pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, org_name: '', support_whatsapp: '', show_support_button: false },
   me: null as Me | null,
   net: { loading: false, error: null as string | null },
-  teachers: [...TEACHERS] as Teacher[],
-  students: [...STUDENTS] as Student[],
+  // Live mode starts empty: demo records must never appear (even briefly) before the server's data arrives.
+  teachers: (LIVE ? [] : [...TEACHERS]) as Teacher[],
+  students: (LIVE ? [] : [...STUDENTS]) as Student[],
   /** Live mode: the teacher's review queue from the API (demo derives it from tasks). */
   reviews: null as ReviewItem[] | null,
   /** Live mode, teacher: own sessions (with bookings) for the coming week. */
@@ -91,10 +92,10 @@ const initial = () => ({
   planTab: 'hifz' as TaskType,
   circTab: 'teachers' as 'teachers' | 'bookings' | 'lessons' | 'quizzes',
   q: '', filt: 'all', lessonTopic: 'all', progRange: 'month' as 'week' | 'month' | 'q',
-  tasks: initialTasks(),
+  tasks: LIVE ? [] : initialTasks(),
   fb: initialFeedback() as Record<string, Feedback>,
   recs: initialRecordings() as Record<string, Recording>,
-  sessions: initialSessions() as Session[],
+  sessions: (LIVE ? [] : initialSessions()) as Session[],
   avail: generateAvailability() as Availability,
   others: initialOthers() as OtherSubmission[],
   bk: {

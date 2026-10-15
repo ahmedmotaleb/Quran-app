@@ -57,6 +57,57 @@ function AttentionLive() {
   );
 }
 
+interface Sched { id: number; surah_name: string; ayah_from: number; ayah_to: number; step: number; interval_days: number; next_due: string; active: boolean; cycles: number;
+  history: { at: string; kind_label: string; due_on: string | null; outcome: string; reason: string; actor: string | null }[] }
+const OUTCOME: Record<string, string> = { next: 'إلى الفاصل التالي', same: 'الفاصل نفسه', earlier: 'فاصل أقصر', repeat: 'إعادة' };
+
+/** Spaced-repetition schedules of one student: next date, interval, history; override with a reason, pause/resume. */
+function ReviewSchedulesLive({ id }: { id: number }) {
+  const [d, setD] = useState<{ help: string; results: Sched[] } | null>(null);
+  const [edit, setEdit] = useState<{ s: Sched; date: string; reason: string; err?: string } | null>(null); const [openH, setOpenH] = useState<number | null>(null);
+  const load = () => api<{ help: string; results: Sched[] }>('GET', `teacher/students/${id}/review-schedules`).then(setD).catch(() => setD({ help: '', results: [] }));
+  useEffect(() => { void load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const save = async (body: Record<string, unknown>, sched: Sched) => {
+    try { await api('PATCH', `teacher/review-schedules/${sched.id}`, body); toast('حُفظ التعديل'); setEdit(null); await load(); }
+    catch (e) { const er = e as { message: string; field?: (n: string) => string | null }; setEdit(edit && { ...edit, err: er.field?.('reason') ?? er.field?.('next_due') ?? er.message }); if (!edit) toast(er.message, 'alert'); }
+  };
+  if (!d || !d.results.length) return null;
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>جدول المراجعة</h3>
+      <details style={{ fontSize: 12, color: color.body }}><summary style={{ cursor: 'pointer', minHeight: 40, display: 'flex', alignItems: 'center' }}>كيف تُجدول المراجعات؟</summary><p style={{ margin: 0, lineHeight: 1.8 }}>{d.help}</p></details>
+      {d.results.map((x) => (
+        <div key={x.id} style={{ ...card, borderRadius: 14, padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ flex: 1, fontWeight: 700 }}>سورة {x.surah_name} {x.ayah_from}–{x.ayah_to}</span>
+            <span style={{ fontSize: 12, color: x.active ? color.primary : color.muted }}>{x.active ? `التالية ${x.next_due} · كل ${x.interval_days} يوم` : 'موقوفة'}</span>
+          </div>
+          {edit?.s.id === x.id ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>الموعد الجديد<input type="date" dir="ltr" value={edit.date} onChange={(e) => setEdit({ ...edit, date: e.target.value })} style={{ display: 'block', marginTop: 4, minHeight: 44, borderRadius: 10, border: `1px solid ${color.borderInput}`, padding: '0 10px', width: '100%' }} /></label>
+              <label style={{ fontSize: 13, fontWeight: 700 }}>السبب<input value={edit.reason} onChange={(e) => setEdit({ ...edit, reason: e.target.value })} style={{ display: 'block', marginTop: 4, minHeight: 44, borderRadius: 10, border: `1px solid ${color.borderInput}`, padding: '0 10px', width: '100%' }} /></label>
+              {edit.err && <p role="alert" style={{ margin: 0, color: color.danger, fontSize: 13 }}>{edit.err}</p>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => save({ next_due: edit.date, reason: edit.reason }, x)} style={primaryBtn(44, 14, { padding: '0 14px' })}>حفظ</button>
+                <button onClick={() => setEdit(null)} style={{ minHeight: 44, padding: '0 14px', borderRadius: 12, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, cursor: 'pointer' }}>إلغاء</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={() => setEdit({ s: x, date: x.next_due, reason: '' })} style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, cursor: 'pointer', fontWeight: 700 }}>تعديل الموعد</button>
+              <button onClick={() => { const r = window.prompt(x.active ? 'سبب إيقاف المراجعات:' : 'سبب الاستئناف:'); if (r) void save({ active: !x.active, reason: r }, x); }} style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, cursor: 'pointer', fontWeight: 700 }}>{x.active ? 'إيقاف' : 'استئناف'}</button>
+              <button onClick={() => setOpenH(openH === x.id ? null : x.id)} aria-expanded={openH === x.id} style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: 'none', background: 'transparent', color: color.primary, cursor: 'pointer', textDecoration: 'underline' }}>السجل ({x.history.length})</button>
+            </div>
+          )}
+          {openH === x.id && <ul style={{ margin: 0, paddingInlineStart: 18, fontSize: 12, lineHeight: 1.8, color: color.body }}>
+            {x.history.map((h, i) => <li key={i}>{h.at.slice(0, 10)} · {h.kind_label}{h.outcome ? ` (${OUTCOME[h.outcome] ?? h.outcome})` : ''}{h.due_on ? ` · الموعد ${h.due_on}` : ''}{h.reason ? ` · ${h.reason}` : ''}{h.actor ? ` · ${h.actor}` : ''}</li>)}
+          </ul>}
+        </div>
+      ))}
+    </section>
+  );
+}
+
 function StudentProgressLive({ id }: { id: number }) {
   const [p, setP] = useState<ApiProgress | null>(null); const [err, setErr] = useState<string | null>(null);
   useEffect(() => { let on = true; studentProgress(id).then((x) => on && setP(x)).catch((e) => on && setErr((e as Error).message)); return () => { on = false; }; }, [id]);
@@ -175,8 +226,9 @@ export function TeacherStudents() {
 
 export function TeacherStudent() {
   const s = useApp(); const { revs, open } = useReviews(); const evals = useEvals();
-  const u = s.students.find((x) => x.id === s.params.id) || s.students[0];
-  if (!u) return <BackHeader title="ملف الطالب" sticky />;
+  // Never fall back to another student's file in live mode (e.g. while the list is still loading).
+  const u = s.students.find((x) => x.id === s.params.id) || (s.liveMode ? undefined : s.students[0]);
+  if (!u) return <div><BackHeader title="ملف الطالب" sticky /><p role="status" style={muted(14, { padding: 16 })}>{s.liveMode && !s.students.length ? 'جارٍ التحميل…' : 'هذا الطالب غير مرتبط بك.'}</p></div>;
   const live = s.liveMode;
   const isY = live || u.id === 'u1';
   const recs = revs.filter((r) => r.sid === u.id);
@@ -202,6 +254,7 @@ export function TeacherStudent() {
           <div style={{ ...card, borderRadius: 14, padding: 12 }}><p style={muted(12)}>الخطة الحالية</p><p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 700 }}>{u.plan}</p></div>
         </div>}
         {live && <StudentProgressLive key={u.id} id={Number(u.id)} />}
+        {live && <ReviewSchedulesLive key={`r${u.id}`} id={Number(u.id)} />}
         <button onClick={() => openAssign(u.id)} style={primaryBtn(52, 16)}><Icon name="plus" /> أنشئ واجبًا لـ {u.name}</button>
         <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>الخطة</h3>
