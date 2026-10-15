@@ -30,10 +30,10 @@ Demo accounts (password `halqa123`): `yousef@halqa.app` (student), `teacher@halq
 
 ## Admin portal (`#/admin`)
 
-**Partially simulated:** the portal below still runs on in-memory demo data (it shows a
-«بيانات عرض تجريبية» badge). The backend already has the admin sign-in with two-step
-verification, user status, teacher-student assignment and guardian-link APIs; connecting the
-portal to them is in progress (see `docs/STATUS.md`).
+**Partially simulated:** in live mode, sign-in (with two-step verification), the overview,
+students, teachers and parents run on the real API. Circles, bookings, lectures, quizzes,
+subscriptions and settings still show in-memory demo data and say so on screen (see
+`docs/STATUS.md`). The description below is of the demo portal.
 
 The desktop admin portal has its own sign-in (demo: `admin@halqa.app` / `halqa123`). Admin
 accounts can't sign in to the mobile app, and other accounts can't sign in to the portal.

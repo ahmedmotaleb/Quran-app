@@ -8,6 +8,8 @@ import { LIVE } from './api/client';
 
 const AdminApp = lazy(() => import('./admin/AdminApp'));
 const DesignSystem = lazy(() => import('./designsystem/DesignSystem'));
+const SetPasswordPage = lazy(() => import('./screens/auth/LinkPages').then((m) => ({ default: m.SetPasswordPage })));
+const AcceptInvitePage = lazy(() => import('./screens/auth/LinkPages').then((m) => ({ default: m.AcceptInvitePage })));
 
 function useHash() {
   const [h, setH] = useState(() => window.location.hash);
@@ -26,7 +28,7 @@ function useMedia(q: string) {
   return m;
 }
 
-/** `#/admin` → admin portal, `#/design-system` → living style guide, anything else → the mobile app. */
+/** `#/admin` → admin portal, `#/design-system` → style guide, `#/reset`/`#/invite` → link pages, else → the mobile app. */
 export default function App() {
   return <><Routes /><PwaUpdate /></>;
 }
@@ -35,6 +37,8 @@ function Routes() {
   const h = useHash();
   if (h.startsWith('#/admin')) return <Suspense fallback={null}><AdminApp /></Suspense>;
   if (h.startsWith('#/design-system')) return <Suspense fallback={null}><DesignSystem /></Suspense>;
+  if (h.startsWith('#/reset')) return <Suspense fallback={null}><SetPasswordPage /></Suspense>;
+  if (h.startsWith('#/invite')) return <Suspense fallback={null}><AcceptInvitePage /></Suspense>;
   return <MobileApp />;
 }
 

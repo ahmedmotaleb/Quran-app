@@ -19,8 +19,9 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 | Teacher | Content authoring (lectures, quizzes) | simulated | `src/screens/teacher` `tcontent` is in `SAMPLE_SCREENS` | Pack prompt 07 (admin content first) |
 | Teacher | Voice notes on feedback | partial | Backend upload exists; hidden in live UI | Later |
 | Parent | Linked children, sessions, tasks, progress, no audio | implemented | `test_permissions.py`, `e2e/parent.mjs` | — |
-| Admin | Portal sign-in | simulated | `src/admin/adminStore.ts` `adminLogin` checks a hard-coded demo password | **Pack prompt 04** |
-| Admin | Users, teachers, parents | simulated (UI) / partial (API) | UI reads `adminData.ts`; API has `admin/users`, status, assignments, guardian links | Pack prompt 05 |
+| Admin | Portal sign-in | implemented | Real `admin/auth/login`, OTP step, session restore; `e2e/admin.mjs` | — |
+| Admin | Users, teachers, parents | implemented | Live sections on `admin/users*`, approval, links, setup links, teacher invitations; `test_admin_people.py`, `e2e/admin-people.mjs` | — |
+| Auth | Set-password and invitation pages | implemented | `#/reset`, `#/invite` (`src/screens/auth/LinkPages.tsx`) | Email delivery (pack 23) |
 | Admin | Circles, bookings | simulated | UI reads `initialCircles`/`initialBookings` | Pack prompt 06 |
 | Admin | Courses, lessons, quizzes | simulated | UI reads `initialContent`; no admin content API on `main` (draft on branch `admin-console-wip`) | Pack prompt 07 |
 | Admin | Settings, audit log | simulated (UI) | `AppSettings` model exists; no admin API on `main` | Pack prompt 08 |
@@ -38,8 +39,7 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 
 ## Top gaps (user impact × release risk)
 
-1. Admin portal sign-in is simulated (prompt 04) — blocks every other admin feature.
-2. Admin users/teachers/parents not persisted (05) — teachers cannot be approved, students cannot be linked from the UI.
+1. ~~Admin sign-in (04)~~ and ~~users/teachers/parents (05)~~ — done.
 3. No way to create courses/lessons/quizzes in production (07) — learners see an empty library.
 4. Admin bookings/circles simulated (06).
 5. Settings not editable (08).
@@ -49,4 +49,4 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 9. Teacher content authoring still sample (07, teacher side).
 10. Live video sessions undecided (19).
 
-The live Admin Portal remains the highest-priority gap. Next prompt: **04**.
+The rest of the live Admin Portal (06–08) remains the highest-priority gap. Next prompt: **06**.

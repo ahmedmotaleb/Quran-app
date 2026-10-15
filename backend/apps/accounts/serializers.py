@@ -82,20 +82,44 @@ class AdminUserSerializer(serializers.ModelSerializer):
     teachers = serializers.SerializerMethodField()
     guardians = serializers.SerializerMethodField()
     children = serializers.SerializerMethodField()
+    level = serializers.CharField(source="student_profile.level", read_only=True, default="")
+    approved = serializers.SerializerMethodField()
+    has_password = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "role", "status", "timezone", "date_joined", "teachers", "guardians", "children"]
+        fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "level", "approved", "has_password",
+                  "date_joined", "last_login", "teachers", "guardians", "children"]
         read_only_fields = fields
 
     def get_teachers(self, u):
-        return [{"id": a.teacher_id, "name": a.teacher.full_name} for a in u.teacher_assignments.all() if a.active]
+        return [{"id": a.teacher_id, "name": a.teacher.full_name, "assignment_id": a.id} for a in u.teacher_assignments.all() if a.active]
 
     def get_guardians(self, u):
-        return [{"id": g.guardian_id, "name": g.guardian.full_name, "status": g.status} for g in u.guardians.all() if g.status != "revoked"]
+        return [{"id": g.guardian_id, "name": g.guardian.full_name, "status": g.status, "link_id": g.id}
+                for g in u.guardians.all() if g.status != "revoked"]
 
     def get_children(self, u):
-        return [{"id": g.student_id, "name": g.student.full_name, "status": g.status} for g in u.guardian_links.all() if g.status != "revoked"]
+        return [{"id": g.student_id, "name": g.student.full_name, "status": g.status, "link_id": g.id}
+                for g in u.guardian_links.all() if g.status != "revoked"]
+
+    def get_approved(self, u):
+        if u.role != Role.TEACHER:
+            return None
+        prof = getattr(u, "teacher_profile", None)
+        return bool(prof and prof.approved_at)
+
+    def get_has_password(self, u):
+        return u.has_usable_password()
+
+
+class AdminUserUpdateSerializer(serializers.Serializer):
+    full_name = serializers.CharField(min_length=2, max_length=120, required=False)
+    phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    timezone = serializers.CharField(max_length=64, required=False)
+
+    def validate_timezone(self, v):
+        return validate_tz(v)
 
 
 class AdminCreateUserSerializer(serializers.Serializer):
@@ -125,6 +149,7 @@ class TeacherAssignmentSerializer(serializers.ModelSerializer):
         model = TeacherAssignment
         fields = ["id", "teacher", "student", "active", "created_at"]
         read_only_fields = ["id", "active", "created_at"]
+        validators: list = []  # the view answers duplicates with a clear 409 in Arabic
 
     def validate(self, attrs):
         if attrs["teacher"].role != Role.TEACHER:

@@ -1,10 +1,27 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { color, font } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import type { Status } from './adminData';
 import { adminLogin, adminLogout, adminRestore, goSection, mfaFinish, mfaStart, setAdmin, useAdmin, type AdminState, type Section } from './adminStore';
 import { LIVE, type ApiError } from '@/api/client';
+import * as LA from './live/api';
+const PeopleLive = lazy(() => import('./live/People'));
+
+/** Sections that run on the real API in live mode; the rest still show demo data (labelled). */
+const LIVE_SECTIONS: Partial<Record<Section, LA.Role>> = { students: 'student', teachers: 'teacher', parents: 'parent' };
+type LiveCounts = Partial<Record<LA.Role, LA.Counts>>;
+function useLiveCounts(sec: Section) {
+  const [c, setC] = useState<LiveCounts>({});
+  useEffect(() => {
+    if (!LIVE) return;
+    let on = true;
+    Promise.all((['student', 'teacher', 'parent'] as const).map((r) => LA.peopleCounts(r).then((x) => [r, x] as const)))
+      .then((xs) => { if (on) setC(Object.fromEntries(xs)); }).catch(() => { /* badges are optional */ });
+    return () => { on = false; };
+  }, [sec]);
+  return c;
+}
 import { StatusPill, TableSection, card } from './AdminTables';
 import AdminDialogs from './AdminDialogs';
 import AdminSettings from './AdminSettings';
@@ -112,7 +129,12 @@ function pendingCounts(s: AdminState): Partial<Record<Section, number>> {
 function Portal() {
   const s = useAdmin();
   const narrow = useNarrow();
-  const counts = pendingCounts(s);
+  const lc = useLiveCounts(s.sec);
+  const counts: Partial<Record<Section, number>> = LIVE
+    ? { students: (lc.student?.pending ?? 0) + (lc.student?.unlinked ?? 0), teachers: (lc.teacher?.pending ?? 0) + (lc.teacher?.unapproved ?? 0), parents: lc.parent?.pending ?? 0 }
+    : pendingCounts(s);
+  const liveRole = LIVE ? LIVE_SECTIONS[s.sec] : undefined;
+  const demoBadge = LIVE && !liveRole;
   const label = NAV.find((n) => n[0] === s.sec)![1];
 
   const nav = (
@@ -155,12 +177,14 @@ function Portal() {
       <main style={{ flex: 1, minWidth: 0, padding: '28px clamp(16px,3vw,40px)', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div><h1 style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>{label}</h1><p style={{ margin: '4px 0 0', fontSize: 14, color: color.muted }}>{TITLES[s.sec]}</p></div>
-          <span style={{ fontSize: 13, color: color.muted, background: color.sand, padding: '6px 12px', borderRadius: 999 }}>
-            {LIVE ? `${s.me?.full_name ?? ''} · الأقسام ما زالت ببيانات عرض تجريبية` : 'بيانات عرض تجريبية'}
+          <span style={{ fontSize: 13, color: demoBadge ? color.dangerInk : color.muted, background: color.sand, padding: '6px 12px', borderRadius: 999 }}>
+            {!LIVE ? 'بيانات عرض تجريبية' : liveRole || s.sec === 'overview' ? `${s.me?.full_name ?? ''} · بيانات حقيقية` : 'هذا القسم ما زال ببيانات عرض تجريبية — لا تُحفظ التغييرات'}
           </span>
         </header>
         {LIVE && s.me && !s.me.mfa_enabled && <MfaSetup />}
-        {s.sec === 'overview' ? <Overview counts={counts} /> : s.sec === 'settings' ? <AdminSettings /> : <TableSection key={s.sec} sec={s.sec} />}
+        {liveRole ? <Suspense fallback={null}><PeopleLive key={liveRole} role={liveRole} /></Suspense>
+          : s.sec === 'overview' ? (LIVE ? <OverviewLive c={lc} /> : <Overview counts={counts} />)
+            : s.sec === 'settings' ? <AdminSettings /> : <TableSection key={s.sec} sec={s.sec} />}
       </main>
       <AdminDialogs />
       {s.toast && <div role="status" aria-live="polite" style={{ position: 'fixed', bottom: 24, left: 24, maxWidth: 'calc(100vw - 48px)', background: color.ink, color: color.ivory, padding: '14px 18px', borderRadius: 14, fontSize: 14, boxShadow: '0 12px 28px -12px rgba(0,0,0,.4)', zIndex: 60 }}>{s.toast}</div>}
@@ -232,6 +256,44 @@ function Overview({ counts }: { counts: Partial<Record<Section, number>> }) {
           ))}
         </section>
       </div>
+    </>
+  );
+}
+
+/* ---------------- Live overview (real counts only) ---------------- */
+function OverviewLive({ c }: { c: LiveCounts }) {
+  const n = (x?: number) => (x === undefined ? '…' : x);
+  const kpis: { l: string; v: number | string; s: string; go: Section }[] = [
+    { l: 'طلاب نشطون', v: n(c.student?.active), s: c.student?.unlinked ? `${c.student.unlinked} دون معلم مرتبط` : 'كلهم مرتبطون بمعلمين', go: 'students' },
+    { l: 'معلمون نشطون', v: n(c.teacher?.active), s: `${c.teacher?.unapproved ?? 0} غير معتمدين`, go: 'teachers' },
+    { l: 'أولياء أمور', v: n(c.parent?.active), s: `${c.parent?.pending ?? 0} بانتظار الاعتماد`, go: 'parents' },
+  ];
+  const todo: [Section, number, string][] = [
+    ['students', c.student?.pending ?? 0, 'طلاب بانتظار الاعتماد'], ['students', c.student?.unlinked ?? 0, 'طلاب دون معلم'],
+    ['teachers', c.teacher?.unapproved ?? 0, 'معلمون غير معتمدين'], ['parents', c.parent?.pending ?? 0, 'أولياء أمور بانتظار الاعتماد'],
+  ];
+  const open = todo.filter(([, k]) => k > 0);
+  return (
+    <>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14 }}>
+        {kpis.map((k) => (
+          <button key={k.l} onClick={() => goSection(k.go)} style={{ ...card, padding: 18, textAlign: 'right', cursor: 'pointer', color: color.ink }}>
+            <p style={{ margin: 0, fontSize: 14, color: color.muted }}>{k.l}</p>
+            <p style={{ margin: '6px 0 0', fontSize: 30, fontWeight: 800, fontFamily: font.latin }}>{k.v}</p>
+            <p style={{ margin: '4px 0 0', fontSize: 13, color: color.primary }}>{k.s}</p>
+          </button>
+        ))}
+      </div>
+      <section style={{ ...card, padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>يحتاج إجراء</h2>
+        {open.length === 0 && <p style={{ margin: 0, fontSize: 15, color: color.muted }}>لا توجد إجراءات معلقة.</p>}
+        {open.map(([k, v, t]) => (
+          <button key={t} onClick={() => goSection(k)} style={{ minHeight: 52, padding: '0 14px', borderRadius: 12, border: `1px solid ${color.divider}`, background: color.ivory, display: 'flex', alignItems: 'center', gap: 10, textAlign: 'right', cursor: 'pointer', color: color.ink, fontSize: 15 }}>
+            <span style={{ flex: 1 }}><span style={{ fontFamily: font.latin }}>{v}</span> {t}</span><span style={{ fontWeight: 700, color: color.primary }}>{NAV.find((x) => x[0] === k)![1]} ←</span>
+          </button>
+        ))}
+      </section>
+      <p style={{ margin: 0, fontSize: 14, color: color.muted }}>الحلقات والحجوزات والمحاضرات والاختبارات والاشتراكات والإعدادات ما زالت ببيانات عرض تجريبية، وتُربط بالخادم في المراحل التالية.</p>
     </>
   );
 }
