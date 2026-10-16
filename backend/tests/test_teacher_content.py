@@ -84,3 +84,64 @@ def test_teachers_only_touch_their_own_content(world):
         assert c.post("/api/v1/teacher/courses", {"title": "x y"}, format="json").status_code == 403
     assert client_for(world.t1).get("/api/v1/admin/content/drafts").status_code == 403
     assert Course.objects.get(pk=cid).teacher_id == world.t1.id
+
+
+# ---- lesson files (PDF / audio) -------------------------------------------------------
+from django.core.files.uploadedfile import SimpleUploadedFile  # noqa: E402
+
+from .test_media_submissions import _private_root  # noqa: E402,F401 (uploads go to a temporary folder)
+
+PDF = b"%PDF-1.4\n" + b"0" * 2000
+MP3 = b"ID3" + b"\0" * 3000
+
+
+def lesson_file(c, data=PDF, ctype="application/pdf", **extra):
+    return c.post("/api/v1/media/lesson-files", {"file": SimpleUploadedFile("f", data, content_type=ctype), **extra}, format="multipart")
+
+
+def test_lesson_files_upload_attach_and_read_rules(world):
+    t1, admin, s1, p1 = client_for(world.t1), client_for(world.admin), client_for(world.s1), client_for(world.p1)
+    assert lesson_file(s1).status_code == 403 and lesson_file(p1).status_code == 403   # students/parents cannot upload
+    assert lesson_file(t1, b"not a pdf at all", "application/pdf").status_code == 400  # signature checked
+    assert lesson_file(t1, PDF, "application/zip").status_code == 400
+    pdf = lesson_file(t1).json()
+    mp3 = lesson_file(t1, MP3, "audio/mpeg", duration_seconds="600").json()
+    assert pdf["content_type"] == "application/pdf" and pdf["duration_seconds"] is None
+
+    cid = t1.post("/api/v1/teacher/courses", {"title": "دورة الملفات"}, format="json").json()["id"]
+    assert t1.post(f"/api/v1/teacher/courses/{cid}/lessons", {"title": "ملخص", "kind": "pdf"}, format="json").status_code == 400  # file required
+    wrong = t1.post(f"/api/v1/teacher/courses/{cid}/lessons", {"title": "ملخص", "kind": "pdf", "media": mp3["id"]}, format="json")
+    assert wrong.status_code == 400 and "media" in wrong.json()["fields"]                  # audio is not a PDF
+    other = lesson_file(client_for(world.t2)).json()
+    assert t1.post(f"/api/v1/teacher/courses/{cid}/lessons", {"title": "ملخص", "kind": "pdf", "media": other["id"]}, format="json").status_code == 400
+    l = t1.post(f"/api/v1/teacher/courses/{cid}/lessons", {"title": "ملخص", "kind": "pdf", "media": pdf["id"]}, format="json").json()
+    assert l["has_file"] and l["file_type"] == "application/pdf"
+    assert t1.post(f"/api/v1/teacher/courses/{cid}/lessons", {"title": "نسخة", "kind": "pdf", "media": pdf["id"]}, format="json").status_code == 400  # one lesson per file
+    audio = t1.post(f"/api/v1/teacher/courses/{cid}/lessons", {"title": "تلاوة نموذجية", "kind": "audio", "media": mp3["id"]}, format="json")
+    assert audio.status_code == 201
+
+    # Draft: the student cannot read the file. Published: they can, through a signed link; parents never.
+    assert s1.get(f"/api/v1/media/{pdf['id']}").status_code == 404
+    admin.post(f"/api/v1/admin/lessons/{l['id']}/state", {"state": "published"}, format="json")
+    admin.post(f"/api/v1/admin/courses/{cid}/state", {"state": "published"}, format="json")
+    got = s1.get(f"/api/v1/lessons/{l['id']}").json()
+    assert got["kind"] == "pdf" and got["media"]["url"]
+    assert s1.get(f"/api/v1/media/{pdf['id']}").status_code == 200
+    assert p1.get(f"/api/v1/media/{mp3['id']}").status_code == 404
+
+
+def test_unattached_lesson_files_are_purged_attached_kept(world):
+    from datetime import timedelta
+
+    from django.core.management import call_command
+    from django.utils import timezone
+
+    from apps.media.models import MediaObject
+
+    t1 = client_for(world.t1)
+    kept, loose = lesson_file(t1).json()["id"], lesson_file(t1).json()["id"]
+    cid = t1.post("/api/v1/teacher/courses", {"title": "دورة"}, format="json").json()["id"]
+    t1.post(f"/api/v1/teacher/courses/{cid}/lessons", {"title": "ملخص", "kind": "pdf", "media": kept}, format="json")
+    MediaObject.objects.filter(pk__in=[kept, loose]).update(created_at=timezone.now() - timedelta(hours=72))
+    call_command("purge_orphan_media")
+    assert MediaObject.objects.get(pk=kept).state == "validated" and MediaObject.objects.get(pk=loose).state == "deleted"

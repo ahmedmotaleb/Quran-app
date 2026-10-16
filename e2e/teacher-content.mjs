@@ -8,7 +8,8 @@ const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || u
 const errs = [];
 let fails = 0;
 const stamp = Date.now().toString(36).slice(-4);
-const CT = `دورة المخارج ${stamp}`, LT = `مخارج الحلق ${stamp}`, QT = `اختبار المخارج ${stamp}`;
+const CT = `دورة المخارج ${stamp}`, LT = `مخارج الحلق ${stamp}`, QT = `اختبار المخارج ${stamp}`, PT = `ملخص المخارج ${stamp}`;
+const PDF = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(3000, 48)]);
 async function learner(email) {
   const page = await (await b.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Africa/Cairo' })).newPage(); page.setDefaultTimeout(10000);
   page.on('pageerror', (e) => errs.push(e.message));
@@ -50,8 +51,22 @@ await step(T.page, 'write a lesson in a new draft course; it persists', async ()
   await T.page.reload(); await open();
   await T.app.getByText(LT).waitFor(); await T.app.locator('strong', { hasText: CT }).waitFor();
 });
+await step(T.page, 'attach a PDF to a lesson; a wrong file type is refused', async () => {
+  await T.app.getByRole('button', { exact: true, name: 'PDF' }).click();
+  await T.app.locator('#tl-title').fill(PT);
+  await T.app.getByRole('button', { name: 'حفظ الدرس كمسودة' }).click();
+  await T.app.getByText('ارفع ملف الدرس').waitFor();
+  await T.page.setInputFiles('#tl-file', { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
+  await T.app.getByText('اختر ملف PDF.').waitFor();
+  await T.page.setInputFiles('#tl-file', { name: 'ملخص.pdf', mimeType: 'application/pdf', buffer: PDF });
+  await T.app.getByText(/رُفع: ملخص.pdf/).waitFor();
+  await T.app.getByRole('button', { name: 'حفظ الدرس كمسودة' }).click();
+  await T.page.getByText('حُفظ الدرس كمسودة بانتظار النشر').waitFor();
+  await T.app.getByText(PT).waitFor();
+  await T.app.getByRole('button', { exact: true, name: 'نص' }).click();
+});
 await step(T.page, 'a video link must be YouTube or Vimeo (server rule)', async () => {
-  await T.app.locator('#tl-title').fill('رابط خاطئ'); await T.app.getByRole('button', { name: 'رابط فيديو' }).click();
+  await T.app.locator('#tl-title').fill('رابط خاطئ'); await T.app.getByRole('button', { exact: true, name: 'فيديو' }).click();
   await T.app.locator('#tl-url').fill('https://example.com/video.mp4');
   await T.app.getByRole('button', { name: 'حفظ الدرس كمسودة' }).click();
   await T.app.getByText(/YouTube أو Vimeo/).first().waitFor();
@@ -76,7 +91,7 @@ await T.page.screenshot({ path: out + '/teacher-content.png' });
 
 // Admin: the overview lists the drafts; publishing makes the lesson visible to students.
 const A = await (await b.newContext({ viewport: { width: 1280, height: 860 } })).newPage(); A.setDefaultTimeout(10000);
-let lessonId = 0, courseId = 0, quizId = 0;
+let lessonId = 0, courseId = 0, quizId = 0, pdfLessonId = 0;
 await step(A, 'admin overview lists teacher drafts for review', async () => {
   await A.goto(BASE + '#/admin');
   await A.locator('#ad-email').fill('admin@halqa.app'); await A.locator('#ad-pw').fill('halqa123');
@@ -85,11 +100,14 @@ await step(A, 'admin overview lists teacher drafts for review', async () => {
   await A.getByText(/اختبارات مسودة بانتظار المراجعة والنشر \(\d+ من المعلمين\)/).waitFor();
   const courses = (await call(A, 'GET', `admin/courses?q=${encodeURIComponent(CT)}`)).body.results;
   courseId = courses[0].id;
-  lessonId = (await call(A, 'GET', `admin/courses/${courseId}`)).body.lesson_list.find((l) => l.title === LT).id;
+  const list = (await call(A, 'GET', `admin/courses/${courseId}`)).body.lesson_list;
+  lessonId = list.find((l) => l.title === LT).id;
+  pdfLessonId = list.find((l) => l.title === PT)?.id ?? 0;
+  if (!list.find((l) => l.title === PT)?.has_file) throw new Error('PDF lesson has no file on the server');
   quizId = (await call(A, 'GET', `admin/tests?q=${encodeURIComponent(QT)}`)).body.results[0].id;
 });
 await step(A, 'admin publishes the lesson, course and quiz', async () => {
-  for (const [path, body] of [[`admin/lessons/${lessonId}/state`, { state: 'published' }], [`admin/courses/${courseId}/state`, { state: 'published' }], [`admin/tests/${quizId}/state`, { state: 'published' }]]) {
+  for (const [path, body] of [[`admin/lessons/${lessonId}/state`, { state: 'published' }], [`admin/lessons/${pdfLessonId}/state`, { state: 'published' }], [`admin/courses/${courseId}/state`, { state: 'published' }], [`admin/tests/${quizId}/state`, { state: 'published' }]]) {
     const r = await call(A, 'POST', path, body); if (r.status !== 200) throw new Error(`${path} → ${r.status} ${JSON.stringify(r.body)}`);
   }
 });
@@ -98,6 +116,15 @@ await step(S.page, 'the student sees the published lesson', async () => {
   await S.app.getByText('السلام عليكم، يوسف').waitFor();
   const r = await call(S.page, 'GET', 'lessons');
   if (!r.body.some((l) => l.title === LT)) throw new Error('lesson not in the student library');
+});
+await step(S.page, 'the student downloads the PDF through a private signed link', async () => {
+  const l = (await call(S.page, 'GET', `lessons/${pdfLessonId}`)).body;
+  if (l.kind !== 'pdf' || !l.media?.url) throw new Error('no file link for the student');
+  const got = await S.page.request.get(new URL(l.media.url, BASE).href);
+  const body = await got.body();
+  if (got.status() !== 200 || !body.subarray(0, 5).equals(Buffer.from('%PDF-'))) throw new Error(`file ${got.status()}`);
+  const bare = await (await b.newContext()).request.get(new URL(l.media.url, BASE).href.split('?')[0]);
+  if (bare.status() < 400) throw new Error('unsigned link readable');
 });
 await step(T.page, 'the teacher sees it published, without a delete button', async () => {
   await T.page.reload(); await open();

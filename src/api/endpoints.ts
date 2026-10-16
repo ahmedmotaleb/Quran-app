@@ -86,6 +86,21 @@ export function uploadVoiceNote(blob: Blob, seconds: number) {
   f.append('duration_seconds', String(Math.max(1, Math.round(seconds))));
   return api<ApiMedia>('POST', 'media/voice-feedback', f);
 }
+/** A lesson file (PDF or audio) for admins/teachers. Audio length is read in the browser when possible. */
+export async function uploadLessonFile(file: File) {
+  const f = new FormData();
+  f.append('file', file);
+  if (file.type.startsWith('audio/')) {
+    const secs = await new Promise<number>((res) => {
+      const a = new Audio(); const url = URL.createObjectURL(file);
+      a.preload = 'metadata'; a.onloadedmetadata = () => { URL.revokeObjectURL(url); res(a.duration); };
+      a.onerror = () => { URL.revokeObjectURL(url); res(NaN); }; a.src = url;
+    });
+    if (Number.isFinite(secs) && secs >= 1) f.append('duration_seconds', String(Math.round(secs)));
+  }
+  return api<ApiMedia & { content_type: string }>('POST', 'media/lesson-files', f);
+}
+export const LESSON_FILE_ACCEPT = 'application/pdf,audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/ogg,audio/webm';
 export const submit = (assignment: number, media: string, key: string) =>
   api<ApiSubmission>('POST', `assignments/${assignment}/submissions`, { media }, { idempotencyKey: key });
 export const submissions = (q = '') => api<Page<ApiSubmission>>('GET', `submissions?page_size=100${q}`);

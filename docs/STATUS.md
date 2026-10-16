@@ -20,14 +20,14 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 | Student | Mushaf (verified text) | live | 6,236 ayahs imported and byte-verified (Ops run); smoke step passes | — |
 | Teacher | Students, assignments, review queue, scores, notes | implemented | `test_media_submissions.py`, `e2e/loop.mjs` | — |
 | Teacher | Schedule, occurrences, attendance, grading | implemented | `test_teacher_schedule.py`, `test_lessons_quizzes.py` | — |
-| Teacher | Content authoring (lessons, quizzes) | implemented | Teachers draft lessons (own or new draft course) and quizzes through `teacher/*` endpoints with the admin console's validation; admins review and publish (overview lists drafts); published items are read-only for teachers; `test_teacher_content.py`, `e2e/teacher-content.mjs` | Lesson file uploads (PDF/audio) |
+| Teacher | Content authoring (lessons, quizzes) | implemented | Teachers draft lessons (own or new draft course) and quizzes through `teacher/*` endpoints with the admin console's validation; admins review and publish (overview lists drafts); published items are read-only for teachers; `test_teacher_content.py`, `e2e/teacher-content.mjs` | — |
 | Teacher | Voice notes on feedback | implemented | Real recording on the review screen (own recorder), uploaded as private `voice_feedback` media with the feedback; the student plays it through a signed link; parents never get audio; `test_media_submissions.py`, `e2e/loop.mjs` | — |
 | Parent | Linked children, sessions, tasks, progress, no audio | implemented | `test_permissions.py`, `e2e/parent.mjs` | — |
 | Admin | Portal sign-in | implemented | Real `admin/auth/login`, OTP step, session restore; `e2e/admin.mjs` | — |
 | Admin | Users, teachers, parents | implemented | Live sections on `admin/users*`, approval, links, setup links, teacher invitations; `test_admin_people.py`, `e2e/admin-people.mjs` | — |
 | Auth | Set-password and invitation pages | implemented | `#/reset`, `#/invite` (`src/screens/auth/LinkPages.tsx`) | Email delivery (pack 23) |
 | Admin | Circles, bookings | implemented | `admin/circles*`, `admin/sessions/<id>/cancel`, `admin/bookings*`; `test_admin_scheduling.py`, `e2e/admin-scheduling.mjs` | — |
-| Admin | Courses, lessons, enrollments, quizzes | implemented | `admin/courses*`, `admin/lessons*`, `admin/enrollments*`, `admin/tests*`, `admin/questions*` (versioned); `test_admin_content.py`, `e2e/admin-content.mjs` | Lesson file uploads (PDF/audio) from the console |
+| Admin | Courses, lessons, enrollments, quizzes | implemented | `admin/courses*`, `admin/lessons*`, `admin/enrollments*`, `admin/tests*`, `admin/questions*` (versioned); `test_admin_content.py`, `e2e/admin-content.mjs`; lesson files (PDF, audio) uploaded privately, type-checked, readable only through signed links once published; unattached uploads purged after 48 h | — |
 | Admin | Settings, audit log | implemented | `admin/settings` (password re-entry for sensitive keys), `admin/audit`, public `settings/public` read by the app; `test_admin_settings.py`, `e2e/admin-settings.mjs` | — |
 | Admin | Subscriptions | simulated | Demo only; no payment provider | Pack prompts 09–10 (optional) |
 | Backend | Auth, roles, CSRF, throttles, audit events | implemented | `test_auth.py`, `test_permissions.py` | — |

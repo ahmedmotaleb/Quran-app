@@ -45,6 +45,12 @@ class IsAdminRole(HasRole):
         return True
 
 
+class IsContentAuthor(HasRole):
+    """Admins, and teachers for their own draft content."""
+
+    roles = (Role.ADMIN, Role.TEACHER)
+
+
 class IsLearningUser(HasRole):
     """Anyone who uses the learning app (not the admin portal)."""
 
