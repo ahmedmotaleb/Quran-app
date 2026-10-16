@@ -107,4 +107,6 @@ urlpatterns = [
     path("notifications", notifications.NotificationList.as_view()),
     path("notifications/read", notifications.NotificationRead.as_view()),
     path("notifications/unread", notifications.UnreadCount.as_view()),
+    path("push/config", notifications.PushConfig.as_view()),
+    path("push/subscriptions", notifications.PushSubscriptions.as_view()),
 ]

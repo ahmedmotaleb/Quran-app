@@ -17,7 +17,7 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 | Private media storage | PASS | R2 private bucket, presigned reads; smoke after every deploy: upload, owner playback, anonymous and unsigned refused; 200 KB upload 0.7–0.8 s | Recordings not backed up (owner decision in RECOVERY.md) |
 | Email / password recovery | BLOCKED | Code, tests and setup script ready; no link is ever logged; `/api/ready` → `email: log_only` | Owner must choose an SMTP provider, verify a sender, run `deploy/gcp-email.sh`. Until then admins send set-password links |
 | Subscriptions/payments | NOT TESTED (not enabled) | — | Product decision (prompts 09–10) |
-| Notifications | PARTIAL | In-app inbox and bell for all events (E2E `inbox`); hourly reminders job runs in production | No push or email delivery (prompt 18) |
+| Notifications | PARTIAL | In-app inbox and bell for all events (E2E `inbox`); hourly reminders job runs in production; Web Push built and tested (`test_push.py`, `e2e/push.mjs`), off until `deploy/gcp-push.sh` runs | Push not yet verified on a real phone; email reminders need SMTP |
 | Live sessions | NOT TESTED (not enabled) | The live-session screen shows labelled sample content in live mode, not presented as a working integration | Provider decision (prompt 19) |
 | CI/E2E | PASS | Backend, Web (typecheck, build, PWA cache rules, npm audit, CSP in the production image), E2E live mode (16 suites, 7 handbook journeys) gate every PR | — |
 | Security | PASS | Admin MFA enforced in production; lockout; throttles; CSP/HSTS/frame/permissions headers; argon2id; IDOR sweep; pip-audit and npm audit clean | Alerts for abuse need `gcp-ops.sh` (below) |

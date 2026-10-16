@@ -226,6 +226,11 @@ if IS_DEPLOYED:
 if env("REDIS_URL"):
     CACHES = {"default": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": env("REDIS_URL")}}
 
+# Web Push (optional): VAPID keys from deploy/gcp-push.sh. Without both keys push stays off (nothing simulated).
+VAPID_PUBLIC_KEY = env("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = env("VAPID_PRIVATE_KEY", "")
+VAPID_SUBJECT = env("VAPID_SUBJECT", "") or (APP_URL or "mailto:admin@example.invalid")
+
 # Admin accounts must have two-step verification before using admin APIs (default on in staging/production).
 ADMIN_REQUIRE_MFA = env_bool("ADMIN_REQUIRE_MFA", IS_DEPLOYED)
 LOGIN_LOCKOUT_FAILURES = int(env("LOGIN_LOCKOUT_FAILURES", "10") or 10)  # per account, any IP, within the window

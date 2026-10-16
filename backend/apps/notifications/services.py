@@ -12,13 +12,17 @@ def notify(recipient, kind: str, title: str, body: str = "", *, link: str = "", 
     failed notification can never roll back the booking/grade that caused it. Failures never break the caller."""
     try:
         with transaction.atomic():
-            return Notification.objects.create(recipient=recipient, kind=kind, title=title, body=body[:500], link=link,
-                                               dedupe_key=dedupe, data=data or {})
+            n = Notification.objects.create(recipient=recipient, kind=kind, title=title, body=body[:500], link=link,
+                                            dedupe_key=dedupe, data=data or {})
     except IntegrityError:
         return None
     except Exception:  # noqa: BLE001
         log.exception("notification_failed", extra={"kind": kind})
         return None
+    from .push import deliver
+
+    deliver(n)  # optional phone delivery; generic text only, never raises
+    return n
 
 
 def after_commit(recipient, kind: str, title: str, body: str = "", **kw) -> None:
