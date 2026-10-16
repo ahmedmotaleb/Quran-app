@@ -63,7 +63,7 @@ class TeacherLessons(APIView):
 
     def post(self, request, pk):
         c = _own_course(request.user, pk)
-        s = LessonIn(data=request.data)
+        s = LessonIn(data=request.data, context={"request": request})
         s.is_valid(raise_exception=True)
         d = s.validated_data
         if "order" not in d:
@@ -84,7 +84,7 @@ class TeacherLessonDetail(APIView):
 
     def patch(self, request, pk):
         l = self._get(request, pk)
-        s = LessonIn(l, data=request.data, partial=True)
+        s = LessonIn(l, data=request.data, partial=True, context={"request": request})
         s.is_valid(raise_exception=True)
         for k, v in s.validated_data.items():
             setattr(l, k, v)

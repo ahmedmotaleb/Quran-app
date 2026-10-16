@@ -80,7 +80,7 @@ export const getCourse = (id: number) => api<Course & { lesson_list: Lesson[] }>
 export const saveCourse = (id: number | null, d: Partial<{ title: string; description: string; topic: string; level: string; teacher: number; restricted: boolean }>) =>
   id ? api<Course>('PATCH', `admin/courses/${id}`, d) : api<Course>('POST', 'admin/courses', d);
 export const setCourseState = (id: number, state: PubState, reason = '') => api<Course>('POST', `admin/courses/${id}/state`, { state, reason });
-export const saveLesson = (courseId: number, id: number | null, d: Partial<{ title: string; kind: string; body: string; external_url: string; duration_minutes: number | null }>) =>
+export const saveLesson = (courseId: number, id: number | null, d: Partial<{ title: string; kind: string; body: string; external_url: string; duration_minutes: number | null; media: string }>) =>
   id ? api<Lesson>('PATCH', `admin/lessons/${id}`, d) : api<Lesson>('POST', `admin/courses/${courseId}/lessons`, d);
 export const setLessonState = (id: number, state: PubState) => api<Lesson>('POST', `admin/lessons/${id}/state`, { state });
 export const listEnrollments = (courseId: number, page = 1) => api<Page<Enrollment>>('GET', `admin/courses/${courseId}/enrollments?page=${page}`);

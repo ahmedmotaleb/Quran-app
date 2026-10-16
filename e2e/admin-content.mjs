@@ -29,6 +29,15 @@ await step('create a restricted course with a text lesson', async () => {
   await dialog().locator('#ls-t').fill(LT); await dialog().locator('#ls-b').fill('المد الطبيعي مقداره حركتان.');
   await dialog().getByRole('button', { name: 'حفظ الدرس' }).click(); await dialog().getByText(LT).waitFor();
 });
+await step('add an audio lesson from a file (type checked, stored privately)', async () => {
+  await dialog().getByRole('button', { name: 'إضافة درس' }).click();
+  await dialog().locator('#ls-t').fill(`تلاوة نموذجية للمد`);
+  await dialog().getByRole('radio', { name: 'صوت' }).click();
+  await dialog().getByRole('button', { name: 'حفظ الدرس' }).click(); await dialog().getByText('ارفع ملف الدرس.').waitFor();
+  await page.setInputFiles('#ls-file', { name: 'تلاوة.mp3', mimeType: 'audio/mpeg', buffer: Buffer.concat([Buffer.from('ID3'), Buffer.alloc(4000)]) });
+  await dialog().getByText(/رُفع: تلاوة.mp3/).waitFor();
+  await dialog().getByRole('button', { name: 'حفظ الدرس' }).click(); await dialog().getByText(`تلاوة نموذجية للمد`).waitFor();
+});
 await step('publishing the course needs a published lesson', async () => {
   await dialog().getByRole('button', { name: 'نشر', exact: true }).click();
   await page.getByText('انشر درسًا واحدًا على الأقل قبل نشر الدورة.').waitFor();

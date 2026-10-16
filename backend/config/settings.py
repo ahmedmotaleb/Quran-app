@@ -265,8 +265,8 @@ STORAGE_REGION = env("STORAGE_REGION", "auto")
 STORAGE_ACCESS_KEY_ID = env("STORAGE_ACCESS_KEY_ID", "")
 STORAGE_SECRET_ACCESS_KEY = env("STORAGE_SECRET_ACCESS_KEY", "")
 MEDIA_URL_TTL_SECONDS = int(env("MEDIA_URL_TTL_SECONDS", "600") or 600)
-MEDIA_MAX_BYTES = {"recitation": 25 * 1024 * 1024, "voice_feedback": 10 * 1024 * 1024}
-MEDIA_MAX_SECONDS = {"recitation": 20 * 60, "voice_feedback": 5 * 60}
+MEDIA_MAX_BYTES = {"recitation": 25 * 1024 * 1024, "voice_feedback": 10 * 1024 * 1024, "lesson_file": 50 * 1024 * 1024}
+MEDIA_MAX_SECONDS = {"recitation": 20 * 60, "voice_feedback": 5 * 60, "lesson_file": 4 * 3600}
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024  # larger uploads spool to a temp file
 
 # ---- Logging: one JSON object per line, with the request id --------------------------

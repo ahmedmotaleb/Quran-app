@@ -43,13 +43,18 @@ def limits(purpose: str) -> tuple[int, int]:
     return max_bytes, max_secs
 
 
+PDF_TYPE = {"application/pdf": ("pdf", lambda h: h[:5] == b"%PDF-")}
+
+
 def store_audio(*, owner, purpose: str, upload, duration_seconds) -> MediaObject:
-    """Validates type (declared + magic bytes), size and duration; streams to private storage."""
+    """Validates type (declared + magic bytes), size and duration; streams to private storage.
+    Lesson files may also be PDFs, and their duration is optional (a PDF has none)."""
     if settings.MEDIA_STORAGE == "none":
         # Honest failure: the server has no recordings storage yet (owner must configure STORAGE_*).
         raise ApiError("storage_not_configured", "رفع التسجيلات غير مفعّل على الخادم بعد. سيتاح قريبًا بإذن الله.", 503)
     declared = (upload.content_type or "").split(";")[0].strip().lower()
-    if declared not in AUDIO_TYPES:
+    types = {**AUDIO_TYPES, **PDF_TYPE} if purpose == MediaObject.Purpose.LESSON_FILE else AUDIO_TYPES
+    if declared not in types:
         raise ApiError("invalid_file", INVALID_FILE, 400, {"file": [INVALID_FILE]})
     max_bytes, max_secs = limits(purpose)
     if upload.size == 0:
@@ -57,14 +62,15 @@ def store_audio(*, owner, purpose: str, upload, duration_seconds) -> MediaObject
     if upload.size > max_bytes:
         mb = max_bytes // (1024 * 1024)
         raise ApiError("file_too_large", f"حجم التسجيل أكبر من {mb} ميغابايت.", 413, {"file": [f"الحد الأقصى {mb} ميغابايت."]})
+    optional = purpose == MediaObject.Purpose.LESSON_FILE and duration_seconds in (None, "")
     try:
-        dur = float(duration_seconds)
+        dur = None if optional else float(duration_seconds)
     except (TypeError, ValueError):
         raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"duration_seconds": ["أدخل مدة صحيحة."]}) from None
-    if not 1 <= dur <= max_secs:
+    if dur is not None and not 1 <= dur <= max_secs:
         raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"duration_seconds": ["مدة التسجيل خارج الحد المسموح."]})
 
-    ext, sniff = AUDIO_TYPES[declared]
+    ext, sniff = types[declared]
     f = upload.open("rb")
     head = f.read(16)
     if len(head) < 12 or not sniff(head):

@@ -54,6 +54,7 @@ urlpatterns = [
     # Private media
     path("media/recitations", media.RecitationUpload.as_view()),
     path("media/voice-feedback", media.VoiceFeedbackUpload.as_view()),
+    path("media/lesson-files", media.LessonFileUpload.as_view()),
     path("media/<uuid:pk>", media.MediaDetail.as_view()),
     path("media/<uuid:pk>/content", media.MediaContent.as_view(), name="media-content"),
     # Scheduling & booking

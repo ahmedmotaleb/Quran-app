@@ -7,6 +7,7 @@ import type { ApiError } from '@/api/client';
 import { toast } from '../adminStore';
 import * as A from './api';
 import { chip, date, errMsg, Modal, Pager, ReasonDialog, SearchBar, smallBtn, Table, useDebounced, usePaged } from './ui';
+import { LessonFilePicker } from '@/components/LessonFilePicker';
 
 const ST: Record<string, { l: string; bg: string; fg: string }> = {
   draft: { l: 'مسودة', bg: '#ECE7DB', fg: '#45534E' }, pending: { l: 'بانتظار المراجعة', bg: '#F3E6CC', fg: '#6B470C' },
@@ -152,40 +153,44 @@ function CoursePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
 }
 
 function LessonForm({ courseId, lesson, onClose, onSaved }: { courseId: number; lesson: A.Lesson | null; onClose: () => void; onSaved: () => void }) {
-  const [f, setF] = useState({ title: lesson?.title ?? '', kind: lesson?.kind === 'video' ? 'video' : 'text', body: lesson?.body ?? '', url: lesson?.external_url ?? '', minutes: lesson?.duration_minutes ? String(lesson.duration_minutes) : '' });
+  type K = 'text' | 'video' | 'audio' | 'pdf';
+  const [f, setF] = useState({ title: lesson?.title ?? '', kind: (lesson?.kind ?? 'text') as K, body: lesson?.body ?? '', url: lesson?.external_url ?? '', minutes: lesson?.duration_minutes ? String(lesson.duration_minutes) : '' });
+  const [media, setMedia] = useState<string | null>(null); // a newly uploaded file (null: keep the current one)
   const [err, setErr] = useState<Record<string, string | null>>({}); const [busy, setBusy] = useState(false);
-  const fileKind = lesson && (lesson.kind === 'audio' || lesson.kind === 'pdf');
+  const fileKind = f.kind === 'audio' || f.kind === 'pdf';
+  const hasCurrent = !!lesson?.has_file && lesson.kind === f.kind;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const x: Record<string, string> = {};
     if (f.title.trim().length < 2) x.title = 'اكتب عنوان الدرس.';
     if (f.kind === 'text' && !f.body.trim()) x.body = 'اكتب نص الدرس.';
     if (f.kind === 'video' && !/^https:\/\//.test(f.url.trim())) x.external_url = 'أضف رابط YouTube أو Vimeo يبدأ بـ https://';
+    if (fileKind && !media && !hasCurrent) x.media = 'ارفع ملف الدرس.';
     if (Object.keys(x).length) return setErr(x);
     setBusy(true); setErr({});
     try {
-      await A.saveLesson(courseId, lesson?.id ?? null, { title: f.title.trim(), kind: f.kind, body: f.body, external_url: f.kind === 'video' ? f.url.trim() : '', duration_minutes: f.minutes ? Number(f.minutes) : null });
+      await A.saveLesson(courseId, lesson?.id ?? null, { title: f.title.trim(), kind: f.kind, body: f.body, external_url: f.kind === 'video' ? f.url.trim() : '',
+        duration_minutes: f.minutes ? Number(f.minutes) : null, ...(media ? { media } : {}) });
       toast('حُفظ الدرس'); onSaved();
-    } catch (y) { setErr(fieldsOf(y, ['title', 'body', 'external_url', 'duration_minutes'])); } finally { setBusy(false); }
+    } catch (y) { setErr(fieldsOf(y, ['title', 'body', 'external_url', 'duration_minutes', 'media'])); } finally { setBusy(false); }
   };
   return (
     <Modal title={lesson ? 'تعديل الدرس' : 'درس جديد'} onClose={onClose} wide>
-      {fileKind ? <p style={{ margin: 0 }}>هذا الدرس مرتبط بملف ({KIND_L[lesson!.kind]}). تعديل الملفات من لوحة الإدارة غير متاح بعد.</p> : (
-        <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <Field id="ls-t" label="عنوان الدرس" err={err.title}><input id="ls-t" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} style={inputStyle(err.title)} /></Field>
-          <div role="radiogroup" aria-label="نوع الدرس" style={{ display: 'flex', gap: 8 }}>
-            {(['text', 'video'] as const).map((k) => <button type="button" key={k} role="radio" aria-checked={f.kind === k} onClick={() => setF({ ...f, kind: k })} style={chip(f.kind === k)}>{KIND_L[k]}</button>)}
-          </div>
-          {f.kind === 'video' && <Field id="ls-u" label="رابط الفيديو (YouTube أو Vimeo)" err={err.external_url}><input id="ls-u" dir="ltr" value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} style={inputStyle(err.external_url, true)} /></Field>}
-          <Field id="ls-b" label={f.kind === 'video' ? 'ملاحظات (اختياري)' : 'نص الدرس'} err={err.body}>
-            <textarea id="ls-b" rows={8} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} style={{ ...inputStyle(err.body), minHeight: 160, paddingTop: 10, lineHeight: 1.8 }} />
-          </Field>
-          <Field id="ls-m" label="المدة بالدقائق (اختياري)" err={err.duration_minutes}><input id="ls-m" inputMode="numeric" dir="ltr" value={f.minutes} onChange={(e) => setF({ ...f, minutes: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle(err.duration_minutes, true), maxWidth: 160 }} /></Field>
-          <p style={{ margin: 0, fontSize: 13, color: color.muted }}>لا تكتب آيات القرآن نصًا هنا؛ أشر إليها باسم السورة ورقم الآية، فالنص المعتمد يُعرض من المصحف.</p>
-          {err.form && <FieldError msg={err.form} />}
-          <button type="submit" disabled={busy} style={primaryBtn(48, 15)}>{busy ? 'جارٍ الحفظ…' : 'حفظ الدرس'}</button>
-        </form>
-      )}
+      <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <Field id="ls-t" label="عنوان الدرس" err={err.title}><input id="ls-t" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} style={inputStyle(err.title)} /></Field>
+        <div role="radiogroup" aria-label="نوع الدرس" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {(['text', 'video', 'audio', 'pdf'] as const).map((k) => <button type="button" key={k} role="radio" aria-checked={f.kind === k} onClick={() => { setF({ ...f, kind: k }); setMedia(null); }} style={chip(f.kind === k)}>{KIND_L[k]}</button>)}
+        </div>
+        {f.kind === 'video' && <Field id="ls-u" label="رابط الفيديو (YouTube أو Vimeo)" err={err.external_url}><input id="ls-u" dir="ltr" value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} style={inputStyle(err.external_url, true)} /></Field>}
+        {fileKind && <LessonFilePicker key={f.kind} id="ls-file" kind={f.kind as 'audio' | 'pdf'} current={hasCurrent ? 'الملف الحالي' : null} err={err.media} onUploaded={setMedia} />}
+        <Field id="ls-b" label={f.kind === 'text' ? 'نص الدرس' : 'ملاحظات (اختياري)'} err={err.body}>
+          <textarea id="ls-b" rows={8} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} style={{ ...inputStyle(err.body), minHeight: 160, paddingTop: 10, lineHeight: 1.8 }} />
+        </Field>
+        <Field id="ls-m" label="المدة بالدقائق (اختياري)" err={err.duration_minutes}><input id="ls-m" inputMode="numeric" dir="ltr" value={f.minutes} onChange={(e) => setF({ ...f, minutes: e.target.value.replace(/\D/g, '') })} style={{ ...inputStyle(err.duration_minutes, true), maxWidth: 160 }} /></Field>
+        <p style={{ margin: 0, fontSize: 13, color: color.muted }}>لا تكتب آيات القرآن نصًا هنا؛ أشر إليها باسم السورة ورقم الآية، فالنص المعتمد يُعرض من المصحف.</p>
+        {err.form && <FieldError msg={err.form} />}
+        <button type="submit" disabled={busy} style={primaryBtn(48, 15)}>{busy ? 'جارٍ الحفظ…' : 'حفظ الدرس'}</button>
+      </form>
     </Modal>
   );
 }

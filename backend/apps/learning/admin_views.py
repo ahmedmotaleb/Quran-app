@@ -64,7 +64,8 @@ class CourseIn(serializers.Serializer):
 
 class LessonIn(serializers.Serializer):
     title = serializers.CharField(min_length=2, max_length=160)
-    kind = serializers.ChoiceField(choices=[Lesson.Kind.TEXT, Lesson.Kind.VIDEO])  # stored files: not yet in the console
+    kind = serializers.ChoiceField(choices=Lesson.Kind.choices)
+    media = serializers.UUIDField(required=False, allow_null=True)  # an uploaded lesson file (audio or PDF kinds)
     body = serializers.CharField(allow_blank=True, required=False, max_length=20000)
     external_url = serializers.URLField(allow_blank=True, required=False)
     duration_minutes = serializers.IntegerField(min_value=1, max_value=600, required=False, allow_null=True)
@@ -83,7 +84,31 @@ class LessonIn(serializers.Serializer):
             raise serializers.ValidationError({"external_url": ["أضف رابط الفيديو."]})
         if kind == Lesson.Kind.TEXT and not d.get("body", getattr(self.instance, "body", "")).strip():
             raise serializers.ValidationError({"body": ["اكتب نص الدرس."]})
+        if kind in (Lesson.Kind.AUDIO, Lesson.Kind.PDF):
+            if "media" in d:
+                d["media"] = self._lesson_file(d["media"], kind)
+            elif not getattr(self.instance, "media_id", None):
+                raise serializers.ValidationError({"media": ["ارفع ملف الدرس."]})
+        elif "media" in d or (self.instance is not None and "kind" in d):
+            d["media"] = None  # text and video lessons carry no stored file
         return d
+
+    def _lesson_file(self, mid, kind):
+        """The file must be a validated lesson upload of the right type, by this author (admins: any), unused."""
+        from apps.media.models import MediaObject
+
+        if mid is None:
+            raise serializers.ValidationError({"media": ["ارفع ملف الدرس."]})
+        user = self.context["request"].user
+        m = MediaObject.objects.filter(pk=mid, purpose=MediaObject.Purpose.LESSON_FILE, state=MediaObject.State.VALIDATED).first()
+        if m is None or (user.role != Role.ADMIN and m.owner_id != user.pk):
+            raise serializers.ValidationError({"media": ["الملف غير صالح. ارفعه مرة أخرى."]})
+        is_pdf = m.content_type == "application/pdf"
+        if (kind == Lesson.Kind.PDF) != is_pdf:
+            raise serializers.ValidationError({"media": ["نوع الملف لا يطابق نوع الدرس (PDF أو صوت)."]})
+        if Lesson.objects.filter(media=m).exclude(pk=getattr(self.instance, "pk", None)).exists():
+            raise serializers.ValidationError({"media": ["هذا الملف مرفق بدرس آخر."]})
+        return m
 
 
 def _course_out(c: Course) -> dict:
@@ -96,7 +121,8 @@ def _course_out(c: Course) -> dict:
 def _lesson_out(l: Lesson) -> dict:
     return {"id": l.id, "course": l.course_id, "order": l.order, "title": l.title, "kind": l.kind, "body": l.body,
             "external_url": l.external_url, "duration_minutes": l.duration_minutes, "state": l.state,
-            "has_file": l.media_id is not None, "updated_at": l.updated_at.isoformat()}
+            "has_file": l.media_id is not None, "file_type": l.media.content_type if l.media_id else None,
+            "updated_at": l.updated_at.isoformat()}
 
 
 def _courses():
@@ -164,7 +190,7 @@ class AdminCourseState(AdminView):
 class AdminLessons(AdminView):
     def post(self, request, pk):
         c = get_object_or_404(Course, pk=pk)
-        s = LessonIn(data=request.data)
+        s = LessonIn(data=request.data, context={"request": request})
         s.is_valid(raise_exception=True)
         d = s.validated_data
         if "order" not in d:
@@ -177,7 +203,7 @@ class AdminLessons(AdminView):
 class AdminLessonDetail(AdminView):
     def patch(self, request, pk):
         l = get_object_or_404(Lesson, pk=pk)
-        s = LessonIn(l, data=request.data, partial=True)
+        s = LessonIn(l, data=request.data, partial=True, context={"request": request})
         s.is_valid(raise_exception=True)
         for k, v in s.validated_data.items():
             setattr(l, k, v)

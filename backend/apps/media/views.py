@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsStudent, IsTeacher
+from apps.accounts.permissions import IsContentAuthor, IsStudent, IsTeacher
 from apps.core.audit import audit
 from apps.core.exceptions import ApiError
 
@@ -45,6 +45,14 @@ class RecitationUpload(_Upload):
 class VoiceFeedbackUpload(_Upload):
     permission_classes = [IsTeacher]
     purpose = MediaObject.Purpose.VOICE_FEEDBACK
+
+
+class LessonFileUpload(_Upload):
+    """A PDF or audio file for a lesson (admins, and teachers for their own drafts). It is readable by learners only
+    once attached to a published lesson they may open; unattached uploads are removed after 48 hours."""
+
+    permission_classes = [IsContentAuthor]
+    purpose = MediaObject.Purpose.LESSON_FILE
 
 
 class MediaDetail(APIView):

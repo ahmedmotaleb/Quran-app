@@ -20,10 +20,14 @@ class Command(BaseCommand):
 
     def handle(self, *args, hours, dry_run, **opts):
         cutoff = timezone.now() - timedelta(hours=hours)
-        qs = (MediaObject.objects.filter(created_at__lt=cutoff, purpose__in=MediaObject.PRIVATE_PURPOSES)
+        from apps.learning.models import Lesson
+
+        purposes = {*MediaObject.PRIVATE_PURPOSES, MediaObject.Purpose.LESSON_FILE}
+        qs = (MediaObject.objects.filter(created_at__lt=cutoff, purpose__in=purposes)
               .exclude(state=MediaObject.State.DELETED)
-              .annotate(sub=Exists(Submission.objects.filter(media=OuterRef("pk"))), fb=Exists(Feedback.objects.filter(voice=OuterRef("pk"))))
-              .filter(sub=False, fb=False))
+              .annotate(sub=Exists(Submission.objects.filter(media=OuterRef("pk"))), fb=Exists(Feedback.objects.filter(voice=OuterRef("pk"))),
+                        les=Exists(Lesson.objects.filter(media=OuterRef("pk"))))
+              .filter(sub=False, fb=False, les=False))
         n = 0
         for m in qs.iterator():
             n += 1

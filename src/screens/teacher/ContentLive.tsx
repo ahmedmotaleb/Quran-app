@@ -9,6 +9,7 @@ import { Icon } from '@/components/Icon';
 import { BackHeader, FieldError, Segmented, card, inputStyle, labelStyle, muted, outlineBtn, primaryBtn } from '@/components/ui';
 import { ApiError, api } from '@/api/client';
 import { toast } from '@/store/store';
+import { LessonFilePicker } from '@/components/LessonFilePicker';
 
 type State = 'draft' | 'published' | 'archived' | 'pending' | 'closed';
 interface Lesson { id: number; title: string; kind: string; state: State }
@@ -94,12 +95,14 @@ function LessonForm({ courses, onSaved }: { courses: Course[]; onSaved: () => vo
   const [courseTitle, setCourseTitle] = useState('');
   const [topic, setTopic] = useState('tajweed');
   const [title, setTitle] = useState('');
-  const [lk, setLk] = useState<'text' | 'video'>('text');
+  const [lk, setLk] = useState<'text' | 'video' | 'audio' | 'pdf'>('text');
+  const [media, setMedia] = useState<string | null>(null);
   const [body, setBody] = useState('');
   const [url, setUrl] = useState('');
   const [mins, setMins] = useState('');
   const [err, setErr] = useState<Record<string, string | null>>({});
   const [busy, setBusy] = useState(false);
+  const [pickerKey, setPickerKey] = useState(0);
   const [touched, setTouched] = useState(false);
   // Once the teacher's courses load, pre-select the latest one — never overriding a choice they already made.
   useEffect(() => { if (!touched && course === 'new' && open.length && !courseTitle) { setCourse(String(open[0].id)); setErr((e) => ({ ...e, course: null })); } }, [open.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -109,17 +112,19 @@ function LessonForm({ courses, onSaved }: { courses: Course[]; onSaved: () => vo
     if (title.trim().length < 2) e.title = 'أدخل عنوان الدرس';
     if (lk === 'text' && !body.trim()) e.body = 'اكتب نص الدرس';
     if (lk === 'video' && !url.trim()) e.external_url = 'أضف رابط الفيديو';
+    if ((lk === 'audio' || lk === 'pdf') && !media) e.media = 'ارفع ملف الدرس';
     setErr(e); if (Object.keys(e).length) return;
     setBusy(true);
     try {
       let cid = course;
       if (course === 'new') cid = String((await api<{ id: number }>('POST', 'teacher/courses', { title: courseTitle.trim(), topic })).id);
-      await api('POST', `teacher/courses/${cid}/lessons`, { title: title.trim(), kind: lk, body: lk === 'text' ? body : '', external_url: lk === 'video' ? url.trim() : '', duration_minutes: mins ? Number(mins) : null });
-      setTitle(''); setBody(''); setUrl(''); setMins(''); setCourseTitle(''); setCourse(cid);
+      await api('POST', `teacher/courses/${cid}/lessons`, { title: title.trim(), kind: lk, body: lk === 'text' ? body : '', external_url: lk === 'video' ? url.trim() : '',
+        duration_minutes: mins ? Number(mins) : null, ...(media && (lk === 'audio' || lk === 'pdf') ? { media } : {}) });
+      setTitle(''); setBody(''); setUrl(''); setMins(''); setCourseTitle(''); setCourse(cid); setMedia(null); setPickerKey((k) => k + 1);
       toast('حُفظ الدرس كمسودة بانتظار النشر'); onSaved();
     } catch (x) {
       const a = x as ApiError;
-      setErr({ title: a.field?.('title'), body: a.field?.('body'), external_url: a.field?.('external_url'), duration: a.field?.('duration_minutes'), form: a.fields && Object.keys(a.fields).length ? null : a.message });
+      setErr({ title: a.field?.('title'), body: a.field?.('body'), external_url: a.field?.('external_url'), duration: a.field?.('duration_minutes'), media: a.field?.('media'), form: a.fields && Object.keys(a.fields).length ? null : a.message });
     } finally { setBusy(false); }
   };
   return (
@@ -137,10 +142,10 @@ function LessonForm({ courses, onSaved }: { courses: Course[]; onSaved: () => vo
         </div>
       )}
       <Field id="tl-title" label="عنوان الدرس" err={err.title}><input id="tl-title" value={title} aria-invalid={!!err.title} onChange={(e) => setTitle(e.target.value)} style={inputStyle(err.title)} /></Field>
-      <Segmented role="group" label="شكل الدرس" h={44} options={[['text', 'نص'], ['video', 'رابط فيديو']] as const} value={lk} onChange={setLk} />
-      {lk === 'text'
-        ? <Field id="tl-body" label="نص الدرس" err={err.body}><textarea id="tl-body" value={body} onChange={(e) => setBody(e.target.value)} style={area} /></Field>
-        : <Field id="tl-url" label="رابط YouTube أو Vimeo" err={err.external_url}><input id="tl-url" dir="ltr" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)} style={inputStyle(err.external_url, true)} /></Field>}
+      <Segmented role="group" label="شكل الدرس" h={44} fs={14} options={[['text', 'نص'], ['video', 'فيديو'], ['audio', 'صوت'], ['pdf', 'PDF']] as const} value={lk} onChange={(k) => { setLk(k); setMedia(null); setErr({ ...err, media: null }); }} />
+      {lk === 'text' && <Field id="tl-body" label="نص الدرس" err={err.body}><textarea id="tl-body" value={body} onChange={(e) => setBody(e.target.value)} style={area} /></Field>}
+      {lk === 'video' && <Field id="tl-url" label="رابط YouTube أو Vimeo" err={err.external_url}><input id="tl-url" dir="ltr" inputMode="url" value={url} onChange={(e) => setUrl(e.target.value)} style={inputStyle(err.external_url, true)} /></Field>}
+      {(lk === 'audio' || lk === 'pdf') && <LessonFilePicker key={`${lk}-${pickerKey}`} id="tl-file" kind={lk} err={err.media} onUploaded={setMedia} />}
       <Field id="tl-mins" label="المدة بالدقائق (اختياري)" err={err.duration}><input id="tl-mins" inputMode="numeric" dir="ltr" value={mins} onChange={(e) => setMins(e.target.value.replace(/\D/g, '').slice(0, 3))} style={inputStyle(err.duration, true)} /></Field>
       {err.form && <p role="alert" style={{ margin: 0, color: color.dangerInk }}>{err.form}</p>}
       <button onClick={save} disabled={busy} style={primaryBtn()}>{busy ? 'جارٍ الحفظ…' : 'حفظ الدرس كمسودة'}</button>
