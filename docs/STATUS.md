@@ -20,7 +20,7 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 | Student | Mushaf (verified text) | live | 6,236 ayahs imported and byte-verified (Ops run); smoke step passes | — |
 | Teacher | Students, assignments, review queue, scores, notes | implemented | `test_media_submissions.py`, `e2e/loop.mjs` | — |
 | Teacher | Schedule, occurrences, attendance, grading | implemented | `test_teacher_schedule.py`, `test_lessons_quizzes.py` | — |
-| Teacher | Content authoring (lectures, quizzes) | simulated | `src/screens/teacher` `tcontent` is in `SAMPLE_SCREENS` | Pack prompt 07 (admin content first) |
+| Teacher | Content authoring (lessons, quizzes) | implemented | Teachers draft lessons (own or new draft course) and quizzes through `teacher/*` endpoints with the admin console's validation; admins review and publish (overview lists drafts); published items are read-only for teachers; `test_teacher_content.py`, `e2e/teacher-content.mjs` | Lesson file uploads (PDF/audio) |
 | Teacher | Voice notes on feedback | partial | Backend upload exists; hidden in live UI | Later |
 | Parent | Linked children, sessions, tasks, progress, no audio | implemented | `test_permissions.py`, `e2e/parent.mjs` | — |
 | Admin | Portal sign-in | implemented | Real `admin/auth/login`, OTP step, session restore; `e2e/admin.mjs` | — |
@@ -54,7 +54,7 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 6. Password-reset email not delivered (23) — code is ready; needs the owner's SMTP provider and sender. Until then admins issue set-password links.
 7. ~~No tested backup/restore (27)~~ — nightly drill; keeping copies needs `BACKUP_PASSPHRASE`.
 8. ~~No error tracking or alerting (26)~~ — ready; the owner runs `deploy/gcp-ops.sh` to switch alerts on.
-9. Teacher content authoring still sample (07, teacher side).
+9. ~~Teacher content authoring still sample (07, teacher side)~~ — teachers draft, admins publish.
 10. Live video sessions undecided (19).
 
 The admin portal is live except subscriptions (no payments yet). Prompts 22–29 are done; what remains needs the owner (email provider, `gcp-ops.sh`, `BACKUP_PASSPHRASE`, real-device QA). Release review: [RELEASE_REVIEW.md](RELEASE_REVIEW.md) (prompt 32).

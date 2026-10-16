@@ -73,6 +73,8 @@ export interface Quiz {
 export type QKind = 'mcq' | 'true_false' | 'short' | 'recitation';
 export interface Question { id: number; order: number; version: number; kind: QKind; prompt: string; options: string[] | { surah?: number; ayah_from?: number; ayah_to?: number }; answer_key: unknown; points: number; used: number | null }
 
+export type Drafts = { lessons: number; tests: number; lessons_by_teachers: number; tests_by_teachers: number };
+export const contentDrafts = () => api<Drafts>('GET', 'admin/content/drafts');
 export const listCourses = (p: { q?: string; state?: string; page?: number }) => api<Page<Course>>('GET', `admin/courses?${qs(p)}`);
 export const getCourse = (id: number) => api<Course & { lesson_list: Lesson[] }>('GET', `admin/courses/${id}`);
 export const saveCourse = (id: number | null, d: Partial<{ title: string; description: string; topic: string; level: string; teacher: number; restricted: boolean }>) =>
