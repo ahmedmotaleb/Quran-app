@@ -113,8 +113,11 @@ const NAV: [Section, string, IconName][] = [
   ['circles', 'الحلقات', 'target'], ['bookings', 'الحجوزات', 'cal'], ['lectures', 'المحاضرات', 'video'], ['quizzes', 'الاختبارات', 'plan'],
   ['subs', 'الاشتراكات', 'file'], ['settings', 'الإعدادات', 'settings'],
 ];
+// No payments yet (owner decision): the live portal has no Subscriptions section; the demo keeps its sample.
+const NAV_SHOWN = LIVE ? NAV.filter(([k]) => k !== 'subs') : NAV;
+const todayCairo = () => new Intl.DateTimeFormat('ar-EG', { timeZone: 'Africa/Cairo', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 const TITLES: Record<Section, string> = {
-  overview: 'الأحد 11 أكتوبر 2026',
+  overview: LIVE ? '' : 'الأحد 11 أكتوبر 2026',
   students: 'اعتماد حسابات الطلاب وربطهم بالمعلمين وأولياء الأمور',
   teachers: 'اعتماد المعلمين ومتابعة طلابهم وحلقاتهم',
   parents: 'ربط أولياء الأمور بأبنائهم؛ يرى كلٌّ منهم بيانات أبنائه فقط',
@@ -146,13 +149,14 @@ function Portal() {
   const liveRole = LIVE ? LIVE_SECTIONS[s.sec] : undefined;
   const liveOther = LIVE ? LIVE_OTHER[s.sec] : undefined;
   const demoBadge = LIVE && !liveRole && !liveOther && s.sec !== 'overview';
+  useEffect(() => { if (LIVE && s.sec === 'subs') goSection('overview'); }, [s.sec]);
   const label = NAV.find((n) => n[0] === s.sec)![1];
 
   const nav = (
     <nav aria-label="أقسام الإدارة" style={narrow
       ? { display: 'flex', gap: 4, overflowX: 'auto', padding: '0 12px 10px', margin: '0 -0px' }
       : { display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {NAV.map(([k, l, ic]) => {
+      {NAV_SHOWN.map(([k, l, ic]) => {
         const cur = s.sec === k; const c = counts[k] ?? 0;
         return (
           <button key={k} onClick={() => goSection(k)} aria-current={cur ? 'page' : undefined}
@@ -187,7 +191,7 @@ function Portal() {
       )}
       <main style={{ flex: 1, minWidth: 0, padding: '28px clamp(16px,3vw,40px)', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <div><h1 style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>{label}</h1><p style={{ margin: '4px 0 0', fontSize: 14, color: color.muted }}>{TITLES[s.sec]}</p></div>
+          <div><h1 style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>{label}</h1><p style={{ margin: '4px 0 0', fontSize: 14, color: color.muted }}>{s.sec === 'overview' && LIVE ? todayCairo() : TITLES[s.sec]}</p></div>
           <span style={{ fontSize: 13, color: demoBadge ? color.dangerInk : color.muted, background: color.sand, padding: '6px 12px', borderRadius: 999 }}>
             {!LIVE ? 'بيانات عرض تجريبية' : !demoBadge ? `${s.me?.full_name ?? ''} · بيانات حقيقية` : 'هذا القسم ما زال ببيانات عرض تجريبية — لا تُحفظ التغييرات'}
           </span>
@@ -308,7 +312,6 @@ function OverviewLive({ c }: { c: LiveCounts }) {
           </button>
         ))}
       </section>
-      <p style={{ margin: 0, fontSize: 14, color: color.muted }}>الاشتراكات ما زالت ببيانات عرض تجريبية؛ الدفع والاشتراكات الحقيقية غير مفعّلة بعد.</p>
     </>
   );
 }

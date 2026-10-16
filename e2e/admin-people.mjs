@@ -25,7 +25,9 @@ await page.getByText(/بيانات حقيقية/).waitFor();
 
 await step('overview shows real counts', async () => {
   await page.getByText('طلاب نشطون').waitFor();
-  await page.getByText(/ما زالت ببيانات عرض تجريبية/).waitFor();
+  // No payments yet (owner decision): no Subscriptions section or demo note in the live portal.
+  if (await page.getByRole('navigation').getByRole('button', { name: 'الاشتراكات' }).count()) throw new Error('Subscriptions still in the menu');
+  if (await page.getByText(/بيانات عرض تجريبية/).count()) throw new Error('demo-data note still shown');
 });
 await step('students list comes from the server', async () => {
   await nav('الطلاب'); await page.getByRole('button', { name: 'يوسف أحمد', exact: true }).waitFor();

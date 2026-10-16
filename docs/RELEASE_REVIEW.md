@@ -15,8 +15,8 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 | Backend/API + PostgreSQL | PASS | 155 tests on PostgreSQL in CI (concurrency, permissions, cross-role sweep); migrations check; `/api/ready` checks database, migrations, cache | — |
 | Quran source/import integrity | PASS | Tanzil Uthmani v1.1, 6,236 ayahs; nightly restore drill re-verifies byte-for-byte; E2E `quran` shows the screen equals the served text; no generated text | — |
 | Private media storage | PASS | R2 private bucket, presigned reads; smoke after every deploy: upload, owner playback, anonymous and unsigned refused; 200 KB upload 0.7–0.8 s | Recordings not backed up (owner decision in RECOVERY.md) |
-| Email / password recovery | BLOCKED | Code, tests and setup script ready; no link is ever logged; `/api/ready` → `email: log_only` | Owner must choose an SMTP provider, verify a sender, run `deploy/gcp-email.sh`. Until then admins send set-password links |
-| Subscriptions/payments | NOT TESTED (not enabled) | — | Product decision (prompts 09–10) |
+| Email / password recovery | PARTIAL | Gmail SMTP configured in production (`/api/ready` → `email: smtp`) | A real reset email and link still to be confirmed by the owner |
+| Subscriptions/payments | NOT TESTED (not enabled) | Owner decision: no charge for now; the section is hidden in the live portal | — |
 | Notifications | PARTIAL | In-app inbox and bell for all events (E2E `inbox`); hourly reminders job runs in production; Web Push built and tested (`test_push.py`, `e2e/push.mjs`), off until `deploy/gcp-push.sh` runs | Push not yet verified on a real phone; email reminders need SMTP |
 | Live sessions | NOT TESTED (not enabled) | The live-session screen shows labelled sample content in live mode, not presented as a working integration | Provider decision (prompt 19) |
 | CI/E2E | PASS | Backend, Web (typecheck, build, PWA cache rules, npm audit, CSP in the production image), E2E live mode (16 suites, 7 handbook journeys) gate every PR | — |
@@ -29,10 +29,10 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 
 ## Risks re-checked (prompt 32 list)
 
-- **Admin screens in live mode use the API, not demo state:** yes, except Subscriptions, which the portal header labels «هذا القسم ما زال ببيانات عرض تجريبية — لا تُحفظ التغييرات».
+- **Admin screens in live mode use the API, not demo state:** yes. Subscriptions is hidden in the live portal (no charge for now).
 - **Progress is consistent across roles:** one server calculation. `test_progress.py` and E2E `progress` compare the student, teacher and parent views.
 - **Spaced repetition does not duplicate or inflate:** there is one review task per cycle, enforced by the database. Memorization counts distinct accepted ayahs (`test_reviews.py`, `test_progress.py`).
-- **Recording storage and reset email are actually configured:** storage yes. Email no (BLOCKED, above).
+- **Recording storage and reset email are actually configured:** storage yes. Email configured (Gmail SMTP); delivery to be confirmed.
 - **Live-session sample content is not presented as real:** it is labelled as sample in live mode.
 - **Capacity claims are measured:** only the measured range is claimed (LOADTEST.md).
 

@@ -44,10 +44,12 @@ await step(T.page, 'teacher accepts a memorization → a review schedule starts'
 await step(S.page, 'when due, the review appears once in خطة اليوم', async () => {
   execSync(process.env.DUE_CMD, { stdio: 'inherit' });
   await S.page.reload(); await S.app.getByText('خطة اليوم').waitFor();
-  const item = S.app.getByRole('button', { name: /مراجعة: سورة .* 1–4/ });
+  // Count inside the plan only: Home also has a separate "today's review" card that may show the same task.
+  const plan = () => S.app.locator('section[aria-labelledby="today-h"]');
+  const item = plan().getByRole('button', { name: /مراجعة: سورة .* 1–4/ });
   await item.waitFor();
   await S.page.reload(); await S.app.getByText('خطة اليوم').waitFor();
-  if (await S.app.getByRole('button', { name: /مراجعة: سورة .* 1–4/ }).count() !== 1) throw new Error('duplicated');
+  if (await plan().getByRole('button', { name: /مراجعة: سورة .* 1–4/ }).count() !== 1) throw new Error('duplicated in the plan');
   await S.app.getByRole('button', { name: 'كيف تُرتّب الخطة؟' }).click(); await S.app.getByText(/واجبات المعلم المتأخرة أولًا/).waitFor();
 });
 await S.page.screenshot({ path: out + '/rev-today.png', fullPage: true });

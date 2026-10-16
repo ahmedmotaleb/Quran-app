@@ -58,7 +58,7 @@ const initial = () => ({
   /** True when a backend is configured (VITE_API_BASE_URL); demo data otherwise. */
   liveMode: LIVE,
   /** Public platform settings from the server (live mode); safe defaults until loaded. */
-  pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, org_name: '', support_whatsapp: '', show_support_button: false },
+  pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, org_name: '', support_email: '', support_whatsapp: '', show_support_button: false },
   me: null as Me | null,
   net: { loading: false, error: null as string | null },
   // Live mode starts empty: demo records must never appear (even briefly) before the server's data arrives.

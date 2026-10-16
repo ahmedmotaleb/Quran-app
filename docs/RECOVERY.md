@@ -25,18 +25,15 @@ The checks:
 - every submission still has its recording metadata row;
 - row counts.
 
-## Decisions for the owner (proposed defaults)
+## Decisions (owner, 16 October 2026)
 
-- **RPO** (maximum data loss): proposed **24 hours** worst case from the nightly dump, and minutes with Neon
-  restore inside its history window.
-- **RTO** (time to be back): proposed **1 hour**. Measured parts are in each drill's summary (dump, restore and
-  verify times). Pointing Cloud Run at a restored database takes about 5 minutes (below).
-- **Recordings**: R2 has no object versioning. Proposed: accept that recordings are not backed up. Losing the
-  bucket loses audio, but scores, feedback text and progress stay in the database. The alternative is a second
-  bucket with a nightly copy (`rclone sync`), at R2 storage cost beyond the 10 GB free.
-- **Set `BACKUP_PASSPHRASE`**: GitHub → Settings → Secrets and variables → Actions → New repository secret. Use a
-  long random passphrase, and also keep it in your password manager. Without it, the drill still runs nightly but
-  no copy is kept.
+- **RPO:** up to **24 hours** of data may be lost in a disaster, the nightly dump. Inside Neon's history window,
+  minutes.
+- **RTO:** the app is back within **1 hour**.
+- **Recordings are not backed up** for the pilot. Losing the R2 bucket would lose audio, but scores, feedback text
+  and progress stay in the database. Revisit before recordings exceed R2's free 10 GB or before a paid launch.
+- **Still to do:** set the `BACKUP_PASSPHRASE` repository secret so the nightly drill also keeps encrypted copies
+  (GitHub → Settings → Secrets and variables → Actions). Keep the same passphrase in a password manager.
 
 ## Restore runbook
 
