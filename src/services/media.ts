@@ -29,6 +29,9 @@ let chunks: Blob[] = [];
 /** Object URL of the last finished recording (null for demo recordings). */
 export const recording: { url: string | null; blob: Blob | null } = { url: null, blob: null };
 
+/** True while the microphone is capturing (any screen that records, including quiz recitations). */
+export function recorderActive() { return !!mr && mr.state !== 'inactive'; }
+
 export function recorderSupported() {
   return typeof navigator.mediaDevices?.getUserMedia === 'function' && typeof window.MediaRecorder !== 'undefined';
 }

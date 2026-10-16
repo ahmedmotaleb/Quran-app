@@ -1,9 +1,11 @@
 // Live admin settings (pack prompt 08), against a seeded dev server: node e2e/admin-settings.mjs <shots-dir> [base-url]
 // A safe change persists and is audited; a sensitive change needs the password; the learner app follows it.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { trackWrites } from './lib/settle.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const page = await b.newPage({ viewport: { width: 1280, height: 900 }, timezoneId: 'Africa/Cairo' }); page.setDefaultTimeout(10000);
+const { settledReload } = trackWrites(page);
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 let fails = 0;
 const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await page.screenshot({ path: `${out}/settings-fail-${name.replace(/\W+/g, '_')}.png` }); } };
@@ -18,7 +20,7 @@ await step('a safe change saves, persists after reload and is audited', async ()
   await nav('الإعدادات'); await page.locator('#st-cancel_hours').fill('24');
   await page.getByText('1 تغيير غير محفوظ').waitFor();
   await page.getByRole('button', { name: 'حفظ التغييرات' }).click(); await page.getByText(/آخر حفظ/).waitFor();
-  await page.reload(); await nav('الإعدادات');
+  await settledReload(); await nav('الإعدادات');
   if (await page.locator('#st-cancel_hours').inputValue() !== '24') throw new Error('not persisted');
   await page.getByRole('cell', { name: 'تعديل الإعدادات' }).first().waitFor(); await page.getByText('cancel_hours: 12 → 24').first().waitFor();
 });

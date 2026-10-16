@@ -449,9 +449,11 @@ export function obNext() {
   reset('home', 'student');
   toast(`تم إعداد خطتك. مرحبًا بك في ${BRAND.ar}`);
 }
-export function logout() {
+export async function logout() {
   set({ sheet: null });
-  if (LIVE) live.logout();
+  // Live mode: the sign-in screen appears only after the server has ended the session, so reopening or
+  // refreshing right away cannot restore the old account.
+  if (LIVE) await live.logout();
   reset('login', null, { login: { email: '', pw: '', show: false, errors: {}, loading: false } });
 }
 

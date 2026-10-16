@@ -1,9 +1,11 @@
 // Live admin courses, lessons, enrollments and quizzes (pack prompt 07), against a seeded dev server:
 //   node e2e/admin-content.mjs <shots-dir> [base-url]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { trackWrites } from './lib/settle.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const page = await b.newPage({ viewport: { width: 1280, height: 900 }, timezoneId: 'Africa/Cairo' }); page.setDefaultTimeout(10000);
+const { settledReload } = trackWrites(page);
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 let fails = 0;
 const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await page.screenshot({ path: `${out}/content-fail-${name.replace(/\W+/g, '_')}.png` }); } };
@@ -38,14 +40,14 @@ await step('only enrolled students can open the lesson', async () => {
   yousef = await tokenFor('yousef@halqa.app'); sara = await tokenFor('sara@halqa.app');
   if ((await api('GET', 'lessons', yousef)).body.some((l) => l.title === LT)) throw new Error('visible before enrollment');
   await dialog().getByRole('button', { name: 'تسجيل طالب' }).click(); await dialog().getByRole('button', { name: /يوسف أحمد/ }).click();
-  await page.reload(); await nav('المحاضرات'); await page.getByRole('button', { name: CT }).click(); await dialog().getByText('يوسف أحمد').waitFor();
+  await settledReload(); await nav('المحاضرات'); await page.getByRole('button', { name: CT }).click(); await dialog().getByText('يوسف أحمد').waitFor();
   const l = (await api('GET', 'lessons', yousef)).body.find((x) => x.title === LT); if (!l) throw new Error('enrolled student cannot see it');
   lessonId = l.id;
   if ((await api('GET', `lessons/${lessonId}`, sara)).status !== 404) throw new Error('other student can open it');
 });
 await step('ending the enrollment removes access, keeps the record', async () => {
   await dialog().getByRole('button', { name: 'إنهاء تسجيل يوسف أحمد' }).click(); await dialog().getByRole('button', { name: 'إنهاء التسجيل' }).click();
-  await page.reload(); await nav('المحاضرات'); await page.getByRole('button', { name: CT }).click(); await dialog().getByText('منسحب').waitFor();
+  await settledReload(); await nav('المحاضرات'); await page.getByRole('button', { name: CT }).click(); await dialog().getByText('منسحب').waitFor();
   if ((await api('GET', `lessons/${lessonId}`, yousef)).status !== 404) throw new Error('still accessible');
 });
 let qid = 0; let testId = 0;
@@ -75,7 +77,7 @@ await step('student starts; admin edits a question mid-attempt; the attempt keep
   await dialog().getByText('ما مقدار المد الطبيعي؟').waitFor();
   const r = await api('POST', `attempts/${attempt}/submit`, yousef, { answers: [{ question: qid, response: 0 }] });
   if (r.status !== 200 || r.body.objective_score !== 1) throw new Error(`submit ${r.status} ${JSON.stringify(r.body)}`);
-  await page.reload(); await nav('الاختبارات'); await page.getByRole('button', { name: QT }).click();
+  await settledReload(); await nav('الاختبارات'); await page.getByRole('button', { name: QT }).click();
   await dialog().getByText(/نسخة 2/).waitFor(); await dialog().getByText(/1 محاولة مسلّمة/).waitFor();
 });
 await step('close the quiz: students no longer see it', async () => {

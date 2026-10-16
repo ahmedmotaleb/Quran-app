@@ -4,6 +4,7 @@ import { BackButton, Segmented, Switch, card, dangerOutlineBtn } from '@/compone
 import { tzOf } from '@/lib/format';
 import { go, logout, openSheet, setState, toast, up, useApp } from '@/store/store';
 import { promptInstall, useInstall } from '@/pwa/install';
+import { LIVE } from '@/api/client';
 
 const NOTIFS = [['tasks', 'تذكير بالواجبات'], ['sessions', 'تذكير قبل الجلسات'], ['feedback', 'تقييمات المعلم'], ['news', 'أخبار الحلقة']] as const;
 const rowBtn = { width: '100%', minHeight: 52, border: 'none', background: 'transparent', display: 'flex', alignItems: 'center', gap: 8, padding: 0, cursor: 'pointer', color: color.ink, fontSize: 15 } as const;
@@ -75,7 +76,7 @@ export default function Account() {
       </section>
       <button onClick={() => openSheet({ kind: 'confirm', title: 'تسجيل الخروج؟', body: 'ستحتاج إلى إدخال بريدك وكلمة المرور للعودة.', ok: 'تسجيل الخروج', danger: true, onOk: logout })}
         style={dangerOutlineBtn(52, 16)}><Icon name="leave" /> تسجيل الخروج</button>
-      <p style={{ margin: 0, fontSize: 12, color: color.muted, textAlign: 'center', fontFamily: font.latin }}>HALQA · v0.1 prototype</p>
+      <p style={{ margin: 0, fontSize: 12, color: color.muted, textAlign: 'center', fontFamily: font.latin }}>{LIVE ? 'HALQA · v0.1' : 'HALQA · v0.1 prototype'}</p>
     </div>
   );
 }
