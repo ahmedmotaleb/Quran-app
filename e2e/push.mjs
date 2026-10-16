@@ -51,10 +51,15 @@ await step('a push message shows a generic RTL notification that opens the app',
   });
   const payload = { title: 'الحلقة', body: 'وصل تقييم جديد من معلمك.', url: '/#/tasks/7', tag: 'feedback' };
   await cdp.send('ServiceWorker.deliverPushMessage', { origin: new URL(LIVE).origin, registrationId: reg.registrationId, data: JSON.stringify(payload) });
-  const shown = await page.waitForFunction(async () => {
-    const r = await navigator.serviceWorker.ready; const n = await r.getNotifications();
-    return n.length ? { title: n[0].title, body: n[0].body, dir: n[0].dir, url: n[0].data && n[0].data.url } : null;
-  }, null, { timeout: 10000 }).then((h) => h.jsonValue());
+  let shown = null;
+  for (let i = 0; i < 40 && !shown; i++) {   // the handler runs asynchronously in the worker: poll for its notification
+    shown = await page.evaluate(async () => {
+      const r = await navigator.serviceWorker.ready; const n = await r.getNotifications();
+      return n.length ? { title: n[0].title, body: n[0].body, dir: n[0].dir, url: n[0].data && n[0].data.url } : null;
+    });
+    if (!shown) await page.waitForTimeout(250);
+  }
+  if (!shown) throw new Error('no notification was shown within 10 s');
   if (shown.title !== 'الحلقة' || shown.body !== payload.body || shown.dir !== 'rtl' || shown.url !== '/#/tasks/7') throw new Error(JSON.stringify(shown));
 });
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
