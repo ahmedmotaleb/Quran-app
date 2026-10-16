@@ -5,7 +5,7 @@ import { color, font } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
 import { BackButton, Spinner, card, muted } from '@/components/ui';
 import { SUR } from '@/data/demo';
-import { jumpTo, loadSurah, loadSurahList, openSheet, playAyah, stopMushaf, up, useApp } from '@/store/store';
+import { jumpTo, loadSurah, loadSurahList, openSheet, playAyah, setMushafRate, stopMushaf, up, useApp } from '@/store/store';
 
 const stepBtn = { width: 32, height: 44, border: 'none', background: 'transparent', color: color.primary, cursor: 'pointer', display: 'grid', placeItems: 'center' } as const;
 const num = { fontFamily: font.latin, fontWeight: 700, fontSize: 14, minWidth: 20, textAlign: 'center' } as const;
@@ -114,25 +114,43 @@ export default function Mushaf() {
         )}
       </div>
 
-      <div style={{ position: 'sticky', bottom: 0, background: color.card, borderTop: `1px solid ${color.border}`, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ position: 'sticky', bottom: 0, background: color.card, borderTop: `1px solid ${color.border}` }}>
+      <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <button onClick={() => (M.playing ? stopMushaf() : playAyah(M.from, 0))} aria-label={playL} disabled={!M.data || !audioName}
           style={{ width: 52, height: 52, borderRadius: '50%', border: 'none', background: color.primary, color: color.ivory, display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0, opacity: M.data && audioName ? 1 : 0.6 }}>
           <Icon name={M.playing ? 'pause' : 'play'} />
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{playL}</p>
-          <p style={muted(12, { margin: '2px 0 0' })}>{M.playing ? `الآية ${M.cur} · التكرار ${M.rep + 1} من ${M.repeat}` : audioName ? `النطاق ${M.from}–${M.to} · ${audioName}` : 'التلاوة الصوتية غير متاحة حاليًا'}</p>
+          <p aria-live="polite" style={muted(12, { margin: '2px 0 0' })}>{M.playing ? `الآية ${M.cur} · ${M.cur && M.cur > M.to ? 'متابعة بعد النطاق' : M.repeat === 0 ? `التكرار ${M.rep + 1} · مستمر` : `التكرار ${M.rep + 1} من ${M.repeat}`}` : audioName ? `النطاق ${M.from}–${M.to} · ${audioName}` : 'التلاوة الصوتية غير متاحة حاليًا'}</p>
         </div>
         <div role="group" aria-label="تكرار النطاق" style={{ display: 'flex', alignItems: 'center', gap: 2, border: `1px solid ${color.borderChip}`, borderRadius: 12, padding: 2 }}>
           <span style={{ color: color.muted, padding: '0 4px' }}><Icon name="repeat" size={18} /></span>
-          {[1, 3, 5].map((n) => {
+          {[1, 3, 5, 10, 0].map((n) => {
             const on = M.repeat === n;
             return (
-              <button key={n} aria-pressed={on} aria-label={`تكرار ${n} مرات`} onClick={() => setM({ repeat: n })}
-                style={{ minWidth: 36, minHeight: 40, border: 'none', borderRadius: 10, background: on ? color.primary : 'transparent', color: on ? color.ivory : color.primary, fontFamily: font.latin, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>×{n}</button>
+              <button key={n} aria-pressed={on} aria-label={n ? `تكرار ${n} مرات` : 'تكرار مستمر'} onClick={() => setM({ repeat: n })}
+                style={{ minWidth: 32, minHeight: 40, border: 'none', borderRadius: 10, background: on ? color.primary : 'transparent', color: on ? color.ivory : color.primary, fontFamily: font.latin, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>{n ? `×${n}` : '∞'}</button>
             );
           })}
         </div>
+      </div>
+      {audioName && (
+        <div style={{ padding: '0 16px 10px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div role="group" aria-label="سرعة التلاوة" style={{ display: 'flex', alignItems: 'center', gap: 2, border: `1px solid ${color.borderChip}`, borderRadius: 12, padding: 2 }}>
+            <span style={{ fontSize: 12, color: color.muted, padding: '0 6px', fontWeight: 700 }}>السرعة</span>
+            {[0.75, 1, 1.25].map((r) => {
+              const on = M.rate === r;
+              return <button key={r} aria-pressed={on} aria-label={`السرعة ${r}`} onClick={() => setMushafRate(r)}
+                style={{ minWidth: 40, minHeight: 40, border: 'none', borderRadius: 10, background: on ? color.primary : 'transparent', color: on ? color.ivory : color.primary, fontFamily: font.latin, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>{r}×</button>;
+            })}
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: color.ink, minHeight: 40, cursor: 'pointer' }}>
+            <input type="checkbox" checked={M.adv} onChange={(e) => setM({ adv: e.target.checked })} style={{ width: 20, height: 20, accentColor: color.primary }} />
+            متابعة بعد نهاية النطاق
+          </label>
+        </div>
+      )}
       </div>
     </div>
   );

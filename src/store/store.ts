@@ -43,7 +43,8 @@ export interface AssignForm {
 }
 export interface MushafState {
   surah: number; data: SurahData | null; loading: boolean; error: boolean; errMsg?: string | null; from: number; to: number; font: number;
-  bookmark: number | null; playing: boolean; cur: number | null; repeat: number; rep: number; jump: string;
+  /** repeat: times to play the range (0 = continuously); rate: playback speed; adv: carry on past the range end. */
+  bookmark: number | null; playing: boolean; cur: number | null; repeat: number; rep: number; jump: string; rate: number; adv: boolean;
   list: SurahListItem[] | null; listQ: string; listErr: boolean; flash: number | null;
   /** Live mode: the reader's saved bookmarks (all surahs) and the verified source's details. */
   marks: Mark[] | null; src: SourceInfo | null;
@@ -111,7 +112,7 @@ const initial = () => ({
   },
   rec: { phase: 'idle' as RecPhase, secs: 0, task: 'k1', demo: false, prog: 0, ...REC_LIVE },
   player: { key: null as string | null, pos: 0, dur: 0, playing: false },
-  m: { surah: 67, data: null, loading: false, error: false, from: 1, to: 10, font: 26, bookmark: null, playing: false, cur: null, repeat: 1, rep: 0, jump: '', list: null, listQ: '', listErr: false, flash: null, marks: null, src: null } as MushafState,
+  m: { surah: 67, data: null, loading: false, error: false, from: 1, to: 10, font: 26, bookmark: null, playing: false, cur: null, repeat: 1, rep: 0, rate: 1, adv: false, jump: '', list: null, listQ: '', listErr: false, flash: null, marks: null, src: null } as MushafState,
   live: { phase: 'waiting' as LivePhase, mic: true, cam: true, secs: 0, count: 272, attempt: 0, taskOpen: true, c: 0 },
   sim: { uploadFail: false, slotTaken: false },
   rv: null as ReviewDraft | null,
@@ -375,21 +376,26 @@ export function playAyah(a: number, rep: number) {
   const m = get().m; media.stopMushafAudio(); media.stopPlayback();
   const src = ayahAudioUrl(m.surah, a, get().pub.ayah_audio?.url);
   if (!src) { toast('التلاوة الصوتية متوقفة حتى اعتماد مصدر مرخّص.', 'alert'); return; }
-  const au = new Audio(src); media.mushafAudio.el = au;
+  const au = new Audio(src); media.mushafAudio.el = au; au.playbackRate = m.rate;
   const fail = () => {
     if (media.mushafAudio.el !== au) return;
     media.stopMushafAudio(); setM({ playing: false, cur: null });
     toast('تعذّر تشغيل الصوت. تحقق من الاتصال.', 'alert');
   };
   au.onended = () => {
-    const mm = get().m;
+    const mm = get().m; const last = mm.data?.numberOfAyahs ?? mm.to;
+    const fullRange = rep + 1 >= mm.repeat && mm.repeat !== 0;
     if (a < mm.to) playAyah(a + 1, rep);
-    else if (rep + 1 < mm.repeat) playAyah(mm.from, rep + 1);
+    else if (!fullRange) playAyah(mm.from, rep + 1);                       // next pass (0 = continuous)
+    else if (mm.adv && a < last) playAyah(a + 1, rep);                      // auto-advance past the range, once each
     else { media.stopMushafAudio(); setM({ playing: false, cur: null, rep: 0 }); }
   };
   au.onerror = fail; au.play().catch(fail);
   setM({ playing: true, cur: a, rep });
+  document.getElementById('ayah-' + a)?.scrollIntoView({ block: 'center', behavior: 'smooth' });  // follow the reciter
 }
+/** Speed applies at once to the ayah playing now and to the next ones. */
+export function setMushafRate(rate: number) { setM({ rate }); if (media.mushafAudio.el) media.mushafAudio.el.playbackRate = rate; }
 export function jumpTo(raw: string | number) {
   const m = get().m; if (!m.data) return;
   const n = parseInt(String(raw), 10);

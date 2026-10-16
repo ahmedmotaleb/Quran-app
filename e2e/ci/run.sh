@@ -28,7 +28,7 @@ run() {  # suite [base-url]
 export PYTHON="$PY"
 
 # 1. Student signup/onboarding/session restore, verified Quran reader, recording → submission → feedback, parent (no audio), progress.
-reseed; run live; run quran; run reading; run loop; shell_py past_booking.py; shell_py attendance.py; run parent; run progress
+reseed; run live; run quran; run reading; run quran-audio; run loop; shell_py past_booking.py; shell_py attendance.py; run parent; run progress
 # 2. Teacher slot → booking → cancel/reschedule → attendance; lessons and quiz with server + teacher grading;
 #    a live session joined through the teacher's meeting link.
 reseed; PAST_CMD="bash e2e/ci/py.sh past_booking.py" run schedule; run learn
@@ -36,7 +36,8 @@ reseed; SOON_CMD="bash e2e/ci/py.sh soon_booking.py" run live-session
 # 3. Spaced repetition and Today plan; notifications inbox.
 reseed; DUE_CMD="bash e2e/ci/py.sh due_reviews.py" run reviews
 reseed; run inbox
-# 4. Admin: real sign-in with enforced two-step verification (second server), then persistent edits.
+# 4. Admin: real sign-in with enforced two-step verification (second server, which also has a test ayah-audio
+#    source for quran-audio), then persistent edits.
 reseed; MFA_ENFORCED=1 RESET_CMD="bash e2e/ci/py.sh mfa_reset.py" run admin http://localhost:5176/
 for s in admin-people admin-scheduling admin-content admin-settings teacher-content; do reseed; run "$s"; done
 # 5. PWA: manifest, installability, offline shell, no API data in caches (preview builds); an update published
