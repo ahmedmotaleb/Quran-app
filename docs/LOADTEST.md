@@ -47,7 +47,34 @@ and all other rules stay on.
 | Container | 0 restarts, not OOM-killed |
 | Slowest frequent queries | Slot lookup 4.4 ms mean (max 61 ms); rate-limit cache update 0.6 ms mean |
 
-Per-endpoint p95/p99 and CPU/memory peaks are in each run's job summary and annotations.
+### Run 2: 16 October 2026, main at `06bc3f4` (after the E2E and logout changes)
+
+| Measure | Result |
+| --- | --- |
+| Requests | 8,639 (16.6/s), **0.00 %** failed, checks 100 % |
+| Latency, all requests: p50 / p95 / p99 | **7 / 21 / 265 ms** |
+| Booking race | **1 booked, 49 refused**; 4 ordinary "slot full/overlap" refusals during browsing |
+| App CPU (1 vCPU) | max 62 %, average 14 % (79 five-second samples) |
+| App memory | max **343 MiB of 512**; 0 restarts, not OOM-killed |
+| Database | max 9 connections, 0 waiting locks; slowest frequent query 3.1 ms mean (slot lookup) |
+
+Per endpoint (requests, then p50 / p95 / p99 in ms):
+
+| Endpoint | n | p50 | p95 | p99 | | Endpoint | n | p50 | p95 | p99 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| sign-in | 226 | 28 | 1,425 | 1,673 | | lessons | 393 | 6 | 8 | 11 |
+| me | 711 | 4 | 6 | 9 | | lesson | 393 | 8 | 11 | 13 |
+| today | 711 | 12 | 16 | 23 | | tests | 393 | 5 | 7 | 10 |
+| assignments | 726 | 7 | 10 | 14 | | notifications | 709 | 7 | 10 | 14 |
+| progress | 711 | 15 | 22 | 28 | | teacher dashboard | 123 | 14 | 19 | 107 |
+| surah text | 711 | 6 | 8 | 12 | | teacher student progress | 369 | 16 | 21 | 28 |
+| teachers | 318 | 6 | 8 | 11 | | parent weekly summary | 236 | 17 | 26 | 33 |
+| teacher slots | 318 | 16 | 20 | 23 | | parent child progress | 236 | 17 | 24 | 30 |
+| book | 82 | 17 | 23 | 25 | | upload 200 KB | 15 | 16 | 71 | 167 |
+| race booking (50 at once) | 50 | 174 | 370 | 390 | | submit | 15 | 14 | 18 | 19 |
+
+Sign-in is the only slow endpoint, by design. Password hashing is deliberately expensive, and its p95 comes from
+the burst of 50 simultaneous sign-ins before the race. Everyday screens stay under 30 ms at p99.
 
 ## Fixes made because of measurements
 
@@ -60,7 +87,7 @@ Per-endpoint p95/p99 and CPU/memory peaks are in each run's job summary and anno
 ## What can be claimed
 
 - On one Cloud Run-sized instance, **50 simultaneously active students plus 10 staff/parents** were served with no
-  errors and sub-second p99. Booking stays correct under a 50-way race. "500 registered students" is supported for
+  errors, sub-second p99, and CPU and memory to spare (62 % / 343 MiB peaks). Booking stays correct under a 50-way race. "500 registered students" is supported for
   this activity level, since most registered users are not active at the same moment.
 - **Not yet measured:** Neon's network latency and compute limits under this load, Cloud Run cold starts, more
   than 50 active users, and real mobile networks. Before promising more, run the same profile against a staging
