@@ -79,12 +79,19 @@ export function uploadRecitation(blob: Blob, seconds: number) {
   f.append('duration_seconds', String(Math.max(1, Math.round(seconds))));
   return api<ApiMedia>('POST', 'media/recitations', f);
 }
+export function uploadVoiceNote(blob: Blob, seconds: number) {
+  const f = new FormData();
+  const type = (blob.type || 'audio/webm').split(';')[0];
+  f.append('file', new File([blob], 'voice-note', { type }));
+  f.append('duration_seconds', String(Math.max(1, Math.round(seconds))));
+  return api<ApiMedia>('POST', 'media/voice-feedback', f);
+}
 export const submit = (assignment: number, media: string, key: string) =>
   api<ApiSubmission>('POST', `assignments/${assignment}/submissions`, { media }, { idempotencyKey: key });
 export const submissions = (q = '') => api<Page<ApiSubmission>>('GET', `submissions?page_size=100${q}`);
 export const giveFeedback = (id: number, body: {
   score_hifz: number; score_tajweed: number; score_fluency: number; decision: 'accept' | 'repeat';
-  general: string; needs_review: string; next_step: string; notes: { at_seconds: number; text: string }[];
+  general: string; needs_review: string; next_step: string; notes: { at_seconds: number; text: string }[]; voice?: string | null;
 }) => api<ApiSubmission>('POST', `submissions/${id}/feedback`, body);
 export const teacherStudents = () => api<Page<ApiTeacherStudent>>('GET', 'teacher/students?page_size=100');
 export interface ApiTeacherOcc {

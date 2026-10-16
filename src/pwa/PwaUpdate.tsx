@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useApp } from '@/store/store';
 import { recorderActive } from '@/services/media';
+import { voiceNote, voiceNoteRecording } from '@/services/voiceNote';
 import { color } from '@/theme/tokens';
 
 const BUSY = new Set(['requesting', 'recording', 'paused', 'review', 'uploading', 'failed']);
@@ -18,7 +19,7 @@ export default function PwaUpdate() {
   });
   const recBusy = useApp((s) => BUSY.has(s.rec.phase));
   const [waiting, setWaiting] = useState(false);
-  const busy = () => recBusy || recorderActive();
+  const busy = () => recBusy || recorderActive() || voiceNoteRecording() || !!voiceNote.blob; // a teacher's unsent voice note too
   useEffect(() => {
     if (!waiting) return;
     const t = setInterval(() => { if (!busy()) { clearInterval(t); updateServiceWorker(true); } }, 1000);

@@ -14,6 +14,7 @@ import { BRAND } from '@/theme/brand';
 import { LIVE } from '@/api/client';
 import type { ApiBooking, ApiGradingItem, ApiLesson, ApiQuestion, ApiResult, ApiSubmission, ApiTeacherOcc, ApiTest, Me } from '@/api/endpoints';
 import * as live from './live';
+import { discardVoiceNote } from '@/services/voiceNote';
 
 /* ------------------------------------------------------------------ */
 /* State shape                                                          */
@@ -527,6 +528,7 @@ export function selectReviews(s: AppState): ReviewItem[] {
   return [...all.filter((r) => r.status === 'submitted'), ...all.filter((r) => r.status === 'reviewed')];
 }
 export function openReview(rid: string) {
+  discardVoiceNote(); // a note recorded for another submission never carries over
   set({ rv: { rid, notes: [], ratings: { hifz: 0, tajweed: 0, fluency: 0 }, decision: 'approve', needs: '', general: '', voice: null, voiceRec: false, voiceSecs: 0, draft: null, errors: {} } });
   go('treview', { rid });
 }

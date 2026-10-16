@@ -5,6 +5,7 @@ from apps.core import admin_views as core_admin
 from apps.assessments import views as assessments
 from apps.learning import admin_views as learn_admin
 from apps.learning import progress
+from apps.learning import teacher_content
 from apps.learning import reviews
 from apps.learning import views as learning
 from apps.media import views as media
@@ -74,6 +75,13 @@ urlpatterns = [
     path("admin/bookings/counts", sched_admin.AdminBookingCounts.as_view()),
     path("admin/bookings/<int:pk>/cancel", sched_admin.AdminBookingCancel.as_view()),
     # Admin: courses, lessons, enrollments, quizzes
+    path("teacher/content", teacher_content.TeacherContent.as_view()),
+    path("teacher/courses", teacher_content.TeacherCourses.as_view()),
+    path("teacher/courses/<int:pk>/lessons", teacher_content.TeacherLessons.as_view()),
+    path("teacher/lessons/<int:pk>", teacher_content.TeacherLessonDetail.as_view()),
+    path("teacher/tests", teacher_content.TeacherTests.as_view()),
+    path("teacher/tests/<int:pk>", teacher_content.TeacherTestDetail.as_view()),
+    path("admin/content/drafts", teacher_content.AdminContentDrafts.as_view()),
     path("admin/courses", learn_admin.AdminCourses.as_view()),
     path("admin/courses/<int:pk>", learn_admin.AdminCourseDetail.as_view()),
     path("admin/courses/<int:pk>/state", learn_admin.AdminCourseState.as_view()),

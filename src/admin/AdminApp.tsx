@@ -19,14 +19,15 @@ const LIVE_OTHER: Partial<Record<Section, () => JSX.Element>> = {
 
 /** Sections that run on the real API in live mode; the rest still show demo data (labelled). */
 const LIVE_SECTIONS: Partial<Record<Section, LA.Role>> = { students: 'student', teachers: 'teacher', parents: 'parent' };
-type LiveCounts = Partial<Record<LA.Role, LA.Counts>>;
+type LiveCounts = Partial<Record<LA.Role, LA.Counts>> & { drafts?: LA.Drafts };
 function useLiveCounts(sec: Section) {
   const [c, setC] = useState<LiveCounts>({});
   useEffect(() => {
     if (!LIVE) return;
     let on = true;
     Promise.all((['student', 'teacher', 'parent'] as const).map((r) => LA.peopleCounts(r).then((x) => [r, x] as const)))
-      .then((xs) => { if (on) setC(Object.fromEntries(xs)); }).catch(() => { /* badges are optional */ });
+      .then((xs) => { if (on) setC((p) => ({ ...p, ...Object.fromEntries(xs) })); }).catch(() => { /* badges are optional */ });
+    LA.contentDrafts().then((d) => { if (on) setC((p) => ({ ...p, drafts: d })); }).catch(() => {});
     return () => { on = false; };
   }, [sec]);
   return c;
@@ -283,6 +284,8 @@ function OverviewLive({ c }: { c: LiveCounts }) {
   const todo: [Section, number, string][] = [
     ['students', c.student?.pending ?? 0, 'طلاب بانتظار الاعتماد'], ['students', c.student?.unlinked ?? 0, 'طلاب دون معلم'],
     ['teachers', c.teacher?.unapproved ?? 0, 'معلمون غير معتمدين'], ['parents', c.parent?.pending ?? 0, 'أولياء أمور بانتظار الاعتماد'],
+    ['lectures', c.drafts?.lessons ?? 0, `دروس مسودة بانتظار المراجعة والنشر${c.drafts?.lessons_by_teachers ? ` (${c.drafts.lessons_by_teachers} من المعلمين)` : ''}`],
+    ['quizzes', c.drafts?.tests ?? 0, `اختبارات مسودة بانتظار المراجعة والنشر${c.drafts?.tests_by_teachers ? ` (${c.drafts.tests_by_teachers} من المعلمين)` : ''}`],
   ];
   const open = todo.filter(([, k]) => k > 0);
   return (

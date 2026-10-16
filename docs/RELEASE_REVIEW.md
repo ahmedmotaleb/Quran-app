@@ -9,7 +9,7 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 | Area | State | Evidence | Gap |
 | --- | --- | --- | --- |
 | Student web/PWA | PASS | E2E `live`, `loop`, `learn`, `reviews`, `schedule`, `quran`, `inbox` on every PR; production smoke: sign-up, onboarding, Mushaf, recording upload/playback | Real-device checks (see PWA row) |
-| Teacher web/PWA | PARTIAL | Students, assignments, review queue, feedback, schedule, attendance, grading are live (E2E `loop`, `schedule`, `learn`) | Teacher content authoring (`tcontent`) still shows labelled sample content; admins author content instead |
+| Teacher web/PWA | PASS | Students, assignments, review queue, feedback, schedule, attendance, grading and content authoring (drafts reviewed and published by admins) are live (E2E `loop`, `schedule`, `learn`, `teacher-content`) | Lesson file uploads (PDF/audio) not yet supported |
 | Parent web/PWA | PASS | E2E `parent`, `progress`: linked children only, no audio, same numbers as the student | — |
 | Product Admin Portal | PARTIAL | Sign-in with enforced two-step verification, people, circles, bookings, courses, quizzes, settings, audit: all on the API (E2E `admin*`) | «الاشتراكات» is demo only: no payment provider (prompts 09–10 not started) |
 | Backend/API + PostgreSQL | PASS | 155 tests on PostgreSQL in CI (concurrency, permissions, cross-role sweep); migrations check; `/api/ready` checks database, migrations, cache | — |
@@ -43,7 +43,7 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 3. **No kept backup copies** (medium). The drill proves restores work, but only Neon's short history holds past data until `BACKUP_PASSPHRASE` is set.
 4. **Real-device PWA QA not done** (medium): microphone and recording format on iPhone are the main unknowns.
 
-Teacher content authoring, payments, push and live video are product scope, not blockers for a recitation pilot.
+Payments, push and live video are product scope, not blockers for a recitation pilot.
 
 ## Changes since the previous review (`e9c4c25`, 15 October)
 

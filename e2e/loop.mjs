@@ -64,12 +64,23 @@ await step(T.page, 'teacher adds timed note, scores, requests repeat', async () 
   await T.app.getByRole('button', { name: /أضف ملاحظة عند/ }).click();
   await T.app.locator('#rv-draft').fill('انتبه لمدّ المنفصل هنا');
   await T.app.getByRole('button', { exact: true, name: 'حفظ الملاحظة' }).click().catch(async () => { await T.app.getByRole('button', { name: /حفظ/ }).first().click(); });
+  // A real voice note (fake microphone): recorded, played back locally, uploaded with the feedback.
+  if (await T.app.getByText(/لم تُفعَّل في التطبيق بعد/).count()) throw new Error('voice notes still disabled in live mode');
+  await T.app.getByRole('button', { name: /سجّل ملاحظة صوتية/ }).click();
+  await T.app.getByText(/جارٍ تسجيل الملاحظة/).waitFor();
+  await T.page.waitForTimeout(2500);
+  await T.app.getByRole('button', { exact: true, name: 'إنهاء' }).click();
+  await T.app.getByRole('button', { name: 'تشغيل الملاحظة الصوتية' }).waitFor();
   for (const [l, n] of [['الحفظ', 4], ['التجويد', 3], ['الطلاقة', 4]]) await T.app.getByRole('radio', { name: new RegExp(`^${l}: ${n} من 5`) }).click();
   await T.app.getByRole('button', { exact: true, name: 'يحتاج إعادة' }).click();
   await T.app.getByRole('button', { name: /إرسال التقييم للطالب/ }).click();
   await T.app.getByText('حدّد ما يحتاج الطالب إلى إعادته').waitFor();
   await T.app.locator('#rv-needs').fill('الآيات 6–8');
-  await T.app.getByRole('button', { name: /إرسال التقييم للطالب/ }).click();
+  const [up] = await Promise.all([
+    T.page.waitForResponse((r) => r.url().includes('/api/v1/media/voice-feedback') && r.request().method() === 'POST'),
+    T.app.getByRole('button', { name: /إرسال التقييم للطالب/ }).click(),
+  ]);
+  if (up.status() !== 201) throw new Error('voice note upload ' + up.status());
   await T.page.getByText('أُرسل التقييم إلى يوسف أحمد').waitFor();
 });
 await T.page.screenshot({ path: out + '/m3-teacher-sent.png' });
@@ -93,6 +104,13 @@ await step(S.page, 'student sees needs-repeat + teacher feedback', async () => {
   await S.app.getByText('يحتاج إلى إعادة').waitFor();
   await S.app.getByText('انتبه لمدّ المنفصل هنا').waitFor();
   await S.app.getByText('4 من 5').first().waitFor();
+});
+await step(S.page, 'student plays the teacher\'s voice note (private, signed)', async () => {
+  const [resp] = await Promise.all([
+    S.page.waitForResponse((r) => r.url().includes('/content?t='), { timeout: 8000 }),
+    S.app.getByRole('button', { name: 'تشغيل الملاحظة الصوتية' }).click(),
+  ]);
+  if (resp.status() !== 200) throw new Error('voice note audio ' + resp.status());
 });
 await S.page.screenshot({ path: out + '/m4-student-feedback.png', fullPage: true });
 await step(S.page, 'student sees the newly assigned task', async () => {

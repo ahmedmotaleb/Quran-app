@@ -21,6 +21,7 @@ import { useEffect } from 'react';
 import { ProgressCards } from '@/components/ProgressCards';
 import { InboxBell } from '@/screens/common/Inbox';
 import { api } from '@/api/client';
+import { discardVoiceNote, startVoiceNote, stopVoiceNote, voiceNote, voiceNoteRecording } from '@/services/voiceNote';
 import { studentProgress, type ApiProgress } from '@/api/endpoints';
 
 interface Dash {
@@ -467,7 +468,7 @@ export function TeacherReview() {
           <label htmlFor="rv-gen" style={{ fontSize: 15, fontWeight: 700 }}>ملاحظة عامة</label>
           <textarea id="rv-gen" rows={3} value={V.general} onChange={(e) => up('rv', { general: e.target.value })} style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15, resize: 'vertical' }} />
         </div>
-        {s.liveMode ? <p style={muted(12)}>الملاحظات الصوتية للمعلم لم تُفعَّل في التطبيق بعد؛ استخدم الملاحظات المكتوبة على التوقيت.</p> : <>
+        {s.liveMode ? <VoiceNoteLive key={V.rid} /> : <>
         <div style={{ ...card, borderRadius: 14, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, minHeight: 64 }}>
           {!V.voiceRec && !V.voice && (
             <button onClick={() => up('rv', { voiceRec: true, voiceSecs: 0 })} style={{ flex: 1, minHeight: 44, border: 'none', background: 'transparent', color: color.primary, fontSize: 15, fontWeight: 700, display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}><Icon name="mic" /> سجّل ملاحظة صوتية (اختياري)</button>
@@ -490,6 +491,53 @@ export function TeacherReview() {
         </>}
         <button onClick={sendReview} style={primaryBtn()}><Icon name="check" /> إرسال التقييم للطالب</button>
       </div>
+    </div>
+  );
+}
+
+/** Live mode: a real optional voice note, kept on the device until "send" uploads it with the feedback. */
+function VoiceNoteLive() {
+  const [phase, setPhase] = useState<'idle' | 'rec' | 'ready' | 'denied'>(voiceNote.blob ? 'ready' : 'idle');
+  const [secs, setSecs] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [audio] = useState(() => new Audio());
+  useEffect(() => {
+    if (phase !== 'rec') return;
+    const t0 = Date.now(); const id = setInterval(() => setSecs(Math.round((Date.now() - t0) / 1000)), 500);
+    return () => clearInterval(id);
+  }, [phase]);
+  useEffect(() => () => { audio.pause(); }, [audio]);
+  useEffect(() => () => { if (voiceNoteRecording()) discardVoiceNote(); }, []); // leaving mid-recording drops it
+  const start = async () => { try { await startVoiceNote(); setSecs(0); setPhase('rec'); } catch { setPhase('denied'); } };
+  const stop = async () => { await stopVoiceNote(); setPhase(voiceNote.blob ? 'ready' : 'idle'); };
+  const play = () => {
+    if (playing) { audio.pause(); setPlaying(false); return; }
+    audio.src = voiceNote.url ?? ''; audio.onended = () => setPlaying(false); audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+  };
+  const remove = () => { audio.pause(); setPlaying(false); discardVoiceNote(); setPhase('idle'); };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ ...card, borderRadius: 14, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, minHeight: 64 }}>
+        {(phase === 'idle' || phase === 'denied') && (
+          <button onClick={start} style={{ flex: 1, minHeight: 44, border: 'none', background: 'transparent', color: color.primary, fontSize: 15, fontWeight: 700, display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}><Icon name="mic" /> سجّل ملاحظة صوتية (اختياري)</button>
+        )}
+        {phase === 'rec' && (
+          <>
+            <RecDot /><span role="status" style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>جارٍ تسجيل الملاحظة <Ltr>{fmt(secs)}</Ltr></span>
+            <button onClick={stop} style={primaryBtn(44, 15, { padding: '0 14px', borderRadius: 10 })}>إنهاء</button>
+          </>
+        )}
+        {phase === 'ready' && (
+          <>
+            <button onClick={play} aria-label={playing ? 'إيقاف الملاحظة الصوتية' : 'تشغيل الملاحظة الصوتية'} style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: color.sage, color: color.primary, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name={playing ? 'pause' : 'play'} /></button>
+            <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>ملاحظة صوتية <Ltr>{fmt(voiceNote.secs)}</Ltr></span>
+            <button onClick={remove} aria-label="حذف الملاحظة الصوتية" style={{ width: 44, height: 44, border: 'none', background: 'transparent', color: color.dangerInk, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="trash" size={18} /></button>
+          </>
+        )}
+      </div>
+      <p role={phase === 'denied' ? 'alert' : undefined} style={muted(12, phase === 'denied' ? { color: color.dangerInk } : {})}>
+        {phase === 'denied' ? 'لم يُسمح باستخدام الميكروفون. فعّله من إعدادات المتصفح ثم حاول مجددًا.' : 'تُرفع الملاحظة مع التقييم، ويسمعها الطالب فقط.'}
+      </p>
     </div>
   );
 }

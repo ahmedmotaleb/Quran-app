@@ -22,6 +22,8 @@ import {
 } from '@/screens/teacher/Teacher';
 import ParentHome from '@/screens/parent/ParentHome';
 import Inbox from '@/screens/common/Inbox';
+import TeacherContentLive from '@/screens/teacher/ContentLive';
+import { LIVE as LIVE_MODE } from '@/api/client';
 
 const SCREENS: Record<Screen, ComponentType> = {
   splash: Splash, intro: Intro, login: Login, signup: Signup, forgot: Forgot, onboard: Onboard,
@@ -29,7 +31,7 @@ const SCREENS: Record<Screen, ComponentType> = {
   circles: Circles, teacher: TeacherPage, bkreview: BookingReview, bkdone: BookingDone, session: SessionDetails,
   live: Live, lesson: LessonPage, quiz: QuizPage, progress: Progress, account: Account,
   tdash: TeacherDash, tstudents: TeacherStudents, tstudent: TeacherStudent, tassign: TeacherAssign,
-  treviews: TeacherReviews, treview: TeacherReview, tschedule: TeacherSchedule, tcontent: TeacherContent, phome: ParentHome, inbox: Inbox,
+  treviews: TeacherReviews, treview: TeacherReview, tschedule: TeacherSchedule, tcontent: LIVE_MODE ? TeacherContentLive : TeacherContent, phome: ParentHome, inbox: Inbox,
 };
 
 const TABS_STUDENT: [Screen, string, IconName][] = [['home', 'الرئيسية', 'home'], ['plan', 'تعلمي', 'plan'], ['circles', 'الجلسات', 'users'], ['progress', 'تقدمي', 'chart'], ['account', 'حسابي', 'user']];
@@ -86,8 +88,8 @@ function DataStateView({ screen, ds }: { screen: Screen; ds: Exclude<DataState, 
   );
 }
 
-// Teacher: students, assignments and reviews are live; today's sessions, schedule and content are not yet.
-const SAMPLE_SCREENS: Screen[] = ['live', 'tcontent'];
+// Live mode: only the live-video session screen still shows the design's sample content (no provider yet).
+const SAMPLE_SCREENS: Screen[] = ['live'];
 
 /**
  * The phone UI. `framed` renders the fake status bar + home indicator used inside the
