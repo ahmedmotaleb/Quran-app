@@ -50,7 +50,7 @@ jobs:
       - name: Start the API (normal, and with admin two-step verification required) and the app
         run: |
           (cd backend && nohup python manage.py runserver 8000 --noreload > /tmp/api.log 2>&1 &)
-          (cd backend && ADMIN_REQUIRE_MFA=1 nohup python manage.py runserver 8001 --noreload > /tmp/api-mfa.log 2>&1 &)
+          (cd backend && ADMIN_REQUIRE_MFA=1 AYAH_AUDIO_URL='https://audio.e2e.test/{surah}{ayah}.mp3' AYAH_AUDIO_NAME='تلاوة اختبار' nohup python manage.py runserver 8001 --noreload > /tmp/api-mfa.log 2>&1 &)
           VITE_API_BASE_URL=/ nohup npx vite --port 5174 --strictPort > /tmp/vite.log 2>&1 &
           API_PROXY_TARGET=http://localhost:8001 VITE_API_BASE_URL=/ nohup npx vite --port 5176 --strictPort > /tmp/vite-mfa.log 2>&1 &
           # PWA checks run on production builds: demo build on :4173, live build on :4175 (API proxied to :8000).
