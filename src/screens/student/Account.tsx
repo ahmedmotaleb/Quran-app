@@ -72,7 +72,7 @@ export default function Account() {
       <InstallRow />
       {LIVE && <PushRow />}
       <section style={{ ...card, padding: '4px 16px' }}>
-        <button onClick={() => openSheet({ kind: 'info', title: 'المساعدة', body: `للمساعدة في الحجز أو التسجيل، تواصل مع فريق الدعم عبر ${(LIVE && useApp.getState().pub.support_email) || 'support@halqa.app'}. نرد عادة خلال يوم عمل.` })}
+        <button onClick={() => openSheet({ kind: 'info', title: 'المساعدة', body: `للمساعدة في الحجز أو التسجيل، تواصل مع فريق الدعم عبر ${(LIVE && useApp.getState().pub.support_email) || 'halqa.app.eg@gmail.com'}. نرد عادة خلال يوم عمل.` })}
           style={{ ...rowBtn, borderBottom: `1px solid ${color.divider}` }}><Icon name="help" size={18} /><span style={{ flex: 1, textAlign: 'right' }}>المساعدة</span><Icon name="chevL" size={18} /></button>
         <button onClick={() => openSheet({ kind: 'info', title: 'الخصوصية', body: 'تسجيلاتك لا يطّلع عليها إلا معلمك المرتبط وإدارة الحلقة. يرى ولي الأمر بيانات أبنائه المرتبطين فقط. يمكنك طلب حذف تسجيلاتك في أي وقت.' })}
           style={rowBtn}><Icon name="shield" size={18} /><span style={{ flex: 1, textAlign: 'right' }}>الخصوصية</span><Icon name="chevL" size={18} /></button>

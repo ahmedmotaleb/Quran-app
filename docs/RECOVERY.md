@@ -30,6 +30,7 @@ The checks:
 - **RPO:** up to **24 hours** of data may be lost in a disaster, the nightly dump. Inside Neon's history window,
   minutes.
 - **RTO:** the app is back within **1 hour**.
+- **Support email:** halqa.app.eg@gmail.com (shown in the Help sheet; admins can change it in Settings).
 - **Recordings are not backed up** for the pilot. Losing the R2 bucket would lose audio, but scores, feedback text
   and progress stay in the database. Revisit before recordings exceed R2's free 10 GB or before a paid launch.
 - **Still to do:** set the `BACKUP_PASSPHRASE` repository secret so the nightly drill also keeps encrypted copies
