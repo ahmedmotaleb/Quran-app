@@ -18,7 +18,7 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 | Email / password recovery | PARTIAL | Gmail SMTP configured in production (`/api/ready` → `email: smtp`) | A real reset email and link still to be confirmed by the owner |
 | Subscriptions/payments | NOT TESTED (not enabled) | Owner decision: no charge for now; the section is hidden in the live portal | — |
 | Notifications | PARTIAL | In-app inbox and bell for all events (E2E `inbox`); hourly reminders job runs in production; Web Push built and tested (`test_push.py`, `e2e/push.mjs`), off until `deploy/gcp-push.sh` runs | Push not yet verified on a real phone; email reminders need SMTP |
-| Live sessions | NOT TESTED (not enabled) | The live-session screen shows labelled sample content in live mode, not presented as a working integration | Provider decision (prompt 19) |
+| Live sessions | PASS | Meeting-link adapter: teacher adds the participant link (host links refused); `bookings/<id>/join` gives it only to the booked student inside the join window; early, late, cancelled, wrong-user and parent requests refused (`test_live_sessions.py`, E2E `live-session`) | Calls run in the meeting service, so the app has no evidence of who joined; the teacher marks attendance |
 | CI/E2E | PASS | Backend, Web (typecheck, build, PWA cache rules, npm audit, CSP in the production image), E2E live mode (16 suites, 7 handbook journeys) gate every PR | — |
 | Security | PASS | Admin MFA enforced in production; lockout; throttles; CSP/HSTS/frame/permissions headers; argon2id; IDOR sweep; pip-audit and npm audit clean | Alerts for abuse need `gcp-ops.sh` (below) |
 | Performance/load | PARTIAL | Two runs on a Cloud Run-sized container: 50 active students + 10 staff/parents, 0 % errors, p95 21–23 ms, p99 265–310 ms, peaks 62 % CPU / 343 MiB, booking race 1 of 50 ([LOADTEST.md](LOADTEST.md)) | Not yet measured on Cloud Run + Neon itself or above 50 active users |
@@ -33,7 +33,7 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 - **Progress is consistent across roles:** one server calculation. `test_progress.py` and E2E `progress` compare the student, teacher and parent views.
 - **Spaced repetition does not duplicate or inflate:** there is one review task per cycle, enforced by the database. Memorization counts distinct accepted ayahs (`test_reviews.py`, `test_progress.py`).
 - **Recording storage and reset email are actually configured:** storage yes. Email configured (Gmail SMTP); delivery to be confirmed.
-- **Live-session sample content is not presented as real:** it is labelled as sample in live mode.
+- **Live-session sample content is not presented as real:** the simulated call is gone from the live app; sessions open the teacher's meeting link.
 - **Capacity claims are measured:** only the measured range is claimed (LOADTEST.md).
 
 ## Release blockers, by severity

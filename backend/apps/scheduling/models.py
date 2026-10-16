@@ -92,7 +92,7 @@ class SessionOccurrence(TimeStamped):
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.SCHEDULED)
     source_rule = models.ForeignKey(AvailabilityRule, null=True, blank=True, on_delete=models.SET_NULL, related_name="occurrences")
     meeting_provider = models.CharField(max_length=32, blank=True)
-    meeting_url = models.URLField(blank=True)  # never exposed outside authorized endpoints
+    meeting_url = models.URLField(max_length=500, blank=True)  # participant link; only via the join endpoint and to its teacher
     summary = models.TextField(blank=True)
 
     class Meta:

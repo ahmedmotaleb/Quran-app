@@ -358,6 +358,13 @@ export async function setAttendance(bookingId: number, value: string) {
   await refreshSchedule();
 }
 
+export async function saveMeetingLink(occId: number, url: string): Promise<string | null> {
+  try { await E.setMeetingLink(occId, url.trim()); toast(url.trim() ? 'حُفظ رابط الجلسة' : 'أُزيل رابط الجلسة'); }
+  catch (e) { return e instanceof ApiError ? (e.fields.url?.[0] ?? e.message) : msg(e); }
+  await refreshSchedule();
+  return null;
+}
+
 export async function teacherCancelBooking(bookingId: number) {
   try { await E.cancelBooking(bookingId, 'ألغاه المعلم'); toast('أُلغي الحجز وأُبلغ الطالب'); } catch (e) { toast(msg(e), 'alert'); }
   await refreshSchedule();

@@ -64,11 +64,13 @@ urlpatterns = [
     path("teachers/<int:pk>/slots", scheduling.TeacherSlots.as_view()),
     path("teacher/occurrences", scheduling.TeacherOccurrences.as_view()),
     path("teacher/occurrences/<int:pk>/close", scheduling.TeacherOccurrenceClose.as_view()),
+    path("teacher/occurrences/<int:pk>/meeting", scheduling.TeacherOccurrenceMeeting.as_view()),
     path("bookings", scheduling.BookingList.as_view()),
     path("bookings/<int:pk>", scheduling.BookingDetail.as_view()),
     path("bookings/<int:pk>/cancel", scheduling.BookingCancel.as_view()),
     path("bookings/<int:pk>/reschedule", scheduling.BookingReschedule.as_view()),
     path("bookings/<int:pk>/attendance", scheduling.BookingAttendance.as_view()),
+    path("bookings/<int:pk>/join", scheduling.BookingJoin.as_view()),
     # Admin: circles, sessions, bookings
     path("admin/circles", sched_admin.AdminCircles.as_view()),
     path("admin/circles/<int:pk>", sched_admin.AdminCircleDetail.as_view()),

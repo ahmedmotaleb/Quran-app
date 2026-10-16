@@ -23,6 +23,7 @@ export interface ApiSlot { id: number; teacher: number; teacher_name: string; ki
 export interface ApiBooking {
   id: number; occurrence: ApiSlot; student: number; student_name: string; status: 'confirmed' | 'cancelled'; assignment: number | null;
   note: string; attendance: string; cancelled_at: string | null; cancel_reason: string; created_at: string; can_join: boolean;
+  has_meeting_link: boolean;
 }
 
 // ---- auth ----
@@ -36,7 +37,7 @@ export const adminLogin = (email: string, password: string, otp: string) =>
 export const mfaSetup = () => api<{ secret: string; otpauth_uri: string }>('POST', 'admin/mfa/setup');
 export const mfaConfirm = (otp: string) => api<{ mfa_enabled: boolean }>('POST', 'admin/mfa/confirm', { otp });
 export const me = () => api<Me>('GET', 'me');
-export const publicSettings = () => api<{ cancel_hours: number; open_signup: boolean; max_recording_seconds: number; org_name: string; support_whatsapp: string; show_support_button: boolean }>('GET', 'settings/public');
+export const publicSettings = () => api<{ cancel_hours: number; open_signup: boolean; max_recording_seconds: number; join_minutes: number; org_name: string; support_whatsapp: string; show_support_button: boolean }>('GET', 'settings/public');
 export const updateMe = (patch: Partial<Pick<Me, 'full_name' | 'timezone' | 'phone'>>) => api<Me>('PATCH', 'me', patch);
 export const saveOnboarding = (d: { level: string; daily_goal: string; preferred_days: string[]; preferred_period: string }) =>
   api<Me>('PUT', 'me/onboarding', d);
@@ -111,11 +112,16 @@ export const giveFeedback = (id: number, body: {
 export const teacherStudents = () => api<Page<ApiTeacherStudent>>('GET', 'teacher/students?page_size=100');
 export interface ApiTeacherOcc {
   id: number; kind: 'individual' | 'group'; starts_at: string; ends_at: string; capacity: number; status: string;
+  meeting_provider: string; meeting_url: string;
   bookings: { id: number; student: number; student_name: string; attendance: string; assignment_title: string; note: string }[];
 }
 export const teacherOccurrences = (days = 8) => api<ApiTeacherOcc[]>('GET', `teacher/occurrences?days=${days}`);
 export const openSlot = (starts_at: string, minutes = 45) => api<ApiTeacherOcc>('POST', 'teacher/occurrences', { starts_at, minutes });
 export const closeSlot = (id: number) => api<null>('POST', `teacher/occurrences/${id}/close`);
+/** The teacher's participant link for their own session ("" clears it). */
+export const setMeetingLink = (id: number, url: string) => api<ApiTeacherOcc>('PUT', `teacher/occurrences/${id}/meeting`, { url });
+/** The booked student's link, only while the join window is open. */
+export const joinBooking = (id: number) => api<{ url: string; provider: string; provider_label: string }>('POST', `bookings/${id}/join`);
 export const markAttendance = (booking: number, attendance: string) => api<ApiBooking>('POST', `bookings/${booking}/attendance`, { attendance });
 // ---- lessons & quizzes ----
 export interface ApiLesson {
@@ -182,7 +188,7 @@ export function toSession(b: ApiBooking): Session {
   return {
     id: String(b.id), t: String(o.teacher), teacherName: o.teacher_name, h: 0, type: o.kind === 'group' ? 'جماعية' : 'فردية', dur: minutes,
     status: b.status === 'cancelled' ? 'cancelled' : past ? 'completed' : 'confirmed',
-    task: b.assignment ? String(b.assignment) : null, note: b.note, startsAt: o.starts_at, endsAt: o.ends_at, canJoin: b.can_join, attendance: b.attendance,
+    task: b.assignment ? String(b.assignment) : null, note: b.note, startsAt: o.starts_at, endsAt: o.ends_at, canJoin: b.can_join, hasLink: b.has_meeting_link, attendance: b.attendance,
   };
 }
 

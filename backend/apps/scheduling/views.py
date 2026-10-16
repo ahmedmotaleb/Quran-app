@@ -67,7 +67,7 @@ class BookingScopeMixin:
         cfg, now = AppSettings.load(), timezone.now()
         ctx["joinable"] = set(Booking.objects.filter(
             status="confirmed", occurrence__starts_at__lte=now + timedelta(minutes=cfg.join_minutes), occurrence__ends_at__gte=now,
-        ).values_list("pk", flat=True))
+        ).exclude(occurrence__status=SessionOccurrence.Status.CANCELLED).values_list("pk", flat=True))
         return ctx
 
 
@@ -209,3 +209,57 @@ class TeacherOccurrenceClose(APIView):
             o.save(update_fields=["status", "updated_at"])
         audit("occurrence.closed", actor=request.user, target=o, request=request)
         return Response(status=204)
+
+
+class TeacherOccurrenceMeeting(APIView):
+    """PUT {url}: the teacher sets (or with "" clears) the participant link of their own upcoming session."""
+
+    permission_classes = [IsTeacher]
+
+    def put(self, request, pk):
+        from .meeting import InvalidMeetingLink, provider_for
+
+        url = str(request.data.get("url", "")).strip()
+        provider = ""
+        if url:
+            try:
+                provider = provider_for(url)
+            except InvalidMeetingLink as e:
+                raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"url": [str(e)]}) from None
+        with transaction.atomic():
+            o = SessionOccurrence.objects.select_for_update().filter(pk=pk, teacher=request.user).first()
+            if o is None:
+                raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
+            if o.status == SessionOccurrence.Status.CANCELLED or o.ends_at <= timezone.now():
+                raise ApiError("closed", "انتهت هذه الجلسة أو أُلغيت.", 409)
+            o.meeting_url, o.meeting_provider = url, provider
+            o.save(update_fields=["meeting_url", "meeting_provider", "updated_at"])
+        audit("occurrence.meeting_link_set" if url else "occurrence.meeting_link_cleared", actor=request.user, target=o, request=request,
+              provider=provider)  # the link itself is not written to the audit log
+        return Response(TeacherOccurrenceSerializer(o).data)
+
+
+class BookingJoin(APIView):
+    """POST: the booked student gets the session's participant link, only while the join window is open.
+    Everyone else (parents, other students, a teacher of another session) gets 404; nothing is revealed."""
+
+    permission_classes = [IsStudent]
+
+    def post(self, request, pk):
+        b = Booking.objects.select_related("occurrence").filter(pk=pk, student=request.user).first()
+        if b is None:
+            raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
+        o, now, cfg = b.occurrence, timezone.now(), AppSettings.load()
+        if b.status != Booking.Status.CONFIRMED or o.status == SessionOccurrence.Status.CANCELLED:
+            raise ApiError("cancelled", "أُلغيت هذه الجلسة.", 409)
+        if now > o.ends_at:
+            raise ApiError("ended", "انتهت هذه الجلسة.", 409)
+        opens = o.starts_at - timedelta(minutes=cfg.join_minutes)
+        if now < opens:
+            raise ApiError("too_early", f"يُفتح الدخول قبل الجلسة بـ {cfg.join_minutes} دقائق.", 409)
+        if not o.meeting_url:
+            raise ApiError("no_link", "لم يضف المعلم رابط الجلسة بعد. حاول بعد قليل.", 409)
+        audit("booking.joined", actor=request.user, target=b, request=request, provider=o.meeting_provider)
+        from .meeting import LABELS
+
+        return Response({"url": o.meeting_url, "provider": o.meeting_provider, "provider_label": LABELS.get(o.meeting_provider, "")})
