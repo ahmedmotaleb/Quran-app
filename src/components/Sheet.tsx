@@ -7,7 +7,7 @@ import { Icon, type IconName } from './Icon';
 import { Spinner, outlineBtn, primaryBtn } from './ui';
 import { TZS } from '@/data/demo';
 import { normalizeArabic, tzOf } from '@/lib/format';
-import { closeSheet, openAt, pickSurah, playAyah, setState, toast, up, useApp, type Mark } from '@/store/store';
+import { closeSheet, loadSurahList, openAt, pickSurah, playAyah, setState, toast, up, useApp, type Mark } from '@/store/store';
 
 /** Bottom sheet host: confirm / info / ayah actions / surah picker / timezone picker. */
 export default function Sheet() {
@@ -68,7 +68,7 @@ export default function Sheet() {
       </button>
     ));
   } else if (sh.kind === 'bookmarks') {
-    body = <BookmarkList marks={M.marks} />;
+    body = <BookmarkList marks={M.marks} names={M.list} />;
   } else if (sh.kind === 'surahs') {
     const q = M.listQ.trim();
     const list = (M.list || []).filter((x) => !q || normalizeArabic(x.name).includes(q));
@@ -122,9 +122,11 @@ export default function Sheet() {
 
 
 /** The reader's bookmarks across all surahs: jump to one, give it a private label, or remove it. */
-function BookmarkList({ marks }: { marks: Mark[] | null }) {
+function BookmarkList({ marks, names }: { marks: Mark[] | null; names: { n: number; name: string }[] | null }) {
   const [edit, setEdit] = useState<number | null>(null);
   const [label, setLabel] = useState('');
+  useEffect(() => { loadSurahList(); }, []); // all 114 names come from the verified source
+  const sname = (n: number) => names?.find((x) => x.n === n)?.name ?? (SUR[n] ? `سورة ${SUR[n][0]}` : `سورة ${n}`);
   if (!marks) return <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}><Spinner /></div>;
   if (!marks.length) return <p style={{ margin: 0, fontSize: 15, color: color.muted, lineHeight: 1.7 }}>لا توجد علامات بعد. اضغط على أي آية ثم «ضع علامة مرجعية».</p>;
   return (
@@ -133,11 +135,11 @@ function BookmarkList({ marks }: { marks: Mark[] | null }) {
         <div key={m.id} style={{ border: `1px solid ${color.border}`, borderRadius: 14, background: color.card, padding: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button onClick={() => openAt(m.surah, m.ayah)} style={{ flex: 1, minHeight: 44, border: 'none', background: 'transparent', textAlign: 'right', cursor: 'pointer', color: color.ink, padding: '0 6px' }}>
-              <span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>سورة {SUR[m.surah]?.[0] ?? m.surah} · الآية {m.ayah}</span>
+              <span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>{sname(m.surah)} · الآية {m.ayah}</span>
               {m.label && <span style={{ display: 'block', fontSize: 13, color: color.muted }}>{m.label}</span>}
             </button>
-            <button onClick={() => { setEdit(m.id); setLabel(m.label); }} aria-label={`وصف العلامة عند سورة ${SUR[m.surah]?.[0] ?? m.surah} الآية ${m.ayah}`} style={{ width: 40, height: 40, border: 'none', background: 'transparent', color: color.primary, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="edit" size={18} /></button>
-            <button onClick={() => removeMark(m.id)} aria-label={`حذف العلامة عند سورة ${SUR[m.surah]?.[0] ?? m.surah} الآية ${m.ayah}`} style={{ width: 40, height: 40, border: 'none', background: 'transparent', color: color.dangerInk, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="trash" size={18} /></button>
+            <button onClick={() => { setEdit(m.id); setLabel(m.label); }} aria-label={`وصف العلامة عند ${sname(m.surah)} الآية ${m.ayah}`} style={{ width: 40, height: 40, border: 'none', background: 'transparent', color: color.primary, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="edit" size={18} /></button>
+            <button onClick={() => removeMark(m.id)} aria-label={`حذف العلامة عند ${sname(m.surah)} الآية ${m.ayah}`} style={{ width: 40, height: 40, border: 'none', background: 'transparent', color: color.dangerInk, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="trash" size={18} /></button>
           </div>
           {edit === m.id && (
             <form onSubmit={(e) => { e.preventDefault(); labelMark(m.id, label); setEdit(null); }} style={{ display: 'flex', gap: 6 }}>
