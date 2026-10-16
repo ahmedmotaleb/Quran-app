@@ -34,7 +34,7 @@ class AppSettings(models.Model):
     """Public, admin-editable platform settings (singleton row, pk=1). Secrets never live here."""
 
     org_name = models.CharField(max_length=120, default="الحلقة لتعليم القرآن")
-    support_email = models.EmailField(default="support@halqa.app")
+    support_email = models.EmailField(default="halqa.app.eg@gmail.com")
     support_whatsapp = models.CharField(max_length=32, blank=True)
     show_support_button = models.BooleanField(default=False)
     default_timezone = models.CharField(max_length=64, default="Africa/Cairo")
