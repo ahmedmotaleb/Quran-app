@@ -1,0 +1,65 @@
+# Release review (pack prompt 32)
+
+**Date:** 16 October 2026 · **Commit:** `main` at `06bc3f4` · **Production:**
+https://halqa-835293468002.europe-west1.run.app (Google Cloud Run, europe-west1; Neon PostgreSQL; Cloudflare R2)
+
+One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with a named gap), **FAIL**,
+**BLOCKED** (needs an owner decision or credential), **NOT TESTED**.
+
+| Area | State | Evidence | Gap |
+| --- | --- | --- | --- |
+| Student web/PWA | PASS | E2E `live`, `loop`, `learn`, `reviews`, `schedule`, `quran`, `inbox` on every PR; production smoke: sign-up, onboarding, Mushaf, recording upload/playback | Real-device checks (see PWA row) |
+| Teacher web/PWA | PARTIAL | Students, assignments, review queue, feedback, schedule, attendance, grading are live (E2E `loop`, `schedule`, `learn`) | Teacher content authoring (`tcontent`) still shows labelled sample content; admins author content instead |
+| Parent web/PWA | PASS | E2E `parent`, `progress`: linked children only, no audio, same numbers as the student | — |
+| Product Admin Portal | PARTIAL | Sign-in with enforced two-step verification, people, circles, bookings, courses, quizzes, settings, audit: all on the API (E2E `admin*`) | «الاشتراكات» is demo only: no payment provider (prompts 09–10 not started) |
+| Backend/API + PostgreSQL | PASS | 155 tests on PostgreSQL in CI (concurrency, permissions, cross-role sweep); migrations check; `/api/ready` checks database, migrations, cache | — |
+| Quran source/import integrity | PASS | Tanzil Uthmani v1.1, 6,236 ayahs; nightly restore drill re-verifies byte-for-byte; E2E `quran` shows the screen equals the served text; no generated text | — |
+| Private media storage | PASS | R2 private bucket, presigned reads; smoke after every deploy: upload, owner playback, anonymous and unsigned refused; 200 KB upload 0.7–0.8 s | Recordings not backed up (owner decision in RECOVERY.md) |
+| Email / password recovery | BLOCKED | Code, tests and setup script ready; no link is ever logged; `/api/ready` → `email: log_only` | Owner must choose an SMTP provider, verify a sender, run `deploy/gcp-email.sh`. Until then admins send set-password links |
+| Subscriptions/payments | NOT TESTED (not enabled) | — | Product decision (prompts 09–10) |
+| Notifications | PARTIAL | In-app inbox and bell for all events (E2E `inbox`); hourly reminders job runs in production | No push or email delivery (prompt 18) |
+| Live sessions | NOT TESTED (not enabled) | The live-session screen shows labelled sample content in live mode, not presented as a working integration | Provider decision (prompt 19) |
+| CI/E2E | PASS | Backend, Web (typecheck, build, PWA cache rules, npm audit, CSP in the production image), E2E live mode (16 suites, 7 handbook journeys) gate every PR | — |
+| Security | PASS | Admin MFA enforced in production; lockout; throttles; CSP/HSTS/frame/permissions headers; argon2id; IDOR sweep; pip-audit and npm audit clean | Alerts for abuse need `gcp-ops.sh` (below) |
+| Performance/load | PARTIAL | Two runs on a Cloud Run-sized container: 50 active students + 10 staff/parents, 0 % errors, p95 21–23 ms, p99 265–310 ms, peaks 62 % CPU / 343 MiB, booking race 1 of 50 ([LOADTEST.md](LOADTEST.md)) | Not yet measured on Cloud Run + Neon itself or above 50 active users |
+| Backups/restore | PARTIAL | Nightly drill restores production into an isolated database and verifies sign-in, Quran and media rows (first run: 17 s dump, <1 s restore, 3 s verify) | Encrypted copies are kept only after the owner sets `BACKUP_PASSPHRASE`; RPO/RTO await owner decision |
+| Monitoring/alerts | BLOCKED | Signals, nine alert policies, uptime check and alert drill are ready ([MONITORING.md](MONITORING.md)) | Owner runs `deploy/gcp-ops.sh` once (needs project-owner rights), then the `alert-drill` |
+| Cloud Run deployment | PASS | Deploy on merge with migrations first; smoke test after each deploy; hourly maintenance job green | No separate staging service |
+| Android APK | NOT TESTED (not required) | PWA is the client by decision | Prompt 30 only if an APK is required |
+
+## Risks re-checked (prompt 32 list)
+
+- **Admin screens in live mode use the API, not demo state:** yes, except Subscriptions, which the portal header labels «هذا القسم ما زال ببيانات عرض تجريبية — لا تُحفظ التغييرات».
+- **Progress is consistent across roles:** one server calculation. `test_progress.py` and E2E `progress` compare the student, teacher and parent views.
+- **Spaced repetition does not duplicate or inflate:** there is one review task per cycle, enforced by the database. Memorization counts distinct accepted ayahs (`test_reviews.py`, `test_progress.py`).
+- **Recording storage and reset email are actually configured:** storage yes. Email no (BLOCKED, above).
+- **Live-session sample content is not presented as real:** it is labelled as sample in live mode.
+- **Capacity claims are measured:** only the measured range is claimed (LOADTEST.md).
+
+## Release blockers, by severity
+
+1. **Password recovery email is not delivered** (high). A user who forgets their password depends on an admin.
+2. **Alerts are not switched on** (high for a pilot). Failures would go unnoticed until users report them.
+3. **No kept backup copies** (medium). The drill proves restores work, but only Neon's short history holds past data until `BACKUP_PASSPHRASE` is set.
+4. **Real-device PWA QA not done** (medium): microphone and recording format on iPhone are the main unknowns.
+
+Teacher content authoring, payments, push and live video are product scope, not blockers for a recitation pilot.
+
+## Changes since the previous review (`e9c4c25`, 15 October)
+
+Prompts 04–08 (admin portal on the API), 11–17 (progress, reviews, Today plan, notifications, question
+versioning), 22 (scheduled jobs), 23 (email code), 24 (security), 25 (load test with two fixes), 26
+(monitoring), 27 (backup drill), 28 (E2E in CI, which caught a sign-out race), 29 (PWA update safety).
+
+## Next three actions
+
+1. **Turn on password-reset email.** Choose an SMTP provider with a free tier, verify the sender domain or
+   address, and run `bash deploy/gcp-email.sh` in Cloud Shell.
+   *Done when* `/api/ready` shows `"email":"smtp"` and a real "forgot password" email arrives and its link sets a new password.
+2. **Switch on alerts and kept backups.** Run `bash deploy/gcp-ops.sh` in Cloud Shell, then **Ops → alert-drill**.
+   Add the `BACKUP_PASSPHRASE` repository secret and run **Backup and restore drill**.
+   *Done when* the drill emails "Halqa: operational failure" to the owner, and the backup run shows `stored=yes`
+   with a `halqa-db-backup-…` artifact.
+3. **Real-device pilot check.** Complete the table in [PWA_QA.md](PWA_QA.md) on one Android phone and one
+   iPhone, with one real teacher and two students for a week.
+   *Done when* every row is ✅ or has a filed defect, and an iPhone recording has been submitted and played by the teacher.
