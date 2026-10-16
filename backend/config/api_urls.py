@@ -20,6 +20,9 @@ urlpatterns = [
     path("quran/source", quran.SourceView.as_view()),
     path("quran/surahs", quran.SurahList.as_view()),
     path("quran/surahs/<int:number>", quran.SurahText.as_view()),
+    path("quran/position", quran.ReadingPositionView.as_view()),
+    path("quran/bookmarks", quran.BookmarkList.as_view()),
+    path("quran/bookmarks/<int:pk>", quran.BookmarkDetail.as_view()),
     # Learning
     path("assignments", learning.AssignmentList.as_view()),
     path("assignments/<int:pk>", learning.AssignmentDetail.as_view()),

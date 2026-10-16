@@ -1,4 +1,6 @@
-import type { FormEvent } from 'react';
+import { useEffect, type FormEvent } from 'react';
+import { LIVE } from '@/api/client';
+import { notePosition } from '@/store/live';
 import { color, font } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
 import { BackButton, Spinner, card, muted } from '@/components/ui';
@@ -14,6 +16,20 @@ export default function Mushaf() {
   const max = M.data?.numberOfAyahs ?? M.to;
   const name = M.data ? M.data.name : SUR[M.surah] ? 'سورة ' + SUR[M.surah][0] : '…';
   const playL = M.playing ? 'إيقاف التلاوة' : 'تشغيل النطاق';
+  const marked = (n: number) => (LIVE ? !!M.marks?.some((x) => x.surah === M.surah && x.ayah === n) : M.bookmark === n);
+  const nMarks = M.marks?.length ?? 0;
+  // Live: remember where the reader is (the top-most ayah in view), so the Mushaf reopens there on any device.
+  useEffect(() => {
+    if (!LIVE || !M.data) return;
+    const surah = M.surah;
+    const seen = new Set<number>();
+    const io = new IntersectionObserver((es) => {
+      es.forEach((e) => { const n = +e.target.id.split('-')[1]; if (e.isIntersecting) seen.add(n); else seen.delete(n); });
+      if (seen.size) notePosition(surah, Math.min(...seen));
+    }, { root: document.getElementById('scr'), rootMargin: '-120px 0px -40% 0px' });
+    document.querySelectorAll('[id^="ayah-"]').forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [M.data, M.surah]);
 
   return (
     <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -29,7 +45,8 @@ export default function Mushaf() {
         </button>
         <button onClick={() => setM({ font: Math.max(18, M.font - 2) })} aria-label="تصغير الخط" style={{ width: 44, height: 48, border: 'none', background: 'transparent', color: color.primary, fontSize: 15, fontWeight: 800, cursor: 'pointer' }}>أ-</button>
         <button onClick={() => setM({ font: Math.min(40, M.font + 2) })} aria-label="تكبير الخط" style={{ width: 44, height: 48, border: 'none', background: 'transparent', color: color.primary, fontSize: 19, fontWeight: 800, cursor: 'pointer' }}>أ+</button>
-        <button onClick={() => M.bookmark && jumpTo(M.bookmark)} aria-label={M.bookmark ? `علامة عند الآية ${M.bookmark}` : 'لا توجد علامة'}
+        <button onClick={() => (LIVE ? openSheet({ kind: 'bookmarks' }) : M.bookmark && jumpTo(M.bookmark))}
+          aria-label={LIVE ? `علاماتي (${nMarks})` : M.bookmark ? `علامة عند الآية ${M.bookmark}` : 'لا توجد علامة'}
           style={{ width: 48, height: 48, borderRadius: 14, border: 'none', background: 'transparent', color: color.goldInk, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
           <Icon name="bookmark" />
         </button>
@@ -71,7 +88,7 @@ export default function Mushaf() {
             <div style={{ ...card, borderRadius: 18, padding: '20px 18px', position: 'relative' }}>
               <div lang="ar" style={{ fontFamily: font.quran, fontSize: M.font, lineHeight: 2.25, textAlign: 'justify', color: color.inkQuran }}>
                 {M.data.ayahs.map((a) => {
-                  const n = a.numberInSurah; const inR = n >= M.from && n <= M.to; const cur = M.cur === n; const fl = M.flash === n; const bm = M.bookmark === n;
+                  const n = a.numberInSurah; const inR = n >= M.from && n <= M.to; const cur = M.cur === n; const fl = M.flash === n; const bm = marked(n);
                   const open = () => openSheet({ kind: 'ayah', n });
                   return (
                     <span key={n} id={'ayah-' + n} onClick={open} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } }} role="button" tabIndex={0}
@@ -84,7 +101,12 @@ export default function Mushaf() {
                 })}
               </div>
             </div>
-            <p style={muted(12, { margin: '10px 0 0', lineHeight: 1.7 })}>النص: رسم المصحف العثماني من مشروع Tanzil عبر واجهة alquran.cloud. الصوت: everyayah.com. اضغط على أي آية لتحديد النطاق أو وضع علامة.</p>
+            <p style={muted(12, { margin: '10px 0 0', lineHeight: 1.7 })}>
+              {LIVE
+                ? M.src ? `النص: ${M.src.edition} — ${M.src.name}، الإصدار ${M.src.version}، رواية ${M.src.narration}. ${M.src.attribution}` : 'النص: النسخة المعتمدة المحفوظة على خادم الحلقة.'
+                : 'النص: رسم المصحف العثماني من مشروع Tanzil عبر واجهة alquran.cloud.'}
+              {' '}الصوت: everyayah.com. اضغط على أي آية لتحديد النطاق أو وضع علامة.
+            </p>
           </>
         )}
       </div>

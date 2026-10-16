@@ -7,7 +7,7 @@
  * Not wired (screens keep demo content, labelled): teacher content authoring, live video.
  */
 import * as E from '@/api/endpoints';
-import { ApiError, resetCsrf } from '@/api/client';
+import { ApiError, api, resetCsrf } from '@/api/client';
 import { TZS } from '@/data/demo';
 import type { Feedback, Recording, Role, Slot, TzId } from '@/data/types';
 import { dayOffset, fmtRelative, zonedToIso } from '@/lib/time';
@@ -15,7 +15,7 @@ import { rangeL, tzOf, typeL } from '@/lib/format';
 import { SUR } from '@/data/demo';
 import { BRAND } from '@/theme/brand';
 import * as media from '@/services/media';
-import { back, reset, setState, toast, up, useApp, type AssignForm, type ReviewDraft, type ReviewItem } from './store';
+import { back, reset, setState, toast, up, useApp, type AssignForm, type Mark, type ReviewDraft, type ReviewItem } from './store';
 import { discardVoiceNote, stopVoiceNote, voiceNote, voiceNoteRecording } from '@/services/voiceNote';
 
 // Lazy: store.ts and this module import each other.
@@ -423,4 +423,54 @@ export async function gradeRecitation(answerId: number, points: number, reason: 
     toast('حُفظت الدرجة');
     setState({ grading: await E.gradingQueue() });
   } catch (e) { toast(msg(e), 'alert'); }
+}
+
+
+/* ---------- Mushaf: reading position, bookmarks, source (pack prompt 20) ---------- */
+let posTimer: ReturnType<typeof setTimeout> | null = null;
+let lastSaved = '';
+
+export async function enterMushaf(requested: number | null) {
+  const { loadSurah, jumpTo } = await import('./store');
+  api<{ name: string; edition: string; narration: string; version: string; license: string; attribution: string; url: string }>('GET', 'quran/source')
+    .then((src) => up('m', { src })).catch(() => {});
+  loadMarks();
+  if (requested) { loadSurah(requested); return; }
+  try {
+    const pos = await api<{ surah: number | null; ayah: number | null }>('GET', 'quran/position');
+    if (pos.surah && pos.ayah) {
+      lastSaved = `${pos.surah}:${pos.ayah}`;
+      await loadSurah(pos.surah);
+      if (pos.ayah > 1) jumpTo(pos.ayah);
+      return;
+    }
+  } catch { /* offline or not signed in: open the current surah */ }
+  loadSurah(get().m.surah);
+}
+
+/** Called as the reader scrolls; saves at most every 1.5 s, and only when the place changed. */
+export function notePosition(surah: number, ayah: number) {
+  const key = `${surah}:${ayah}`;
+  if (key === lastSaved) return;
+  if (posTimer) clearTimeout(posTimer);
+  posTimer = setTimeout(() => {
+    lastSaved = key;
+    api('PUT', 'quran/position', { surah, ayah }).catch(() => { lastSaved = ''; });
+  }, 1500);
+}
+
+export async function loadMarks() {
+  try { up('m', { marks: await api<Mark[]>('GET', 'quran/bookmarks') }); } catch { /* keep what we have */ }
+}
+export async function addMark(surah: number, ayah: number) {
+  try { await api('POST', 'quran/bookmarks', { surah, ayah }); toast(`حُفظت العلامة عند الآية ${ayah}`, 'bookmark'); await loadMarks(); }
+  catch (e) { toast(msg(e), 'alert'); }
+}
+export async function removeMark(id: number) {
+  try { await api('DELETE', `quran/bookmarks/${id}`); toast('أُزيلت العلامة', 'bookmark'); await loadMarks(); }
+  catch (e) { toast(msg(e), 'alert'); }
+}
+export async function labelMark(id: number, label: string) {
+  try { await api('PATCH', `quran/bookmarks/${id}`, { label }); await loadMarks(); toast('حُفظ الوصف', 'bookmark'); }
+  catch (e) { toast(msg(e), 'alert'); }
 }

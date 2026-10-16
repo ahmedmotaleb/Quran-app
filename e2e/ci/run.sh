@@ -28,7 +28,7 @@ run() {  # suite [base-url]
 export PYTHON="$PY"
 
 # 1. Student signup/onboarding/session restore, verified Quran reader, recording → submission → feedback, parent (no audio), progress.
-reseed; run live; run quran; run loop; shell_py past_booking.py; shell_py attendance.py; run parent; run progress
+reseed; run live; run quran; run reading; run loop; shell_py past_booking.py; shell_py attendance.py; run parent; run progress
 # 2. Teacher slot → booking → cancel/reschedule → attendance; lessons and quiz with server + teacher grading.
 reseed; PAST_CMD="bash e2e/ci/py.sh past_booking.py" run schedule; run learn
 # 3. Spaced repetition and Today plan; notifications inbox.

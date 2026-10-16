@@ -1,12 +1,13 @@
 import { LIVE } from '@/api/client';
-import { saveTimezone } from '@/store/live';
-import { useEffect, useRef } from 'react';
+import { addMark, labelMark, removeMark, saveTimezone } from '@/store/live';
+import { SUR } from '@/data/demo';
+import { useEffect, useRef, useState } from 'react';
 import { color, font } from '@/theme/tokens';
 import { Icon, type IconName } from './Icon';
 import { Spinner, outlineBtn, primaryBtn } from './ui';
 import { TZS } from '@/data/demo';
 import { normalizeArabic, tzOf } from '@/lib/format';
-import { closeSheet, pickSurah, playAyah, setState, toast, up, useApp } from '@/store/store';
+import { closeSheet, loadSurahList, openAt, pickSurah, playAyah, setState, toast, up, useApp, type Mark } from '@/store/store';
 
 /** Bottom sheet host: confirm / info / ayah actions / surah picker / timezone picker. */
 export default function Sheet() {
@@ -25,7 +26,7 @@ export default function Sheet() {
   }, [sh]);
 
   if (!sh) return null;
-  const title = 'title' in sh ? sh.title : sh.kind === 'ayah' ? `الآية ${sh.n}` : sh.kind === 'surahs' ? 'اختر السورة' : 'المنطقة الزمنية';
+  const title = 'title' in sh ? sh.title : sh.kind === 'ayah' ? `الآية ${sh.n}` : sh.kind === 'surahs' ? 'اختر السورة' : sh.kind === 'bookmarks' ? 'علاماتي' : 'المنطقة الزمنية';
   const h2 = { margin: '4px 0 0', fontSize: sh.kind === 'confirm' || sh.kind === 'info' ? 19 : 18, fontWeight: 800 } as const;
 
   let body: React.ReactNode = null;
@@ -51,7 +52,11 @@ export default function Sheet() {
     const acts: { label: string; icon: IconName; click: () => void }[] = [
       { label: 'ابدأ النطاق من هذه الآية', icon: 'target', click: () => { closeSheet(); up('m', { from: n, to: Math.max(n, M.to) }); } },
       { label: 'أنهِ النطاق عند هذه الآية', icon: 'target', click: () => { closeSheet(); up('m', { to: n, from: Math.min(n, M.from) }); } },
-      { label: M.bookmark === n ? 'إزالة العلامة المرجعية' : 'ضع علامة مرجعية', icon: 'bookmark', click: () => {
+      LIVE ? (() => {
+        // Live: bookmarks are saved on the server (all devices); only the surah/ayah numbers are stored.
+        const mk = M.marks?.find((x) => x.surah === M.surah && x.ayah === n);
+        return { label: mk ? 'إزالة العلامة المرجعية' : 'ضع علامة مرجعية', icon: 'bookmark' as IconName, click: () => { closeSheet(); if (mk) removeMark(mk.id); else addMark(M.surah, n); } };
+      })() : { label: M.bookmark === n ? 'إزالة العلامة المرجعية' : 'ضع علامة مرجعية', icon: 'bookmark', click: () => {
         closeSheet(); up('m', { bookmark: M.bookmark === n ? null : n });
         toast(M.bookmark === n ? 'أُزيلت العلامة' : 'حُفظت العلامة عند الآية ' + n, 'bookmark');
       } },
@@ -62,6 +67,8 @@ export default function Sheet() {
         <span style={{ color: color.primary }}><Icon name={a.icon} /></span>{a.label}
       </button>
     ));
+  } else if (sh.kind === 'bookmarks') {
+    body = <BookmarkList marks={M.marks} names={M.list} />;
   } else if (sh.kind === 'surahs') {
     const q = M.listQ.trim();
     const list = (M.list || []).filter((x) => !q || normalizeArabic(x.name).includes(q));
@@ -109,6 +116,40 @@ export default function Sheet() {
         <h2 style={h2}>{title}</h2>
         {body}
       </div>
+    </div>
+  );
+}
+
+
+/** The reader's bookmarks across all surahs: jump to one, give it a private label, or remove it. */
+function BookmarkList({ marks, names }: { marks: Mark[] | null; names: { n: number; name: string }[] | null }) {
+  const [edit, setEdit] = useState<number | null>(null);
+  const [label, setLabel] = useState('');
+  useEffect(() => { loadSurahList(); }, []); // all 114 names come from the verified source
+  const sname = (n: number) => names?.find((x) => x.n === n)?.name ?? (SUR[n] ? `سورة ${SUR[n][0]}` : `سورة ${n}`);
+  if (!marks) return <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}><Spinner /></div>;
+  if (!marks.length) return <p style={{ margin: 0, fontSize: 15, color: color.muted, lineHeight: 1.7 }}>لا توجد علامات بعد. اضغط على أي آية ثم «ضع علامة مرجعية».</p>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: '55vh', overflowY: 'auto' }}>
+      {marks.map((m) => (
+        <div key={m.id} style={{ border: `1px solid ${color.border}`, borderRadius: 14, background: color.card, padding: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => openAt(m.surah, m.ayah)} style={{ flex: 1, minHeight: 44, border: 'none', background: 'transparent', textAlign: 'right', cursor: 'pointer', color: color.ink, padding: '0 6px' }}>
+              <span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>{sname(m.surah)} · الآية {m.ayah}</span>
+              {m.label && <span style={{ display: 'block', fontSize: 13, color: color.muted }}>{m.label}</span>}
+            </button>
+            <button onClick={() => { setEdit(m.id); setLabel(m.label); }} aria-label={`وصف العلامة عند ${sname(m.surah)} الآية ${m.ayah}`} style={{ width: 40, height: 40, border: 'none', background: 'transparent', color: color.primary, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="edit" size={18} /></button>
+            <button onClick={() => removeMark(m.id)} aria-label={`حذف العلامة عند ${sname(m.surah)} الآية ${m.ayah}`} style={{ width: 40, height: 40, border: 'none', background: 'transparent', color: color.dangerInk, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="trash" size={18} /></button>
+          </div>
+          {edit === m.id && (
+            <form onSubmit={(e) => { e.preventDefault(); labelMark(m.id, label); setEdit(null); }} style={{ display: 'flex', gap: 6 }}>
+              <input autoFocus value={label} maxLength={80} onChange={(e) => setLabel(e.target.value)} aria-label="وصف خاص بك (اختياري)" placeholder="مثال: بداية حفظ هذا الأسبوع"
+                style={{ flex: 1, minHeight: 44, padding: '0 10px', borderRadius: 10, border: `1.5px solid ${color.borderInput}`, background: color.ivory, fontSize: 15 }} />
+              <button type="submit" style={primaryBtn(44, 14, { padding: '0 14px', borderRadius: 10 })}>حفظ</button>
+            </form>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
