@@ -3,9 +3,11 @@
 // Admin creates a circle, schedules sessions (preview first), publishes; a student books through the API; the admin
 // sees and cancels the booking; the student is notified; the admin cancels a whole session. Reloads before checks.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { trackWrites } from './lib/settle.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const page = await b.newPage({ viewport: { width: 1280, height: 900 }, timezoneId: 'Africa/Cairo' }); page.setDefaultTimeout(10000);
+const { settledReload } = trackWrites(page);
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 let fails = 0;
 const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await page.screenshot({ path: `${out}/sched-fail-${name.replace(/\W+/g, '_')}.png` }); } };
@@ -37,7 +39,7 @@ await step('preview then schedule 2 weekly sessions', async () => {
   await dialog().locator('#sc-m').fill('45'); await dialog().locator('#sc-w').fill('2');
   await dialog().getByRole('button', { name: 'معاينة' }).click();
   await dialog().getByRole('button', { name: 'إضافة 2 جلسة' }).click();
-  await page.reload(); await nav('الحلقات'); await page.getByRole('button', { name: CN }).click();
+  await settledReload(); await nav('الحلقات'); await page.getByRole('button', { name: CN }).click();
   await dialog().getByRole('button', { name: 'إلغاء الجلسة' }).first().waitFor();
   if (await dialog().getByRole('button', { name: 'إلغاء الجلسة' }).count() !== 2) throw new Error('expected 2 sessions');
 });
@@ -64,7 +66,7 @@ await step('the booking appears in admin Bookings; cancel with a reason', async 
   await page.getByRole('searchbox').fill('يوسف');
   const btn = page.getByRole('button', { name: 'إلغاء حجز يوسف أحمد' }).first(); await btn.click();
   await dialog().locator('#rs').fill('اختبار إلغاء الإدارة'); await dialog().getByRole('button', { name: 'إلغاء الحجز' }).click();
-  await page.reload(); await nav('الحجوزات');
+  await settledReload(); await nav('الحجوزات');
   await page.getByRole('button', { name: 'ملغاة', exact: true }).click(); await page.getByText('اختبار إلغاء الإدارة').first().waitFor();
 });
 await step('the student is notified and the seat is free again', async () => {
@@ -83,7 +85,7 @@ await step('cancel a whole session from the circle panel', async () => {
   await dialog().getByText('1/3').waitFor();
   await dialog().getByRole('button', { name: 'إلغاء الجلسة' }).first().click();
   await dialog().locator('#rs').fill('عذر طارئ للمعلم'); await dialog().getByRole('button', { name: 'إلغاء الجلسة' }).click();
-  await page.reload(); await nav('الحلقات'); await page.getByRole('button', { name: CN }).click();
+  await settledReload(); await nav('الحلقات'); await page.getByRole('button', { name: CN }).click();
   await dialog().getByText('ملغاة').waitFor(); // the cancelled session row
   if (await dialog().getByRole('button', { name: 'إلغاء الجلسة' }).count() !== 1) throw new Error('session not cancelled');
   const mine = (await api('GET', 'bookings', sara)).body.results.find((x) => x.occurrence.id === occId);

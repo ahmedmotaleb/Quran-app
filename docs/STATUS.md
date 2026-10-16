@@ -15,7 +15,7 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 | Student | Lessons, quizzes | implemented | `test_lessons_quizzes.py`; `e2e/learn.mjs` | Add content via the admin console |
 | All roles | In-app notifications + inbox | implemented | Events: assignment, submission, feedback, booking confirm/cancel/reschedule (both sides), 24h session reminder records, absence (student + guardians), review due, course lesson/quiz publication (enrolled only); bell + inbox; `test_notifications.py`, `e2e/inbox.mjs` | Push/email delivery (pack 18) |
 | Student/Teacher | Spaced-repetition reviews + Today plan | implemented | `apps/learning/reviews.py` (schedules, history, overrides; intervals in admin settings), `today` endpoint; `test_reviews.py`, `test_today.py`, `e2e/reviews.mjs` | — |
-| Operations | Hourly maintenance (reminders, due reviews, orphan uploads) | implemented | `run_scheduled` command; Cloud Run job `halqa-tasks` updated on deploy; `scheduled.yml` hourly | Confirm first scheduled run is green |
+| Operations | Hourly maintenance (reminders, due reviews, orphan uploads) | live | Cloud Run job `halqa-tasks` (updated on deploy) ran green in production; hourly trigger from GitHub until `gcp-ops.sh` moves it to Cloud Scheduler | — |
 | All roles | Progress analytics (one server calculation) | implemented | `apps/learning/progress.py`: `progress/me`, `teacher/students/<id>/progress`, `parent/children/<id>/progress`, `admin/progress`, `teacher/dashboard`, `parent/weekly-summary`; `test_progress.py`, `e2e/progress.mjs` | Weekly summary delivery (pack 18) |
 | Student | Mushaf (verified text) | live | 6,236 ayahs imported and byte-verified (Ops run); smoke step passes | — |
 | Teacher | Students, assignments, review queue, scores, notes | implemented | `test_media_submissions.py`, `e2e/loop.mjs` | — |
@@ -31,14 +31,16 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 | Admin | Settings, audit log | implemented | `admin/settings` (password re-entry for sensitive keys), `admin/audit`, public `settings/public` read by the app; `test_admin_settings.py`, `e2e/admin-settings.mjs` | — |
 | Admin | Subscriptions | simulated | Demo only; no payment provider | Pack prompts 09–10 (optional) |
 | Backend | Auth, roles, CSRF, throttles, audit events | implemented | `test_auth.py`, `test_permissions.py` | — |
+| Performance | Load test (prompt 25) | implemented | **Load test** workflow, Cloud Run-sized container (1 CPU, 512 MB): 25→50 active students + teachers + parents, 0 % errors, p95 23 ms, booking race 1 winner of 50, no OOM — [LOADTEST.md](LOADTEST.md) | Re-run on Cloud Run + Neon staging before claiming more |
+| CI | Gates | implemented | Backend (PostgreSQL tests, migrations check, deploy check, pip-audit), Web (typecheck, build, PWA/cache checks, npm audit, CSP headers in the production image), **E2E (live mode)**: 16 browser suites over the 7 handbook journeys | — |
 | Security | Prompt 24 hardening | implemented | Admin MFA required when deployed; per-account lockout; password-change throttle; shared (database) rate-limit cache; CSP + Permissions-Policy on every response; cross-role sweep over 24 id-bearing endpoints; `pip-audit` + `npm audit` in CI; `test_security.py`, `e2e/admin.mjs` with `MFA_ENFORCED=1` | Owner: turn on two-step verification at next admin sign-in |
-| PWA | Installable, offline shell, update prompt | live | Smoke "PWA installable" passes on production | Pack prompt 29 device QA |
+| PWA | Installable, offline shell, update prompt | live | Smoke "PWA installable" on production; `e2e/pwa.mjs` (manifest, offline shell, no API data cached, back button); `e2e/pwa-update.mjs` (update never interrupts a recording) — see [PWA_QA.md](PWA_QA.md) | Owner: real-device checklist in PWA_QA.md |
 | Deployment | Cloud Run, deploy on merge, migrations before release | live | `deploy-cloudrun.yml` runs green; `/api/ready` ok | — |
 | Storage | Private recordings (Cloudflare R2) | live | `/api/ready` → `media_storage: configured`; smoke upload, owner playback, anonymous refused | — |
 | Email | Password-reset delivery | blocked | Code ready: SMTP settings, `deploy/gcp-email.sh`, send failures reported, no link ever logged (`test_auth.py`); `/api/ready` → `email: log_only` | Owner: choose an SMTP provider, verify a sender, run `deploy/gcp-email.sh` |
 | Domain | Custom domain | missing | App served at `halqa-835293468002.europe-west1.run.app` | Optional |
-| Recovery | Backups, restore drill | missing | Only Neon's built-in history; no tested restore | Pack prompt 27 |
-| Monitoring | Error tracking, alerts | missing | Cloud Run default logs only; 1 USD budget alert | Pack prompt 26 |
+| Recovery | Backups, restore drill | live | Nightly **Backup and restore drill**: production dump restored into an isolated database and verified (first run: 770 KB dump 17 s, restore <1 s, verify 3 s; sign-in, Quran 6,236 ayahs byte-identical, media rows) — [RECOVERY.md](RECOVERY.md) | Owner: set `BACKUP_PASSPHRASE` to keep encrypted copies; decide RPO/RTO |
+| Monitoring | Alerts, uptime, operational signals | implemented | Structured failure events, sign-in signals, hourly `ops_stats`; `deploy/gcp-ops.sh` (9 alert policies, uptime check, Cloud Scheduler); `alert-drill` Ops task; `test_health.py` — [MONITORING.md](MONITORING.md) | Owner: run `deploy/gcp-ops.sh`, then the `alert-drill` |
 | Live video | Live sessions | missing | Needs a provider decision | Pack prompt 19 |
 | Commercial | Subscriptions, payments | missing | Admin «الاشتراكات» is demo only | Pack prompts 09–10 |
 | Android | Native APK | not present (by decision) | Capacitor project removed; PWA is the client | Pack prompt 30 only if required |
@@ -50,9 +52,9 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 4. ~~Admin bookings/circles (06)~~ — done.
 5. ~~Settings (08)~~ — done.
 6. Password-reset email not delivered (23) — code is ready; needs the owner's SMTP provider and sender. Until then admins issue set-password links.
-7. No tested backup/restore (27).
-8. No error tracking or alerting (26).
+7. ~~No tested backup/restore (27)~~ — nightly drill; keeping copies needs `BACKUP_PASSPHRASE`.
+8. ~~No error tracking or alerting (26)~~ — ready; the owner runs `deploy/gcp-ops.sh` to switch alerts on.
 9. Teacher content authoring still sample (07, teacher side).
 10. Live video sessions undecided (19).
 
-The admin portal is live except subscriptions (no payments yet). Prompts 22–24 are done (23 waits only for provider credentials). Next prompt: **25** (load test) → 26 → 27 → 28 → 29 → 32.
+The admin portal is live except subscriptions (no payments yet). Prompts 22–29 are done; what remains needs the owner (email provider, `gcp-ops.sh`, `BACKUP_PASSPHRASE`, real-device QA). Release review: [RELEASE_REVIEW.md](RELEASE_REVIEW.md) (prompt 32).

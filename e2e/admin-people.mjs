@@ -2,17 +2,19 @@
 // Run against a freshly seeded dev server (see e2e/admin.mjs): node e2e/admin-people.mjs <shots-dir> [base-url]
 // Every check that matters reloads the page first, so it reads what the server stored, not local state.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { trackWrites } from './lib/settle.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: 'Africa/Cairo', permissions: ['clipboard-read', 'clipboard-write'] });
 const page = await ctx.newPage(); page.setDefaultTimeout(10000);
+const { settledReload } = trackWrites(page);
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 let fails = 0;
 const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await page.screenshot({ path: `${out}/people-fail-${name.replace(/\W+/g, '_')}.png` }); } };
 const nav = (name) => page.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: new RegExp(`^${name}`) }).click();
 const dialog = () => page.getByRole('dialog').last();
 const openPerson = async (name) => { await page.getByRole('button', { name, exact: true }).click(); await dialog().getByText('حالة الحساب').waitFor(); };
-const reopen = async (section, name) => { await page.reload(); await nav(section); await openPerson(name); };
+const reopen = async (section, name) => { await settledReload(); await nav(section); await openPerson(name); };
 const stamp = Date.now();
 const SN = `طالب الاختبار ${stamp % 100000}`; const SN2 = `${SN} المعدّل`; const TN = `معلم الاختبار ${stamp % 100000}`;
 
@@ -43,7 +45,7 @@ await step('add a student and get a one-use setup link', async () => {
   setupLink = (await dialog().locator('code').innerText()).trim();
   if (!setupLink.includes('#/reset?uid=')) throw new Error('no setup link');
   await dialog().getByRole('button', { name: 'تم' }).click();
-  await page.reload(); await nav('الطلاب'); await page.getByRole('button', { name: SN, exact: true }).waitFor();
+  await settledReload(); await nav('الطلاب'); await page.getByRole('button', { name: SN, exact: true }).waitFor();
 });
 await step('the new student sets a password from the link and signs in', async () => {
   const p2 = await ctx.newPage(); await p2.goto(setupLink.replace(/^https?:\/\/[^/]+\//, BASE));
@@ -103,7 +105,7 @@ await step('invite a teacher; the link creates an approved teacher account', asy
   const c3 = await b.newContext(); const p3 = await c3.newPage(); await p3.goto(invite.replace(/^https?:\/\/[^/]+\//, BASE));
   await p3.locator('#iv-name').fill(TN); await p3.locator('#iv-email').fill(`teach+${stamp}@example.com`); await p3.locator('#iv-pw').fill('E2e-Teacher-2026!');
   await p3.getByRole('button', { name: 'إنشاء الحساب' }).click(); await p3.getByText('تم إنشاء حساب المعلم').waitFor(); await c3.close();
-  await page.reload(); await nav('المعلمون'); await openPerson(TN); await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
+  await settledReload(); await nav('المعلمون'); await openPerson(TN); await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
 });
 await page.screenshot({ path: out + '/people-teacher.png' });
 await step('a non-admin cannot call the admin API', async () => {
