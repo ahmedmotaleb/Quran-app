@@ -40,6 +40,7 @@ for s in admin-people admin-scheduling admin-content admin-settings teacher-cont
 # 5. PWA: manifest, installability, offline shell, no API data in caches (preview builds); an update published
 #    during a recording waits until the recording is submitted.
 reseed; run pwa http://localhost:4173/
+reseed; run push http://localhost:4175/
 reseed; NEW_VERSION_CMD="echo '// e2e update' >> ${LIVE_DIST:-/tmp/dist-live}/sw.js" run pwa-update http://localhost:4175/
 
 {

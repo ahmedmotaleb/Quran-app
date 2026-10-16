@@ -100,6 +100,19 @@ It asks for the SMTP host, port, user, sender address and password; the password
 Until then the app sends no email at all (it records `email_not_sent_no_provider` in the log, without the
 link) and admins hand out set-password links from the console instead.
 
+## 6a. Phone notifications (optional, free)
+
+Web Push needs no outside account. In Cloud Shell:
+
+```bash
+bash deploy/gcp-push.sh
+```
+
+It generates the app's signing keys, puts the private key in Secret Manager (`halqa-vapid-private`), and sets
+`VAPID_PUBLIC_KEY` on the service and the maintenance job. `/api/ready` then shows `"push":"configured"`. Each
+person turns it on per device in «حسابي» → «إشعارات على هذا الجهاز». Lock-screen text is generic; details stay
+in the app. On iPhone and iPad the app must be installed to the home screen (iOS 16.4 or later).
+
 ## 6b. Hourly maintenance job
 
 Every deploy also updates a Cloud Run **job** `halqa-tasks` (same image and settings as the service) that runs

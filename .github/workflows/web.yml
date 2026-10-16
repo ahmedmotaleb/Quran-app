@@ -25,6 +25,7 @@ jobs:
       - name: Check the PWA output
         run: |
           test -f dist/sw.js && test -f dist/manifest.webmanifest
+          grep -q 'push-sw.js' dist/sw.js && test -f dist/push-sw.js   # Web Push handlers are loaded by the service worker
           node -e "const m=JSON.parse(require('fs').readFileSync('dist/manifest.webmanifest','utf8'));for(const k of ['name','short_name','start_url','display','icons']) if(!m[k]) throw new Error('manifest missing '+k);if(m.display!=='standalone'||m.dir!=='rtl') throw new Error('display/dir')"
           # Duplicate precache entries make Workbox abort installation (offline would silently break).
           dups=$(grep -o 'url:"[^"]*"' dist/sw.js | sort | uniq -d | wc -l); test "$dups" = 0

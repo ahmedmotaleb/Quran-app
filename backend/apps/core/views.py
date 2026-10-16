@@ -54,6 +54,7 @@ def ready(request):
     features = {
         "media_storage": storage_status(),
         "email": "smtp" if "smtp" in settings.EMAIL_BACKEND else "log_only",
+        "push": "configured" if settings.VAPID_PUBLIC_KEY and settings.VAPID_PRIVATE_KEY else "not_configured",
     }
     if checks.get("database") == "ok":
         from apps.quran.models import QuranSource

@@ -5,6 +5,8 @@ import { tzOf } from '@/lib/format';
 import { go, logout, openSheet, setState, toast, up, useApp } from '@/store/store';
 import { promptInstall, useInstall } from '@/pwa/install';
 import { LIVE } from '@/api/client';
+import { useEffect, useState } from 'react';
+import { disablePush, enablePush, pushState, type PushState } from '@/pwa/push';
 
 const NOTIFS = [['tasks', 'تذكير بالواجبات'], ['sessions', 'تذكير قبل الجلسات'], ['feedback', 'تقييمات المعلم'], ['news', 'أخبار الحلقة']] as const;
 const rowBtn = { width: '100%', minHeight: 52, border: 'none', background: 'transparent', display: 'flex', alignItems: 'center', gap: 8, padding: 0, cursor: 'pointer', color: color.ink, fontSize: 15 } as const;
@@ -68,6 +70,7 @@ export default function Account() {
         </button>
       </section>
       <InstallRow />
+      {LIVE && <PushRow />}
       <section style={{ ...card, padding: '4px 16px' }}>
         <button onClick={() => openSheet({ kind: 'info', title: 'المساعدة', body: 'للمساعدة في الحجز أو التسجيل أو الاشتراك، تواصل مع فريق الدعم عبر support@halqa.app. نرد عادة خلال يوم عمل.' })}
           style={{ ...rowBtn, borderBottom: `1px solid ${color.divider}` }}><Icon name="help" size={18} /><span style={{ flex: 1, textAlign: 'right' }}>المساعدة</span><Icon name="chevL" size={18} /></button>
@@ -95,5 +98,40 @@ function InstallRow() {
       <span style={{ flex: 1 }}>ثبّت التطبيق على جهازك</span>
       <span style={{ color: color.primary }}><Icon name="chevL" size={18} /></span>
     </button>
+  );
+}
+
+
+const PUSH_TEXT: Record<PushState, string> = {
+  'unsupported': 'هذا المتصفح لا يدعم إشعارات الجوال. ستجد كل الإشعارات داخل التطبيق.',
+  'ios-install': 'على iPhone وiPad: ثبّت التطبيق على الشاشة الرئيسية أولًا (iOS 16.4 أو أحدث)، ثم فعّل الإشعارات من هنا.',
+  'server-off': 'إشعارات الجوال غير مفعّلة على الخادم بعد. ستجد كل الإشعارات داخل التطبيق.',
+  'denied': 'رُفض إذن الإشعارات لهذا الموقع. فعّله من إعدادات المتصفح ثم عد إلى هنا.',
+  'off': 'تصلك تنبيهات قصيرة عند وصول تقييم أو واجب أو تذكير بجلسة، دون تفاصيل على شاشة القفل.',
+  'on': 'الإشعارات مفعّلة على هذا الجهاز. تظهر تنبيهات عامة فقط، والتفاصيل داخل التطبيق.',
+};
+
+/** Phone notifications for this device: explained first, permission asked only on tap, easy to turn off. */
+function PushRow() {
+  const [st, setSt] = useState<PushState | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { pushState().then(setSt).catch(() => setSt('unsupported')); }, []);
+  if (!st) return null;
+  const act = async () => {
+    setBusy(true);
+    try { const n = st === 'on' ? await disablePush() : await enablePush(); setSt(n); if (n === 'on') toast('ستصلك الإشعارات على هذا الجهاز'); if (n === 'off' && st === 'on') toast('أُوقفت الإشعارات على هذا الجهاز'); }
+    catch { toast('تعذّر تغيير الإشعارات. حاول مرة أخرى.', 'alert'); }
+    finally { setBusy(false); }
+  };
+  const can = st === 'on' || st === 'off';
+  return (
+    <section aria-labelledby="push-h" style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ color: color.primary }}><Icon name="bell" size={18} /></span>
+        <h2 id="push-h" style={{ flex: 1, margin: 0, fontSize: 15, fontWeight: 700 }}>إشعارات على هذا الجهاز</h2>
+        {can && <Switch on={st === 'on'} onToggle={() => { if (!busy) act(); }} label="إشعارات على هذا الجهاز" />}
+      </div>
+      <p role="status" style={{ margin: 0, fontSize: 13, color: color.muted, lineHeight: 1.7 }}>{PUSH_TEXT[st]}</p>
+    </section>
   );
 }
