@@ -6,7 +6,7 @@
 | --- | --- | --- | --- | --- |
 | PostgreSQL (all accounts, links, tasks, submissions, feedback, bookings, content, Quran text, audit log) | 1. Neon point-in-time restore (provider) | Continuous, within the plan's history window (Neon Console → project → *Restore*; short on the free plan) | Neon at rest | Neon project owner |
 |  | 2. Nightly `pg_dump` (workflow **Backup and restore drill**) | Every night 02:41 UTC; encrypted copy kept 30 days once `BACKUP_PASSPHRASE` is set | AES-256 (gpg, passphrase in GitHub secret `BACKUP_PASSPHRASE`) | Repository admins (secret + Actions) |
-| Recordings (Cloudflare R2 bucket `halqa-recordings`) | Not copied (decision below) | — | R2 at rest | Cloudflare account owner |
+| Recordings (Cloudflare R2 bucket `halqa-recordings`) | Not copied (decision below); deleted 48 h after the teacher's review | — | R2 at rest | Cloudflare account owner |
 | Quran text | In the database (above) + the public Tanzil source; the drill checks it byte-for-byte | — | — | — |
 | Configuration | Code and deploy scripts in git; secrets in Google Secret Manager (versioned) and GitHub secrets | Every change | Google/GitHub | Project owner |
 
@@ -31,6 +31,10 @@ The checks:
   minutes.
 - **RTO:** the app is back within **1 hour**.
 - **Support email:** halqa.app.eg@gmail.com (shown in the Help sheet; admins can change it in Settings).
+- **Recordings are deleted 48 hours after the teacher reviews them** (task feedback or quiz grading), by the hourly
+  `purge_reviewed_recordings` step. A recording still waiting for its teacher is never deleted. Scores, feedback text
+  and timed notes stay; the student sees "deleted after 48 hours" instead of a player. Change with the
+  `RECORDING_RETENTION_HOURS` setting.
 - **Recordings are not backed up** for the pilot. Losing the R2 bucket would lose audio, but scores, feedback text
   and progress stay in the database. Revisit before recordings exceed R2's free 10 GB or before a paid launch.
 - **Still to do:** set the `BACKUP_PASSPHRASE` repository secret so the nightly drill also keeps encrypted copies

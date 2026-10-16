@@ -4,6 +4,7 @@ independent: a failing step is reported and the job exits non-zero, but the othe
 - session_reminders: reminder records for sessions in the next 24 hours
 - generate_reviews: due spaced-repetition review tasks
 - purge_orphan_media: uploads never attached to a submission/feedback after 48 hours (needs object storage)
+- purge_reviewed_recordings: student recordings 48 hours after the teacher's review (needs object storage)
 - ops_stats: one aggregate log line (database size and connections, stored media, failed uploads) that the
   monitoring log metrics read; it never contains names, emails or object keys
 """
@@ -22,7 +23,7 @@ class Command(BaseCommand):
     def handle(self, **_):
         steps = ["session_reminders", "generate_reviews"]
         if settings.MEDIA_STORAGE != "none":
-            steps.append("purge_orphan_media")
+            steps += ["purge_orphan_media", "purge_reviewed_recordings"]
         failed = []
         for name in steps:
             try:

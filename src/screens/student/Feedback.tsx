@@ -36,7 +36,9 @@ export default function Feedback() {
           </span>
         </div>
         <section aria-label="التسجيل وملاحظات التوقيت" style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <PlayerBar k={pkey} dur={f.dur} url={recUrl} notes={f.notes} />
+          {s.recs[id]?.gone
+            ? <p style={muted(14, { display: 'flex', gap: 6, alignItems: 'center' })}><Icon name="clock" size={18} /> حُذف التسجيل تلقائيًا بعد 48 ساعة من التقييم. بقيت الدرجات والملاحظات.</p>
+            : <PlayerBar k={pkey} dur={f.dur} url={recUrl} notes={f.notes} />}
           {f.notes.map((n, i) => (
             <FbNote key={i} t={n.t} text={n.text} pkey={pkey} dur={f.dur} url={recUrl} />
           ))}

@@ -68,7 +68,7 @@ export interface ApiFeedback {
 export interface ApiSubmission {
   id: number; assignment: number; assignment_title: string; kind: string; surah: number; ayah_from: number; ayah_to: number;
   student: number; student_name: string; attempt: number; duration_seconds: number; created_at: string;
-  audio: SignedUrl | null; feedback: ApiFeedback | null;
+  audio: SignedUrl | null; audio_deleted: boolean; feedback: ApiFeedback | null;
 }
 export interface ApiTeacherStudent { id: number; full_name: string; level: string; birth_year: number | null; guardian_linked: boolean }
 

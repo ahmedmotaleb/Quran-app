@@ -46,7 +46,7 @@ export async function loadStudentData() {
     for (const x of sub.results) {
       const k = String(x.assignment);
       if (recs[k]) continue;
-      recs[k] = { dur: x.duration_seconds, url: x.audio?.url ?? null };
+      recs[k] = { dur: x.duration_seconds, url: x.audio?.url ?? null, gone: x.audio_deleted };
       if (x.feedback) fb[k] = E.toFeedback(x.feedback, x.duration_seconds, tz);
     }
     setState((s) => ({

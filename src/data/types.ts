@@ -40,7 +40,7 @@ export interface Feedback {
   /** Live mode: signed, short-lived URL of the teacher's voice note. */ voiceUrl?: string | null;
 }
 
-export interface Recording { dur: number; url?: string | null }
+export interface Recording { dur: number; url?: string | null; gone?: boolean }
 
 export interface Session {
   id: string; t: string; day?: number; past?: string; h: number; type: string; dur: number;
