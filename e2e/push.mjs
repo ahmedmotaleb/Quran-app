@@ -9,7 +9,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const out = process.argv[2]; const LIVE = (process.argv[3] || 'http://localhost:4175/').replace(/\/?$/, '/');
 const ctx = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'halqa-push-')), {
-  executablePath: process.env.CHROMIUM_PATH || undefined, viewport: { width: 390, height: 844 },
+  // Full Chromium in new-headless mode: Playwright's default headless shell cannot show notifications.
+  executablePath: process.env.CHROMIUM_PATH || undefined, channel: process.env.CHROMIUM_PATH ? undefined : 'chromium',
+  viewport: { width: 390, height: 844 },
 });
 await ctx.grantPermissions(['notifications'], { origin: new URL(LIVE).origin });
 const page = ctx.pages()[0] ?? await ctx.newPage(); page.setDefaultTimeout(15000);
