@@ -100,8 +100,9 @@ function LessonForm({ courses, onSaved }: { courses: Course[]; onSaved: () => vo
   const [mins, setMins] = useState('');
   const [err, setErr] = useState<Record<string, string | null>>({});
   const [busy, setBusy] = useState(false);
-  // Once the teacher's courses load, pre-select the latest one (unless they already started a new course).
-  useEffect(() => { if (course === 'new' && open.length && !courseTitle) { setCourse(String(open[0].id)); setErr((e) => ({ ...e, course: null })); } }, [open.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [touched, setTouched] = useState(false);
+  // Once the teacher's courses load, pre-select the latest one — never overriding a choice they already made.
+  useEffect(() => { if (!touched && course === 'new' && open.length && !courseTitle) { setCourse(String(open[0].id)); setErr((e) => ({ ...e, course: null })); } }, [open.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => {
     const e: Record<string, string> = {};
     if (course === 'new' && courseTitle.trim().length < 2) e.course = 'اكتب اسم الدورة الجديدة';
@@ -124,7 +125,7 @@ function LessonForm({ courses, onSaved }: { courses: Course[]; onSaved: () => vo
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <Field id="tl-course" label="الدورة" err={err.course}>
-        <select id="tl-course" value={course} onChange={(e) => { setCourse(e.target.value); setErr({ ...err, course: null }); }} style={sel}>
+        <select id="tl-course" value={course} onChange={(e) => { setTouched(true); setCourse(e.target.value); setErr({ ...err, course: null }); }} style={sel}>
           {open.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
           <option value="new">+ دورة جديدة (مسودة)</option>
         </select>

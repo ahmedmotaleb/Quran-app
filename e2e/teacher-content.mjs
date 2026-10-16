@@ -26,6 +26,8 @@ const call = (p, method, path, body) => p.evaluate(async ([m, u, bd]) => {
 const step = async (p, name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await p.screenshot({ path: `${out}/tcontent-fail-${name.replace(/\W+/g, '_')}.png` }); } };
 
 const T = await learner('teacher@halqa.app');
+// Slow the teacher's content list on purpose: choices made before it arrives must survive (a race CI once caught).
+await T.page.route('**/api/v1/teacher/content', async (r) => { await new Promise((ok) => setTimeout(ok, 1500)); await r.continue(); });
 await T.app.getByText('مرحبًا، الشيخ عبدالرحمن السالم').waitFor();
 const open = async () => { await T.page.goto(BASE + '#/'); await T.app.getByRole('button', { name: /محاضرة أو اختبار/ }).click(); await T.app.getByRole('heading', { name: 'إنشاء محتوى' }).waitFor(); };
 await step(T.page, 'no sample banner; the review rule is shown', async () => {
@@ -38,7 +40,9 @@ await step(T.page, 'missing fields are explained, nothing is saved', async () =>
   await T.app.getByText('أدخل عنوان الدرس').waitFor(); await T.app.getByText('اكتب نص الدرس').waitFor();
 });
 await step(T.page, 'write a lesson in a new draft course; it persists', async () => {
+  await T.page.reload(); await open();                     // the list is still loading here
   await T.app.locator('#tl-course').selectOption('new');
+  await T.page.waitForTimeout(2000);                       // … and has arrived now: the choice must still stand
   await T.app.locator('#tl-ctitle').fill(CT); await T.app.locator('#tl-title').fill(LT);
   await T.app.locator('#tl-body').fill('الحلق مخرج للهمزة والهاء والعين والحاء والغين والخاء.'); await T.app.locator('#tl-mins').fill('8');
   await T.app.getByRole('button', { name: 'حفظ الدرس كمسودة' }).click();
