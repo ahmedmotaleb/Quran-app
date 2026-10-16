@@ -273,6 +273,13 @@ MEDIA_URL_TTL_SECONDS = int(env("MEDIA_URL_TTL_SECONDS", "600") or 600)
 MEDIA_MAX_BYTES = {"recitation": 25 * 1024 * 1024, "voice_feedback": 10 * 1024 * 1024, "lesson_file": 50 * 1024 * 1024}
 # Student recordings are deleted this long after the teacher reviewed them (owner decision).
 RECORDING_RETENTION_HOURS = int(os.environ.get("RECORDING_RETENTION_HOURS", "48"))
+# Reference recitation audio for the Mushaf (pack prompt 21). Off until the owner has a licence or written permission
+# for a source. AYAH_AUDIO_URL is an https template with {surah} and {ayah} (zero-padded to 3 digits), e.g.
+# https://everyayah.com/data/Alafasy_128kbps/{surah}{ayah}.mp3 ; AYAH_AUDIO_NAME is the credit shown under the text.
+AYAH_AUDIO_URL = os.environ.get("AYAH_AUDIO_URL", "").strip()
+AYAH_AUDIO_NAME = os.environ.get("AYAH_AUDIO_NAME", "").strip()
+if AYAH_AUDIO_URL and not (AYAH_AUDIO_URL.startswith("https://") and "{surah}" in AYAH_AUDIO_URL and "{ayah}" in AYAH_AUDIO_URL):
+    raise ImproperlyConfigured("AYAH_AUDIO_URL must be an https URL containing {surah} and {ayah}.")
 MEDIA_MAX_SECONDS = {"recitation": 20 * 60, "voice_feedback": 5 * 60, "lesson_file": 4 * 3600}
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024  # larger uploads spool to a temp file
 
