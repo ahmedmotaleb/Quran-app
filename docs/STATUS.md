@@ -21,7 +21,7 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 | Teacher | Students, assignments, review queue, scores, notes | implemented | `test_media_submissions.py`, `e2e/loop.mjs` | — |
 | Teacher | Schedule, occurrences, attendance, grading | implemented | `test_teacher_schedule.py`, `test_lessons_quizzes.py` | — |
 | Teacher | Content authoring (lessons, quizzes) | implemented | Teachers draft lessons (own or new draft course) and quizzes through `teacher/*` endpoints with the admin console's validation; admins review and publish (overview lists drafts); published items are read-only for teachers; `test_teacher_content.py`, `e2e/teacher-content.mjs` | Lesson file uploads (PDF/audio) |
-| Teacher | Voice notes on feedback | partial | Backend upload exists; hidden in live UI | Later |
+| Teacher | Voice notes on feedback | implemented | Real recording on the review screen (own recorder), uploaded as private `voice_feedback` media with the feedback; the student plays it through a signed link; parents never get audio; `test_media_submissions.py`, `e2e/loop.mjs` | — |
 | Parent | Linked children, sessions, tasks, progress, no audio | implemented | `test_permissions.py`, `e2e/parent.mjs` | — |
 | Admin | Portal sign-in | implemented | Real `admin/auth/login`, OTP step, session restore; `e2e/admin.mjs` | — |
 | Admin | Users, teachers, parents | implemented | Live sections on `admin/users*`, approval, links, setup links, teacher invitations; `test_admin_people.py`, `e2e/admin-people.mjs` | — |

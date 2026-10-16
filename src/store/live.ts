@@ -16,6 +16,7 @@ import { SUR } from '@/data/demo';
 import { BRAND } from '@/theme/brand';
 import * as media from '@/services/media';
 import { back, reset, setState, toast, up, useApp, type AssignForm, type ReviewDraft, type ReviewItem } from './store';
+import { discardVoiceNote, stopVoiceNote, voiceNote, voiceNoteRecording } from '@/services/voiceNote';
 
 // Lazy: store.ts and this module import each other.
 const get = () => useApp.getState();
@@ -295,11 +296,15 @@ export async function submitRecording() {
 /* ---------------- teacher ---------------- */
 export async function sendFeedback(v: ReviewDraft, r: ReviewItem) {
   try {
+    if (voiceNoteRecording()) await stopVoiceNote();
+    // The optional voice note is uploaded first (private media); a failed upload stops the send, keeping the note.
+    const voice = voiceNote.blob ? (await E.uploadVoiceNote(voiceNote.blob, voiceNote.secs)).id : null;
     await E.giveFeedback(+r.id, {
       score_hifz: v.ratings.hifz, score_tajweed: v.ratings.tajweed, score_fluency: v.ratings.fluency,
       decision: v.decision === 'approve' ? 'accept' : 'repeat', general: v.general.trim(), needs_review: v.needs.trim(),
-      next_step: '', notes: v.notes.map((n) => ({ at_seconds: n.t, text: n.text })),
+      next_step: '', notes: v.notes.map((n) => ({ at_seconds: n.t, text: n.text })), voice,
     });
+    discardVoiceNote();
     back();
     toast(`أُرسل التقييم إلى ${r.student}`);
     await loadTeacherData();
