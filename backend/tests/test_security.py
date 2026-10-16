@@ -142,3 +142,16 @@ def test_password_hash_fits_small_instances_and_old_hashes_upgrade(settings):
     assert upgraded and "m=19456" in upgraded[0]
     assert not check_password("wrong", new)
     assert SmallArgon2PasswordHasher.memory_cost <= 32 * 1024
+
+
+def test_ayah_audio_is_off_until_a_source_is_approved(client, settings):
+    """Owner decision (16 October 2026): no unlicensed recitation audio. Off by default, no audio host allowed."""
+    from apps.core.middleware import build_csp
+
+    assert client.get("/api/v1/settings/public").json()["ayah_audio"] is None
+    assert "everyayah" not in build_csp() and "alquran" not in build_csp()
+    settings.AYAH_AUDIO_URL = "https://audio.example.org/r/{surah}{ayah}.mp3"
+    settings.AYAH_AUDIO_NAME = "قارئ مرخّص"
+    assert client.get("/api/v1/settings/public").json()["ayah_audio"] == {"url": settings.AYAH_AUDIO_URL, "name": "قارئ مرخّص"}
+    media = build_csp().split("media-src")[1].split(";")[0]
+    assert "https://audio.example.org" in media

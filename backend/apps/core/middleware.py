@@ -46,15 +46,27 @@ class HealthCheckMiddleware:
         return self.get_response(request)
 
 
-# Exact sources the app uses: own origin; Google Fonts; ayah audio (everyayah.com) and private recordings via
-# short-lived signed links on Cloudflare R2. No inline scripts are needed (Vite emits external modules only).
-CSP = "; ".join([
-    "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com data:", "img-src 'self' data: blob:",
-    "media-src 'self' blob: https://everyayah.com https://*.r2.cloudflarestorage.com",
-    "connect-src 'self' https://*.r2.cloudflarestorage.com https://api.alquran.cloud https://everyayah.com",
-    "worker-src 'self'", "manifest-src 'self'", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
-])
+def _audio_origin() -> str:
+    """The approved ayah-audio host, if one is configured (AYAH_AUDIO_URL); nothing otherwise."""
+    from urllib.parse import urlsplit
+
+    from django.conf import settings
+
+    u = urlsplit(settings.AYAH_AUDIO_URL) if settings.AYAH_AUDIO_URL else None
+    return f" https://{u.hostname}" if u and u.hostname else ""
+
+
+def build_csp() -> str:
+    """Exact sources the app uses: own origin; Google Fonts; private recordings via short-lived signed links on
+    Cloudflare R2; and ayah audio only from the approved source. No inline scripts (Vite emits external modules only)."""
+    audio = _audio_origin()
+    return "; ".join([
+        "default-src 'self'", "script-src 'self'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com data:", "img-src 'self' data: blob:",
+        f"media-src 'self' blob:{audio} https://*.r2.cloudflarestorage.com",
+        "connect-src 'self' https://*.r2.cloudflarestorage.com",
+        "worker-src 'self'", "manifest-src 'self'", "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
+    ])
 PERMISSIONS = "microphone=(self), camera=(), geolocation=(), payment=(), usb=()"
 
 
@@ -63,10 +75,11 @@ class SecurityHeadersMiddleware:
 
     def __init__(self, get_response):
         self.get_response = get_response
+        self.csp = build_csp()
 
     def __call__(self, request):
         resp = self.get_response(request)
-        resp.setdefault("Content-Security-Policy", CSP)
+        resp.setdefault("Content-Security-Policy", self.csp)
         resp.setdefault("Permissions-Policy", PERMISSIONS)
         resp.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         # Also on responses that return before Django's SecurityMiddleware (the health check).

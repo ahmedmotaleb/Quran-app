@@ -45,9 +45,12 @@ export async function fetchSurahList(): Promise<SurahListItem[]> {
   return j.data.map((x: { number: number; name: string; numberOfAyahs: number }) => ({ n: x.number, name: x.name, c: x.numberOfAyahs }));
 }
 
-/** Per-ayah recitation audio (Mishary Alafasy, 128kbps) from everyayah.com. */
-export const ayahAudioUrl = (surah: number, ayah: number) =>
-  `https://everyayah.com/data/Alafasy_128kbps/${String(surah).padStart(3, '0')}${String(ayah).padStart(3, '0')}.mp3`;
+const pad3 = (n: number) => String(n).padStart(3, '0');
+/** Per-ayah recitation audio. Live mode: only the source the server approves (`ayah_audio` in public settings;
+ *  null = no licensed source yet, no audio). Demo: Mishary Alafasy from everyayah.com. */
+export const ayahAudioUrl = (surah: number, ayah: number, template?: string | null) =>
+  LIVE ? (template ? template.replace('{surah}', pad3(surah)).replace('{ayah}', pad3(ayah)) : null)
+    : `https://everyayah.com/data/Alafasy_128kbps/${pad3(surah)}${pad3(ayah)}.mp3`;
 
 /** One ayah ("surah:ayah", e.g. "1:1") in Uthmani script. */
 export async function fetchAyah(ref: string): Promise<string> {

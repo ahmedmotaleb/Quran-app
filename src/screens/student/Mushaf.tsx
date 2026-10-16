@@ -16,6 +16,9 @@ export default function Mushaf() {
   const max = M.data?.numberOfAyahs ?? M.to;
   const name = M.data ? M.data.name : SUR[M.surah] ? 'سورة ' + SUR[M.surah][0] : '…';
   const playL = M.playing ? 'إيقاف التلاوة' : 'تشغيل النطاق';
+  const pubAudio = useApp((s) => s.pub.ayah_audio);
+  // Live mode: only an approved source (server setting); the demo keeps its sample reciter.
+  const audioName = LIVE ? (pubAudio ? pubAudio.name || 'تلاوة مرجعية' : null) : 'مشاري العفاسي (everyayah.com)';
   const marked = (n: number) => (LIVE ? !!M.marks?.some((x) => x.surah === M.surah && x.ayah === n) : M.bookmark === n);
   const nMarks = M.marks?.length ?? 0;
   // Live: remember where the reader is (the top-most ayah in view), so the Mushaf reopens there on any device.
@@ -105,20 +108,20 @@ export default function Mushaf() {
               {LIVE
                 ? M.src ? `النص: ${M.src.edition} — ${M.src.name}، الإصدار ${M.src.version}، رواية ${M.src.narration}. ${M.src.attribution}` : 'النص: النسخة المعتمدة المحفوظة على خادم الحلقة.'
                 : 'النص: رسم المصحف العثماني من مشروع Tanzil عبر واجهة alquran.cloud.'}
-              {' '}الصوت: everyayah.com. اضغط على أي آية لتحديد النطاق أو وضع علامة.
+              {' '}{audioName ? `الصوت: ${audioName}.` : 'التلاوة الصوتية متوقفة حتى اعتماد مصدر مرخّص.'} اضغط على أي آية لتحديد النطاق أو وضع علامة.
             </p>
           </>
         )}
       </div>
 
       <div style={{ position: 'sticky', bottom: 0, background: color.card, borderTop: `1px solid ${color.border}`, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button onClick={() => (M.playing ? stopMushaf() : playAyah(M.from, 0))} aria-label={playL} disabled={!M.data}
-          style={{ width: 52, height: 52, borderRadius: '50%', border: 'none', background: color.primary, color: color.ivory, display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0, opacity: M.data ? 1 : 0.6 }}>
+        <button onClick={() => (M.playing ? stopMushaf() : playAyah(M.from, 0))} aria-label={playL} disabled={!M.data || !audioName}
+          style={{ width: 52, height: 52, borderRadius: '50%', border: 'none', background: color.primary, color: color.ivory, display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0, opacity: M.data && audioName ? 1 : 0.6 }}>
           <Icon name={M.playing ? 'pause' : 'play'} />
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{playL}</p>
-          <p style={muted(12, { margin: '2px 0 0' })}>{M.playing ? `الآية ${M.cur} · التكرار ${M.rep + 1} من ${M.repeat}` : `النطاق ${M.from}–${M.to} · مشاري العفاسي`}</p>
+          <p style={muted(12, { margin: '2px 0 0' })}>{M.playing ? `الآية ${M.cur} · التكرار ${M.rep + 1} من ${M.repeat}` : audioName ? `النطاق ${M.from}–${M.to} · ${audioName}` : 'التلاوة الصوتية غير متاحة حاليًا'}</p>
         </div>
         <div role="group" aria-label="تكرار النطاق" style={{ display: 'flex', alignItems: 'center', gap: 2, border: `1px solid ${color.borderChip}`, borderRadius: 12, padding: 2 }}>
           <span style={{ color: color.muted, padding: '0 4px' }}><Icon name="repeat" size={18} /></span>

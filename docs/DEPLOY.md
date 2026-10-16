@@ -130,7 +130,18 @@ GitHub emails the repository owner. Run it by hand from **Actions → Scheduled 
 
 Rate limits and lockouts are stored in a database table (`halqa_cache`, created by `createcachetable` during
 deploy) so every instance shares them. Every response carries a Content-Security-Policy that allows only this
-site, Google Fonts, ayah audio from everyayah.com and signed recording links on Cloudflare R2.
+site, Google Fonts, signed recording links on Cloudflare R2, and the ayah-audio host only when one is approved.
+
+**Ayah audio (off until licensed).** The Mushaf plays reference recitation only from a source the owner has a
+licence or written permission for. Once you have it, set both on the Cloud Run service (the maintenance job copies
+them on the next deploy):
+
+```bash
+gcloud run services update halqa --region europe-west1 \
+  --update-env-vars '^|^AYAH_AUDIO_URL=https://everyayah.com/data/Alafasy_128kbps/{surah}{ayah}.mp3|AYAH_AUDIO_NAME=مشاري العفاسي (everyayah.com، بإذن)'
+```
+
+`{surah}` and `{ayah}` become three-digit numbers (001001). Remove the variables to switch audio off again.
 
 ## 7. Check the deployment
 

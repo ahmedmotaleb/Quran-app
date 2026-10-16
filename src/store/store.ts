@@ -58,7 +58,7 @@ const initial = () => ({
   /** True when a backend is configured (VITE_API_BASE_URL); demo data otherwise. */
   liveMode: LIVE,
   /** Public platform settings from the server (live mode); safe defaults until loaded. */
-  pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, join_minutes: 10, org_name: '', support_email: '', support_whatsapp: '', show_support_button: false },
+  pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, join_minutes: 10, ayah_audio: null as { url: string; name: string } | null, org_name: '', support_email: '', support_whatsapp: '', show_support_button: false },
   me: null as Me | null,
   net: { loading: false, error: null as string | null },
   // Live mode starts empty: demo records must never appear (even briefly) before the server's data arrives.
@@ -373,7 +373,9 @@ export async function loadSurahList() {
 export function stopMushaf() { media.stopMushafAudio(); setM({ playing: false, cur: null }); }
 export function playAyah(a: number, rep: number) {
   const m = get().m; media.stopMushafAudio(); media.stopPlayback();
-  const au = new Audio(ayahAudioUrl(m.surah, a)); media.mushafAudio.el = au;
+  const src = ayahAudioUrl(m.surah, a, get().pub.ayah_audio?.url);
+  if (!src) { toast('التلاوة الصوتية متوقفة حتى اعتماد مصدر مرخّص.', 'alert'); return; }
+  const au = new Audio(src); media.mushafAudio.el = au;
   const fail = () => {
     if (media.mushafAudio.el !== au) return;
     media.stopMushafAudio(); setM({ playing: false, cur: null });

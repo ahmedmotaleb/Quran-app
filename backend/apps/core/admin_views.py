@@ -1,6 +1,7 @@
 """Admin portal: platform settings and the audit log (pack prompt 08), plus the public settings the apps read."""
 from __future__ import annotations
 
+from django.conf import settings
 from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -95,7 +96,9 @@ class PublicSettings(APIView):
                          "support_whatsapp": c.support_whatsapp if c.show_support_button else "", "open_signup": c.open_signup,
                          "default_timezone": c.default_timezone, "cancel_hours": c.cancel_hours, "join_minutes": c.join_minutes,
                          "booking_horizon_days": c.booking_horizon_days, "max_recording_seconds": max_secs,
-                         "max_upload_mb": max_bytes // (1024 * 1024)})
+                         "max_upload_mb": max_bytes // (1024 * 1024),
+                         # null while no licensed recitation source is approved: the Mushaf then plays no audio.
+                         "ayah_audio": {"url": settings.AYAH_AUDIO_URL, "name": settings.AYAH_AUDIO_NAME} if settings.AYAH_AUDIO_URL else None})
 
 
 class AdminAudit(AdminView):
