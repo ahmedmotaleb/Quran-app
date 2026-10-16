@@ -1,0 +1,71 @@
+# End-to-end regression suite (pack prompt 28): every critical journey in a real browser against the live-mode
+# React app, the Django API and PostgreSQL — never demo data. Each group starts from freshly seeded test data.
+# A failing journey fails the check with the failing steps as annotations and screenshots as an artifact.
+name: E2E (live mode)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency: { group: 'e2e-${{ github.ref }}', cancel-in-progress: true }
+permissions: { contents: read }
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: halqa, POSTGRES_PASSWORD: halqa-ci-only, POSTGRES_DB: halqa_e2e }
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U halqa" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      APP_ENV: development
+      DATABASE_URL: postgres://halqa:halqa-ci-only@localhost:5432/halqa_e2e
+      SEED_PASSWORD: halqa123                     # test data only
+      THROTTLE_AUTH: 1000/min                     # every browser comes from one address
+      THROTTLE_BOOKING: 1000/min
+      THROTTLE_UPLOAD: 1000/hour
+      MEDIA_LOCAL_ROOT: /tmp/halqa-media
+      PYTHON: python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.13', cache: pip, cache-dependency-path: backend/requirements*.txt }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: pip install -q -r backend/requirements.txt
+      - run: npm ci && npm i --no-save playwright@1.56.1 && npx playwright install --with-deps chromium >/dev/null
+
+      - name: Database, seed data and the verified Quran text
+        working-directory: backend
+        run: |
+          python manage.py migrate --noinput -v0
+          bash ../e2e/ci/snapshot.sh
+          python manage.py seed_dev
+
+      - name: Start the API (normal, and with admin two-step verification required) and the app
+        run: |
+          (cd backend && nohup python manage.py runserver 8000 --noreload > /tmp/api.log 2>&1 &)
+          (cd backend && ADMIN_REQUIRE_MFA=1 nohup python manage.py runserver 8001 --noreload > /tmp/api-mfa.log 2>&1 &)
+          VITE_API_BASE_URL=/ nohup npx vite --port 5174 --strictPort > /tmp/vite.log 2>&1 &
+          API_PROXY_TARGET=http://localhost:8001 VITE_API_BASE_URL=/ nohup npx vite --port 5176 --strictPort > /tmp/vite-mfa.log 2>&1 &
+          # PWA checks run on production builds: demo build on :4173, live build on :4175 (API proxied to :8000).
+          npx vite build --outDir /tmp/dist-demo >/dev/null && (nohup npx vite preview --outDir /tmp/dist-demo --port 4173 --strictPort > /tmp/prev-demo.log 2>&1 &)
+          VITE_API_BASE_URL=/ npx vite build --outDir /tmp/dist-live >/dev/null && (nohup npx vite preview --outDir /tmp/dist-live --port 4175 --strictPort > /tmp/prev-live.log 2>&1 &)
+          for u in localhost:8000/api/health localhost:8001/api/health localhost:5174/api/health localhost:5176/api/health localhost:4173 localhost:4175; do
+            for i in $(seq 1 60); do curl -fs "$u" >/dev/null && break; sleep 1; done
+            curl -fs "$u" >/dev/null || { echo "::error title=e2e setup::$u did not start"; tail -20 /tmp/*.log; exit 1; }
+          done
+
+      - name: Run the journeys
+        run: bash e2e/ci/run.sh shots
+
+      - if: failure()
+        run: tail -40 /tmp/api.log /tmp/api-mfa.log /tmp/vite.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: e2e-shots, path: shots, retention-days: 14, if-no-files-found: ignore }

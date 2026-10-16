@@ -129,7 +129,11 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY" > report.md
           echo "::notice title=Load test::$(head -c 600 loadtest/loadtest-summary.md 2>/dev/null | head -2 | tr '\n' ' ')"
           docker logs app > app.log 2>&1 || true
-          echo "::notice title=Resources::$(sed -n '/### Resources/,/Container restarts/p' report.md | tail -2 | tr '\n' ' ')"
+          echo "::notice title=Resources::$(grep -A3 '### Resources' report.md | tail -1) $(grep 'Container restarts' report.md)"
+          # Per-endpoint rows as annotations too (readable through the API without downloading the artifact).
+          grep '^| [a-z_]* | [0-9]' loadtest/loadtest-summary.md | sed 's/^| //; s/ |$//; s/ | /:/; s/ | /,/g' > rows.txt || true
+          split -l 8 rows.txt part. 2>/dev/null || true
+          for f in part.*; do [ -s "$f" ] && echo "::notice title=Endpoints (name:count,p50,p95,p99,max ms)::$(tr '\n' ';' < "$f")"; done
           echo "::notice title=Slow queries::$(sed -n '/by mean time/,/Most total/p' report.md | sed -n '4,8p' | tr -s ' ' | tr '\n' ';' | head -c 900)"
           test -z "${K6_EXIT:-}" || { echo "::error title=Load test::k6 thresholds failed (exit ${K6_EXIT})"; exit 1; }
 

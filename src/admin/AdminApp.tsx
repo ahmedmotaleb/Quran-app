@@ -179,7 +179,7 @@ function Portal() {
         <aside style={{ flex: '0 0 248px', background: color.primary, color: color.ivory, padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 6, position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' }}>
           {brand}{nav}
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 16 }}>
-            <button onClick={toApp} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.sage, fontSize: 14, textAlign: 'right', padding: '0 14px', cursor: 'pointer', textDecoration: 'underline' }}>← العودة إلى نموذج الجوال</button>
+            <button onClick={toApp} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.sage, fontSize: 14, textAlign: 'right', padding: '0 14px', cursor: 'pointer', textDecoration: 'underline' }}>{LIVE ? '← تطبيق الحلقة' : '← العودة إلى نموذج الجوال'}</button>
             <button onClick={adminLogout} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.sage, fontSize: 14, textAlign: 'right', padding: '0 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="leave" size={18} /> تسجيل الخروج</button>
           </div>
         </aside>
