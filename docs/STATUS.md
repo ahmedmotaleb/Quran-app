@@ -43,7 +43,7 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 | Domain | Custom domain | missing | App served at `halqa-835293468002.europe-west1.run.app` | Optional |
 | Recovery | Backups, restore drill | live | Nightly **Backup and restore drill**: production dump restored into an isolated database and verified (first run: 770 KB dump 17 s, restore <1 s, verify 3 s; sign-in, Quran 6,236 ayahs byte-identical, media rows) — [RECOVERY.md](RECOVERY.md) | Owner: set `BACKUP_PASSPHRASE` to keep encrypted copies; decide RPO/RTO |
 | Monitoring | Alerts, uptime, operational signals | implemented | Structured failure events, sign-in signals, hourly `ops_stats`; `deploy/gcp-ops.sh` (9 alert policies, uptime check, Cloud Scheduler); `alert-drill` Ops task; `test_health.py` — [MONITORING.md](MONITORING.md) | Owner: run `deploy/gcp-ops.sh`, then the `alert-drill` |
-| Live video | Live sessions | missing | Needs a provider decision | Pack prompt 19 |
+| Live video | Live sessions | done (meeting link) | The teacher adds a Google Meet, Zoom, Jitsi or Teams participant link; only the booked student gets it, inside the join window; parents cannot join; attendance stays the teacher's action. No video runs inside the app | Pack prompt 19 |
 | Commercial | Subscriptions, payments | not planned yet (owner: no charge for now) | — | Manual payments first if charging starts |
 | Android | Native APK | not present (by decision) | Capacitor project removed; PWA is the client | Pack prompt 30 only if required |
 

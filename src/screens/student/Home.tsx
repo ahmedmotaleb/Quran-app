@@ -117,7 +117,7 @@ export default function Home() {
             <div style={{ display: 'flex', gap: 8, marginTop: 'auto', position: 'relative' }}>
               {next.isToday && (
                 <button onClick={() => go('live', { id: next.id })} style={primaryBtn(52, 16, { flex: 1, background: color.ivory, color: color.primary, fontWeight: 800 })}>
-                  <Icon name="video" /> ادخل غرفة الانتظار
+                  <Icon name="video" /> {s.liveMode ? 'الدخول للجلسة' : 'ادخل غرفة الانتظار'}
                 </button>
               )}
               <button onClick={() => go('session', { id: next.id })} aria-label="تفاصيل الجلسة"

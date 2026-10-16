@@ -14,6 +14,7 @@ import Feedback from '@/screens/student/Feedback';
 import Mushaf from '@/screens/student/Mushaf';
 import Circles, { BookingDone, BookingReview, SessionDetails, TeacherPage } from '@/screens/student/Circles';
 import Live from '@/screens/student/Live';
+import LiveJoin from '@/screens/student/LiveJoin';
 import { LessonPage, QuizPage } from '@/screens/student/Learn';
 import Progress from '@/screens/student/Progress';
 import Account from '@/screens/student/Account';
@@ -29,7 +30,7 @@ const SCREENS: Record<Screen, ComponentType> = {
   splash: Splash, intro: Intro, login: Login, signup: Signup, forgot: Forgot, onboard: Onboard,
   home: Home, plan: Plan, task: TaskDetail, record: Record, feedback: Feedback, mushaf: Mushaf,
   circles: Circles, teacher: TeacherPage, bkreview: BookingReview, bkdone: BookingDone, session: SessionDetails,
-  live: Live, lesson: LessonPage, quiz: QuizPage, progress: Progress, account: Account,
+  live: LIVE_MODE ? LiveJoin : Live, lesson: LessonPage, quiz: QuizPage, progress: Progress, account: Account,
   tdash: TeacherDash, tstudents: TeacherStudents, tstudent: TeacherStudent, tassign: TeacherAssign,
   treviews: TeacherReviews, treview: TeacherReview, tschedule: TeacherSchedule, tcontent: LIVE_MODE ? TeacherContentLive : TeacherContent, phome: ParentHome, inbox: Inbox,
 };
@@ -88,8 +89,8 @@ function DataStateView({ screen, ds }: { screen: Screen; ds: Exclude<DataState, 
   );
 }
 
-// Live mode: only the live-video session screen still shows the design's sample content (no provider yet).
-const SAMPLE_SCREENS: Screen[] = ['live'];
+// Live mode: screens that would still show the design's sample content (none: sessions use the meeting link).
+const SAMPLE_SCREENS: Screen[] = [];
 
 /**
  * The phone UI. `framed` renders the fake status bar + home indicator used inside the
@@ -99,7 +100,7 @@ export default function AppShell({ framed }: { framed: boolean }) {
   const screen = useApp((s) => s.screen); const role = useApp((s) => s.role); const ds = useApp((s) => s.ds);
   const uiScale = useApp((s) => s.uiScale); const toast = useApp((s) => s.toast);
 
-  const dark = screen === 'live';
+  const dark = screen === 'live' && !LIVE_MODE;
   const tabs = role === 'student' ? TABS_STUDENT : role === 'teacher' ? TABS_TEACHER : [];
   const showNav = tabs.some((t) => t[0] === screen);
   const showState = ds !== 'normal' && MAIN.includes(screen);

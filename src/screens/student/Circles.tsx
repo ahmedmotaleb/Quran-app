@@ -348,7 +348,7 @@ export function SessionDetails() {
         {x.status === 'cancelled' && <p role="status" style={{ margin: 0, fontSize: 14, color: color.dangerInk, background: color.dangerBg, padding: 12, borderRadius: 12, display: 'flex', gap: 6 }}><Icon name="x" size={18} /> أُلغي هذا الحجز وأُعيد الموعد إلى المتاح.</p>}
         {x.active && (
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {x.isToday && <button onClick={() => go('live', { id: x.id })} style={primaryBtn()}><Icon name="video" /> ادخل غرفة الانتظار</button>}
+            {x.isToday && <button onClick={() => go('live', { id: x.id })} style={primaryBtn()}><Icon name="video" /> {s.liveMode ? 'الدخول للجلسة' : 'ادخل غرفة الانتظار'}</button>}
             {x.notToday && <p style={muted(13, { textAlign: 'center' })}>يُفتح دخول الجلسة قبل الموعد بـ 10 دقائق.</p>}
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => rescheduleSession(x0)} style={outlineBtn(52, 15, { flex: 1 })}>إعادة الجدولة</button>

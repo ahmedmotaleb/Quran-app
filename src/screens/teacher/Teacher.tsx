@@ -6,7 +6,7 @@ import {
 import { DAYS, SUR, TODAY_LABEL } from '@/data/demo';
 import { fmt, scoreL, timeIn, typeIcon, tzLabel, tzOf } from '@/lib/format';
 import { dateKey, dayLabel, fmtDay, fmtTime, zonedToIso as zonedIso } from '@/lib/time';
-import { gradeRecitation, setAttendance, teacherCancelBooking, toggleSlot as toggleLiveSlot } from '@/store/live';
+import { gradeRecitation, saveMeetingLink, setAttendance, teacherCancelBooking, toggleSlot as toggleLiveSlot } from '@/store/live';
 import type { ApiGradingItem } from '@/api/endpoints';
 import { useState } from 'react';
 import { weekDays } from '@/store/selectors';
@@ -733,6 +733,7 @@ function ScheduleLive() {
           return (
             <div key={o.id} style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
               <span style={{ fontSize: 15, fontWeight: 700 }}>{dayLabel(o.starts_at, tz)} · {fmtTime(o.starts_at, tz)} <span style={{ fontWeight: 500, color: color.muted, fontSize: 13 }}>· {o.kind === 'group' ? 'جماعية' : 'فردية'}</span></span>
+              {new Date(o.ends_at).getTime() > now && <MeetingLink occ={o.id} url={o.meeting_url} />}
               {o.bookings.map((b) => (
                 <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${color.divider}`, paddingTop: 8 }}>
                   <span style={{ fontSize: 14 }}><strong>{b.student_name}</strong>{b.assignment_title ? ` · ${b.assignment_title}` : ''}</span>
@@ -789,6 +790,40 @@ function ScheduleLive() {
         </div>
         <p style={muted(12)}>الإتاحة الأسبوعية الثابتة تضبطها الإدارة؛ هنا تفتح أو تغلق مواعيد محددة.</p>
       </>}
+    </div>
+  );
+}
+
+/** The participant link students open at session time (Google Meet, Zoom, Jitsi or Teams). Never a host link. */
+function MeetingLink({ occ, url }: { occ: number; url: string }) {
+  const [edit, setEdit] = useState(false); const [v, setV] = useState(url); const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const id = `ml-${occ}`;
+  const save = async (next: string) => {
+    setBusy(true); const e = await saveMeetingLink(occ, next); setBusy(false);
+    setErr(e); if (!e) setEdit(false);
+  };
+  if (!edit) return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: url ? color.primary : color.warnInk, display: 'flex', gap: 6, alignItems: 'center' }}>
+        <Icon name="video" size={18} /> {url ? 'رابط الجلسة جاهز' : 'أضف رابط الجلسة ليتمكن الطالب من الدخول'}
+      </span>
+      {url && <a href={url} target="_blank" rel="noopener noreferrer" style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', background: color.primary, color: color.ivory, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>افتح</a>}
+      <button onClick={() => { setV(url); setErr(null); setEdit(true); }} style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{url ? 'تغيير' : 'أضف الرابط'}</button>
+    </div>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label htmlFor={id} style={{ fontSize: 13, fontWeight: 700 }}>رابط الدعوة للمشاركين</label>
+      <input id={id} dir="ltr" inputMode="url" value={v} onChange={(e) => setV(e.target.value)} placeholder="https://meet.google.com/…" aria-invalid={!!err} aria-describedby={err ? id + '-err' : undefined}
+        style={{ minHeight: 44, borderRadius: 10, border: `1.5px solid ${err ? color.dangerInk : color.borderStrong}`, padding: '0 10px', fontSize: 15 }} />
+      {err && <span id={id + '-err'} role="alert" style={{ fontSize: 13, color: color.dangerInk }}>{err}</span>}
+      <span style={muted(12)}>Google Meet أو Zoom أو Jitsi أو Teams. لا تلصق رابط المضيف.</span>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => save(v)} disabled={busy || !v.trim()} style={primaryBtn(40, 13, { padding: '0 14px', borderRadius: 10, flex: 'none' })}>حفظ</button>
+        {url && <button onClick={() => save('')} disabled={busy} style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: `1px solid ${color.dangerInk}`, background: 'transparent', color: color.dangerInk, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>إزالة</button>}
+        <button onClick={() => setEdit(false)} style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: 'none', background: 'transparent', color: color.muted, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>إلغاء</button>
+      </div>
     </div>
   );
 }
