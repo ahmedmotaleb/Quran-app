@@ -31,7 +31,7 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 | Admin | Circles, bookings | implemented | `admin/circles*`, `admin/sessions/<id>/cancel`, `admin/bookings*`; `test_admin_scheduling.py`, `e2e/admin-scheduling.mjs` | — |
 | Admin | Courses, lessons, enrollments, quizzes | implemented | `admin/courses*`, `admin/lessons*`, `admin/enrollments*`, `admin/tests*`, `admin/questions*` (versioned); `test_admin_content.py`, `e2e/admin-content.mjs`; lesson files (PDF, audio) uploaded privately, type-checked, readable only through signed links once published; unattached uploads purged after 48 h | — |
 | Admin | Settings, audit log | implemented | `admin/settings` (password re-entry for sensitive keys), `admin/audit`, public `settings/public` read by the app; `test_admin_settings.py`, `e2e/admin-settings.mjs` | — |
-| Admin | Subscriptions | simulated | Demo only; no payment provider | Pack prompts 09–10 (optional) |
+| Admin | Subscriptions | hidden (owner decision: no charge for now) | Section removed from the live portal; demo keeps its sample | Revisit if the academy starts charging (manual payments first) |
 | Backend | Auth, roles, CSRF, throttles, audit events | implemented | `test_auth.py`, `test_permissions.py` | — |
 | Performance | Load test (prompt 25) | implemented | **Load test** workflow, Cloud Run-sized container (1 CPU, 512 MB): 25→50 active students + teachers + parents, 0 % errors, p95 23 ms, booking race 1 winner of 50, no OOM — [LOADTEST.md](LOADTEST.md) | Re-run on Cloud Run + Neon staging before claiming more |
 | CI | Gates | implemented | Backend (PostgreSQL tests, migrations check, deploy check, pip-audit), Web (typecheck, build, PWA/cache checks, npm audit, CSP headers in the production image), **E2E (live mode)**: 16 browser suites over the 7 handbook journeys | — |
@@ -39,12 +39,12 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 | PWA | Installable, offline shell, update prompt | live | Smoke "PWA installable" on production; `e2e/pwa.mjs` (manifest, offline shell, no API data cached, back button); `e2e/pwa-update.mjs` (update never interrupts a recording) — see [PWA_QA.md](PWA_QA.md) | Owner: real-device checklist in PWA_QA.md |
 | Deployment | Cloud Run, deploy on merge, migrations before release | live | `deploy-cloudrun.yml` runs green; `/api/ready` ok | — |
 | Storage | Private recordings (Cloudflare R2) | live | `/api/ready` → `media_storage: configured`; smoke upload, owner playback, anonymous refused | — |
-| Email | Password-reset delivery | blocked | Code ready: SMTP settings, `deploy/gcp-email.sh`, send failures reported, no link ever logged (`test_auth.py`); `/api/ready` → `email: log_only` | Owner: choose an SMTP provider, verify a sender, run `deploy/gcp-email.sh` |
+| Email | Password-reset delivery | live (delivery test pending) | Gmail SMTP via `deploy/gcp-email.sh`; production `/api/ready` → `email: smtp` | Owner: confirm a real «نسيت كلمة المرور» email arrives and its link works |
 | Domain | Custom domain | missing | App served at `halqa-835293468002.europe-west1.run.app` | Optional |
 | Recovery | Backups, restore drill | live | Nightly **Backup and restore drill**: production dump restored into an isolated database and verified (first run: 770 KB dump 17 s, restore <1 s, verify 3 s; sign-in, Quran 6,236 ayahs byte-identical, media rows) — [RECOVERY.md](RECOVERY.md) | Owner: set `BACKUP_PASSPHRASE` to keep encrypted copies; decide RPO/RTO |
 | Monitoring | Alerts, uptime, operational signals | implemented | Structured failure events, sign-in signals, hourly `ops_stats`; `deploy/gcp-ops.sh` (9 alert policies, uptime check, Cloud Scheduler); `alert-drill` Ops task; `test_health.py` — [MONITORING.md](MONITORING.md) | Owner: run `deploy/gcp-ops.sh`, then the `alert-drill` |
 | Live video | Live sessions | missing | Needs a provider decision | Pack prompt 19 |
-| Commercial | Subscriptions, payments | missing | Admin «الاشتراكات» is demo only | Pack prompts 09–10 |
+| Commercial | Subscriptions, payments | not planned yet (owner: no charge for now) | — | Manual payments first if charging starts |
 | Android | Native APK | not present (by decision) | Capacitor project removed; PWA is the client | Pack prompt 30 only if required |
 
 ## Top gaps (user impact × release risk)
