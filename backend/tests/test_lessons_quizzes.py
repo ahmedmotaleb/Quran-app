@@ -132,3 +132,26 @@ def test_attempt_limits_deadline_and_bad_answers(world, quiz):
     Attempt.objects.filter(pk=a2["id"]).update(status="submitted")
     assert s1.post(f"/api/v1/tests/{quiz.id}/attempts").json()["code"] == "no_attempts_left"
     assert client_for(world.s2).post(f"/api/v1/attempts/{a1['id']}/submit", {"answers": []}, format="json").status_code == 404
+
+
+def test_quiz_recording_is_deleted_48h_after_grading_never_while_waiting(world, quiz):
+    from django.core.management import call_command
+
+    from apps.assessments.models import Answer
+    from apps.media.models import MediaObject
+
+    s1, t1 = client_for(world.s1), client_for(world.t1)
+    a = s1.post(f"/api/v1/tests/{quiz.id}/attempts").json()
+    rec = rec_upload(s1)
+    s1.post(f"/api/v1/attempts/{a['id']}/submit", {"answers": [{"question": qids(quiz)["recitation"], "recording": rec}]}, format="json")
+    MediaObject.objects.filter(pk=rec).update(created_at=timezone.now() - timedelta(days=30))
+    call_command("purge_reviewed_recordings")
+    assert MediaObject.objects.get(pk=rec).state == "validated"  # the teacher has not graded it yet
+    ans = t1.get("/api/v1/teacher/grading").json()[0]["answer"]
+    t1.post(f"/api/v1/answers/{ans}/grade", {"points": 2}, format="json")
+    call_command("purge_reviewed_recordings")
+    assert MediaObject.objects.get(pk=rec).state == "validated"  # graded just now
+    Answer.objects.filter(pk=ans).update(graded_at=timezone.now() - timedelta(hours=49))
+    call_command("purge_reviewed_recordings")
+    assert MediaObject.objects.get(pk=rec).state == "deleted"
+    assert s1.get(f"/api/v1/attempts/{a['id']}").json()["score"] == 2  # the grade stays

@@ -217,6 +217,30 @@ def test_purge_orphan_media_keeps_submitted(world, settings):
     assert MediaObject.objects.get(pk=kept).state == "validated"
 
 
+def test_recordings_are_deleted_48h_after_review_never_before(world, settings):
+    """Owner decision: audio goes 48 h after the teacher's review; scores and feedback text stay."""
+    from django.core.management import call_command
+
+    s1, t1 = client_for(world.s1), client_for(world.t1)
+    old, fresh, waiting = (submit(s1, assignment(world), upload(s1).json()["id"]).json() for _ in range(3))
+    for sub in (old, fresh):
+        assert t1.post(f"/api/v1/submissions/{sub['id']}/feedback", FB, format="json").status_code == 201
+    Feedback.objects.filter(submission_id=old["id"]).update(created_at=timezone.now() - timedelta(hours=49))
+    Feedback.objects.filter(submission_id=fresh["id"]).update(created_at=timezone.now() - timedelta(hours=47))
+    MediaObject.objects.update(created_at=timezone.now() - timedelta(days=5))  # old uploads, not orphans
+    call_command("purge_reviewed_recordings", "--dry-run")
+    assert not MediaObject.objects.filter(state="deleted").exists()
+    call_command("run_scheduled")
+    media = lambda sub: Submission.objects.get(pk=sub["id"]).media  # noqa: E731
+    assert media(old).state == "deleted" and not (settings.MEDIA_LOCAL_ROOT / media(old).key).exists()
+    assert media(fresh).state == "validated" and media(waiting).state == "validated"  # 47 h, and never reviewed
+    for c in (s1, t1):
+        out = c.get(f"/api/v1/submissions/{old['id']}").json()
+        assert out["audio"] is None and out["audio_deleted"] is True and out["feedback"]["score_hifz"] == 4
+        assert len(out["feedback"]["notes"]) == 2
+    assert s1.get(f"/api/v1/submissions/{fresh['id']}").json()["audio_deleted"] is False
+
+
 def test_storage_provider_failure_is_reported_and_nothing_is_claimed(world, monkeypatch):
     """Pack prompt 22: a provider outage returns an honest Arabic 503; the media is not usable for a submission."""
     from apps.media import storage

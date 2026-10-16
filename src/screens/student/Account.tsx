@@ -74,7 +74,7 @@ export default function Account() {
       <section style={{ ...card, padding: '4px 16px' }}>
         <button onClick={() => openSheet({ kind: 'info', title: 'المساعدة', body: `للمساعدة في الحجز أو التسجيل، تواصل مع فريق الدعم عبر ${(LIVE && useApp.getState().pub.support_email) || 'halqa.app.eg@gmail.com'}. نرد عادة خلال يوم عمل.` })}
           style={{ ...rowBtn, borderBottom: `1px solid ${color.divider}` }}><Icon name="help" size={18} /><span style={{ flex: 1, textAlign: 'right' }}>المساعدة</span><Icon name="chevL" size={18} /></button>
-        <button onClick={() => openSheet({ kind: 'info', title: 'الخصوصية', body: 'تسجيلاتك لا يطّلع عليها إلا معلمك المرتبط وإدارة الحلقة. يرى ولي الأمر بيانات أبنائه المرتبطين فقط. يمكنك طلب حذف تسجيلاتك في أي وقت.' })}
+        <button onClick={() => openSheet({ kind: 'info', title: 'الخصوصية', body: 'تسجيلاتك لا يطّلع عليها إلا معلمك المرتبط وإدارة الحلقة. يرى ولي الأمر بيانات أبنائه المرتبطين فقط. يُحذف التسجيل تلقائيًا بعد 48 ساعة من تقييم المعلم، وتبقى الدرجات والملاحظات. يمكنك طلب حذف تسجيلاتك في أي وقت.' })}
           style={rowBtn}><Icon name="shield" size={18} /><span style={{ flex: 1, textAlign: 'right' }}>الخصوصية</span><Icon name="chevL" size={18} /></button>
       </section>
       <button onClick={() => openSheet({ kind: 'confirm', title: 'تسجيل الخروج؟', body: 'ستحتاج إلى إدخال بريدك وكلمة المرور للعودة.', ok: 'تسجيل الخروج', danger: true, onOk: logout })}

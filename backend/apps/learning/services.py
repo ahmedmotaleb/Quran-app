@@ -35,6 +35,7 @@ def submission_out(s, user, request) -> dict:
         "id": s.id, "assignment": a.id, "assignment_title": a.title, "kind": a.kind, "surah": a.surah, "ayah_from": a.ayah_from,
         "ayah_to": a.ayah_to, "student": s.student_id, "student_name": s.student.full_name, "attempt": s.attempt,
         "duration_seconds": s.duration_seconds, "created_at": s.created_at.isoformat(), "audio": _media_url(s.media, user, request),
+        "audio_deleted": s.media.state == "deleted",
         "feedback": None,
     }
     if fb is not None:
