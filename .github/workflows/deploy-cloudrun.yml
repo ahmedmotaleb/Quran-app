@@ -83,19 +83,20 @@ jobs:
         run: |
           # Copy the service's current env vars and secret references (including STORAGE_* / EMAIL_* added later).
           gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format json > /tmp/svc.json
-          python3 - <<'PY' > /tmp/jobflags
+          # Plain values go through an env-vars file (JSON is valid YAML), so values containing @ , = or spaces (email
+          # addresses, a sender display name) need no escaping. Secret references are name=secret:version pairs.
+          python3 - <<'PY'
           import json
           env = json.load(open("/tmp/svc.json"))["spec"]["template"]["spec"]["containers"][0].get("env", [])
-          plain = [f'{e["name"]}={e["value"]}' for e in env if "value" in e and e["name"] not in ("PORT",)]
+          plain = {e["name"]: e["value"] for e in env if "value" in e and e["name"] != "PORT"}
           secret = [f'{e["name"]}={e["valueFrom"]["secretKeyRef"]["name"]}:{e["valueFrom"]["secretKeyRef"]["key"]}' for e in env if "valueFrom" in e]
-          print("^@^" + "@".join(plain))
-          print(",".join(secret))
+          json.dump(plain, open("/tmp/job-env.yaml", "w"), ensure_ascii=False)
+          open("/tmp/job-secrets", "w").write(",".join(secret))
           PY
-          ENVS=$(sed -n 1p /tmp/jobflags); SECRETS=$(sed -n 2p /tmp/jobflags)
           gcloud run jobs deploy "$SERVICE-tasks" --project "$PROJECT" --region "$REGION" --image "$IMAGE" \
             --service-account "$SERVICE-run@$PROJECT.iam.gserviceaccount.com" \
             --command python --args manage.py,run_scheduled --memory 512Mi --cpu 1 --max-retries 0 --task-timeout 600 \
-            --set-env-vars "$ENVS" --set-secrets "$SECRETS" --quiet
+            --env-vars-file /tmp/job-env.yaml --set-secrets "$(cat /tmp/job-secrets)" --quiet
 
       - name: Check the live app
         run: |
