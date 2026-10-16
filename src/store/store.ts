@@ -27,6 +27,7 @@ export type Sheet =
   | { kind: 'info'; title: string; body: string }
   | { kind: 'ayah'; n: number }
   | { kind: 'surahs' }
+  | { kind: 'bookmarks' }
   | { kind: 'tz' };
 
 export type RecPhase = 'idle' | 'requesting' | 'denied' | 'recording' | 'paused' | 'review' | 'empty' | 'uploading' | 'failed' | 'success';
@@ -44,7 +45,11 @@ export interface MushafState {
   surah: number; data: SurahData | null; loading: boolean; error: boolean; errMsg?: string | null; from: number; to: number; font: number;
   bookmark: number | null; playing: boolean; cur: number | null; repeat: number; rep: number; jump: string;
   list: SurahListItem[] | null; listQ: string; listErr: boolean; flash: number | null;
+  /** Live mode: the reader's saved bookmarks (all surahs) and the verified source's details. */
+  marks: Mark[] | null; src: SourceInfo | null;
 }
+export interface Mark { id: number; surah: number; ayah: number; label: string }
+export interface SourceInfo { name: string; edition: string; narration: string; version: string; license: string; attribution: string; url: string }
 
 /** Live recorder state: the retry-safe submission key and the already-uploaded file. */
 const REC_LIVE = { live: LIVE, key: null as string | null, mediaId: null as string | null, err: null as string | null };
@@ -106,7 +111,7 @@ const initial = () => ({
   },
   rec: { phase: 'idle' as RecPhase, secs: 0, task: 'k1', demo: false, prog: 0, ...REC_LIVE },
   player: { key: null as string | null, pos: 0, dur: 0, playing: false },
-  m: { surah: 67, data: null, loading: false, error: false, from: 1, to: 10, font: 26, bookmark: null, playing: false, cur: null, repeat: 1, rep: 0, jump: '', list: null, listQ: '', listErr: false, flash: null } as MushafState,
+  m: { surah: 67, data: null, loading: false, error: false, from: 1, to: 10, font: 26, bookmark: null, playing: false, cur: null, repeat: 1, rep: 0, jump: '', list: null, listQ: '', listErr: false, flash: null, marks: null, src: null } as MushafState,
   live: { phase: 'waiting' as LivePhase, mic: true, cam: true, secs: 0, count: 272, attempt: 0, taskOpen: true, c: 0 },
   sim: { uploadFail: false, slotTaken: false },
   rv: null as ReviewDraft | null,
@@ -213,9 +218,9 @@ export const closeSheet = () => set({ sheet: null });
 
 function onEnter(screen: Screen, p: Params) {
   if (screen === 'mushaf') {
-    const n = p.s || get().m.surah;
     if (p.from) setM({ from: p.from, to: p.to });
-    loadSurah(n);
+    if (LIVE) live.enterMushaf(p.s ?? null);  // reopens at the reader's saved position when no range was asked for
+    else loadSurah(p.s || get().m.surah);
   }
   if (screen === 'record') {
     media.discardRecorder();
@@ -393,6 +398,13 @@ export function jumpTo(raw: string | number) {
     if (sc && el) sc.scrollTop += el.getBoundingClientRect().top - sc.getBoundingClientRect().top - 140;
   }, 30);
   setTimeout(() => setM({ flash: null }), 2200);
+}
+/** Open a surah at an ayah (e.g. a bookmark in another surah) and bring that ayah into view. */
+export async function openAt(surah: number, ayah: number) {
+  set({ sheet: null }); media.stopMushafAudio();
+  setM({ playing: false, cur: null, from: ayah, to: ayah });
+  if (get().m.surah !== surah || !get().m.data) await loadSurah(surah);
+  jumpTo(ayah);
 }
 export function pickSurah(x: SurahListItem) {
   set({ sheet: null }); media.stopMushafAudio();

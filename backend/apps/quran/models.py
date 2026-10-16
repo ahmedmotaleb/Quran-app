@@ -65,3 +65,25 @@ class Ayah(models.Model):
         ordering = ["surah__number", "number"]
         constraints = [models.UniqueConstraint(fields=["surah", "number"], name="ayah_unique_per_surah")]
         indexes = [models.Index(fields=["source", "surah", "number"])]
+
+
+# ---- Personal reading data (pack prompt 20) ----------------------------------------------
+# Kept apart from the canonical text: only stable surah/ayah numbers are stored, never verse strings, so a reader's
+# bookmarks and position can never alter or duplicate the verified Quran records.
+class ReadingPosition(models.Model):
+    user = models.OneToOneField("accounts.User", on_delete=models.CASCADE, related_name="reading_position")
+    surah = models.PositiveSmallIntegerField()
+    ayah = models.PositiveSmallIntegerField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class Bookmark(models.Model):
+    user = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="quran_bookmarks")
+    surah = models.PositiveSmallIntegerField()
+    ayah = models.PositiveSmallIntegerField()
+    label = models.CharField(max_length=80, blank=True)  # private to its owner
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "surah", "ayah"], name="bookmark_once_per_ayah")]
+        ordering = ["surah", "ayah"]
