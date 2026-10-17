@@ -16,7 +16,7 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 | Quran source/import integrity | PASS | Tanzil Uthmani v1.1, 6,236 ayahs; nightly restore drill re-verifies byte-for-byte; E2E `quran` shows the screen equals the served text; no generated text | — |
 | Quran reader and audio practice | PARTIAL | Bookmarks, reading position across devices, text size, ranges (E2E `reading`); repeat ×1–10 or continuous, speed, auto-advance (E2E `quran-audio` with a test source) | Ayah audio off in production until a licensed source is approved (owner decision) |
 | Private media storage | PASS | R2 private bucket, presigned reads; smoke after every deploy: upload, owner playback, anonymous and unsigned refused; 200 KB upload 0.7–1.4 s. Recordings deleted 48 h after the teacher's review (hourly job; never before review) | Recordings not backed up, and deleted 48 h after review (owner decisions in RECOVERY.md) |
-| Email / password recovery | PARTIAL | Gmail SMTP configured in production (`/api/ready` → `email: smtp`) | A real reset email and link still to be confirmed by the owner |
+| Email / password recovery | PASS | Gmail SMTP in production (`/api/ready` → `email: smtp`); owner confirmed on 17 October 2026 that a real «نسيت كلمة المرور» email arrived and its link set a new password | — |
 | Subscriptions/payments | NOT TESTED (not enabled) | Owner decision: no charge for now; the section is hidden in the live portal | — |
 | Notifications | PARTIAL | In-app inbox and bell for all events (E2E `inbox`); hourly reminders job runs in production; Web Push built and tested (`test_push.py`, `e2e/push.mjs`), off until `deploy/gcp-push.sh` runs | Push not yet verified on a real phone; email reminders need SMTP |
 | Live sessions | PASS | Meeting-link adapter: teacher adds the participant link (host links refused); `bookings/<id>/join` gives it only to the booked student inside the join window; early, late, cancelled, wrong-user and parent requests refused (`test_live_sessions.py`, E2E `live-session`) | Calls run in the meeting service, so the app has no evidence of who joined; the teacher marks attendance |
@@ -33,16 +33,17 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 - **Admin screens in live mode use the API, not demo state:** yes. Subscriptions is hidden in the live portal (no charge for now).
 - **Progress is consistent across roles:** one server calculation. `test_progress.py` and E2E `progress` compare the student, teacher and parent views.
 - **Spaced repetition does not duplicate or inflate:** there is one review task per cycle, enforced by the database. Memorization counts distinct accepted ayahs (`test_reviews.py`, `test_progress.py`).
-- **Recording storage and reset email are actually configured:** storage yes. Email configured (Gmail SMTP); delivery to be confirmed.
+- **Recording storage and reset email are actually configured:** storage yes. Email configured (Gmail SMTP) and real delivery confirmed by the owner.
 - **Live-session sample content is not presented as real:** the simulated call is gone from the live app; sessions open the teacher's meeting link.
 - **Capacity claims are measured:** only the measured range is claimed (LOADTEST.md).
 
 ## Release blockers, by severity
 
-1. **Password recovery email not yet confirmed** (high). SMTP is configured; a real reset email and link must be checked once.
-2. **Alerts are not switched on** (high for a pilot). Failures would go unnoticed until users report them.
-3. **No kept backup copies** (medium). The drill proves restores work, but only Neon's short history holds past data until `BACKUP_PASSPHRASE` is set.
-4. **Real-device PWA QA not done** (medium): microphone and recording format on iPhone are the main unknowns.
+1. **Alerts are not switched on** (high for a pilot). Failures would go unnoticed until users report them.
+2. **No kept backup copies** (medium). The drill proves restores work, but only Neon's short history holds past data until `BACKUP_PASSPHRASE` is set.
+3. **Real-device PWA QA not done** (medium): microphone and recording format on iPhone are the main unknowns.
+
+Resolved 17 October: password-reset email (owner confirmed real delivery and a working link).
 
 Payments, push and live video are product scope, not blockers for a recitation pilot.
 
@@ -58,14 +59,12 @@ Prompts 04–08 (admin portal on the API), 11–17 (progress, reviews, Today pla
 versioning), 22 (scheduled jobs), 23 (email code), 24 (security), 25 (load test with two fixes), 26
 (monitoring), 27 (backup drill), 28 (E2E in CI, which caught a sign-out race), 29 (PWA update safety).
 
-## Next three actions
+## Next actions
 
-1. **Confirm password-reset email.** SMTP is on (`/api/ready` → `"email":"smtp"`). Use "forgot password" on a
-   real account. *Done when* the email arrives and its link sets a new password.
-2. **Switch on alerts and kept backups.** Run `bash deploy/gcp-ops.sh` in Cloud Shell, then **Ops → alert-drill**.
+1. **Switch on alerts and kept backups.** Run `bash deploy/gcp-ops.sh` in Cloud Shell, then **Ops → alert-drill**.
    Add the `BACKUP_PASSPHRASE` repository secret and run **Backup and restore drill**.
    *Done when* the drill emails "Halqa: operational failure" to the owner, and the backup run shows `stored=yes`
    with a `halqa-db-backup-…` artifact.
-3. **Real-device pilot check.** Complete the table in [PWA_QA.md](PWA_QA.md) on one Android phone and one
+2. **Real-device pilot check.** Complete the table in [PWA_QA.md](PWA_QA.md) on one Android phone and one
    iPhone, with one real teacher and two students for a week.
    *Done when* every row is ✅ or has a filed defect, and an iPhone recording has been submitted and played by the teacher.
