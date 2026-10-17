@@ -132,16 +132,21 @@ Rate limits and lockouts are stored in a database table (`halqa_cache`, created 
 deploy) so every instance shares them. Every response carries a Content-Security-Policy that allows only this
 site, Google Fonts, signed recording links on Cloudflare R2, and the ayah-audio host only when one is approved.
 
-**Ayah audio (off until licensed).** The Mushaf plays reference recitation only from a source the owner has a
-licence or written permission for. Once you have it, set both on the Cloud Run service (the maintenance job copies
-them on the next deploy):
+**Ayah audio (licensed source: Quran Foundation / Quran.com).** The Mushaf plays reference recitation only from a
+licensed source. The approved one is the Quran Foundation Content API: create a *Backend/server app* in the
+[Developer Console](https://dev-console.quran.foundation/projects), then run in Cloud Shell:
 
 ```bash
-gcloud run services update halqa --region europe-west1 \
-  --update-env-vars '^|^AYAH_AUDIO_URL=https://everyayah.com/data/Alafasy_128kbps/{surah}{ayah}.mp3|AYAH_AUDIO_NAME=مشاري العفاسي (everyayah.com، بإذن)'
+bash <(curl -fsSL https://raw.githubusercontent.com/ahmedmotaleb/Quran-app/main/deploy/gcp-quran-audio.sh)
 ```
 
-`{surah}` and `{ayah}` become three-digit numbers (001001). Remove the variables to switch audio off again.
+It checks the keys with Quran Foundation, stores the client secret in Secret Manager (`halqa-qf-client-secret`) and sets
+`QF_CLIENT_ID` and `QF_ENV` on the service. `/api/ready` then shows `"ayah_audio":"quran_foundation_prelive"`.
+Pre-live keys serve **Al-Fatihah and Al-Baqarah only**; after Quran Foundation approves production access, run the
+script again with the production keys and answer `production`. Optional: `QF_RECITATION_ID` (default 7, Mishari
+al-Afasy) and `QF_RECITER_NAME`. The server caches each surah's URL list for one day (the terms allow at most a
+week); browsers stream the files from Quran Foundation's CDN, the only audio host the CSP allows. The Mushaf credits
+«Quran.com». To switch audio off, remove `QF_CLIENT_ID` and `QF_CLIENT_SECRET` from the service.
 
 ## 7. Check the deployment
 

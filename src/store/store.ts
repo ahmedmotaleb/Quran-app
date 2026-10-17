@@ -7,7 +7,8 @@ import type {
   Availability, Decision, Feedback, OtherSubmission, Recording, Role, Scores, Session, SurahData, SurahListItem, Student, Task, TaskStatus, TaskType, Teacher, TimedNote, TzId,
 } from '@/data/types';
 import { rangeL, typeL } from '@/lib/format';
-import { ayahAudioUrl, fetchSurah, fetchSurahList } from '@/services/quran';
+import { ayahAudioUrl, fetchSurah, fetchSurahList, hasSurahAudio, loadSurahAudio } from '@/services/quran';
+import { ApiError } from '@/api/client';
 import * as media from '@/services/media';
 import type { IconName } from '@/components/Icon';
 import { BRAND } from '@/theme/brand';
@@ -59,7 +60,7 @@ const initial = () => ({
   /** True when a backend is configured (VITE_API_BASE_URL); demo data otherwise. */
   liveMode: LIVE,
   /** Public platform settings from the server (live mode); safe defaults until loaded. */
-  pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, join_minutes: 10, ayah_audio: null as { url: string; name: string } | null, org_name: '', support_email: '', support_whatsapp: '', show_support_button: false },
+  pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, join_minutes: 10, ayah_audio: null as import('@/api/endpoints').AyahAudioCfg | null, org_name: '', support_email: '', support_whatsapp: '', show_support_button: false },
   me: null as Me | null,
   net: { loading: false, error: null as string | null },
   // Live mode starts empty: demo records must never appear (even briefly) before the server's data arrives.
@@ -374,8 +375,19 @@ export async function loadSurahList() {
 export function stopMushaf() { media.stopMushafAudio(); setM({ playing: false, cur: null }); }
 export function playAyah(a: number, rep: number) {
   const m = get().m; media.stopMushafAudio(); media.stopPlayback();
-  const src = ayahAudioUrl(m.surah, a, get().pub.ayah_audio?.url);
-  if (!src) { toast('التلاوة الصوتية متوقفة حتى اعتماد مصدر مرخّص.', 'alert'); return; }
+  const cfg = get().pub.ayah_audio;
+  if (cfg?.provider === 'qf' && !hasSurahAudio(m.surah)) {
+    // Normally fetched when the surah opens; if not yet, fetch now and start once the list is here.
+    setM({ playing: true, cur: a, rep });
+    loadSurahAudio(m.surah).then(() => { if (get().m.playing && get().m.cur === a) playAyah(a, rep); })
+      .catch((e) => { setM({ playing: false, cur: null }); toast(e instanceof ApiError ? e.message : 'تعذّر تحميل التلاوة. تحقق من الاتصال.', 'alert'); });
+    return;
+  }
+  const src = ayahAudioUrl(m.surah, a, cfg);
+  if (!src) {
+    setM({ playing: false, cur: null });
+    toast(cfg ? 'لا تتوفر تلاوة لهذه الآية.' : 'التلاوة الصوتية متوقفة حتى اعتماد مصدر مرخّص.', 'alert'); return;
+  }
   const au = new Audio(src); media.mushafAudio.el = au; au.playbackRate = m.rate;
   const fail = () => {
     if (media.mushafAudio.el !== au) return;

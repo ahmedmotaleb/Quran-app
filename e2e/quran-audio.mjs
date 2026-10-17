@@ -90,6 +90,41 @@ await step(R.page, 'leaving the Mushaf stops the recitation', async () => {
   const n = R.played.length; await R.page.waitForTimeout(1000);
   if (R.played.length > n + 1) throw new Error('audio continued after leaving');
 });
+// Licensed source (Quran Foundation): the server hands out one surah's ayah URLs; the Mushaf loads them when the surah
+// opens and plays from them. Quran Foundation is not reachable from CI, so this browser gets the server's answers
+// from route stubs (settings say provider "qf"; quran/audio/<n> lists URLs on the test host).
+const Q = await (async () => {
+  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Africa/Cairo' });
+  const played = []; const asked = [];
+  await ctx.route('https://audio.e2e.test/**', (r) => { played.push(new URL(r.request().url()).pathname.split('/').pop()); return r.fulfill({ status: 200, contentType: 'audio/wav', body: WAV }); });
+  await ctx.route('**/api/v1/settings/public', async (r) => { const res = await r.fetch(); const j = await res.json(); j.ayah_audio = { provider: 'qf', name: 'مشاري راشد العفاسي · Quran.com', url: '' }; return r.fulfill({ response: res, json: j }); });
+  await ctx.route('**/api/v1/quran/audio/*', (r) => {
+    const n = Number(r.request().url().split('/').pop()); asked.push(n);
+    const ayahs = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [String(i + 1), `https://audio.e2e.test/qf/${String(n).padStart(3, '0')}${String(i + 1).padStart(3, '0')}.mp3`]));
+    return r.fulfill({ json: { surah: n, reciter: 'مشاري راشد العفاسي', source: 'Quran.com (Quran Foundation)', ayahs } });
+  });
+  const page = await ctx.newPage(); page.setDefaultTimeout(10000);
+  const app = page.locator('main#scr');
+  await page.goto(OFF); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
+  await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
+  await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
+  await app.getByText('السلام عليكم، يوسف').waitFor();
+  await app.getByRole('button', { name: /افتح المصحف/ }).click();
+  await app.locator('[id^="ayah-"]').first().waitFor();
+  return { page, app, played, asked };
+})();
+await step(Q.page, 'Quran Foundation source: the surah audio list loads on open and the range plays from it', async () => {
+  await Q.app.getByText('Quran.com', { exact: false }).first().waitFor();
+  for (let i = 0; i < 30 && !Q.asked.length; i++) await Q.page.waitForTimeout(100);
+  if (!Q.asked.length) throw new Error('surah audio list not requested on open');
+  for (let i = 0; i < 10; i++) await Q.page.getByRole('button', { name: 'نهاية النطاق ناقص' }).click();
+  await Q.page.getByRole('button', { name: 'نهاية النطاق زائد' }).click();
+  await playBtn(Q).click();
+  await stopBtn(Q).waitFor();
+  await playBtn(Q).waitFor({ timeout: 15000 });
+  const s = String(Q.asked[0]).padStart(3, '0');
+  if (Q.played.join() !== `${s}001.mp3,${s}002.mp3`) throw new Error('played ' + Q.played.join(' '));
+});
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
 process.exitCode = fails ? 1 : 0;
 await b.close();

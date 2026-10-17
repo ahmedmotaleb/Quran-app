@@ -5,6 +5,7 @@ import { color, font } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
 import { BackButton, Spinner, card, muted } from '@/components/ui';
 import { SUR } from '@/data/demo';
+import { loadSurahAudio } from '@/services/quran';
 import { jumpTo, loadSurah, loadSurahList, openSheet, playAyah, setMushafRate, stopMushaf, up, useApp } from '@/store/store';
 
 const stepBtn = { width: 32, height: 44, border: 'none', background: 'transparent', color: color.primary, cursor: 'pointer', display: 'grid', placeItems: 'center' } as const;
@@ -17,6 +18,9 @@ export default function Mushaf() {
   const name = M.data ? M.data.name : SUR[M.surah] ? 'سورة ' + SUR[M.surah][0] : '…';
   const playL = M.playing ? 'إيقاف التلاوة' : 'تشغيل النطاق';
   const pubAudio = useApp((s) => s.pub.ayah_audio);
+  // Licensed source (Quran Foundation): get this surah's ayah audio list as soon as it opens, so «تشغيل» starts at
+  // once (phones only allow audio started directly from a tap).
+  useEffect(() => { if (LIVE && pubAudio?.provider === 'qf') loadSurahAudio(M.surah).catch(() => { /* shown when playing */ }); }, [M.surah, pubAudio?.provider]);
   // Live mode: only an approved source (server setting); the demo keeps its sample reciter.
   const audioName = LIVE ? (pubAudio ? pubAudio.name || 'تلاوة مرجعية' : null) : 'مشاري العفاسي (everyayah.com)';
   const marked = (n: number) => (LIVE ? !!M.marks?.some((x) => x.surah === M.surah && x.ayah === n) : M.bookmark === n);

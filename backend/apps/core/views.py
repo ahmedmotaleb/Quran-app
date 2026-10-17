@@ -55,6 +55,8 @@ def ready(request):
         "media_storage": storage_status(),
         "email": "smtp" if "smtp" in settings.EMAIL_BACKEND else "log_only",
         "push": "configured" if settings.VAPID_PUBLIC_KEY and settings.VAPID_PRIVATE_KEY else "not_configured",
+        "ayah_audio": (f"quran_foundation_{settings.QF_ENV}" if settings.QF_CLIENT_ID and settings.QF_CLIENT_SECRET
+                       else "template" if settings.AYAH_AUDIO_URL else "off"),
     }
     if checks.get("database") == "ok":
         from apps.quran.models import QuranSource

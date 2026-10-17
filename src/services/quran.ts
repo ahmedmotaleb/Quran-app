@@ -7,6 +7,7 @@
  */
 import type { SurahData, SurahListItem } from '@/data/types';
 import { LIVE, api } from '@/api/client';
+import { surahAudio, type AyahAudioCfg } from '@/api/endpoints';
 
 const API = 'https://api.alquran.cloud/v1';
 const cache = new Map<number, SurahData>();
@@ -48,9 +49,26 @@ export async function fetchSurahList(): Promise<SurahListItem[]> {
 const pad3 = (n: number) => String(n).padStart(3, '0');
 /** Per-ayah recitation audio. Live mode: only the source the server approves (`ayah_audio` in public settings;
  *  null = no licensed source yet, no audio). Demo: Mishary Alafasy from everyayah.com. */
-export const ayahAudioUrl = (surah: number, ayah: number, template?: string | null) =>
-  LIVE ? (template ? template.replace('{surah}', pad3(surah)).replace('{ayah}', pad3(ayah)) : null)
-    : `https://everyayah.com/data/Alafasy_128kbps/${pad3(surah)}${pad3(ayah)}.mp3`;
+export const ayahAudioUrl = (surah: number, ayah: number, cfg?: AyahAudioCfg | null) => {
+  if (!LIVE) return `https://everyayah.com/data/Alafasy_128kbps/${pad3(surah)}${pad3(ayah)}.mp3`;
+  if (!cfg) return null;
+  if (cfg.provider === 'qf') return qfAudio.get(surah)?.[String(ayah)] ?? null;
+  return cfg.url ? cfg.url.replace('{surah}', pad3(surah)).replace('{ayah}', pad3(ayah)) : null;
+};
+
+/** Quran Foundation: the server returns one surah's ayah audio URLs; kept for this page session only. */
+const qfAudio = new Map<number, Record<string, string>>();
+const qfPending = new Map<number, Promise<void>>();
+export function hasSurahAudio(surah: number) { return qfAudio.has(surah); }
+export function loadSurahAudio(surah: number): Promise<void> {
+  if (qfAudio.has(surah)) return Promise.resolve();
+  let p = qfPending.get(surah);
+  if (!p) {
+    p = surahAudio(surah).then((r) => { qfAudio.set(surah, r.ayahs); }).finally(() => qfPending.delete(surah));
+    qfPending.set(surah, p);
+  }
+  return p;
+}
 
 /** One ayah ("surah:ayah", e.g. "1:1") in Uthmani script. */
 export async function fetchAyah(ref: string): Promise<string> {

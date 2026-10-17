@@ -98,7 +98,17 @@ class PublicSettings(APIView):
                          "booking_horizon_days": c.booking_horizon_days, "max_recording_seconds": max_secs,
                          "max_upload_mb": max_bytes // (1024 * 1024),
                          # null while no licensed recitation source is approved: the Mushaf then plays no audio.
-                         "ayah_audio": {"url": settings.AYAH_AUDIO_URL, "name": settings.AYAH_AUDIO_NAME} if settings.AYAH_AUDIO_URL else None})
+                         "ayah_audio": _ayah_audio()})
+
+
+def _ayah_audio():
+    from apps.quran import qf_audio
+
+    if qf_audio.configured():  # licensed: Quran Foundation (URLs per surah from quran/audio/<n>)
+        return {"provider": "qf", "name": f"{settings.QF_RECITER_NAME} · Quran.com", "url": ""}
+    if settings.AYAH_AUDIO_URL:
+        return {"provider": "template", "url": settings.AYAH_AUDIO_URL, "name": settings.AYAH_AUDIO_NAME}
+    return None
 
 
 class AdminAudit(AdminView):
