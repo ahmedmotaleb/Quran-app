@@ -1,6 +1,6 @@
 # Project status (evidence-based)
 
-Audited 15 October 2026 at `main` = `e9c4c25` (PR #10). Status words: **implemented** (code + tests),
+Audited 15 October 2026 at `main` = `e9c4c25` (PR #10); rows updated through 17 October 2026 (PR #36). Status words: **implemented** (code + tests),
 **live** (verified on production), **partial**, **simulated** (UI on in-memory demo data), **missing**,
 **blocked** (needs an owner decision or credential). Production checks were made with the Ops
 workflow's smoke test, which signs up a throwaway student, from GitHub's network.
@@ -54,10 +54,10 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 3. ~~Courses/lessons/quizzes authoring (07)~~ — done in the admin console.
 4. ~~Admin bookings/circles (06)~~ — done.
 5. ~~Settings (08)~~ — done.
-6. Password-reset email not delivered (23) — code is ready; needs the owner's SMTP provider and sender. Until then admins issue set-password links.
+6. ~~Password-reset email not delivered (23)~~ — Gmail SMTP configured; the owner still confirms one real reset email and link.
 7. ~~No tested backup/restore (27)~~ — nightly drill; keeping copies needs `BACKUP_PASSPHRASE`.
 8. ~~No error tracking or alerting (26)~~ — ready; the owner runs `deploy/gcp-ops.sh` to switch alerts on.
 9. ~~Teacher content authoring still sample (07, teacher side)~~ — teachers draft, admins publish.
-10. Live video sessions undecided (19).
+10. ~~Live video sessions undecided (19)~~ — teacher meeting links, join window enforced.
 
-The admin portal is live except subscriptions (no payments yet). Prompts 22–29 are done; what remains needs the owner (email provider, `gcp-ops.sh`, `BACKUP_PASSPHRASE`, real-device QA). Release review: [RELEASE_REVIEW.md](RELEASE_REVIEW.md) (prompt 32).
+The admin portal is live; subscriptions are hidden (no charge for now). Prompts 18–29 are done (ayah audio built but off until licensed); what remains needs the owner (confirm a real reset email, `gcp-ops.sh`, `BACKUP_PASSPHRASE`, real-device QA). Release review: [RELEASE_REVIEW.md](RELEASE_REVIEW.md) (prompt 32).

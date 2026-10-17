@@ -37,10 +37,10 @@ browser and run each row. Write ✅ or ❌, plus the device and OS version.
 | 7 | Android back gesture / iOS edge swipe goes back one screen and does not leave the app from inner screens | | | | |
 | 8 | Keyboard on the sign-in and notes fields does not cover the input or the button | | | | |
 | 9 | Phone font size set to largest: text wraps, no clipped buttons, Mushaf text readable | | | | |
-| 10 | Mushaf: ayah audio plays; text is right-to-left with correct ayah markers | | | | |
+| 10 | Mushaf: text is right-to-left with correct ayah markers; play is disabled with «التلاوة الصوتية متوقفة…» (audio off until licensed) | | | | |
 | 11 | After the next deploy: "يتوفر إصدار جديد" appears; "حدّث الآن" updates (and waits if a recording is in progress) | | | | |
 
 Known platform limits:
-- **iOS PWA:** push notifications only work on iOS 16.4+ for installed apps, and are not implemented yet (pack 18).
+- **iOS PWA:** push notifications only work on iOS 16.4+ for installed apps. Web Push is built but off until VAPID keys are set (`deploy/gcp-push.sh`).
 - **Recording format:** Safari records `audio/mp4`. The server accepts it (`apps/media/services.py`
   `AUDIO_TYPES`), but this must be confirmed on a device (row 4).

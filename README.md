@@ -4,10 +4,12 @@ Arabic Quran memorization and Tajweed LMS: React + TypeScript (Vite) installable
 Django + DRF + PostgreSQL API in `backend/`. Production runs on Google Cloud Run (see
 `docs/DEPLOY.md`); the current, evidence-based status of every area is in `docs/STATUS.md`.
 
-**Current state, in short:** the student, teacher and parent apps run on the real API in live
-mode. The product admin portal (`#/admin`) is still **partially simulated**: its screens use
-in-memory demo data until they are connected to the admin APIs. The installable client is a
-PWA; there is no native Android app (optional, future).
+**Current state (17 October 2026, `main`):** the student, teacher and parent apps and the admin portal
+(`#/admin`) run on the real API in production: https://halqa-835293468002.europe-west1.run.app. The
+installable client is a PWA; there is no native Android app (not required). Owner decisions in force:
+no charging yet (subscriptions hidden), ayah audio off until a licensed source is approved, recordings deleted
+48 hours after the teacher's review, live classes through teacher-provided meeting links. Remaining work needs
+the owner (see `docs/RELEASE_REVIEW.md`).
 
 The mobile app (student, teacher and parent) built from the Claude Design handoff in
 `project/Halqa App.dc.html`. It is Arabic-first and fully RTL. The stack is React 18,
@@ -30,10 +32,11 @@ Demo accounts (password `halqa123`): `yousef@halqa.app` (student), `teacher@halq
 
 ## Admin portal (`#/admin`)
 
-**Partially simulated:** in live mode, sign-in (with two-step verification), the overview,
-students, teachers, parents, circles, bookings, lectures (courses, lessons, enrollments) and
-quizzes, settings and the audit log run on the real API. Subscriptions still show in-memory demo data and say so on screen (see
-`docs/STATUS.md`). The description below is of the demo portal.
+**Live:** in live mode, sign-in (with enforced two-step verification), the overview, students, teachers,
+parents, circles, bookings, lectures (courses, lessons, enrollments, lesson files), quizzes, review and publishing
+of teacher drafts, settings (including the support email) and the audit log run on the real API. Subscriptions
+are hidden in the live portal (owner decision: no charge for now). The description below is of the demo portal,
+which keeps its sample data.
 
 The desktop admin portal has its own sign-in (demo: `admin@halqa.app` / `halqa123`). Admin
 accounts can't sign in to the mobile app, and other accounts can't sign in to the portal.
@@ -106,24 +109,25 @@ The app runs in one of two modes, chosen at build time by `VITE_API_BASE_URL`:
   reload. Sign-in, bookings, uploads and notifications are simulated and labelled.
 - **Live mode** (set): the student journey talks to the Django API in `backend/`.
 
-| Live mode: connected to the API | Live mode: still sample content (banner shown) |
+Everything in live mode runs on the API; no screen shows sample content.
+
+| Area | Live mode |
 | --- | --- |
-| Sign-in, sign-up (student only), sign-out, session restore, password-reset request | Teacher content tools (lectures, quizzes) |
-| Onboarding answers, profile timezone | |
-| Student tasks, recording upload and submission, teacher feedback | Live video sessions |
-| Teacher directory, real open slots, booking, cancelling, rescheduling | Teacher voice notes (hidden in live mode) |
-| Teacher: students, new tasks, review queue, scores, timed notes | |
-| Teacher schedule: today's sessions, open/close slots, cancel a booking (student notified), attendance | |
-| Lesson library, mark complete; quizzes graded on the server, recitation answers graded by the teacher | |
-| Student progress from real records (approved tasks, teacher scores, attendance, minutes recorded) | |
-| Parent: linked children only — sessions, attendance, tasks, progress, latest feedback (no audio) | |
+| Accounts | Sign-in, sign-up (student only), sign-out, session restore, password reset by email (Gmail SMTP) |
+| Student | Onboarding, Today plan, tasks, recording upload and submission, teacher feedback (audio deleted 48 h after review), spaced-repetition reviews, progress, inbox |
+| Mushaf | Verified Tanzil text from the server, bookmarks with private labels, reading position across devices, text size, ranges; ayah audio **off** until a licensed source is configured (`AYAH_AUDIO_URL`) |
+| Booking | Teacher directory, real open slots, booking, cancelling, rescheduling; live sessions open the teacher's Google Meet/Zoom/Jitsi/Teams link inside the join window |
+| Teacher | Students, new tasks, review queue, scores, timed notes, voice notes, schedule, attendance, meeting links, quiz grading, content drafts (published by admins) |
+| Parent | Linked children only: sessions, attendance, tasks, progress, weekly summary, latest feedback (no audio, cannot join sessions) |
+| Notifications | In-app inbox and bell; hourly reminders; Web Push built, off until VAPID keys are set (`deploy/gcp-push.sh`) |
 
 The app uses the HttpOnly session cookie + CSRF token; no token is stored in the browser. Bookings send an `Idempotency-Key`, so a retried tap
 never double-books. Server errors are shown in Arabic as the server wrote them.
 
 Quran text: in live mode it comes only from the backend's imported, checksum-verified copy
 (`manage.py import_quran`, see `backend/README.md`); until that import runs, the Mushaf says
-the verified source is unavailable. Demo mode reads Tanzil Uthmani via api.alquran.cloud.
+the verified source is unavailable. Demo mode (the design prototype only, not deployed) reads Tanzil Uthmani via
+api.alquran.cloud and plays sample audio from everyayah.com.
 Either way, a failure shows an error state and never placeholder text.
 
 ### Running live mode locally
@@ -146,7 +150,7 @@ src/
   theme/tokens.ts        colours, fonts, radii (design tokens)
   data/types.ts          domain models (Assignment, Review, Session, Slot…)
   data/demo.ts           demo data layer — swap for API calls
-  services/quran.ts      alquran.cloud + everyayah.com
+  services/quran.ts      live: the server's verified text; demo: alquran.cloud + everyayah.com
   services/media.ts      shared <audio>, Mushaf audio, MediaRecorder
   store/store.ts         app state (zustand) + actions: navigation, recorder, booking, reviews…
   store/selectors.ts     derived data (sessions in the user's timezone, etc.)
@@ -167,14 +171,14 @@ In live mode times are real instants from the server, shown in the user's IANA t
 (`lib/time.ts`). Demo data keeps hours in Riyadh time (`lib/format.ts → timeIn`). Task
 status moves `not_started → in_progress → submitted → reviewed | needs_repeat`.
 
-## Not yet implemented
+## Not implemented, by decision or pending the owner
 
-- Product admin portal on live data (screens still simulated; backend partly ready)
-- Teacher content authoring (lectures, quizzes) in the app
-- Live video sessions (needs a provider decision)
-- Password-reset email delivery in production (needs an email provider; links are logged until then)
-- Subscriptions and payments
+- Subscriptions and payments (owner: no charge for now; section hidden)
+- Ayah audio in production (built; off until a licensed source is approved)
+- Video inside the app (sessions use the teacher's meeting link)
 - Native Android app (the PWA is the mobile client)
+- Owner checks still open: real password-reset email, alerts (`deploy/gcp-ops.sh`), kept encrypted backups
+  (`BACKUP_PASSPHRASE`), real-device PWA QA (`docs/PWA_QA.md`)
 
 ## Design handoff
 

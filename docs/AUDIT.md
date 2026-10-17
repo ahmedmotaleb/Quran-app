@@ -1,4 +1,6 @@
 # Repository audit and roadmap (Prompt 02)
+> **Historical snapshot.** This audit records the repository as it was before the backend work began. It is kept
+> for history and is not current: see `docs/STATUS.md` and `docs/RELEASE_REVIEW.md` (17 October 2026).
 
 Audit date: 11 October 2026. Repository `ahmedmotaleb/Quran-app`, branch `halqa-frontend`,
 audited at commit `d39fd5d` (base `main` = `861c249`, README only).
