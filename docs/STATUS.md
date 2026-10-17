@@ -42,7 +42,7 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 | Storage | Private recordings (Cloudflare R2) | live | `/api/ready` → `media_storage: configured`; smoke upload, owner playback, anonymous refused | — |
 | Email | Password-reset delivery | live | Gmail SMTP via `deploy/gcp-email.sh`; production `/api/ready` → `email: smtp`; owner confirmed a real reset email and link on 17 October 2026 | — |
 | Domain | Custom domain | missing | App served at `halqa-835293468002.europe-west1.run.app` | Optional |
-| Recovery | Backups, restore drill | live | Nightly **Backup and restore drill**: production dump restored into an isolated database and verified (first run: 770 KB dump 17 s, restore <1 s, verify 3 s; sign-in, Quran 6,236 ayahs byte-identical, media rows) — [RECOVERY.md](RECOVERY.md) | Owner: set `BACKUP_PASSPHRASE` to keep encrypted copies; decide RPO/RTO |
+| Recovery | Backups, restore drill | live | Nightly **Backup and restore drill**: production dump restored into an isolated database and verified (first run: 770 KB dump 17 s, restore <1 s, verify 3 s; sign-in, Quran 6,236 ayahs byte-identical, media rows) — [RECOVERY.md](RECOVERY.md) ; encrypted copies kept 30 days since 17 October (`stored=yes`); RPO 24 h, RTO 1 h | — |
 | Monitoring | Alerts, uptime, operational signals | implemented | Structured failure events, sign-in signals, hourly `ops_stats`; `deploy/gcp-ops.sh` (9 alert policies, uptime check, Cloud Scheduler); `alert-drill` Ops task; `test_health.py` — [MONITORING.md](MONITORING.md) | Owner: run `deploy/gcp-ops.sh`, then the `alert-drill` |
 | Live video | Live sessions | done (meeting link) | The teacher adds a Google Meet, Zoom, Jitsi or Teams participant link; only the booked student gets it, inside the join window; parents cannot join; attendance stays the teacher's action. No video runs inside the app | Pack prompt 19 |
 | Commercial | Subscriptions, payments | not planned yet (owner: no charge for now) | — | Manual payments first if charging starts |
@@ -55,9 +55,9 @@ workflow's smoke test, which signs up a throwaway student, from GitHub's network
 4. ~~Admin bookings/circles (06)~~ — done.
 5. ~~Settings (08)~~ — done.
 6. ~~Password-reset email not delivered (23)~~ — live; real delivery confirmed by the owner (17 October).
-7. ~~No tested backup/restore (27)~~ — nightly drill; keeping copies needs `BACKUP_PASSPHRASE`.
+7. ~~No tested backup/restore (27)~~ — nightly drill; encrypted copies kept since 17 October.
 8. ~~No error tracking or alerting (26)~~ — ready; the owner runs `deploy/gcp-ops.sh` to switch alerts on.
 9. ~~Teacher content authoring still sample (07, teacher side)~~ — teachers draft, admins publish.
 10. ~~Live video sessions undecided (19)~~ — teacher meeting links, join window enforced.
 
-The admin portal is live; subscriptions are hidden (no charge for now). Prompts 18–29 are done (ayah audio built but off until licensed); what remains needs the owner (`gcp-ops.sh`, `BACKUP_PASSPHRASE`, real-device QA). Release review: [RELEASE_REVIEW.md](RELEASE_REVIEW.md) (prompt 32).
+The admin portal is live; subscriptions are hidden (no charge for now). Prompts 18–29 are done (ayah audio built but off until licensed); what remains needs the owner (`gcp-ops.sh`, real-device QA). Release review: [RELEASE_REVIEW.md](RELEASE_REVIEW.md) (prompt 32).

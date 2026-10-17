@@ -23,7 +23,7 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 | CI/E2E | PASS | Backend, Web (typecheck, build, PWA cache rules, npm audit, CSP in the production image), E2E live mode (21 suites, 7 handbook journeys) gate every PR | — |
 | Security | PASS | Admin MFA enforced in production; lockout; throttles; CSP/HSTS/frame/permissions headers; argon2id; IDOR sweep; pip-audit and npm audit clean | Alerts for abuse need `gcp-ops.sh` (below) |
 | Performance/load | PARTIAL | Two runs on a Cloud Run-sized container: 50 active students + 10 staff/parents, 0 % errors, p95 21–23 ms, p99 265–310 ms, peaks 62 % CPU / 343 MiB, booking race 1 of 50 ([LOADTEST.md](LOADTEST.md)) | Not yet measured on Cloud Run + Neon itself or above 50 active users |
-| Backups/restore | PARTIAL | Nightly drill restores production into an isolated database and verifies sign-in, Quran and media rows (first run: 17 s dump, <1 s restore, 3 s verify) | Encrypted copies are kept only after the owner sets `BACKUP_PASSPHRASE`; RPO/RTO await owner decision |
+| Backups/restore | PASS | Nightly drill restores production into an isolated database and verifies sign-in, Quran and media rows. Encrypted copies kept 30 days: first kept run 17 October (run 39056054938: 789 KB dump 25 s, restore 1 s, verify 4 s, `stored=yes`, artifact `halqa-db-backup-39056054938`). RPO 24 h / RTO 1 h (owner) | Neon's own extension (`pg_session_jwt`) is skipped on restore with a warning; checks pass |
 | Monitoring/alerts | BLOCKED | Signals, nine alert policies, uptime check and alert drill are ready ([MONITORING.md](MONITORING.md)) | Owner runs `deploy/gcp-ops.sh` once (needs project-owner rights), then the `alert-drill` |
 | Cloud Run deployment | PASS | Deploy on merge with migrations first; smoke test after each deploy; hourly maintenance job green | No separate staging service |
 | Android APK | NOT TESTED (not required) | PWA is the client by decision | Prompt 30 only if an APK is required |
@@ -39,11 +39,13 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 
 ## Release blockers, by severity
 
-1. **Alerts are not switched on** (high for a pilot). Failures would go unnoticed until users report them.
-2. **No kept backup copies** (medium). The drill proves restores work, but only Neon's short history holds past data until `BACKUP_PASSPHRASE` is set.
-3. **Real-device PWA QA not done** (medium): microphone and recording format on iPhone are the main unknowns.
+1. **Alerts are not switched on** (high for a pilot). Failures would go unnoticed until users report them. The
+   alert drill on 17 October (run 39056436141) reported that the deploy account cannot read logs yet:
+   `deploy/gcp-ops.sh` has not completed in Cloud Shell.
+2. **Real-device PWA QA not done** (medium): microphone and recording format on iPhone are the main unknowns.
 
-Resolved 17 October: password-reset email (owner confirmed real delivery and a working link).
+Resolved 17 October: password-reset email (owner confirmed real delivery and a working link); kept encrypted
+backups (`BACKUP_PASSPHRASE` set, first stored copy verified).
 
 Payments, push and live video are product scope, not blockers for a recitation pilot.
 
@@ -61,10 +63,8 @@ versioning), 22 (scheduled jobs), 23 (email code), 24 (security), 25 (load test 
 
 ## Next actions
 
-1. **Switch on alerts and kept backups.** Run `bash deploy/gcp-ops.sh` in Cloud Shell, then **Ops → alert-drill**.
-   Add the `BACKUP_PASSPHRASE` repository secret and run **Backup and restore drill**.
-   *Done when* the drill emails "Halqa: operational failure" to the owner, and the backup run shows `stored=yes`
-   with a `halqa-db-backup-…` artifact.
+1. **Switch on alerts.** Run `bash deploy/gcp-ops.sh` in Cloud Shell (project owner account), then **Ops → alert-drill**.
+   *Done when* the drill passes and emails "Halqa: operational failure" to the owner.
 2. **Real-device pilot check.** Complete the table in [PWA_QA.md](PWA_QA.md) on one Android phone and one
    iPhone, with one real teacher and two students for a week.
    *Done when* every row is ✅ or has a filed defect, and an iPhone recording has been submitted and played by the teacher.

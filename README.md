@@ -177,8 +177,7 @@ status moves `not_started → in_progress → submitted → reviewed | needs_rep
 - Ayah audio in production (built; off until a licensed source is approved)
 - Video inside the app (sessions use the teacher's meeting link)
 - Native Android app (the PWA is the mobile client)
-- Owner checks still open: alerts (`deploy/gcp-ops.sh`), kept encrypted backups
-  (`BACKUP_PASSPHRASE`), real-device PWA QA (`docs/PWA_QA.md`)
+- Owner checks still open: alerts (`deploy/gcp-ops.sh`), real-device PWA QA (`docs/PWA_QA.md`)
 
 ## Design handoff
 
