@@ -6,7 +6,11 @@ import { Icon } from '@/components/Icon';
 import type { ApiError } from '@/api/client';
 import { toast } from '../adminStore';
 import * as A from './api';
-import { chip, date, errMsg, Modal, Pager, ReasonDialog, SearchBar, smallBtn, Table, useDebounced, usePaged } from './ui';
+import { chip, date, errMsg, Modal, ReasonDialog, smallBtn, useDebounced } from './ui';
+import {
+  BulkBar, type BulkDef, Checkbox, type Col, courseOptions, DataView, type FilterField, FilterControls, filterOf, InlineSelectHeader, items, listParams,
+  Pager, SelectionSummary, teacherOptions, useListUrl, useSelection, useServerList, useUrlSearch,
+} from './list';
 import { LessonFilePicker } from '@/components/LessonFilePicker';
 
 const ST: Record<string, { l: string; bg: string; fg: string }> = {
@@ -20,33 +24,58 @@ const pill = (k: string) => { const t = ST[k] ?? ST.draft; return <span style={{
 const nameBtn = (label: string, onClick: () => void) => (
   <button onClick={onClick} style={{ border: 'none', background: 'transparent', padding: 0, font: 'inherit', fontWeight: 700, color: color.primary, cursor: 'pointer', textDecoration: 'underline', minHeight: 32, textAlign: 'right' }}>{label}</button>
 );
-const td = (c: ReactNode, latin = false) => <td style={{ padding: '12px 16px', fontFamily: latin ? font.latin : undefined }}>{c}</td>;
+const searchStyle = { flex: '1 1 240px', minHeight: 48, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15 } as const;
 function Field({ id, label, children, err }: { id: string; label: string; children: ReactNode; err?: string | null }) {
   return <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}><label htmlFor={id} style={labelStyle}>{label}</label>{children}<FieldError msg={err} /></div>;
 }
 const fieldsOf = (e: unknown, names: string[]) => { const a = e as ApiError; const o: Record<string, string | null> = {}; let any = false; for (const n of names) { o[n] = a.field?.(n) ?? null; any ||= !!o[n]; } if (!any) o.form = a.message; return o; };
 
 /* =============================== Courses =============================== */
+const CONTENT_STATES: [string, string][] = [['draft', 'مسودة'], ['pending', 'بانتظار المراجعة'], ['published', 'منشور'], ['archived', 'مؤرشف']];
+const COURSE_FIELDS: FilterField[] = [
+  { key: 'state', label: 'الحالة', type: 'select', options: CONTENT_STATES },
+  { key: 'teacher', label: 'المعلم', type: 'remote', load: teacherOptions },
+  { key: 'topic', label: 'المجال', type: 'select', options: TOPICS.filter(([v]) => v) },
+  { key: 'created', label: 'تاريخ الإنشاء', type: 'dates', from: 'created_from', to: 'created_to' },
+];
+const COURSE_ACTIONS: BulkDef[] = [
+  { key: 'publish', label: 'نشر', tone: 'primary', body: (n) => `ستظهر ${items(n)} للطلاب. تُترك الدورات التي ليس فيها درس منشور.`, ok: (n) => `نشر ${items(n)}` },
+  { key: 'draft', label: 'إلغاء النشر', body: (n) => `ستعود ${items(n)} إلى مسودة وتختفي عن الطلاب. تبقى التسجيلات محفوظة.`, ok: (n) => `إلغاء نشر ${items(n)}` },
+  { key: 'archive', label: 'أرشفة', reason: true, title: 'أرشفة الدورات', body: (n) => `ستختفي ${items(n)} عن الطلاب. التسجيلات والإنجازات والدرجات تبقى محفوظة.`, ok: (n) => `أرشفة ${items(n)}` },
+  { key: 'delete', label: 'حذف المحدد', tone: 'danger', destructive: true,
+    body: (n) => `أنت على وشك حذف ${items(n)}. لا يمكن التراجع عن هذا الإجراء. تُحذف المسودات الفارغة فقط (بلا دروس أو تسجيلات أو اختبارات)؛ غيرها يبقى كما هو.`, ok: (n) => `حذف ${items(n)}` },
+];
+
 export function CoursesLive() {
-  const [q, setQ] = useState(''); const dq = useDebounced(q); const [f, setF] = useState('all');
-  const L = usePaged((page) => A.listCourses({ q: dq, state: f === 'all' ? undefined : f, page }), [dq, f]);
+  const { q, update } = useListUrl('lectures');
+  const [text, setText] = useUrlSearch(q, update);
+  const sort = q.sort ?? '-updated'; const page = Number(q.page ?? 1) || 1;
+  const params = { ...listParams(q), sort, page: String(page) };
+  const L = useServerList((p) => A.listCourses(p), params);
+  const filter = filterOf(params); const sel = useSelection(JSON.stringify(filter));
   const [open, setOpen] = useState<number | null>(null); const [adding, setAdding] = useState(false);
+  const f = q.state ?? 'all';
+  const cols: Col<A.Course>[] = [
+    { key: 'title', label: 'الدورة', sort: 'title', primary: true, cell: (c) => nameBtn(c.title, () => setOpen(c.id)) },
+    { key: 't', label: 'المعلم', cell: (c) => c.teacher.name }, { key: 'l', label: 'المستوى', cell: (c) => c.level || '—' },
+    { key: 'p', label: 'الدروس المنشورة', latin: true, cell: (c) => `${c.published_lessons}/${c.lessons}` }, { key: 'e', label: 'المسجلون', latin: true, cell: (c) => c.enrolled },
+    { key: 'r', label: 'الوصول', cell: (c) => (c.restricted ? 'للمسجلين فقط' : 'مفتوح') }, { key: 's', label: 'الحالة', sort: 'state', cell: (c) => pill(c.state) },
+  ];
   return (
     <>
-      <SearchBar q={q} setQ={setQ} label="ابحث في الدورات" action={<button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> دورة جديدة</button>} />
-      <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
-        {[['all', 'الكل'], ['draft', 'مسودة'], ['published', 'منشورة'], ['archived', 'مؤرشفة']].map(([k, l]) => <button key={k} aria-pressed={f === k} onClick={() => setF(k)} style={chip(f === k)}>{l}</button>)}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input type="search" aria-label="ابحث في الدورات" placeholder="ابحث في الدورات" value={text} onChange={(e) => setText(e.target.value)} style={searchStyle} />
+        <FilterControls fields={COURSE_FIELDS} q={q} update={update} />
+        <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> دورة جديدة</button>
       </div>
-      <Table cols={['الدورة', 'المعلم', 'المستوى', 'الدروس المنشورة', 'المسجلون', 'الوصول', 'الحالة']} loading={L.loading} err={L.err} empty={!L.data?.results.length} retry={() => void L.reload()}>
-        {L.data?.results.map((c) => (
-          <tr key={c.id} style={{ borderTop: `1px solid ${color.divider}` }}>
-            <th scope="row" style={{ padding: '12px 16px', textAlign: 'right' }}>{nameBtn(c.title, () => setOpen(c.id))}</th>
-            {td(c.teacher.name)}{td(c.level || '—')}{td(`${c.published_lessons}/${c.lessons}`, true)}{td(c.enrolled, true)}
-            {td(c.restricted ? 'للمسجلين فقط' : 'مفتوح')}{td(pill(c.state))}
-          </tr>
-        ))}
-      </Table>
-      <Pager page={L.page} total={L.data?.count ?? 0} setPage={L.setPage} />
+      <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+        {[['all', 'الكل'], ['draft', 'مسودة'], ['published', 'منشورة'], ['archived', 'مؤرشفة']].map(([k, l]) => <button key={k} aria-pressed={f === k} onClick={() => update({ state: k === 'all' ? '' : k })} style={chip(f === k)}>{l}</button>)}
+      </div>
+      <SelectionSummary sel={sel} pageIds={L.data?.results.map((r) => r.id) ?? []} total={L.data?.count ?? 0} />
+      <DataView rows={L.data?.results} cols={cols} sel={sel} total={L.data?.count ?? 0} rowLabel={(c) => c.title} sort={sort} setSort={(x) => update({ sort: x })}
+        loading={L.loading} err={L.err} retry={() => void L.reload()} />
+      <Pager page={page} total={L.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
+      <BulkBar resource="courses" sel={sel} total={L.data?.count ?? 0} actions={COURSE_ACTIONS} filter={filter} onDone={() => void L.reload()} />
       {adding && <CourseForm onClose={() => setAdding(false)} onSaved={(c) => { setAdding(false); void L.reload(); setOpen(c.id); }} />}
       {open !== null && <CoursePanel id={open} onClose={() => setOpen(null)} onChanged={() => void L.reload()} />}
     </>
@@ -99,6 +128,10 @@ function CoursePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
   }, [id]);
   useEffect(() => { void reload(); }, [reload]);
   const act = async (fn: () => Promise<unknown>, ok: string) => { setBusy(true); try { await fn(); toast(ok); await reload(); onChanged(); } catch (e) { toast(errMsg(e)); } finally { setBusy(false); } };
+  const lsel = useSelection(`l${id}`); const esel = useSelection(`e${id}`);
+  const lessonIds = c?.lesson_list.map((l) => l.id) ?? [];
+  const activeEnr = (enr ?? []).filter((e) => e.status === 'active').map((e) => e.id);
+  const after = () => { void reload(); onChanged(); };
   return (
     <Modal title={c?.title ?? 'الدورة'} onClose={onClose} wide>
       {err && <p role="alert" style={{ margin: 0, color: color.danger }}>{err}</p>}
@@ -115,8 +148,10 @@ function CoursePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
         <section style={{ borderTop: `1px solid ${color.divider}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>الدروس</h3>
           {c.lesson_list.length === 0 && <p style={{ margin: 0, color: color.muted }}>لا توجد دروس بعد.</p>}
+          {lessonIds.length > 1 && <InlineSelectHeader sel={lsel} ids={lessonIds} what="الدروس" />}
           {c.lesson_list.map((l) => (
             <div key={l.id} style={{ display: 'flex', gap: 8, alignItems: 'center', minHeight: 48, borderTop: `1px solid ${color.divider}`, flexWrap: 'wrap' }}>
+              {lessonIds.length > 1 && <Checkbox checked={lsel.has(l.id)} onChange={() => lsel.toggle(l.id)} label={`تحديد ${l.title}`} />}
               <span style={{ fontFamily: font.latin, color: color.muted, minWidth: 24 }}>{l.order}</span>
               <span style={{ flex: 1, minWidth: 160 }}>{l.title} <span style={{ fontSize: 12, color: color.muted }}>· {KIND_L[l.kind]}</span></span>
               {pill(l.state)}
@@ -131,8 +166,10 @@ function CoursePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
         <section style={{ borderTop: `1px solid ${color.divider}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>المسجلون {c.restricted ? '' : <span style={{ fontSize: 13, color: color.muted, fontWeight: 400 }}>(الدورة مفتوحة؛ التسجيل للمتابعة فقط)</span>}</h3>
           {enr?.length === 0 && <p style={{ margin: 0, color: color.muted }}>لا يوجد طلاب مسجلون.</p>}
+          {activeEnr.length > 1 && <InlineSelectHeader sel={esel} ids={activeEnr} what="المسجلين النشطين" />}
           {enr?.map((e) => (
             <div key={e.id} style={{ display: 'flex', gap: 8, alignItems: 'center', minHeight: 44 }}>
+              {activeEnr.length > 1 && (activeEnr.includes(e.id) ? <Checkbox checked={esel.has(e.id)} onChange={() => esel.toggle(e.id)} label={`تحديد ${e.student.name}`} /> : <span style={{ width: 22 }} />)}
               <span style={{ flex: 1 }}>{e.student.name}</span>{pill(e.status)}<span style={{ fontSize: 12, color: color.muted }}>{e.starts_on ? date(e.starts_on) : ''}</span>
               {e.status === 'active' && <button onClick={() => setEnd(e)} aria-label={`إنهاء تسجيل ${e.student.name}`} style={smallBtn('danger')}>إنهاء</button>}
             </div>
@@ -140,6 +177,16 @@ function CoursePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
           {c.state !== 'archived' && <button onClick={() => setSub('enroll')} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>تسجيل طالب</button>}
         </section>
       </>}
+      <BulkBar resource="lessons" sel={lsel} total={lessonIds.length} filter={{}} onDone={after} actions={[
+        { key: 'publish', label: 'نشر', tone: 'primary', body: (n) => `سيُنشر ${items(n)} للطلاب المسموح لهم.`, ok: (n) => `نشر ${items(n)}` },
+        { key: 'draft', label: 'إلغاء النشر', body: (n) => `سيعود ${items(n)} إلى مسودة. يُترك آخر درس منشور في دورة منشورة.`, ok: (n) => `إلغاء نشر ${items(n)}` },
+        { key: 'archive', label: 'أرشفة', body: (n) => `سيُخفى ${items(n)} عن الطلاب، ويبقى ما أكملوه محفوظًا.`, ok: (n) => `أرشفة ${items(n)}` },
+        { key: 'delete', label: 'حذف المحدد', tone: 'danger', destructive: true, body: (n) => `أنت على وشك حذف ${items(n)}. لا يمكن التراجع عن هذا الإجراء. تُحذف المسودات التي لم يكملها أحد فقط.`, ok: (n) => `حذف ${items(n)}` },
+      ]} />
+      <BulkBar resource="enrollments" sel={esel} total={activeEnr.length} filter={{}} onDone={after} actions={[
+        { key: 'withdraw', label: 'إنهاء التسجيل', tone: 'danger', title: 'إنهاء التسجيلات', body: (n) => `سيُنهى ${items(n)}${c?.restricted ? ' ويفقد أصحابها الوصول إلى دروس الدورة' : ''}. يبقى السجل محفوظًا.`, ok: (n) => `إنهاء ${items(n)}` },
+        { key: 'complete', label: 'تحديد كمكتمل', body: (n) => `سيُسجَّل ${items(n)} كمكتملة. يبقى السجل محفوظًا.`, ok: (n) => `إكمال ${items(n)}` },
+      ]} />
       {sub === 'edit' && c && <CourseForm course={c} onClose={() => setSub(null)} onSaved={() => { setSub(null); void reload(); onChanged(); }} />}
       {sub === 'archive' && c && <ReasonDialog title="أرشفة الدورة" body="تختفي الدورة عن الطلاب. التسجيلات والإنجازات والدرجات تبقى محفوظة." ok="أرشفة" onClose={() => setSub(null)}
         run={async (r) => { await A.setCourseState(c.id, 'archived', r); toast('أُرشفت الدورة'); await reload(); onChanged(); }} />}
@@ -214,25 +261,49 @@ function StudentPicker({ exclude, onClose, onPick }: { exclude: number[]; onClos
 }
 
 /* =============================== Quizzes =============================== */
+const QUIZ_FIELDS: FilterField[] = [
+  { key: 'state', label: 'الحالة', type: 'select', options: [['draft', 'مسودة'], ['pending', 'بانتظار المراجعة'], ['published', 'منشور'], ['closed', 'مغلق']] },
+  { key: 'course', label: 'الدورة', type: 'remote', load: courseOptions },
+  { key: 'teacher', label: 'المعلم (الكاتب)', type: 'remote', load: teacherOptions },
+  { key: 'created', label: 'تاريخ الإنشاء', type: 'dates', from: 'created_from', to: 'created_to' },
+];
+const QUIZ_ACTIONS: BulkDef[] = [
+  { key: 'publish', label: 'نشر', tone: 'primary', body: (n) => `سيُنشر ${items(n)}. تُترك الاختبارات التي بلا أسئلة.`, ok: (n) => `نشر ${items(n)}` },
+  { key: 'close', label: 'إغلاق', body: (n) => `سيُغلق ${items(n)}: لا محاولات جديدة، وتبقى النتائج محفوظة.`, ok: (n) => `إغلاق ${items(n)}` },
+  { key: 'delete', label: 'حذف المحدد', tone: 'danger', destructive: true,
+    body: (n) => `أنت على وشك حذف ${items(n)}. لا يمكن التراجع عن هذا الإجراء. تُحذف المسودات التي لم يحاولها أحد فقط؛ غيرها يبقى كما هو.`, ok: (n) => `حذف ${items(n)}` },
+];
+
 export function QuizzesLive() {
-  const [q, setQ] = useState(''); const dq = useDebounced(q); const [f, setF] = useState('all');
-  const L = usePaged((page) => A.listQuizzes({ q: dq, state: f === 'all' ? undefined : f, page }), [dq, f]);
+  const { q, update } = useListUrl('quizzes');
+  const [text, setText] = useUrlSearch(q, update);
+  const sort = q.sort ?? '-updated'; const page = Number(q.page ?? 1) || 1;
+  const params = { ...listParams(q), sort, page: String(page) };
+  const L = useServerList((p) => A.listQuizzes(p), params);
+  const filter = filterOf(params); const sel = useSelection(JSON.stringify(filter));
   const [open, setOpen] = useState<number | null>(null); const [adding, setAdding] = useState(false);
+  const f = q.state ?? 'all';
+  const cols: Col<A.Quiz>[] = [
+    { key: 'title', label: 'الاختبار', sort: 'title', primary: true, cell: (t) => nameBtn(t.title, () => setOpen(t.id)) },
+    { key: 'c', label: 'الدورة', cell: (t) => t.course?.title ?? '—' }, { key: 'l', label: 'المستوى', cell: (t) => t.level || '—' },
+    { key: 'q', label: 'الأسئلة', latin: true, cell: (t) => t.questions }, { key: 'a', label: 'المحاولات المسلّمة', latin: true, cell: (t) => t.attempts },
+    { key: 's', label: 'الحالة', sort: 'state', cell: (t) => pill(t.state) },
+  ];
   return (
     <>
-      <SearchBar q={q} setQ={setQ} label="ابحث في الاختبارات" action={<button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> اختبار جديد</button>} />
-      <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
-        {[['all', 'الكل'], ['draft', 'مسودة'], ['published', 'منشور'], ['closed', 'مغلق']].map(([k, l]) => <button key={k} aria-pressed={f === k} onClick={() => setF(k)} style={chip(f === k)}>{l}</button>)}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input type="search" aria-label="ابحث في الاختبارات" placeholder="ابحث في الاختبارات" value={text} onChange={(e) => setText(e.target.value)} style={searchStyle} />
+        <FilterControls fields={QUIZ_FIELDS} q={q} update={update} />
+        <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> اختبار جديد</button>
       </div>
-      <Table cols={['الاختبار', 'الدورة', 'المستوى', 'الأسئلة', 'المحاولات المسلّمة', 'الحالة']} loading={L.loading} err={L.err} empty={!L.data?.results.length} retry={() => void L.reload()}>
-        {L.data?.results.map((t) => (
-          <tr key={t.id} style={{ borderTop: `1px solid ${color.divider}` }}>
-            <th scope="row" style={{ padding: '12px 16px', textAlign: 'right' }}>{nameBtn(t.title, () => setOpen(t.id))}</th>
-            {td(t.course?.title ?? '—')}{td(t.level || '—')}{td(t.questions, true)}{td(t.attempts, true)}{td(pill(t.state))}
-          </tr>
-        ))}
-      </Table>
-      <Pager page={L.page} total={L.data?.count ?? 0} setPage={L.setPage} />
+      <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+        {[['all', 'الكل'], ['draft', 'مسودة'], ['published', 'منشور'], ['closed', 'مغلق']].map(([k, l]) => <button key={k} aria-pressed={f === k} onClick={() => update({ state: k === 'all' ? '' : k })} style={chip(f === k)}>{l}</button>)}
+      </div>
+      <SelectionSummary sel={sel} pageIds={L.data?.results.map((r) => r.id) ?? []} total={L.data?.count ?? 0} />
+      <DataView rows={L.data?.results} cols={cols} sel={sel} total={L.data?.count ?? 0} rowLabel={(t) => t.title} sort={sort} setSort={(x) => update({ sort: x })}
+        loading={L.loading} err={L.err} retry={() => void L.reload()} />
+      <Pager page={page} total={L.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
+      <BulkBar resource="tests" sel={sel} total={L.data?.count ?? 0} actions={QUIZ_ACTIONS} filter={filter} onDone={() => void L.reload()} />
       {adding && <QuizForm onClose={() => setAdding(false)} onSaved={(t) => { setAdding(false); void L.reload(); setOpen(t.id); }} />}
       {open !== null && <QuizPanel id={open} onClose={() => setOpen(null)} onChanged={() => void L.reload()} />}
     </>
@@ -283,6 +354,8 @@ function QuizPanel({ id, onClose, onChanged }: { id: number; onClose: () => void
   const reload = useCallback(async () => { try { setT(await A.getQuiz(id)); setErr(null); } catch (e) { setErr(errMsg(e)); } }, [id]);
   useEffect(() => { void reload(); }, [reload]);
   const act = async (fn: () => Promise<unknown>, ok: string) => { setBusy(true); try { await fn(); toast(ok); await reload(); onChanged(); } catch (e) { toast(errMsg(e)); } finally { setBusy(false); } };
+  const qsel = useSelection(`q${id}`);
+  const qIds = t && t.state !== 'closed' ? t.question_list.map((q) => q.id) : [];
   const keyText = (q: A.Question) => q.kind === 'mcq' ? `الصحيح: ${(q.options as string[])[q.answer_key as number] ?? '—'}` : q.kind === 'true_false' ? `الصحيح: ${q.answer_key ? 'صح' : 'خطأ'}`
     : q.kind === 'recitation' ? (() => { const o = q.options as { surah?: number; ayah_from?: number; ayah_to?: number }; return o.surah ? `سورة ${o.surah}: ${o.ayah_from}–${o.ayah_to} · يصححها المعلم` : 'يصححها المعلم'; })() : 'يصححها المعلم';
   return (
@@ -301,8 +374,10 @@ function QuizPanel({ id, onClose, onChanged }: { id: number; onClose: () => void
         <section style={{ borderTop: `1px solid ${color.divider}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>الأسئلة</h3>
           {t.question_list.length === 0 && <p style={{ margin: 0, color: color.muted }}>لا توجد أسئلة بعد.</p>}
+          {qIds.length > 1 && <InlineSelectHeader sel={qsel} ids={qIds} what="الأسئلة" />}
           {t.question_list.map((q, i) => (
             <div key={q.id} style={{ borderTop: `1px solid ${color.divider}`, paddingTop: 8, display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              {qIds.length > 1 && <Checkbox checked={qsel.has(q.id)} onChange={() => qsel.toggle(q.id)} label={`تحديد السؤال ${i + 1}`} />}
               <span style={{ fontFamily: font.latin, color: color.muted, minWidth: 24 }}>{i + 1}</span>
               <span style={{ flex: 1, minWidth: 200 }}>
                 <span style={{ display: 'block', fontWeight: 700 }}>{q.prompt}</span>
@@ -315,6 +390,9 @@ function QuizPanel({ id, onClose, onChanged }: { id: number; onClose: () => void
           {t.state !== 'closed' && <button onClick={() => setSub({ q: null })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>إضافة سؤال</button>}
         </section>
       </>}
+      <BulkBar resource="questions" sel={qsel} total={qIds.length} filter={{}} onDone={() => { void reload(); onChanged(); }} actions={[
+        { key: 'remove', label: 'حذف المحدد', tone: 'danger', destructive: true, body: (n) => `أنت على وشك حذف ${items(n)}. تُخفى عن المحاولات القادمة، وتبقى الإجابات السابقة محفوظة.`, ok: (n) => `حذف ${items(n)}` },
+      ]} />
       {sub === 'edit' && t && <QuizForm quiz={t} onClose={() => setSub(null)} onSaved={() => { setSub(null); void reload(); onChanged(); }} />}
       {sub && typeof sub === 'object' && t && <QuestionForm testId={t.id} q={sub.q} onClose={() => setSub(null)} onSaved={() => { setSub(null); void reload(); onChanged(); }} />}
       {del && <ReasonDialog title="حذف السؤال" body="يُخفى السؤال عن المحاولات القادمة. الإجابات السابقة تبقى محفوظة." ok="حذف" required={false}

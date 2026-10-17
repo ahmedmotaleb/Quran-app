@@ -2,6 +2,13 @@ from django.urls import include, path
 
 from apps.assessments import admin_views as assess_admin
 from apps.core import admin_views as core_admin
+from apps.core.bulk import AdminBulkAction
+# Bulk-action resources register themselves on import (users, circles, bookings, sessions, courses, lessons,
+# enrollments, tests, questions).
+from apps.accounts import admin_bulk as _users_bulk  # noqa: F401,E402
+from apps.scheduling import admin_bulk as _sched_bulk  # noqa: F401,E402
+from apps.learning import admin_bulk as _learn_bulk  # noqa: F401,E402
+from apps.assessments import admin_bulk as _assess_bulk  # noqa: F401,E402
 from apps.assessments import views as assessments
 from apps.learning import admin_views as learn_admin
 from apps.learning import progress
@@ -102,6 +109,7 @@ urlpatterns = [
     path("admin/tests/<int:pk>/questions", assess_admin.AdminQuestions.as_view()),
     path("admin/questions/<int:pk>", assess_admin.AdminQuestionDetail.as_view()),
     # Settings: admin-managed, and the public subset the apps read
+    path("admin/<slug:resource>/bulk-action", AdminBulkAction.as_view()),
     path("admin/settings", core_admin.AdminSettingsView.as_view()),
     path("admin/audit", core_admin.AdminAudit.as_view()),
     path("settings/public", core_admin.PublicSettings.as_view()),

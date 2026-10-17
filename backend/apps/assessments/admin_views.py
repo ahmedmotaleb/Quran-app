@@ -122,15 +122,11 @@ def _page(view, request, qs, fn):
 
 class AdminTests(AdminView):
     def get(self, request):
-        qs = _tests().order_by("-updated_at", "id")
-        p = request.query_params
-        if p.get("state"):
-            qs = qs.filter(state=p["state"])
-        if p.get("level"):
-            qs = qs.filter(level=p["level"])
-        if p.get("q"):
-            qs = qs.filter(title__icontains=p["q"])
-        return _page(self, request, qs, _test_out)
+        from apps.core.bulk import list_with
+
+        from .admin_bulk import TEST_FILTERS
+
+        return list_with(self, request, _tests(), TEST_FILTERS, _test_out)
 
     def post(self, request):
         s = TestIn(data=request.data)

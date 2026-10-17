@@ -125,7 +125,7 @@ class _BaseLogin(APIView):
             log.warning("login_failed", extra={"portal": self.portal})
             _record_failure(email)
             raise BAD_CREDENTIALS
-        if user.status == AccountStatus.SUSPENDED:
+        if user.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
             raise ApiError("account_suspended", "تم إيقاف هذا الحساب. تواصل مع إدارة الحلقة.", 403)
         if not user.can_sign_in:
             raise ApiError("account_pending", "حسابك بانتظار اعتماد الإدارة.", 403)
@@ -207,7 +207,7 @@ class PasswordForgotView(APIView):
     def post(self, request):
         email = str(request.data.get("email", "")).strip().lower()
         user = User.objects.filter(email=email, is_active=True).first()
-        if user and user.status != AccountStatus.SUSPENDED:
+        if user and user.status not in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
             link = password_link(user)
             try:
                 send_mail("استعادة كلمة المرور — الحلقة", f"لتعيين كلمة مرور جديدة افتح الرابط:\n{link}\n\nالرابط صالح لمرة واحدة. إن لم تطلب ذلك فتجاهل الرسالة.",
@@ -395,17 +395,10 @@ class AdminUserList(generics.ListCreateAPIView):
         return AdminCreateUserSerializer if self.request.method == "POST" else AdminUserSerializer
 
     def get_queryset(self):
-        qs = _admin_users().order_by("-date_joined", "id")
-        p = self.request.query_params
-        if p.get("role"):
-            qs = qs.filter(role=p["role"])
-        if p.get("status"):
-            qs = qs.filter(status=p["status"])
-        if p.get("q"):
-            qs = qs.filter(Q(full_name__icontains=p["q"]) | Q(email__icontains=p["q"]))
-        if p.get("unlinked") == "1":
-            qs = qs.filter(role=Role.STUDENT).exclude(teacher_assignments__active=True)
-        return qs
+        from .admin_bulk import USER_FILTERS
+
+        # Search, filters and sort are validated and shared with the bulk "all filtered results" mode.
+        return USER_FILTERS.run(_admin_users(), self.request.query_params, sort=self.request.query_params.get("sort"))
 
     def create(self, request, *args, **kwargs):
         s = AdminCreateUserSerializer(data=request.data)
@@ -461,8 +454,8 @@ class AdminUserSetupLink(APIView):
 
     def post(self, request, pk):
         user = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN), pk=pk, is_active=True)
-        if user.status == AccountStatus.SUSPENDED:
-            raise ApiError("suspended", "الحساب موقوف. أعد تفعيله أولًا.", 409)
+        if user.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
+            raise ApiError("suspended", "الحساب موقوف أو مؤرشف. أعد تفعيله أولًا.", 409)
         return Response(_setup_link(request, user))
 
 
@@ -478,11 +471,11 @@ class AdminUserCounts(APIView):
         out = {s: 0 for s in AccountStatus.values}
         for r in qs.values("status").annotate(n=Count("id")):
             out[r["status"]] = r["n"]
-        out["all"] = sum(out.values())
+        out["all"] = sum(n for s, n in out.items() if s != AccountStatus.ARCHIVED)  # "all" = everyone not archived
         if request.query_params.get("role") == Role.TEACHER:
-            out["unapproved"] = qs.filter(Q(teacher_profile__isnull=True) | Q(teacher_profile__approved_at__isnull=True)).count()
+            out["unapproved"] = qs.exclude(status=AccountStatus.ARCHIVED).filter(Q(teacher_profile__isnull=True) | Q(teacher_profile__approved_at__isnull=True)).count()
         if request.query_params.get("role") == Role.STUDENT:
-            out["unlinked"] = qs.exclude(teacher_assignments__active=True).count()
+            out["unlinked"] = qs.exclude(status=AccountStatus.ARCHIVED).exclude(teacher_assignments__active=True).count()
         return Response(out)
 
 
@@ -517,7 +510,7 @@ class AdminUserStatus(APIView):
         old = user.status
         user.status = s.validated_data["status"]
         user.save(update_fields=["status"])
-        if user.status == AccountStatus.SUSPENDED:
+        if user.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
             # Sessions are re-checked on every request; native tokens are revoked outright.
             AuthToken.objects.filter(user=user, revoked_at__isnull=True).update(revoked_at=timezone.now())
         audit("admin.user_status", actor=request.user, target=user, request=request, old=old, new=user.status, reason=s.validated_data["reason"])

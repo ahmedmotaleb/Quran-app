@@ -6,7 +6,11 @@ import { Icon } from '@/components/Icon';
 import type { ApiError } from '@/api/client';
 import { toast } from '../adminStore';
 import * as A from './api';
-import { chip, dateTime, errMsg, Modal, Pager, ReasonDialog, SearchBar, smallBtn, Table, useDebounced, usePaged } from './ui';
+import { chip, dateTime, errMsg, Modal, ReasonDialog, smallBtn } from './ui';
+import {
+  BulkBar, type BulkDef, circleOptions, type Col, DataView, type FilterField, FilterControls, filterOf, items, listParams, Pager,
+  SelectionSummary, studentOptions, teacherOptions, useListUrl, useSelection, useServerList, useUrlSearch, InlineSelectHeader, Checkbox,
+} from './list';
 
 const CIRCLE_ST: Record<A.CircleState, { l: string; bg: string; fg: string }> = {
   draft: { l: 'مسودة', bg: '#ECE7DB', fg: '#45534E' }, published: { l: 'منشورة', bg: '#D8E5D7', fg: '#124C46' }, off: { l: 'موقوفة', bg: '#F5E1DC', fg: '#8E2F20' },
@@ -19,33 +23,53 @@ const DAYS = ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخ�
 const pill = (t: { l: string; bg: string; fg: string }) => <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700, background: t.bg, color: t.fg, whiteSpace: 'nowrap' }}>{t.l}</span>;
 
 /* =============================== Circles =============================== */
+const CIRCLE_FIELDS: FilterField[] = [
+  { key: 'state', label: 'الحالة', type: 'select', options: [['draft', 'مسودة'], ['published', 'منشورة'], ['off', 'موقوفة']] },
+  { key: 'teacher', label: 'المعلم', type: 'remote', load: teacherOptions },
+  { key: 'has_upcoming', label: 'الجلسات', type: 'bool', yes: 'لها جلسات قادمة', no: 'دون جلسات قادمة' },
+  { key: 'created', label: 'تاريخ الإنشاء', type: 'dates', from: 'created_from', to: 'created_to' },
+];
+const CIRCLE_ACTIONS: BulkDef[] = [
+  { key: 'publish', label: 'نشر', tone: 'primary', body: (n) => `ستظهر ${items(n)} للطلاب ويمكن حجز جلساتها. تُترك الحلقات التي معلمها غير معتمد.`, ok: (n) => `نشر ${items(n)}` },
+  { key: 'disable', label: 'تعطيل', reason: true, body: (n) => `ستختفي ${items(n)} عن الطلاب ولن تُقبل حجوزات جديدة. الحجوزات الحالية تبقى.`, ok: (n) => `تعطيل ${items(n)}` },
+  { key: 'delete', label: 'حذف المحدد', tone: 'danger', destructive: true,
+    body: (n) => `أنت على وشك حذف ${items(n)}. لا يمكن التراجع عن هذا الإجراء. تُحذف المسودات التي لم تُجدول لها جلسات فقط؛ أما الحلقات ذات السجل فتبقى كما هي.`, ok: (n) => `حذف ${items(n)}` },
+];
+
 export function CirclesLive() {
-  const [q, setQ] = useState(''); const dq = useDebounced(q); const [f, setF] = useState('all');
-  const L = usePaged((page) => A.listCircles({ q: dq, state: f === 'all' ? undefined : f, page }), [dq, f]);
+  const { q, update } = useListUrl('circles');
+  const [text, setText] = useUrlSearch(q, update);
+  const sort = q.sort ?? '-updated'; const page = Number(q.page ?? 1) || 1;
+  const params = { ...listParams(q), sort, page: String(page) };
+  const L = useServerList((p) => A.listCircles(p), params);
+  const filter = filterOf(params); const sel = useSelection(JSON.stringify(filter));
   const [open, setOpen] = useState<number | null>(null); const [adding, setAdding] = useState(false);
+  const cur = q.state ?? 'all';
+  const cols: Col<A.Circle>[] = [
+    { key: 'name', label: 'الحلقة', sort: 'name', primary: true, cell: (c) => <button onClick={() => setOpen(c.id)} style={{ border: 'none', background: 'transparent', padding: 0, font: 'inherit', fontWeight: 700, color: color.primary, cursor: 'pointer', textDecoration: 'underline', minHeight: 32 }}>{c.name}</button> },
+    { key: 't', label: 'المعلم', cell: (c) => c.teacher.name },
+    { key: 'l', label: 'المستوى', cell: (c) => c.level || '—' },
+    { key: 'cap', label: 'السعة', sort: 'capacity', latin: true, cell: (c) => c.capacity },
+    { key: 'up', label: 'الجلسات القادمة', latin: true, cell: (c) => c.upcoming_sessions },
+    { key: 'bk', label: 'المقاعد المحجوزة', latin: true, cell: (c) => c.upcoming_booked_seats },
+    { key: 'st', label: 'الحالة', sort: 'state', cell: (c) => pill(CIRCLE_ST[c.state]) },
+  ];
   return (
     <>
-      <SearchBar q={q} setQ={setQ} label="ابحث باسم الحلقة أو المعلم"
-        action={<button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> حلقة جديدة</button>} />
-      <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
-        {[['all', 'الكل'], ['draft', 'مسودة'], ['published', 'منشورة'], ['off', 'موقوفة']].map(([k, l]) => <button key={k} aria-pressed={f === k} onClick={() => setF(k)} style={chip(f === k)}>{l}</button>)}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input type="search" aria-label="ابحث باسم الحلقة أو المعلم" placeholder="ابحث باسم الحلقة أو المعلم" value={text} onChange={(e) => setText(e.target.value)}
+          style={{ flex: '1 1 240px', minHeight: 48, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15 }} />
+        <FilterControls fields={CIRCLE_FIELDS} q={q} update={update} />
+        <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> حلقة جديدة</button>
       </div>
-      <Table cols={['الحلقة', 'المعلم', 'المستوى', 'السعة', 'الجلسات القادمة', 'المقاعد المحجوزة', 'الحالة']} loading={L.loading} err={L.err} empty={!L.data?.results.length} retry={() => void L.reload()}>
-        {L.data?.results.map((c) => (
-          <tr key={c.id} style={{ borderTop: `1px solid ${color.divider}` }}>
-            <th scope="row" style={{ padding: '12px 16px', textAlign: 'right' }}>
-              <button onClick={() => setOpen(c.id)} style={{ border: 'none', background: 'transparent', padding: 0, font: 'inherit', fontWeight: 700, color: color.primary, cursor: 'pointer', textDecoration: 'underline', minHeight: 32 }}>{c.name}</button>
-            </th>
-            <td style={{ padding: '12px 16px' }}>{c.teacher.name}</td>
-            <td style={{ padding: '12px 16px' }}>{c.level || '—'}</td>
-            <td style={{ padding: '12px 16px', fontFamily: font.latin }}>{c.capacity}</td>
-            <td style={{ padding: '12px 16px', fontFamily: font.latin }}>{c.upcoming_sessions}</td>
-            <td style={{ padding: '12px 16px', fontFamily: font.latin }}>{c.upcoming_booked_seats}</td>
-            <td style={{ padding: '12px 16px' }}>{pill(CIRCLE_ST[c.state])}</td>
-          </tr>
-        ))}
-      </Table>
-      <Pager page={L.page} total={L.data?.count ?? 0} setPage={L.setPage} />
+      <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+        {[['all', 'الكل'], ['draft', 'مسودة'], ['published', 'منشورة'], ['off', 'موقوفة']].map(([k, l]) => <button key={k} aria-pressed={cur === k} onClick={() => update({ state: k === 'all' ? '' : k })} style={chip(cur === k)}>{l}</button>)}
+      </div>
+      <SelectionSummary sel={sel} pageIds={L.data?.results.map((r) => r.id) ?? []} total={L.data?.count ?? 0} />
+      <DataView rows={L.data?.results} cols={cols} sel={sel} total={L.data?.count ?? 0} rowLabel={(c) => c.name} sort={sort} setSort={(x) => update({ sort: x })}
+        loading={L.loading} err={L.err} retry={() => void L.reload()} />
+      <Pager page={page} total={L.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
+      <BulkBar resource="circles" sel={sel} total={L.data?.count ?? 0} actions={CIRCLE_ACTIONS} filter={filter} onDone={() => void L.reload()} />
       {adding && <CircleForm onClose={() => setAdding(false)} onSaved={(c) => { setAdding(false); void L.reload(); setOpen(c.id); }} />}
       {open !== null && <CirclePanel id={open} onClose={() => setOpen(null)} onChanged={() => void L.reload()} />}
     </>
@@ -96,6 +120,8 @@ function CirclePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
   const reload = useCallback(async () => { try { setC(await A.getCircle(id)); setErr(null); } catch (e) { setErr(errMsg(e)); } }, [id]);
   useEffect(() => { void reload(); }, [reload]);
   const act = async (fn: () => Promise<unknown>, ok: string) => { setBusy(true); try { await fn(); toast(ok); await reload(); onChanged(); } catch (e) { toast(errMsg(e)); } finally { setBusy(false); } };
+  const sel = useSelection(String(id));
+  const cancellable = (c?.sessions ?? []).filter((s) => s.status === 'scheduled' && new Date(s.starts_at) > new Date()).map((s) => s.id);
   return (
     <Modal title={c?.name ?? 'الحلقة'} onClose={onClose} wide>
       {err && <p role="alert" style={{ margin: 0, color: color.danger }}>{err}</p>}
@@ -116,8 +142,10 @@ function CirclePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
         <section style={{ borderTop: `1px solid ${color.divider}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>الجلسات (بتوقيت القاهرة)</h3>
           {c.sessions.length === 0 && <p style={{ margin: 0, color: color.muted }}>لا توجد جلسات بعد. اختر «جدولة جلسات».</p>}
+          {cancellable.length > 1 && <InlineSelectHeader sel={sel} ids={cancellable} what="الجلسات القادمة" />}
           {c.sessions.map((s) => (
             <div key={s.id} style={{ display: 'flex', gap: 10, alignItems: 'center', minHeight: 44, borderTop: `1px solid ${color.divider}` }}>
+              {cancellable.length > 1 && (cancellable.includes(s.id) ? <Checkbox checked={sel.has(s.id)} onChange={() => sel.toggle(s.id)} label={`تحديد جلسة ${dateTime(s.starts_at)}`} /> : <span style={{ width: 22 }} />)}
               <span style={{ flex: 1 }}>{dateTime(s.starts_at)}</span>
               <span style={{ fontFamily: font.latin, color: color.muted }}>{s.booked}/{s.capacity}</span>
               {s.status === 'scheduled' ? <button disabled={busy || new Date(s.starts_at) <= new Date()} onClick={() => setSub({ cancel: s })} style={smallBtn('danger')}>إلغاء الجلسة</button>
@@ -126,6 +154,9 @@ function CirclePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
           ))}
         </section>
       </>}
+      <BulkBar resource="sessions" sel={sel} total={cancellable.length} filter={{}} onDone={() => { void reload(); onChanged(); }} actions={[
+        { key: 'cancel', label: 'إلغاء الجلسات', tone: 'danger', reason: true, title: 'إلغاء الجلسات',
+          body: (n) => `ستُلغى ${items(n)} وكل حجوزاتها، ويُبلَّغ الطلاب. يبقى السجل محفوظًا.`, ok: (n) => `إلغاء ${items(n)}` }]} />
       {sub === 'edit' && c && <CircleForm circle={c} onClose={() => setSub(null)} onSaved={() => { setSub(null); void reload(); onChanged(); }} />}
       {sub === 'schedule' && c && <ScheduleDialog circle={c} onClose={() => setSub(null)} onDone={() => { void reload(); onChanged(); }} />}
       {sub && typeof sub === 'object' && 'reason' in sub && c && (
@@ -191,38 +222,59 @@ function ScheduleDialog({ circle, onClose, onDone }: { circle: A.Circle; onClose
 }
 
 /* =============================== Bookings =============================== */
+const BOOKING_FIELDS: FilterField[] = [
+  { key: 'when', label: 'الوقت', type: 'select', options: [['upcoming', 'القادمة'], ['past', 'السابقة'], ['all', 'الكل']] },
+  { key: 'status', label: 'الحالة', type: 'select', options: [['confirmed', 'مؤكدة'], ['cancelled', 'ملغاة']] },
+  { key: 'attendance', label: 'الحضور', type: 'select', options: [['present', 'حضر'], ['late', 'متأخر'], ['absent', 'غاب'], ['excused', 'غاب بعذر'], ['unmarked', 'لم يُسجَّل']] },
+  { key: 'teacher', label: 'المعلم', type: 'remote', load: teacherOptions },
+  { key: 'student', label: 'الطالب', type: 'remote', load: studentOptions },
+  { key: 'circle', label: 'الحلقة', type: 'remote', load: circleOptions },
+  { key: 'dates', label: 'تاريخ الجلسة', type: 'dates', from: 'from', to: 'to' },
+];
+const BOOKING_ACTIONS: BulkDef[] = [
+  { key: 'cancel', label: 'إلغاء الحجوزات', tone: 'danger', reason: true, title: 'إلغاء الحجوزات',
+    body: (n) => `سيُلغى ${items(n)} ويُبلَّغ كل طالب. تبقى السجلات والحضور محفوظة. الجلسات التي بدأت لا تُلغى.`, ok: (n) => `إلغاء ${items(n)}` },
+];
+
 export function BookingsLive() {
-  const [q, setQ] = useState(''); const dq = useDebounced(q);
-  const [when, setWhen] = useState<'upcoming' | 'past'>('upcoming'); const [st, setSt] = useState('all');
-  const L = usePaged((page) => A.listBookings({ when, status: st === 'all' ? undefined : st, q: dq, page }), [dq, when, st]);
+  const { q, update } = useListUrl('bookings');
+  const [text, setText] = useUrlSearch(q, update);
+  const when = (q.when ?? 'upcoming') as 'upcoming' | 'past' | 'all';
+  const sort = q.sort ?? (when === 'past' ? '-starts' : 'starts'); const page = Number(q.page ?? 1) || 1;
+  const params = { ...listParams(q), when, sort, page: String(page) };
+  const L = useServerList((p) => A.listBookings(p), params);
+  const filter = filterOf(params); const sel = useSelection(JSON.stringify(filter));
   const [cancel, setCancel] = useState<A.Booking | null>(null);
   // Bookings change while the page is open (students book and cancel): refresh every minute.
   useEffect(() => { const t = setInterval(() => void L.reload(), 60000); return () => clearInterval(t); }, [L.reload]); // eslint-disable-line react-hooks/exhaustive-deps
+  const st = q.status ?? 'all';
+  const cols: Col<A.Booking>[] = [
+    { key: 'at', label: 'الموعد (القاهرة)', sort: 'starts', primary: true, cell: (b) => dateTime(b.starts_at) },
+    { key: 's', label: 'الطالب', sort: 'student', cell: (b) => b.student.name },
+    { key: 't', label: 'المعلم', sort: 'teacher', cell: (b) => b.teacher.name },
+    { key: 'k', label: 'النوع', cell: (b) => (b.circle ? `حلقة: ${b.circle}` : b.kind === 'group' ? 'جماعية' : 'فردية') },
+    { key: 'a', label: 'الحضور', cell: (b) => ATT[b.attendance] ?? '—' },
+    { key: 'st', label: 'الحالة', sort: 'status', cell: (b) => <>{pill(BOOK_ST[b.status])}{b.status === 'cancelled' && b.cancel_reason && <span style={{ display: 'block', fontSize: 12, color: color.muted, marginTop: 4 }}>{b.cancelled_by ? `${b.cancelled_by}: ` : ''}{b.cancel_reason}</span>}</> },
+    { key: 'x', label: 'إجراء', cell: (b) => (b.status === 'confirmed' && new Date(b.starts_at) > new Date()
+      ? <button onClick={() => setCancel(b)} aria-label={`إلغاء حجز ${b.student.name}`} style={smallBtn('danger')}>إلغاء</button> : <span style={{ color: color.faint }}>—</span>) },
+  ];
   return (
     <>
-      <SearchBar q={q} setQ={setQ} label="ابحث باسم الطالب أو المعلم" />
-      <div role="group" aria-label="تصفية" style={{ display: 'flex', gap: 8, overflowX: 'auto', flexWrap: 'wrap' }}>
-        {([['upcoming', 'القادمة'], ['past', 'السابقة']] as const).map(([k, l]) => <button key={k} aria-pressed={when === k} onClick={() => setWhen(k)} style={chip(when === k)}>{l}</button>)}
-        <span style={{ width: 1, background: color.divider }} />
-        {[['all', 'كل الحالات'], ['confirmed', 'مؤكدة'], ['cancelled', 'ملغاة']].map(([k, l]) => <button key={k} aria-pressed={st === k} onClick={() => setSt(k)} style={chip(st === k)}>{l}</button>)}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input type="search" aria-label="ابحث باسم الطالب أو المعلم أو الحلقة" placeholder="ابحث باسم الطالب أو المعلم أو الحلقة" value={text} onChange={(e) => setText(e.target.value)}
+          style={{ flex: '1 1 240px', minHeight: 48, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15 }} />
+        <FilterControls fields={BOOKING_FIELDS} q={q} update={update} />
       </div>
-      <Table cols={['الموعد (القاهرة)', 'الطالب', 'المعلم', 'النوع', 'الحضور', 'الحالة', 'إجراء']} loading={L.loading} err={L.err} empty={!L.data?.results.length} retry={() => void L.reload()}>
-        {L.data?.results.map((b) => (
-          <tr key={b.id} style={{ borderTop: `1px solid ${color.divider}` }}>
-            <th scope="row" style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700 }}>{dateTime(b.starts_at)}</th>
-            <td style={{ padding: '12px 16px' }}>{b.student.name}</td>
-            <td style={{ padding: '12px 16px' }}>{b.teacher.name}</td>
-            <td style={{ padding: '12px 16px' }}>{b.circle ? `حلقة: ${b.circle}` : b.kind === 'group' ? 'جماعية' : 'فردية'}</td>
-            <td style={{ padding: '12px 16px' }}>{ATT[b.attendance] ?? '—'}</td>
-            <td style={{ padding: '12px 16px' }}>{pill(BOOK_ST[b.status])}{b.status === 'cancelled' && b.cancel_reason && <span style={{ display: 'block', fontSize: 12, color: color.muted, marginTop: 4 }}>{b.cancelled_by ? `${b.cancelled_by}: ` : ''}{b.cancel_reason}</span>}</td>
-            <td style={{ padding: '8px 16px' }}>
-              {b.status === 'confirmed' && new Date(b.starts_at) > new Date()
-                ? <button onClick={() => setCancel(b)} aria-label={`إلغاء حجز ${b.student.name}`} style={smallBtn('danger')}>إلغاء</button> : <span style={{ color: color.faint }}>—</span>}
-            </td>
-          </tr>
-        ))}
-      </Table>
-      <Pager page={L.page} total={L.data?.count ?? 0} setPage={L.setPage} />
+      <div role="group" aria-label="تصفية" style={{ display: 'flex', gap: 8, overflowX: 'auto', flexWrap: 'wrap' }}>
+        {([['upcoming', 'القادمة'], ['past', 'السابقة']] as const).map(([k, l]) => <button key={k} aria-pressed={when === k} onClick={() => update({ when: k === 'upcoming' ? '' : k, sort: '' })} style={chip(when === k)}>{l}</button>)}
+        <span style={{ width: 1, background: color.divider }} />
+        {[['all', 'كل الحالات'], ['confirmed', 'مؤكدة'], ['cancelled', 'ملغاة']].map(([k, l]) => <button key={k} aria-pressed={st === k} onClick={() => update({ status: k === 'all' ? '' : k })} style={chip(st === k)}>{l}</button>)}
+      </div>
+      <SelectionSummary sel={sel} pageIds={L.data?.results.map((r) => r.id) ?? []} total={L.data?.count ?? 0} />
+      <DataView rows={L.data?.results} cols={cols} sel={sel} total={L.data?.count ?? 0} rowLabel={(b) => `${b.student.name} ${dateTime(b.starts_at)}`} sort={sort}
+        setSort={(x) => update({ sort: x })} loading={L.loading} err={L.err} retry={() => void L.reload()} />
+      <Pager page={page} total={L.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
+      <BulkBar resource="bookings" sel={sel} total={L.data?.count ?? 0} actions={BOOKING_ACTIONS} filter={filter} onDone={() => void L.reload()} />
       {cancel && (
         <ReasonDialog title="إلغاء الحجز" body={`سيُلغى حجز ${cancel.student.name} مع ${cancel.teacher.name} (${dateTime(cancel.starts_at)}) ويُبلَّغ الطالب. يبقى السجل محفوظًا.`} ok="إلغاء الحجز"
           onClose={() => setCancel(null)} run={async (r) => { await A.cancelBooking(cancel.id, r); toast('أُلغي الحجز وأُبلغ الطالب'); await L.reload(); }} />

@@ -23,6 +23,9 @@ class AccountStatus(models.TextChoices):
     PENDING = "pending", "بانتظار الاعتماد"
     ACTIVE = "active", "نشط"
     SUSPENDED = "suspended", "موقوف"
+    # Soft delete: cannot sign in or recover a password; every record of the person (tasks, recordings
+    # metadata, feedback, attendance, audit) is kept. An admin can reactivate the account.
+    ARCHIVED = "archived", "مؤرشف"
 
 
 class UserManager(BaseUserManager):

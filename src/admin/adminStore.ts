@@ -19,13 +19,20 @@ export type Dialog =
   | { kind: 'confirm'; title: string; body: string; ok: string; onOk: () => void }
   | null;
 
+const SECTIONS: Section[] = ['overview', 'students', 'teachers', 'parents', 'circles', 'bookings', 'lectures', 'quizzes', 'subs', 'settings'];
+/** `#/admin/<section>?…` → the section (list filters after `?` belong to that section's screen). */
+export function sectionFromHash(): Section | null {
+  const m = window.location.hash.match(/^#\/admin\/([a-z]+)/);
+  return m && SECTIONS.includes(m[1] as Section) ? (m[1] as Section) : null;
+}
+
 const initial = () => ({
   authed: false,
   /** Live mode: the signed-in admin as the server reports it; `restoring` while the session is checked. */
   me: null as E.Me | null,
   restoring: LIVE,
   login: { email: '', pw: '', otp: '', needOtp: false, errors: {} as Record<string, string | null>, loading: false },
-  sec: 'overview' as Section,
+  sec: (sectionFromHash() ?? 'overview') as Section,
   q: '', f: 'all' as 'all' | Status, extra: 'all', page: 1,
   toast: null as string | null,
   dialog: null as Dialog,
@@ -51,8 +58,10 @@ export function toast(m: string) {
   toastTimer = setTimeout(() => set({ toast: null }), 2600);
 }
 
-export function goSection(sec: Section) {
+export function goSection(sec: Section, fromHistory = false) {
   set({ sec, q: '', f: 'all', extra: 'all', page: 1, dialog: null });
+  // The section lives in the URL so refresh and back/forward return to it (filters follow after `?`).
+  if (!fromHistory && window.location.hash.split('?')[0] !== `#/admin/${sec}`) window.history.pushState(null, '', `#/admin/${sec}`);
   window.scrollTo({ top: 0 });
 }
 
