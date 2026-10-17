@@ -96,3 +96,25 @@ def test_off_without_keys_and_public_settings_csp_readiness(world, settings, cli
     assert "secret" not in json.dumps(pub) and "cid" not in json.dumps(pub)        # credentials never leave the server
     assert "https://verses.quran.foundation" in build_csp().split("media-src")[1].split(";")[0]
     assert client.get("/api/ready").json()["features"]["ayah_audio"] == "quran_foundation_prelive"
+
+
+def test_requests_carry_a_named_user_agent(monkeypatch):
+    """CDN firewalls often refuse Python's default agent; every QF request names the app."""
+    import io
+    import urllib.request
+
+    seen = {}
+
+    class R(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, timeout=0):
+        seen["ua"] = req.get_header("User-agent")
+        return R(b'{"ok": true}')
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    assert qf_audio._http(urllib.request.Request("https://apis-prelive.quran.foundation/x")) == {"ok": True}
+    assert seen["ua"].startswith("HalqaQuranApp/")

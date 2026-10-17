@@ -110,10 +110,16 @@ export default function Mushaf() {
             </div>
             <p style={muted(12, { margin: '10px 0 0', lineHeight: 1.7 })}>
               {LIVE
-                ? M.src ? `النص: ${M.src.edition} — ${M.src.name}، الإصدار ${M.src.version}، رواية ${M.src.narration}. ${M.src.attribution}` : 'النص: النسخة المعتمدة المحفوظة على خادم الحلقة.'
+                ? M.src ? `النص: ${M.src.edition} — ${M.src.name}، الإصدار ${M.src.version}، رواية ${M.src.narration}.` : 'النص: النسخة المعتمدة المحفوظة على خادم الحلقة.'
                 : 'النص: رسم المصحف العثماني من مشروع Tanzil عبر واجهة alquran.cloud.'}
               {' '}{audioName ? `الصوت: ${audioName}.` : 'التلاوة الصوتية متوقفة حتى اعتماد مصدر مرخّص.'} اضغط على أي آية لتحديد النطاق أو وضع علامة.
             </p>
+            {LIVE && M.src?.attribution && (
+              <details style={{ marginTop: 6 }}>
+                <summary style={{ cursor: 'pointer', fontSize: 12, color: color.muted, minHeight: 32 }}>حقوق النص القرآني (Tanzil)</summary>
+                <p dir="ltr" style={muted(11, { margin: '6px 0 0', lineHeight: 1.6, whiteSpace: 'pre-wrap', textAlign: 'left' })}>{M.src.attribution}</p>
+              </details>
+            )}
           </>
         )}
       </div>
