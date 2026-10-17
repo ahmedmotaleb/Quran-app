@@ -207,6 +207,7 @@ REST_FRAMEWORK = {
         "recovery": env("THROTTLE_RECOVERY", "5/hour"),
         "booking": env("THROTTLE_BOOKING", "30/min"),
         "upload": env("THROTTLE_UPLOAD", "20/hour"),
+        "quran_audio": env("THROTTLE_QURAN_AUDIO", "120/min"),
     },
     "EXCEPTION_HANDLER": "apps.core.exceptions.api_exception_handler",
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
@@ -280,6 +281,18 @@ AYAH_AUDIO_URL = os.environ.get("AYAH_AUDIO_URL", "").strip()
 AYAH_AUDIO_NAME = os.environ.get("AYAH_AUDIO_NAME", "").strip()
 if AYAH_AUDIO_URL and not (AYAH_AUDIO_URL.startswith("https://") and "{surah}" in AYAH_AUDIO_URL and "{ayah}" in AYAH_AUDIO_URL):
     raise ImproperlyConfigured("AYAH_AUDIO_URL must be an https URL containing {surah} and {ayah}.")
+# Licensed source (owner decision, 17 October 2026): Quran Foundation Content API (Quran.com). The server gets the
+# ayah audio URLs with OAuth2 client credentials (the secret never reaches browsers); browsers stream the files from
+# Quran Foundation's CDN. Terms: in-app use allowed; cache at most 1 week (we keep URL lists 1 day); credit QF.
+# QF_ENV=prelive serves only Al-Fatihah and Al-Baqarah until production access is approved.
+QF_CLIENT_ID = os.environ.get("QF_CLIENT_ID", "").strip()
+QF_CLIENT_SECRET = os.environ.get("QF_CLIENT_SECRET", "").strip()
+QF_ENV = os.environ.get("QF_ENV", "prelive").strip() or "prelive"
+if QF_ENV not in ("prelive", "production"):
+    raise ImproperlyConfigured("QF_ENV must be prelive or production.")
+QF_RECITATION_ID = int(os.environ.get("QF_RECITATION_ID", "7") or 7)  # 7 = Mishari Rashid al-Afasy (Murattal)
+QF_RECITER_NAME = os.environ.get("QF_RECITER_NAME", "مشاري راشد العفاسي").strip()
+QF_AUDIO_HOSTS = ("verses.quran.foundation", "verses.quran.com", "download.quranicaudio.com")
 MEDIA_MAX_SECONDS = {"recitation": 20 * 60, "voice_feedback": 5 * 60, "lesson_file": 4 * 3600}
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024  # larger uploads spool to a temp file
 

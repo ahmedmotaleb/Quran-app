@@ -64,7 +64,7 @@ def test_errors_are_arabic_with_request_id(client):
 def test_ready_reports_unconfigured_features(client, settings):
     settings.MEDIA_STORAGE = "none"
     f = client.get("/api/ready").json()["features"]
-    assert f == {"media_storage": "not_configured", "email": "log_only", "push": "not_configured", "quran_text": "not_imported"}
+    assert f == {"media_storage": "not_configured", "email": "log_only", "push": "not_configured", "ayah_audio": "off", "quran_text": "not_imported"}
 
 
 @pytest.mark.django_db

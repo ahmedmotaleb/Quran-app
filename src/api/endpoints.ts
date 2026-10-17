@@ -38,7 +38,7 @@ export const mfaSetup = () => api<{ secret: string; otpauth_uri: string }>('POST
 export const mfaConfirm = (otp: string) => api<{ mfa_enabled: boolean }>('POST', 'admin/mfa/confirm', { otp });
 export const me = () => api<Me>('GET', 'me');
 export const publicSettings = () => api<{ cancel_hours: number; open_signup: boolean; max_recording_seconds: number; join_minutes: number; org_name: string;
-  ayah_audio: { url: string; name: string } | null; support_whatsapp: string; show_support_button: boolean }>('GET', 'settings/public');
+  ayah_audio: AyahAudioCfg | null; support_whatsapp: string; show_support_button: boolean }>('GET', 'settings/public');
 export const updateMe = (patch: Partial<Pick<Me, 'full_name' | 'timezone' | 'phone'>>) => api<Me>('PATCH', 'me', patch);
 export const saveOnboarding = (d: { level: string; daily_goal: string; preferred_days: string[]; preferred_period: string }) =>
   api<Me>('PUT', 'me/onboarding', d);
@@ -227,3 +227,7 @@ const rangeQs = (from?: string, to?: string) => [from && `from=${from}`, to && `
 export const myProgress = (from?: string, to?: string) => api<ApiProgress>('GET', `progress/me?${rangeQs(from, to)}`);
 export const studentProgress = (id: number, from?: string, to?: string) => api<ApiProgress>('GET', `teacher/students/${id}/progress?${rangeQs(from, to)}`);
 export const childProgress = (id: number, from?: string, to?: string) => api<ApiProgress>('GET', `parent/children/${id}/progress?${rangeQs(from, to)}`);
+
+/* ---- ayah audio (licensed source: Quran Foundation / Quran.com) ---- */
+export interface AyahAudioCfg { provider?: 'qf' | 'template'; url: string; name: string }
+export const surahAudio = (n: number) => api<{ surah: number; reciter: string; source: string; ayahs: Record<string, string> }>('GET', `quran/audio/${n}`);

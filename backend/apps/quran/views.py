@@ -112,3 +112,28 @@ class BookmarkDetail(APIView):
     def delete(self, request, pk):
         self._get(request, pk).delete()
         return Response(status=204)
+
+
+class SurahAudio(APIView):
+    """Ayah audio URLs for one surah from the licensed source (Quran Foundation / Quran.com). Signed-in users only,
+    so the server is not an open proxy; the URL list is cached for a day."""
+
+    throttle_scope = "quran_audio"
+
+    def get(self, request, number):
+        from django.conf import settings
+
+        from . import qf_audio
+
+        if not 1 <= number <= 114:
+            raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
+        try:
+            files = qf_audio.surah_audio(number)
+        except qf_audio.AudioUnavailable:
+            raise ApiError("audio_unavailable", "التلاوة غير متاحة الآن. حاول بعد قليل.", 503) from None
+        if not files:
+            msg = ("التلاوة متاحة حاليًا للفاتحة والبقرة فقط حتى تكتمل الموافقة على المصدر."
+                   if settings.QF_ENV == "prelive" else "لا تتوفر تلاوة لهذه السورة من المصدر.")
+            raise ApiError("audio_not_available_for_surah", msg, 404)
+        return Response({"surah": number, "reciter": settings.QF_RECITER_NAME, "source": "Quran.com (Quran Foundation)",
+                         "ayahs": {str(k): v for k, v in sorted(files.items())}})

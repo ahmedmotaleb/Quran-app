@@ -47,13 +47,17 @@ class HealthCheckMiddleware:
 
 
 def _audio_origin() -> str:
-    """The approved ayah-audio host, if one is configured (AYAH_AUDIO_URL); nothing otherwise."""
+    """The approved ayah-audio hosts: Quran Foundation's CDN when it is configured, or the AYAH_AUDIO_URL host."""
     from urllib.parse import urlsplit
 
     from django.conf import settings
 
-    u = urlsplit(settings.AYAH_AUDIO_URL) if settings.AYAH_AUDIO_URL else None
-    return f" https://{u.hostname}" if u and u.hostname else ""
+    hosts = []
+    if settings.QF_CLIENT_ID and settings.QF_CLIENT_SECRET:
+        hosts += list(settings.QF_AUDIO_HOSTS)
+    if settings.AYAH_AUDIO_URL and (h := urlsplit(settings.AYAH_AUDIO_URL).hostname):
+        hosts.append(h)
+    return "".join(f" https://{h}" for h in hosts)
 
 
 def build_csp() -> str:

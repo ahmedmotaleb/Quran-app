@@ -152,6 +152,6 @@ def test_ayah_audio_is_off_until_a_source_is_approved(client, settings):
     assert "everyayah" not in build_csp() and "alquran" not in build_csp()
     settings.AYAH_AUDIO_URL = "https://audio.example.org/r/{surah}{ayah}.mp3"
     settings.AYAH_AUDIO_NAME = "قارئ مرخّص"
-    assert client.get("/api/v1/settings/public").json()["ayah_audio"] == {"url": settings.AYAH_AUDIO_URL, "name": "قارئ مرخّص"}
+    assert client.get("/api/v1/settings/public").json()["ayah_audio"] == {"provider": "template", "url": settings.AYAH_AUDIO_URL, "name": "قارئ مرخّص"}
     media = build_csp().split("media-src")[1].split(";")[0]
     assert "https://audio.example.org" in media
