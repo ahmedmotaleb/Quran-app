@@ -50,8 +50,24 @@ jobs:
           fi
           echo "::notice title=Alert drill::events in Cloud Logging: ${n:-none}"
           [ "$(wc -w <<<"$n")" -ge 6 ] || { echo "::error title=Alert drill::expected 6 synthetic events"; exit 1; }
-          policies=$(gcloud alpha monitoring policies list --project "$P" --filter 'displayName:"Halqa:"' --format 'value(displayName)' 2>/dev/null | wc -l)
-          echo "::notice title=Alert drill::$policies Halqa alert policies exist. Expect emails for 'operational failure' and 'sign-in abuse' within ~10 minutes."
+          # Monitoring REST API (the gcloud "alpha" component is not installed on GitHub runners).
+          API="https://monitoring.googleapis.com/v3/projects/$P"; H="Authorization: Bearer $(gcloud auth print-access-token)"
+          curl -fsS -H "$H" "$API/alertPolicies?pageSize=200" -o /tmp/pol.json || { echo "::error title=Alert drill::cannot list alert policies (monitoring.viewer missing? run deploy/gcp-ops.sh)"; exit 1; }
+          curl -fsS -H "$H" "$API/notificationChannels?pageSize=50" -o /tmp/ch.json || echo '{}' > /tmp/ch.json
+          python3 - <<'PY'
+          import json
+          pol = [p for p in json.load(open("/tmp/pol.json")).get("alertPolicies", []) if p["displayName"].startswith("Halqa:")]
+          ch = {c["name"]: c for c in json.load(open("/tmp/ch.json")).get("notificationChannels", [])}
+          used = {n for p in pol for n in p.get("notificationChannels", [])}
+          to = sorted({ch[n]["labels"].get("email_address", "?") for n in used if n in ch})
+          off = [p["displayName"] for p in pol if not p.get("enabled", True)]
+          print(f"::notice title=Alert drill::{len(pol)} Halqa alert policies; emails go to: {', '.join(to) or 'NO CHANNEL'}"
+                + (f"; disabled: {', '.join(off)}" if off else "")
+                + ". Expect 'Halqa: operational failure' and 'Halqa: sign-in abuse' within ~10 minutes (check spam).")
+          if not pol or not to:
+              print("::error title=Alert drill::no Halqa alert policies or no email channel: run deploy/gcp-ops.sh in Cloud Shell")
+              raise SystemExit(1)
+          PY
 
   run:
     if: inputs.task != 'alert-drill'
