@@ -37,9 +37,28 @@ def configured() -> bool:
     return bool(settings.QF_CLIENT_ID and settings.QF_CLIENT_SECRET)
 
 
+# A named client: Python's default "Python-urllib" agent is commonly refused by CDN firewalls.
+USER_AGENT = "HalqaQuranApp/1.0 (+https://halqa-835293468002.europe-west1.run.app; halqa.app.eg@gmail.com)"
+
+
 def _http(req: urllib.request.Request) -> dict:
+    req.add_header("User-Agent", USER_AGENT)
     with urllib.request.urlopen(req, timeout=10) as r:  # noqa: S310 (fixed https hosts above)
         return json.loads(r.read().decode())
+
+
+def _why(e: Exception) -> dict:
+    """What went wrong, for the logs: status and the start of the provider's error text (never our credentials)."""
+    out = {"error": type(e).__name__}
+    if isinstance(e, urllib.error.HTTPError):
+        out["status"] = e.code
+        try:
+            out["detail"] = e.read(300).decode("utf-8", "replace")
+        except Exception:  # noqa: BLE001
+            pass
+    elif isinstance(e, urllib.error.URLError):
+        out["detail"] = str(e.reason)[:200]
+    return out
 
 
 def _token(force: bool = False) -> str:
@@ -53,7 +72,7 @@ def _token(force: bool = False) -> str:
     try:
         d = _http(req)
     except (urllib.error.URLError, ValueError, TimeoutError) as e:
-        log.error("qf_token_failed", extra={"error": type(e).__name__})
+        log.error("qf_token_failed", extra={"env": settings.QF_ENV, **_why(e)})
         raise AudioUnavailable from None
     t = d.get("access_token")
     if not t:
@@ -73,10 +92,10 @@ def _get(path: str, query: dict) -> dict:
         except urllib.error.HTTPError as e:
             if e.code == 401 and attempt == 0:
                 continue  # token expired early: request a new one, once
-            log.error("qf_request_failed", extra={"status": e.code})
+            log.error("qf_request_failed", extra={"env": settings.QF_ENV, "path": path, **_why(e)})
             raise AudioUnavailable from None
         except (urllib.error.URLError, ValueError, TimeoutError) as e:
-            log.error("qf_request_failed", extra={"error": type(e).__name__})
+            log.error("qf_request_failed", extra={"env": settings.QF_ENV, "path": path, **_why(e)})
             raise AudioUnavailable from None
     raise AudioUnavailable
 
