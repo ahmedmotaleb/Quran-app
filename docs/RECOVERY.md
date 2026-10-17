@@ -37,8 +37,8 @@ The checks:
   `RECORDING_RETENTION_HOURS` setting.
 - **Recordings are not backed up** for the pilot. Losing the R2 bucket would lose audio, but scores, feedback text
   and progress stay in the database. Revisit before recordings exceed R2's free 10 GB or before a paid launch.
-- **Still to do:** set the `BACKUP_PASSPHRASE` repository secret so the nightly drill also keeps encrypted copies
-  (GitHub → Settings → Secrets and variables → Actions). Keep the same passphrase in a password manager.
+- **Kept copies:** `BACKUP_PASSPHRASE` is set (17 October 2026); every nightly run keeps an encrypted copy for 30
+  days. The passphrase must also be in the owner's password manager: without it the copies cannot be opened.
 
 ## Restore runbook
 
