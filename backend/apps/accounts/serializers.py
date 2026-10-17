@@ -145,8 +145,8 @@ class StatusChangeSerializer(serializers.Serializer):
     reason = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
 
     def validate(self, attrs):
-        if attrs["status"] == AccountStatus.SUSPENDED and not attrs["reason"].strip():
-            raise serializers.ValidationError({"reason": ["اذكر سبب الإيقاف."]})
+        if attrs["status"] in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED) and not attrs["reason"].strip():
+            raise serializers.ValidationError({"reason": ["اذكر سبب الإيقاف أو الأرشفة."]})
         return attrs
 
 

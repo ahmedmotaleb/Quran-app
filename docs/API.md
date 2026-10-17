@@ -68,11 +68,58 @@ server logs.
 | `GET attempts/{id}` | scoped (owner, teacher, linked parent, admin) | |
 | `GET teacher/grading`, `POST answers/{id}/grade` | the student's teacher | recitation / short answers; points 0..question points |
 | `GET notifications`, `POST notifications/read` | signed in | own only |
-| `GET, POST admin/users` | admin | filters `role,status,q,unlinked=1`; created users set their password via recovery |
-| `POST admin/users/{id}/status` | admin | suspension requires a reason; revokes tokens |
+| `GET, POST admin/users` | admin | filters `role,status,q,unlinked=1` and the advanced filters below; `sort`; created users set their password via recovery |
+| `POST admin/users/{id}/status` | admin | `pending/active/suspended/archived`; suspension and archiving require a reason and revoke tokens |
+| `POST admin/{resource}/bulk-action` | admin | bulk actions, below |
 | `POST admin/teacher-assignments`, `POST admin/teacher-assignments/{id}/end` | admin | |
 | `POST admin/guardian-links`, `POST admin/guardian-links/{id}/revoke` | admin | |
 | `POST admin/mfa/setup`, `POST admin/mfa/confirm` | admin | TOTP (RFC 6238) |
+
+## Admin lists: search, filters, sort, bulk actions
+
+Every admin list takes `q` (name, email, phone or title; a number also matches the record id), `page`, `page_size`
+(max 100) and `sort` (`key` ascending, `-key` descending). Filter values are validated (`invalid_filter`, 400); dates
+are Cairo calendar days `YYYY-MM-DD`.
+
+| List | Filters | Sort keys |
+| --- | --- | --- |
+| `admin/users` | `role`, `status` (archived only when asked for), `joined_from/to`, `active_from/to` (last sign-in), `approved`, `has_students`, `has_slots`, `circle`, `teacher`, `level`, `upcoming`, `overdue_review`, `linked`, `unlinked` | `name`, `email`, `joined`, `last_login`, `status` |
+| `admin/circles` | `state`, `teacher`, `level`, `has_upcoming`, `created_from/to` | `name`, `updated`, `created`, `capacity`, `state` |
+| `admin/bookings` | `when` (`upcoming`/`past`/`all`), `status`, `attendance` (incl. `unmarked`), `teacher`, `student`, `circle`, `kind`, `from/to` | `starts`, `student`, `teacher`, `status`, `created` |
+| `admin/courses` | `state`, `teacher`, `topic`, `level`, `created_from/to` | `title`, `created`, `updated`, `state` |
+| `admin/tests` | `state`, `course`, `teacher` (author), `level`, `created_from/to` | `title`, `created`, `updated`, `state` |
+| `admin/courses/{id}/enrollments` | `status`, `q` | `created`, `student` |
+
+**`POST admin/{resource}/bulk-action`**: one request per bulk action, never one request per record.
+
+```json
+{"action": "suspend", "ids": [3, 4, 9], "reason": "…"}
+{"action": "suspend", "filter": {"role": "student", "status": "active"}, "expected": 235, "exclude_ids": [7], "reason": "…"}
+```
+
+Response: `{"requested": 25, "success": 23, "skipped": 1, "failed": 1, "results": [{"id", "label", "outcome", "code", "message"}], "errors": [...]}`.
+`skipped` = already in that state; `failed` = refused (protected history, wrong state, not found).
+
+- **ids** (≤ 500) or **filter** (the same validated filter as the list, ≤ 5,000 matches). In filter mode `expected`
+  must equal the current number of matches (minus `exclude_ids`); otherwise `409 results_changed` with the new count,
+  and nothing changes.
+- Each record runs in its own transaction: a failure rolls back that record only.
+- Destructive actions on 10 or more records need `"confirm": "حذف"` (`400 confirm_required`).
+- One audit event per request: `admin.bulk_<action>` with resource, mode, counts, affected ids, filter and reason.
+
+| Resource | Actions | Never |
+| --- | --- | --- |
+| `users` (students, teachers, parents) | `activate`, `suspend`*, `archive`* (soft delete), `approve`, `unapprove`* (teachers only) | delete; admins are never targets |
+| `circles` | `publish`, `disable`*, `draft`, `delete` (draft with no sessions) | delete with sessions |
+| `sessions` | `cancel`* (future only; bookings cancelled, students notified) | delete |
+| `bookings` | `cancel`* (future only; student notified) | delete; past bookings and attendance |
+| `courses` | `publish`, `draft`, `archive`*, `delete` (draft with no lessons, enrollments or quizzes) | delete with history |
+| `lessons` | `publish`, `draft`, `archive`, `delete` (draft nobody completed, no task points to it) | delete with completions |
+| `enrollments` | `withdraw`, `complete` | delete |
+| `tests` | `publish`, `close`, `draft`, `delete` (draft nobody attempted) | delete with attempts |
+| `questions` | `remove` (retired: answers keep pointing at it) | hard delete |
+
+\* requires `reason` (3+ characters). No bulk endpoint exists for the audit log, the Quran text, recordings or notifications.
 
 ## Permission matrix (learning records: assignments, bookings, feedback)
 

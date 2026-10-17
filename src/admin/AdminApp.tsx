@@ -3,7 +3,7 @@ import { color, font } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import type { Status } from './adminData';
-import { adminLogin, adminLogout, adminRestore, goSection, mfaFinish, mfaStart, setAdmin, useAdmin, type AdminState, type Section } from './adminStore';
+import { adminLogin, adminLogout, adminRestore, goSection, sectionFromHash, mfaFinish, mfaStart, setAdmin, useAdmin, type AdminState, type Section } from './adminStore';
 import { LIVE, type ApiError } from '@/api/client';
 import * as LA from './live/api';
 const PeopleLive = lazy(() => import('./live/People'));
@@ -150,6 +150,11 @@ function Portal() {
   const liveOther = LIVE ? LIVE_OTHER[s.sec] : undefined;
   const demoBadge = LIVE && !liveRole && !liveOther && s.sec !== 'overview';
   useEffect(() => { if (LIVE && s.sec === 'subs') goSection('overview'); }, [s.sec]);
+  useEffect(() => { // browser back/forward between sections
+    const on = () => { const x = sectionFromHash() ?? 'overview'; if (x !== useAdmin.getState().sec) goSection(x, true); };
+    window.addEventListener('popstate', on);
+    return () => window.removeEventListener('popstate', on);
+  }, []);
   const label = NAV.find((n) => n[0] === s.sec)![1];
 
   const nav = (

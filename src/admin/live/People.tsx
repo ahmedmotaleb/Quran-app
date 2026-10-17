@@ -2,26 +2,29 @@
  * Live Students / Teachers / Parents sections: server-side search, status filter and pagination; a detail
  * panel whose every action is a server call. The screen only changes after the server confirms.
  */
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { color, font } from '@/theme/tokens';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import { Icon } from '@/components/Icon';
 import type { ApiError } from '@/api/client';
-import { card } from '../AdminTables';
 import { toast } from '../adminStore';
 import * as A from './api';
 import { chip, date, errMsg, LinkBox, Modal, ReasonDialog, smallBtn } from './ui';
+import {
+  BulkBar, type BulkDef, circleOptions, type Col, DataView, type FilterField, FilterControls, filterOf, items, listParams, Pager,
+  SelectionSummary, teacherOptions, useListUrl, useSelection, useServerList, useUrlSearch,
+} from './list';
 
-const PAGE = 20;
-const ROLE_L: Record<A.Role, { one: string; many: string; search: string }> = {
-  student: { one: 'طالب', many: 'الطلاب', search: 'ابحث بالاسم أو البريد' },
-  teacher: { one: 'معلم', many: 'المعلمون', search: 'ابحث عن معلم بالاسم أو البريد' },
-  parent: { one: 'ولي أمر', many: 'أولياء الأمور', search: 'ابحث عن ولي أمر بالاسم أو البريد' },
+const ROLE_L: Record<A.Role, { one: string; many: string; search: string; sec: string }> = {
+  student: { one: 'طالب', many: 'الطلاب', search: 'ابحث بالاسم أو البريد أو الهاتف أو الرقم', sec: 'students' },
+  teacher: { one: 'معلم', many: 'المعلمون', search: 'ابحث عن معلم بالاسم أو البريد', sec: 'teachers' },
+  parent: { one: 'ولي أمر', many: 'أولياء الأمور', search: 'ابحث عن ولي أمر بالاسم أو البريد', sec: 'parents' },
 };
 const ST: Record<A.AccountStatus, { l: string; bg: string; fg: string }> = {
   active: { l: 'نشط', bg: '#D8E5D7', fg: '#124C46' },
   pending: { l: 'بانتظار الاعتماد', bg: '#F3E6CC', fg: '#6B470C' },
   suspended: { l: 'موقوف', bg: '#F5E1DC', fg: '#8E2F20' },
+  archived: { l: 'مؤرشف', bg: '#E4E1DA', fg: '#45534E' },
 };
 
 function Pill({ st }: { st: A.AccountStatus }) {
@@ -29,98 +32,110 @@ function Pill({ st }: { st: A.AccountStatus }) {
   return <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700, background: t.bg, color: t.fg, whiteSpace: 'nowrap' }}>{t.l}</span>;
 }
 
+const STATUS_OPTS: [string, string][] = [['active', 'نشط'], ['suspended', 'موقوف'], ['pending', 'بانتظار الاعتماد'], ['archived', 'مؤرشف']];
+const LEVELS: [string, string][] = [['مبتدئ', 'مبتدئ'], ['متوسط', 'متوسط'], ['متقدم', 'متقدم']];
+const FIELDS: Record<A.Role, FilterField[]> = {
+  student: [
+    { key: 'status', label: 'الحالة', type: 'select', options: STATUS_OPTS },
+    { key: 'teacher', label: 'المعلم', type: 'remote', load: teacherOptions },
+    { key: 'circle', label: 'الحلقة', type: 'remote', load: circleOptions },
+    { key: 'level', label: 'المستوى', type: 'select', options: LEVELS },
+    { key: 'upcoming', label: 'جلسة قادمة', type: 'bool', yes: 'لديه جلسة قادمة', no: 'دون جلسة قادمة' },
+    { key: 'overdue_review', label: 'المراجعة', type: 'bool', yes: 'لديه مراجعة متأخرة', no: 'لا مراجعات متأخرة' },
+    { key: 'joined', label: 'تاريخ الانضمام', type: 'dates', from: 'joined_from', to: 'joined_to' },
+    { key: 'active', label: 'آخر نشاط', type: 'dates', from: 'active_from', to: 'active_to' },
+  ],
+  teacher: [
+    { key: 'status', label: 'الحالة', type: 'select', options: STATUS_OPTS },
+    { key: 'approved', label: 'الاعتماد', type: 'bool', yes: 'معتمد', no: 'غير معتمد' },
+    { key: 'has_students', label: 'الطلاب', type: 'bool', yes: 'لديه طلاب', no: 'دون طلاب' },
+    { key: 'has_slots', label: 'المواعيد', type: 'bool', yes: 'لديه مواعيد قادمة', no: 'دون مواعيد قادمة' },
+    { key: 'circle', label: 'الحلقة', type: 'remote', load: circleOptions },
+    { key: 'joined', label: 'تاريخ الانضمام', type: 'dates', from: 'joined_from', to: 'joined_to' },
+    { key: 'active', label: 'آخر نشاط', type: 'dates', from: 'active_from', to: 'active_to' },
+  ],
+  parent: [
+    { key: 'status', label: 'الحالة', type: 'select', options: STATUS_OPTS },
+    { key: 'linked', label: 'الأبناء', type: 'bool', yes: 'مرتبط بابن', no: 'دون أبناء مرتبطين' },
+    { key: 'joined', label: 'تاريخ الانضمام', type: 'dates', from: 'joined_from', to: 'joined_to' },
+    { key: 'active', label: 'آخر نشاط', type: 'dates', from: 'active_from', to: 'active_to' },
+  ],
+};
+
+function peopleActions(role: A.Role): BulkDef[] {
+  const base: BulkDef[] = [
+    { key: 'activate', label: 'تفعيل', tone: 'primary', body: (n) => `سيُفعَّل ${items(n)} ويستطيع أصحابها الدخول.`, ok: (n) => `تفعيل ${items(n)}` },
+    { key: 'suspend', label: 'تعطيل', reason: true, title: 'تعطيل الحسابات', body: (n) => `سيُمنع أصحاب ${items(n)} من الدخول فورًا حتى إعادة التفعيل. لا يُحذف أي سجل.`, ok: (n) => `تعطيل ${items(n)}` },
+    { key: 'archive', label: 'أرشفة', tone: 'danger', reason: true, destructive: true, title: 'تأكيد الأرشفة',
+      body: (n) => `أنت على وشك أرشفة ${items(n)}. لن يستطيع أصحابها الدخول أو استعادة كلمة المرور. تبقى مهامهم وتقييماتهم وحضورهم محفوظة، ويمكن إعادة التفعيل لاحقًا.`, ok: (n) => `أرشفة ${items(n)}` },
+  ];
+  if (role === 'teacher') base.splice(1, 0,
+    { key: 'approve', label: 'اعتماد', tone: 'primary', body: (n) => `سيظهر ${items(n)} للطلاب ويمكن حجز مواعيدهم.`, ok: (n) => `اعتماد ${items(n)}` },
+    { key: 'unapprove', label: 'سحب الاعتماد', reason: true, body: (n) => `لن يظهر ${items(n)} للطلاب ولن تُقبل حجوزات جديدة. الحجوزات الحالية تبقى.`, ok: (n) => `سحب اعتماد ${items(n)}` });
+  return base;
+}
+
 /* ---------------- Section ---------------- */
 export default function PeopleLive({ role }: { role: A.Role }) {
-  const [q, setQ] = useState(''); const [dq, setDq] = useState('');
-  const [f, setF] = useState<string>('all'); const [page, setPage] = useState(1);
-  const [data, setData] = useState<{ rows: A.Person[]; total: number } | null>(null);
+  const L = ROLE_L[role];
+  const { q, update } = useListUrl(L.sec);
+  const [text, setText] = useUrlSearch(q, update);
+  const sort = q.sort ?? '-joined';
+  const page = Number(q.page ?? 1) || 1;
+  const params = { ...listParams(q), role, sort, page: String(page) };
+  const R = useServerList((p) => A.listPeople(p as Parameters<typeof A.listPeople>[0]), params);
   const [counts, setCounts] = useState<A.Counts | null>(null);
-  const [err, setErr] = useState<string | null>(null); const [loading, setLoading] = useState(true);
+  const reloadCounts = useCallback(() => { A.peopleCounts(role).then(setCounts).catch(() => setCounts(null)); }, [role]);
+  useEffect(() => { reloadCounts(); }, [reloadCounts]);
+  const filter = filterOf(params);
+  const sel = useSelection(JSON.stringify(filter));
   const [open, setOpen] = useState<number | null>(null); const [adding, setAdding] = useState(false);
-  const seq = useRef(0);
+  const reload = () => { void R.reload(); reloadCounts(); };
 
-  useEffect(() => { const t = setTimeout(() => { setDq(q.trim()); setPage(1); }, 300); return () => clearTimeout(t); }, [q]);
-  const load = useCallback(async () => {
-    const my = ++seq.current; setLoading(true); setErr(null);
-    try {
-      const status = ['pending', 'active', 'suspended'].includes(f) ? f : undefined;
-      const [p, c] = await Promise.all([
-        A.listPeople({ role, q: dq, status, page, page_size: PAGE, unlinked: f === 'unlinked' ? '1' : undefined }), A.peopleCounts(role)]);
-      if (my !== seq.current) return; // a newer request superseded this one
-      setData({ rows: p.results, total: p.count }); setCounts(c);
-    } catch (e) { if (my === seq.current) setErr(errMsg(e)); } finally { if (my === seq.current) setLoading(false); }
-  }, [role, dq, f, page]);
-  useEffect(() => { void load(); }, [load]);
-
-  const filters: [string, string, number | undefined][] = [
+  const cur = q.unlinked === '1' ? 'unlinked' : q.status ?? 'all';
+  const quick: [string, string, number | undefined][] = [
     ['all', 'الكل', counts?.all], ['pending', ST.pending.l, counts?.pending], ['active', ST.active.l, counts?.active], ['suspended', ST.suspended.l, counts?.suspended],
     ...(role === 'student' ? [['unlinked', 'دون معلم', counts?.unlinked] as [string, string, number | undefined]] : []),
+    ['archived', ST.archived.l, counts?.archived],
   ];
-  const pages = Math.max(1, Math.ceil((data?.total ?? 0) / PAGE));
-  const L = ROLE_L[role];
+  const rows = R.data?.results;
+  const cols: Col<A.Person>[] = [
+    { key: 'name', label: 'الاسم', sort: 'name', primary: true, cell: (u) => (
+      <button onClick={() => setOpen(u.id)} style={{ border: 'none', background: 'transparent', padding: 0, font: 'inherit', fontWeight: 700, color: color.primary, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3, minHeight: 32, textAlign: 'right' }}>{u.full_name}</button>) },
+    { key: 'email', label: 'البريد الإلكتروني', sort: 'email', cell: (u) => <bdi dir="ltr" style={{ fontFamily: font.latin }}>{u.email}</bdi> },
+    { key: 'rel', label: role === 'student' ? 'المعلم' : role === 'teacher' ? 'الاعتماد' : 'الأبناء', cell: (u) => (
+      role === 'student' ? (u.teachers.map((t) => t.name).join('، ') || <span style={{ color: color.danger }}>غير مرتبط</span>)
+        : role === 'teacher' ? (u.approved ? 'معتمد' : <span style={{ color: color.danger }}>غير معتمد</span>)
+          : (u.children.map((c) => c.name).join('، ') || '—')) },
+    { key: 'joined', label: 'تاريخ الانضمام', sort: 'joined', cell: (u) => date(u.date_joined) },
+    { key: 'last', label: 'آخر نشاط', sort: 'last_login', cell: (u) => date(u.last_login) },
+    { key: 'status', label: 'الحالة', sort: 'status', cell: (u) => <Pill st={u.status} /> },
+  ];
 
   return (
     <>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-        <input type="search" aria-label={L.search} placeholder={L.search} value={q} onChange={(e) => setQ(e.target.value)}
+        <input type="search" aria-label={L.search} placeholder={L.search} value={text} onChange={(e) => setText(e.target.value)}
           style={{ flex: '1 1 240px', minHeight: 48, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15 }} />
+        <FilterControls fields={FIELDS[role]} q={q} update={update} />
         <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}>
           <Icon name="plus" size={18} /> {role === 'teacher' ? 'دعوة معلم' : `إضافة ${L.one}`}
         </button>
       </div>
       <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
-        {filters.map(([k, l, n]) => (
-          <button key={k} aria-pressed={f === k} onClick={() => { setF(k); setPage(1); }} style={chip(f === k)}>
+        {quick.map(([k, l, n]) => (
+          <button key={k} aria-pressed={cur === k} onClick={() => update(k === 'unlinked' ? { status: '', unlinked: '1' } : { status: k === 'all' ? '' : k, unlinked: '' })} style={chip(cur === k)}>
             {l} {n !== undefined && <span style={{ fontFamily: font.latin, opacity: 0.75 }}>({n})</span>}
           </button>
         ))}
       </div>
-      <div style={{ ...card, overflowX: 'auto' }} aria-busy={loading}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, minWidth: 720 }}>
-          <thead>
-            <tr style={{ background: color.sand, textAlign: 'right' }}>
-              {['الاسم', 'البريد الإلكتروني', role === 'student' ? 'المعلم' : role === 'teacher' ? 'الاعتماد' : 'الأبناء', 'تاريخ الانضمام', 'الحالة'].map((c) =>
-                <th key={c} scope="col" style={{ padding: '12px 16px', fontWeight: 700, color: color.body, whiteSpace: 'nowrap' }}>{c}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {data?.rows.map((u) => (
-              <tr key={u.id} style={{ borderTop: `1px solid ${color.divider}` }}>
-                <th scope="row" style={{ padding: '12px 16px', textAlign: 'right' }}>
-                  <button onClick={() => setOpen(u.id)} style={{ border: 'none', background: 'transparent', padding: 0, font: 'inherit', fontWeight: 700, color: color.primary, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3, minHeight: 32, textAlign: 'right' }}>{u.full_name}</button>
-                </th>
-                <td style={{ padding: '12px 16px', color: color.body }}><bdi dir="ltr" style={{ fontFamily: font.latin }}>{u.email}</bdi></td>
-                <td style={{ padding: '12px 16px', color: color.body }}>
-                  {role === 'student' ? (u.teachers.map((t) => t.name).join('، ') || <span style={{ color: color.danger }}>غير مرتبط</span>)
-                    : role === 'teacher' ? (u.approved ? 'معتمد' : <span style={{ color: color.danger }}>غير معتمد</span>)
-                      : (u.children.map((c) => c.name).join('، ') || '—')}
-                </td>
-                <td style={{ padding: '12px 16px', color: color.body }}>{date(u.date_joined)}</td>
-                <td style={{ padding: '12px 16px' }}><Pill st={u.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {loading && !data && <p role="status" style={{ margin: 0, padding: 28, textAlign: 'center', color: color.muted }}>جارٍ التحميل…</p>}
-        {err && (
-          <div role="alert" style={{ padding: 20, display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <span style={{ color: color.danger }}>{err}</span><button onClick={() => void load()} style={smallBtn('primary')}>إعادة المحاولة</button>
-          </div>
-        )}
-        {!err && data && data.rows.length === 0 && <p style={{ margin: 0, padding: 28, textAlign: 'center', color: color.muted }}>لا توجد نتائج مطابقة.</p>}
-      </div>
-      {data && data.total > 0 && (
-        <nav aria-label="الصفحات" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <p style={{ margin: 0, fontSize: 14, color: color.muted }}>عرض {(page - 1) * PAGE + 1}–{Math.min(page * PAGE, data.total)} من {data.total}</p>
-          {pages > 1 && <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <button disabled={page === 1} onClick={() => setPage(page - 1)} aria-label="الصفحة السابقة" style={smallBtn()}><Icon name="chevR" size={18} /></button>
-            <span style={{ fontFamily: font.latin, minWidth: 64, textAlign: 'center' }}>{page} / {pages}</span>
-            <button disabled={page === pages} onClick={() => setPage(page + 1)} aria-label="الصفحة التالية" style={smallBtn()}><Icon name="chevL" size={18} /></button>
-          </div>}
-        </nav>
-      )}
-      {open !== null && <PersonPanel id={open} onClose={() => setOpen(null)} onChanged={() => void load()} />}
-      {adding && <AddDialog role={role} onClose={() => setAdding(false)} onDone={() => void load()} />}
+      <SelectionSummary sel={sel} pageIds={rows?.map((r) => r.id) ?? []} total={R.data?.count ?? 0} />
+      <DataView rows={rows} cols={cols} sel={sel} total={R.data?.count ?? 0} rowLabel={(u) => u.full_name} sort={sort}
+        setSort={(s) => update({ sort: s })} loading={R.loading} err={R.err} retry={reload} />
+      <Pager page={page} total={R.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
+      <BulkBar resource="users" sel={sel} total={R.data?.count ?? 0} actions={peopleActions(role)} filter={filter} onDone={reload} />
+      {open !== null && <PersonPanel id={open} onClose={() => setOpen(null)} onChanged={reload} />}
+      {adding && <AddDialog role={role} onClose={() => setAdding(false)} onDone={reload} />}
     </>
   );
 }
@@ -239,7 +254,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
             {row('كلمة المرور', u.has_password ? 'معيّنة' : <span style={{ color: color.danger }}>لم تُعيَّن بعد</span>)}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
               <button onClick={() => setEdit({ full_name: u.full_name, phone: u.phone })} style={smallBtn()}>تعديل البيانات</button>
-              {u.status !== 'suspended' && <button disabled={busy} onClick={() => act(async () => setLink((await A.newSetupLink(u.id)).setup_link), 'تم إنشاء رابط تعيين كلمة المرور')} style={smallBtn()}>رابط تعيين كلمة المرور</button>}
+              {u.status !== 'suspended' && u.status !== 'archived' && <button disabled={busy} onClick={() => act(async () => setLink((await A.newSetupLink(u.id)).setup_link), 'تم إنشاء رابط تعيين كلمة المرور')} style={smallBtn()}>رابط تعيين كلمة المرور</button>}
             </div>
             {link && <LinkBox link={link} note="أرسل هذا الرابط إلى صاحب الحساب بنفسك. صالح لمرة واحدة؛ ولا تشاركه مع غيره." />}
           </div>
@@ -248,8 +263,9 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
         {section('حالة الحساب', (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {u.status === 'pending' && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'تم اعتماد الحساب')} style={smallBtn('primary')}>اعتماد الحساب</button>}
-            {u.status === 'suspended' && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'أُعيد تفعيل الحساب')} style={smallBtn('primary')}>إعادة التفعيل</button>}
-            {u.status !== 'suspended' && <button disabled={busy} onClick={() => reasonRun('إيقاف الحساب', `سيُمنع ${u.full_name} من الدخول فورًا حتى تعيد تفعيله.`, 'إيقاف الحساب', 'تم إيقاف الحساب', (r) => A.setPersonStatus(u.id, 'suspended', r))} style={smallBtn('danger')}>إيقاف الحساب</button>}
+            {(u.status === 'suspended' || u.status === 'archived') && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'أُعيد تفعيل الحساب')} style={smallBtn('primary')}>إعادة التفعيل</button>}
+            {u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('أرشفة الحساب', `لن يستطيع ${u.full_name} الدخول أو استعادة كلمة المرور. تبقى كل سجلاته محفوظة، ويمكن إعادة التفعيل لاحقًا.`, 'أرشفة الحساب', 'أُرشف الحساب', (r) => A.setPersonStatus(u.id, 'archived', r))} style={smallBtn('danger')}>أرشفة الحساب</button>}
+            {u.status !== 'suspended' && u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('إيقاف الحساب', `سيُمنع ${u.full_name} من الدخول فورًا حتى تعيد تفعيله.`, 'إيقاف الحساب', 'تم إيقاف الحساب', (r) => A.setPersonStatus(u.id, 'suspended', r))} style={smallBtn('danger')}>إيقاف الحساب</button>}
           </div>
         ))}
 

@@ -40,6 +40,7 @@ reseed; run inbox
 #    source for quran-audio), then persistent edits.
 reseed; MFA_ENFORCED=1 RESET_CMD="bash e2e/ci/py.sh mfa_reset.py" run admin http://localhost:5176/
 for s in admin-people admin-scheduling admin-content admin-settings teacher-content; do reseed; run "$s"; done
+reseed; MANY_CMD="bash e2e/ci/py.sh many_students.py" run admin-bulk
 # 5. PWA: manifest, installability, offline shell, no API data in caches (preview builds); an update published
 #    during a recording waits until the recording is submitted.
 reseed; run pwa http://localhost:4173/

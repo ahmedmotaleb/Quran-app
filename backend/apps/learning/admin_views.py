@@ -134,15 +134,11 @@ def _courses():
 
 class AdminCourses(AdminView):
     def get(self, request):
-        qs = _courses().order_by("-updated_at", "id")
-        p = request.query_params
-        if p.get("state"):
-            qs = qs.filter(state=p["state"])
-        if p.get("teacher"):
-            qs = qs.filter(teacher_id=p["teacher"])
-        if p.get("q"):
-            qs = qs.filter(Q(title__icontains=p["q"]) | Q(description__icontains=p["q"]))
-        return _page(self, request, qs, _course_out)
+        from apps.core.bulk import list_with
+
+        from .admin_bulk import COURSE_FILTERS
+
+        return list_with(self, request, _courses(), COURSE_FILTERS, _course_out)
 
     def post(self, request):
         s = CourseIn(data=request.data)
@@ -239,9 +235,10 @@ def _enrollment_out(e: Enrollment) -> dict:
 
 class AdminEnrollments(AdminView):
     def get(self, request, pk):
-        qs = Enrollment.objects.filter(course_id=pk).select_related("student").order_by("-created_at", "id")
-        if request.query_params.get("status"):
-            qs = qs.filter(status=request.query_params["status"])
+        from .admin_bulk import ENROLLMENT_FILTERS
+
+        p = request.query_params
+        qs = ENROLLMENT_FILTERS.run(Enrollment.objects.filter(course_id=pk).select_related("student"), p, sort=p.get("sort"))
         return _page(self, request, qs, _enrollment_out)
 
     def post(self, request, pk):

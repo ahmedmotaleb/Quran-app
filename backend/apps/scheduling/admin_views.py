@@ -19,6 +19,7 @@ from rest_framework.views import APIView
 from apps.accounts.models import Role, User
 from apps.accounts.permissions import IsAdminRole
 from apps.core.audit import audit
+from apps.core.bulk import list_with
 from apps.core.exceptions import ApiError
 from apps.core.models import AppSettings
 from apps.core.pagination import StandardPagination
@@ -75,15 +76,9 @@ def _occ_out(o: SessionOccurrence) -> dict:
 
 class AdminCircles(AdminView):
     def get(self, request):
-        qs = _circles().order_by("-updated_at", "id")
-        p = request.query_params
-        if p.get("state"):
-            qs = qs.filter(state=p["state"])
-        if p.get("teacher"):
-            qs = qs.filter(teacher_id=p["teacher"])
-        if p.get("q"):
-            qs = qs.filter(Q(name__icontains=p["q"]) | Q(teacher__full_name__icontains=p["q"]))
-        return _page(self, request, qs, _circle_out)
+        from .admin_bulk import CIRCLE_FILTERS
+
+        return list_with(self, request, _circles(), CIRCLE_FILTERS, _circle_out)
 
     def post(self, request):
         s = CircleIn(data=request.data)
@@ -223,19 +218,12 @@ def _booking_out(b: Booking) -> dict:
 
 class AdminBookings(AdminView):
     def get(self, request):
+        from .admin_bulk import BOOKING_FILTERS
+
         p = request.query_params
-        qs = Booking.objects.select_related("occurrence__teacher", "occurrence__circle", "student", "cancelled_by")
-        now = timezone.now()
-        if p.get("when", "upcoming") == "upcoming":
-            qs = qs.filter(occurrence__starts_at__gte=now).order_by("occurrence__starts_at", "id")
-        else:
-            qs = qs.filter(occurrence__starts_at__lt=now).order_by("-occurrence__starts_at", "-id")
-        if p.get("status"):
-            qs = qs.filter(status=p["status"])
-        if p.get("teacher"):
-            qs = qs.filter(occurrence__teacher_id=p["teacher"])
-        if p.get("q"):
-            qs = qs.filter(Q(student__full_name__icontains=p["q"]) | Q(occurrence__teacher__full_name__icontains=p["q"]))
+        # Past bookings default to newest first; upcoming ones to soonest first.
+        sort = p.get("sort") or ("-starts" if p.get("when") == "past" else "starts")
+        qs = BOOKING_FILTERS.run(Booking.objects.select_related("occurrence__teacher", "occurrence__circle", "student", "cancelled_by"), p, sort=sort)
         return _page(self, request, qs, _booking_out)
 
 

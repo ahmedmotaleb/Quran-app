@@ -2,7 +2,7 @@
 import { api, type Page } from '@/api/client';
 
 export type Role = 'student' | 'teacher' | 'parent';
-export type AccountStatus = 'pending' | 'active' | 'suspended';
+export type AccountStatus = 'pending' | 'active' | 'suspended' | 'archived';
 export interface Person {
   id: number; email: string; full_name: string; role: Role; status: AccountStatus; timezone: string; phone: string;
   level: string; approved: boolean | null; has_password: boolean; date_joined: string; last_login: string | null;
@@ -13,10 +13,11 @@ export interface Person {
 export interface SetupLink { setup_email_sent: boolean; setup_link: string | null }
 export type Counts = Record<AccountStatus | 'all', number> & { unapproved?: number; unlinked?: number };
 
-const qs = (p: Record<string, string | number | undefined>) =>
+type P = Record<string, string | number | undefined>;
+const qs = (p: P) =>
   Object.entries(p).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
 
-export const listPeople = (p: { role: Role; q?: string; status?: string; page?: number; page_size?: number; unlinked?: string }) =>
+export const listPeople = (p: { role: Role; q?: string; status?: string; page?: number; page_size?: number; unlinked?: string; sort?: string } & P) =>
   api<Page<Person>>('GET', `admin/users?${qs(p)}`);
 export const peopleCounts = (role: Role) => api<Counts>('GET', `admin/users/counts?role=${role}`);
 export const getPerson = (id: number) => api<Person>('GET', `admin/users/${id}`);
@@ -46,7 +47,7 @@ export interface Booking {
   circle: string | null; session_status: string; teacher: { id: number; name: string }; student: { id: number; name: string };
   cancel_reason: string; cancelled_at: string | null; cancelled_by: string | null;
 }
-export const listCircles = (p: { q?: string; state?: string; page?: number }) => api<Page<Circle>>('GET', `admin/circles?${qs(p)}`);
+export const listCircles = (p: P) => api<Page<Circle>>('GET', `admin/circles?${qs(p)}`);
 export const getCircle = (id: number) => api<Circle & { sessions: SessionRow[] }>('GET', `admin/circles/${id}`);
 export const createCircle = (d: { name: string; teacher: number; capacity: number; level: string; schedule_note: string }) => api<Circle>('POST', 'admin/circles', d);
 export const updateCircle = (id: number, d: Partial<{ name: string; capacity: number; level: string; schedule_note: string }>) => api<Circle>('PATCH', `admin/circles/${id}`, d);
@@ -54,7 +55,7 @@ export const setCircleState = (id: number, state: CircleState, reason = '') => a
 export const scheduleCircle = (id: number, d: { weekday: number; time: string; minutes: number; weeks: number; start?: string; timezone: string; dry_run: boolean }) =>
   api<{ dry_run: boolean; created: number; replaced_open_slots: number; timezone: string; plan: PlanItem[] }>('POST', `admin/circles/${id}/sessions`, d);
 export const cancelSession = (id: number, reason: string) => api<{ bookings_cancelled: number }>('POST', `admin/sessions/${id}/cancel`, { reason });
-export const listBookings = (p: { when: 'upcoming' | 'past'; status?: string; q?: string; page?: number }) => api<Page<Booking>>('GET', `admin/bookings?${qs(p)}`);
+export const listBookings = (p: P) => api<Page<Booking>>('GET', `admin/bookings?${qs(p)}`);
 export const cancelBooking = (id: number, reason: string) => api<Booking>('POST', `admin/bookings/${id}/cancel`, { reason });
 
 /* ---- Courses, lessons, enrollments, quizzes (prompt 07) ---- */
@@ -75,7 +76,7 @@ export interface Question { id: number; order: number; version: number; kind: QK
 
 export type Drafts = { lessons: number; tests: number; lessons_by_teachers: number; tests_by_teachers: number };
 export const contentDrafts = () => api<Drafts>('GET', 'admin/content/drafts');
-export const listCourses = (p: { q?: string; state?: string; page?: number }) => api<Page<Course>>('GET', `admin/courses?${qs(p)}`);
+export const listCourses = (p: P) => api<Page<Course>>('GET', `admin/courses?${qs(p)}`);
 export const getCourse = (id: number) => api<Course & { lesson_list: Lesson[] }>('GET', `admin/courses/${id}`);
 export const saveCourse = (id: number | null, d: Partial<{ title: string; description: string; topic: string; level: string; teacher: number; restricted: boolean }>) =>
   id ? api<Course>('PATCH', `admin/courses/${id}`, d) : api<Course>('POST', 'admin/courses', d);
@@ -83,10 +84,10 @@ export const setCourseState = (id: number, state: PubState, reason = '') => api<
 export const saveLesson = (courseId: number, id: number | null, d: Partial<{ title: string; kind: string; body: string; external_url: string; duration_minutes: number | null; media: string }>) =>
   id ? api<Lesson>('PATCH', `admin/lessons/${id}`, d) : api<Lesson>('POST', `admin/courses/${courseId}/lessons`, d);
 export const setLessonState = (id: number, state: PubState) => api<Lesson>('POST', `admin/lessons/${id}/state`, { state });
-export const listEnrollments = (courseId: number, page = 1) => api<Page<Enrollment>>('GET', `admin/courses/${courseId}/enrollments?page=${page}`);
+export const listEnrollments = (courseId: number, page = 1) => api<Page<Enrollment>>('GET', `admin/courses/${courseId}/enrollments?page=${page}&page_size=100`);
 export const enroll = (courseId: number, student: number) => api<Enrollment>('POST', `admin/courses/${courseId}/enrollments`, { student });
 export const endEnrollment = (id: number, status: 'withdrawn' | 'completed', reason = '') => api<Enrollment>('POST', `admin/enrollments/${id}/end`, { status, reason });
-export const listQuizzes = (p: { q?: string; state?: string; page?: number }) => api<Page<Quiz>>('GET', `admin/tests?${qs(p)}`);
+export const listQuizzes = (p: P) => api<Page<Quiz>>('GET', `admin/tests?${qs(p)}`);
 export const getQuiz = (id: number) => api<Quiz & { question_list: Question[] }>('GET', `admin/tests/${id}`);
 export const saveQuiz = (id: number | null, d: Partial<{ title: string; course: number | null; topic: string; level: string; duration_minutes: number | null; max_attempts: number }>) =>
   id ? api<Quiz>('PATCH', `admin/tests/${id}`, d) : api<Quiz>('POST', 'admin/tests', d);
@@ -106,3 +107,10 @@ export interface AuditRow { id: number; at: string; action: string; actor: strin
 export const getSettings = () => api<Settings>('GET', 'admin/settings');
 export const saveSettings = (d: Partial<Settings> & { current_password?: string }) => api<Settings>('PATCH', 'admin/settings', d);
 export const listAudit = (p: { action?: string; page?: number }) => api<Page<AuditRow>>('GET', `admin/audit?${qs(p)}`);
+
+/* ---- Bulk actions (select-all + bulk toolbar) ---- */
+export type BulkResource = 'users' | 'circles' | 'bookings' | 'sessions' | 'courses' | 'lessons' | 'enrollments' | 'tests' | 'questions';
+export interface BulkBody { action: string; ids?: number[]; filter?: Record<string, string>; expected?: number; exclude_ids?: number[]; reason?: string; confirm?: string }
+export interface BulkItem { id: number; label: string; outcome: 'skipped' | 'failed'; code: string; message: string }
+export interface BulkResult { requested: number; success: number; skipped: number; failed: number; results: BulkItem[]; errors: BulkItem[] }
+export const bulkAction = (resource: string, body: BulkBody) => api<BulkResult>('POST', `admin/${resource}/bulk-action`, body);
