@@ -7,7 +7,7 @@ Django + DRF + PostgreSQL API in `backend/`. Production runs on Google Cloud Run
 **Current state (17 October 2026, `main`):** the student, teacher and parent apps and the admin portal
 (`#/admin`) run on the real API in production: https://halqa-835293468002.europe-west1.run.app. The
 installable client is a PWA; there is no native Android app (not required). Owner decisions in force:
-no charging yet (subscriptions hidden), ayah audio off until a licensed source is approved, recordings deleted
+no charging yet (subscriptions hidden), ayah audio from the licensed Quran Foundation (Quran.com) source, recordings deleted
 48 hours after the teacher's review, live classes through teacher-provided meeting links. Remaining work needs
 the owner (see `docs/RELEASE_REVIEW.md`).
 
@@ -115,7 +115,7 @@ Everything in live mode runs on the API; no screen shows sample content.
 | --- | --- |
 | Accounts | Sign-in, sign-up (student only), sign-out, session restore, password reset by email (Gmail SMTP) |
 | Student | Onboarding, Today plan, tasks, recording upload and submission, teacher feedback (audio deleted 48 h after review), spaced-repetition reviews, progress, inbox |
-| Mushaf | Verified Tanzil text from the server, bookmarks with private labels, reading position across devices, text size, ranges; ayah audio **off** until a licensed source is configured (`AYAH_AUDIO_URL`) |
+| Mushaf | Verified Tanzil text from the server, bookmarks with private labels, reading position across devices, text size, ranges; ayah audio from the licensed Quran Foundation (Quran.com) source with repeat, speed and auto-advance |
 | Booking | Teacher directory, real open slots, booking, cancelling, rescheduling; live sessions open the teacher's Google Meet/Zoom/Jitsi/Teams link inside the join window |
 | Teacher | Students, new tasks, review queue, scores, timed notes, voice notes, schedule, attendance, meeting links, quiz grading, content drafts (published by admins) |
 | Parent | Linked children only: sessions, attendance, tasks, progress, weekly summary, latest feedback (no audio, cannot join sessions) |
@@ -174,10 +174,9 @@ status moves `not_started → in_progress → submitted → reviewed | needs_rep
 ## Not implemented, by decision or pending the owner
 
 - Subscriptions and payments (owner: no charge for now; section hidden)
-- Ayah audio in production (built; off until a licensed source is approved)
 - Video inside the app (sessions use the teacher's meeting link)
 - Native Android app (the PWA is the mobile client)
-- Owner checks still open: alerts (`deploy/gcp-ops.sh`), real-device PWA QA (`docs/PWA_QA.md`)
+- Owner checks still open: confirm the alert-drill emails arrived, real-device PWA QA (`docs/PWA_QA.md`)
 
 ## Design handoff
 
