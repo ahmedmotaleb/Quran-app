@@ -3,7 +3,7 @@ import { Icon } from '@/components/Icon';
 import { BackButton, Segmented, Switch, card, dangerOutlineBtn } from '@/components/ui';
 import { tzOf } from '@/lib/format';
 import { go, logout, openSheet, setState, toast, up, useApp } from '@/store/store';
-import { promptInstall, useInstall } from '@/pwa/install';
+import { INSTALL_STEPS, promptInstall, useInstall } from '@/pwa/install';
 import { LIVE } from '@/api/client';
 import { useEffect, useState } from 'react';
 import { disablePush, enablePush, pushState, type PushState } from '@/pwa/push';
@@ -90,7 +90,7 @@ function InstallRow() {
   if (!how) return null;
   const click = async () => {
     if (how === 'prompt') { if (await promptInstall()) toast('ثُبّت التطبيق على جهازك'); return; }
-    openSheet({ kind: 'info', title: 'ثبّت الحلقة على iPhone', body: 'من متصفح Safari: اضغط زر المشاركة أسفل الشاشة، ثم اختر «إضافة إلى الشاشة الرئيسية»، ثم «إضافة».' });
+    openSheet({ kind: 'info', ...INSTALL_STEPS[how] });
   };
   return (
     <button onClick={click} style={{ ...card, minHeight: 56, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', color: color.ink, fontSize: 15, fontWeight: 700, textAlign: 'right' }}>

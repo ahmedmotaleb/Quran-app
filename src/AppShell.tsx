@@ -15,6 +15,7 @@ import Mushaf from '@/screens/student/Mushaf';
 import Circles, { BookingDone, BookingReview, SessionDetails, TeacherPage } from '@/screens/student/Circles';
 import Live from '@/screens/student/Live';
 import LiveJoin from '@/screens/student/LiveJoin';
+import { InstallBanner } from '@/pwa/InstallBanner';
 import { LessonPage, QuizPage } from '@/screens/student/Learn';
 import Progress from '@/screens/student/Progress';
 import Account from '@/screens/student/Account';
@@ -90,6 +91,8 @@ function DataStateView({ screen, ds }: { screen: Screen; ds: Exclude<DataState, 
 }
 
 // Live mode: screens that would still show the design's sample content (none: sessions use the meeting link).
+// Main screens where the install suggestion is shown (each role's home, and sign-in).
+const INSTALL_SCREENS: Screen[] = ['login', 'home', 'tdash', 'phome'];
 const SAMPLE_SCREENS: Screen[] = [];
 
 /**
@@ -129,6 +132,7 @@ export default function AppShell({ framed }: { framed: boolean }) {
           <Icon name="alert" size={18} /> محتوى تجريبي — هذا القسم لم يُربط بالخادم بعد.
         </div>
       )}
+      {INSTALL_SCREENS.includes(screen) && <InstallBanner />}
       <main id="scr" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', position: 'relative', zoom: { s: 0.92, m: 1, l: 1.1 }[uiScale] }}>
         {showState ? <DataStateView screen={screen} ds={ds as Exclude<DataState, 'normal'>} /> : <Cur key={screen} />}
       </main>
