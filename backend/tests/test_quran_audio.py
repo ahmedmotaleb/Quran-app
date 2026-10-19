@@ -118,3 +118,24 @@ def test_requests_carry_a_named_user_agent(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
     assert qf_audio._http(urllib.request.Request("https://apis-prelive.quran.foundation/x")) == {"ok": True}
     assert seen["ua"].startswith("HalqaQuranApp/")
+
+
+def test_check_command_reports_ok_and_failure(qf, monkeypatch, settings):
+    from io import StringIO
+
+    from django.core.management import CommandError, call_command
+
+    out = StringIO()
+    call_command("check_quran_audio", "--surah", "2", stdout=out)
+    assert "51 ayah audio files (prelive)" in out.getvalue() and "verses.quran.foundation" in out.getvalue()
+
+    def down(req):
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, None)
+    monkeypatch.setattr(qf_audio, "_http", down)
+    from django.core.cache import cache
+    cache.clear()
+    with pytest.raises(CommandError):
+        call_command("check_quran_audio")
+    settings.QF_CLIENT_ID = ""
+    with pytest.raises(CommandError, match="not configured"):
+        call_command("check_quran_audio")
