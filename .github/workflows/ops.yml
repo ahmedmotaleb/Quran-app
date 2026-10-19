@@ -8,7 +8,7 @@ on:
       task:
         description: What to run
         type: choice
-        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors]
+        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check]
       admin_email:
         description: create-admin / promote-admin — the admin's email (create-admin takes the password from the ADMIN_PASSWORD secret; promote-admin keeps the account's password)
         required: false
@@ -25,6 +25,41 @@ jobs:
   # failure path; this checks they reached Cloud Logging. The owner should then get the alert emails.
   # Needs deploy/gcp-ops.sh to have run (alert policies + read-only log access for the deploy account).
   # Recent production errors (last 6 hours), without request bodies or personal data: event, status and detail only.
+  # Licensed recitation source: run check_quran_audio inside production (the maintenance job has the service's
+  # settings and secrets), then show its log line and any Quran Foundation error.
+  audio:
+    if: inputs.task == 'audio-check'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Fetch Al-Fatihah's ayah audio list from Quran Foundation, inside production
+        run: |
+          P="${{ vars.GCP_PROJECT_ID }}"
+          START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          gcloud run jobs execute halqa-tasks --project "$P" --region europe-west1 --args manage.py,check_quran_audio --wait --quiet || echo "check failed"
+          sleep 20
+          gcloud logging read 'jsonPayload.msg=("qf_audio_check" OR "qf_token_failed" OR "qf_request_failed") AND timestamp>="'$START'"' \
+            --project "$P" --limit 10 --format json > /tmp/a.json
+          python3 - <<'PY'
+          import json
+          rows = json.load(open("/tmp/a.json"))
+          if not rows:
+              print("::warning title=audio-check::no log lines yet")
+          for r in rows:
+              j = r.get("jsonPayload") or {}
+              keep = {k: j[k] for k in ("msg", "result", "env", "surah", "ayahs", "hosts", "path", "status", "error", "detail") if k in j}
+              print(f"::notice title=audio-check::{json.dumps(keep, ensure_ascii=False)[:500]}")
+          ok = any((r.get("jsonPayload") or {}).get("result") == "ok" for r in rows)
+          raise SystemExit(0 if ok else 1)
+          PY
+
   errors:
     if: inputs.task == 'recent-errors'
     runs-on: ubuntu-latest
