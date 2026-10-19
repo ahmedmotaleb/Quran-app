@@ -1,6 +1,6 @@
 # Release review (pack prompt 32)
 
-**Date:** 17 October 2026 · **Commit:** `main` at `6035033` · **Production:**
+**Date:** 19 October 2026 · **Commit:** `main` (after PR #44) · **Production:**
 https://halqa-835293468002.europe-west1.run.app (Google Cloud Run, europe-west1; Neon PostgreSQL; Cloudflare R2)
 
 One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with a named gap), **FAIL**,
@@ -14,7 +14,7 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 | Product Admin Portal | PASS | Sign-in with enforced two-step verification, people, circles, bookings, courses, quizzes, settings (support email halqa.app.eg@gmail.com), audit: all on the API (E2E `admin*`). Subscriptions are hidden (owner decision: no charge for now) | — |
 | Backend/API + PostgreSQL | PASS | 198 tests on PostgreSQL in CI (concurrency, permissions, cross-role sweep); migrations check; `/api/ready` checks database, migrations, cache | — |
 | Quran source/import integrity | PASS | Tanzil Uthmani v1.1, 6,236 ayahs; nightly restore drill re-verifies byte-for-byte; E2E `quran` shows the screen equals the served text; no generated text | — |
-| Quran reader and audio practice | PARTIAL | Bookmarks, reading position across devices, text size, ranges (E2E `reading`); repeat ×1–10 or continuous, speed, auto-advance (E2E `quran-audio` with a test source) | Ayah audio off in production until a licensed source is approved (owner decision) |
+| Quran reader and audio practice | PASS | Bookmarks, reading position across devices, text size, ranges (E2E `reading`); repeat ×1–10 or continuous, speed, auto-advance (E2E `quran-audio`). Ayah audio from the licensed Quran Foundation Content API (Quran.com), production keys: Ops `audio-check` on 19 October fetched Al-Fatihah's 7 ayahs from `verses.quran.foundation` | Not yet listened to on a real phone (PWA QA) |
 | Private media storage | PASS | R2 private bucket, presigned reads; smoke after every deploy: upload, owner playback, anonymous and unsigned refused; 200 KB upload 0.7–1.4 s. Recordings deleted 48 h after the teacher's review (hourly job; never before review) | Recordings not backed up, and deleted 48 h after review (owner decisions in RECOVERY.md) |
 | Email / password recovery | PASS | Gmail SMTP in production (`/api/ready` → `email: smtp`); owner confirmed on 17 October 2026 that a real «نسيت كلمة المرور» email arrived and its link set a new password | — |
 | Subscriptions/payments | NOT TESTED (not enabled) | Owner decision: no charge for now; the section is hidden in the live portal | — |
@@ -24,7 +24,7 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 | Security | PASS | Admin MFA enforced in production; lockout; throttles; CSP/HSTS/frame/permissions headers; argon2id; IDOR sweep; pip-audit and npm audit clean | Alerts for abuse need `gcp-ops.sh` (below) |
 | Performance/load | PARTIAL | Two runs on a Cloud Run-sized container: 50 active students + 10 staff/parents, 0 % errors, p95 21–23 ms, p99 265–310 ms, peaks 62 % CPU / 343 MiB, booking race 1 of 50 ([LOADTEST.md](LOADTEST.md)) | Not yet measured on Cloud Run + Neon itself or above 50 active users |
 | Backups/restore | PASS | Nightly drill restores production into an isolated database and verifies sign-in, Quran and media rows. Encrypted copies kept 30 days: first kept run 17 October (run 39056054938: 789 KB dump 25 s, restore 1 s, verify 4 s, `stored=yes`, artifact `halqa-db-backup-39056054938`). RPO 24 h / RTO 1 h (owner) | Neon's own extension (`pg_session_jwt`) is skipped on restore with a warning; checks pass |
-| Monitoring/alerts | BLOCKED | Signals, nine alert policies, uptime check and alert drill are ready ([MONITORING.md](MONITORING.md)) | Owner runs `deploy/gcp-ops.sh` once (needs project-owner rights), then the `alert-drill` |
+| Monitoring/alerts | PARTIAL | `deploy/gcp-ops.sh` ran: 9 alert policies emailing halqa.app.eg@gmail.com, uptime check, log metrics; alert drill passed on 17 October (run 39063257562, all 6 synthetic events found) ([MONITORING.md](MONITORING.md)) | Owner to confirm the drill's alert emails arrived (check spam) |
 | Cloud Run deployment | PASS | Deploy on merge with migrations first; smoke test after each deploy; hourly maintenance job green | No separate staging service |
 | Android APK | NOT TESTED (not required) | PWA is the client by decision | Prompt 30 only if an APK is required |
 
@@ -39,13 +39,11 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 
 ## Release blockers, by severity
 
-1. **Alerts are not switched on** (high for a pilot). Failures would go unnoticed until users report them. The
-   alert drill on 17 October (run 39056436141) reported that the deploy account cannot read logs yet:
-   `deploy/gcp-ops.sh` has not completed in Cloud Shell.
-2. **Real-device PWA QA not done** (medium): microphone and recording format on iPhone are the main unknowns.
+1. **Real-device PWA QA not done** (medium): microphone and recording format on iPhone are the main unknowns.
 
 Resolved 17 October: password-reset email (owner confirmed real delivery and a working link); kept encrypted
-backups (`BACKUP_PASSPHRASE` set, first stored copy verified).
+backups (`BACKUP_PASSPHRASE` set, first stored copy verified); alerts switched on (drill passed; email receipt to
+be confirmed). Resolved 19 October: ayah audio from the licensed Quran Foundation source, production.
 
 Payments, push and live video are product scope, not blockers for a recitation pilot.
 
@@ -63,8 +61,8 @@ versioning), 22 (scheduled jobs), 23 (email code), 24 (security), 25 (load test 
 
 ## Next actions
 
-1. **Switch on alerts.** Run `bash deploy/gcp-ops.sh` in Cloud Shell (project owner account), then **Ops → alert-drill**.
-   *Done when* the drill passes and emails "Halqa: operational failure" to the owner.
+1. **Confirm alert emails.** Check halqa.app.eg@gmail.com (and spam) for "Halqa: operational failure" from the
+   17 October drill; run **Ops → alert-drill** again if none arrived.
 2. **Real-device pilot check.** Complete the table in [PWA_QA.md](PWA_QA.md) on one Android phone and one
    iPhone, with one real teacher and two students for a week.
    *Done when* every row is ✅ or has a filed defect, and an iPhone recording has been submitted and played by the teacher.
