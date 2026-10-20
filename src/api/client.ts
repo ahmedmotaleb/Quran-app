@@ -97,6 +97,25 @@ export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   }
 }
 
+/** A POST that answers with a file (CSV export): returns the blob and the server's file name. */
+export async function apiDownload(path: string, body: unknown): Promise<{ blob: Blob; name: string }> {
+  if (!LIVE) throw new ApiError(0, 'demo', 'وضع العرض التجريبي: لا يوجد خادم متصل.');
+  await ensureCsrf();
+  const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'text/csv, application/json' };
+  if (csrf) h['X-CSRFToken'] = csrf;
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/api/v1/${path}`, { method: 'POST', headers: h, body: JSON.stringify(body), credentials: 'include' });
+  } catch { throw OFFLINE(); }
+  if (!res.ok) {
+    let data: Record<string, unknown> = {};
+    try { data = await res.json(); } catch { /* not JSON */ }
+    throw new ApiError(res.status, String(data.code ?? 'error'), String(data.message ?? 'تعذّر التصدير.'), (data.fields as Record<string, string[]>) ?? {}, String(data.request_id ?? ''));
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') ?? '')?.[1] ?? 'halqa.csv';
+  return { blob: await res.blob(), name };
+}
+
 /** Called after login/logout: Django rotates the CSRF token with the session. */
 export function resetCsrf() { csrf = null; }
 

@@ -255,10 +255,43 @@ export interface BulkDef {
   title?: string;                  // dialog title
   body: (n: number) => string;     // what will happen
   ok: (n: number) => string;       // confirm button
+  params?: ParamField[];           // asked in the dialog, validated again by the server (teacher, course, message…)
+}
+export type ParamField =
+  | { key: string; label: string; type: 'remote'; load: () => Promise<[string, string][]> }
+  | { key: string; label: string; type: 'text' | 'textarea'; max: number; hint?: string }
+  | { key: string; label: string; type: 'check' };
+
+function ParamInputs({ fields, v, set }: { fields: ParamField[]; v: Record<string, unknown>; set: (k: string, x: unknown) => void }) {
+  const [opts, setOpts] = useState<Record<string, [string, string][]>>({});
+  useEffect(() => {
+    let on = true;
+    fields.forEach((f) => { if (f.type === 'remote') f.load().then((o) => on && setOpts((p) => ({ ...p, [f.key]: o }))).catch(() => {}); });
+    return () => { on = false; };
+  }, [fields]);
+  return <>{fields.map((f) => {
+    const id = `bp-${f.key}`;
+    if (f.type === 'check') return (
+      <label key={f.key} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, minHeight: 40 }}>
+        <input id={id} type="checkbox" checked={!!v[f.key]} onChange={(e) => set(f.key, e.target.checked)} style={{ width: 20, height: 20 }} /> {f.label}
+      </label>);
+    return (
+      <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <label htmlFor={id} style={labelStyle}>{f.label}</label>
+        {f.type === 'remote'
+          ? <select id={id} value={String(v[f.key] ?? '')} onChange={(e) => set(f.key, e.target.value)} style={inputStyle(null)}>
+              <option value="">اختر…</option>{(opts[f.key] ?? []).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+          : f.type === 'textarea'
+            ? <textarea id={id} rows={4} maxLength={f.max} value={String(v[f.key] ?? '')} onChange={(e) => set(f.key, e.target.value)} style={{ ...inputStyle(null), minHeight: 96, paddingTop: 10 }} />
+            : <input id={id} maxLength={f.max} value={String(v[f.key] ?? '')} onChange={(e) => set(f.key, e.target.value)} style={inputStyle(null)} />}
+        {'hint' in f && f.hint && <span style={{ fontSize: 12, color: color.muted }}>{f.hint}</span>}
+      </div>);
+  })}</>;
 }
 
-export function BulkBar({ resource, sel, total, actions, filter, onDone }: {
-  resource: string; sel: Sel; total: number; actions: BulkDef[]; filter: Record<string, string>; onDone: () => void;
+export function BulkBar({ resource, sel, total, actions, filter, onDone, exportable = false }: {
+  resource: string; sel: Sel; total: number; actions: BulkDef[]; filter: Record<string, string>; onDone: () => void; exportable?: boolean;
 }) {
   const [run, setRun] = useState<BulkDef | null>(null); const [result, setResult] = useState<{ def: BulkDef; r: A.BulkResult } | null>(null);
   const n = sel.count(total);
@@ -268,6 +301,7 @@ export function BulkBar({ resource, sel, total, actions, filter, onDone }: {
       {n > 0 && (
         <div role="toolbar" aria-label="إجراءات على المحدد" style={{ position: 'sticky', bottom: 12, zIndex: 15, ...card, background: color.primary, color: color.ivory, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', boxShadow: '0 8px 24px rgba(20,33,31,.25)' }}>
           <span style={{ fontWeight: 800, fontSize: 15, marginInlineEnd: 6 }}><span style={{ fontFamily: font.latin }}>{n}</span> محدد</span>
+          {exportable && <ExportButton resource={resource} sel={sel} total={total} filter={filter} light />}
           {actions.map((a) => (
             <button key={a.key} onClick={() => setRun(a)} style={{ ...smallBtn(a.tone === 'danger' ? 'danger' : 'plain'), ...(a.tone === 'danger' ? { background: color.danger, color: color.ivory, borderColor: color.danger } : {}), display: 'inline-flex', gap: 6, alignItems: 'center' }}>
               {a.tone === 'danger' && <Icon name="trash" size={16} />}{a.label}
@@ -294,6 +328,7 @@ function BulkConfirm({ def, resource, sel, total, filter, onClose, onDone }: {
 }) {
   const [n, setN] = useState(sel.count(total));
   const [reason, setReason] = useState(''); const [typed, setTyped] = useState('');
+  const [pv, setPv] = useState<Record<string, unknown>>({});
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const needType = !!def.destructive && n >= 10;
   const submit = async (e: FormEvent) => {
@@ -301,15 +336,18 @@ function BulkConfirm({ def, resource, sel, total, filter, onClose, onDone }: {
     if (busy) return; // no second submission
     if (def.reason && reason.trim().length < 3) return setErr('اكتب السبب (3 أحرف على الأقل).');
     if (needType && typed.trim() !== 'حذف') return setErr('اكتب «حذف» للتأكيد.');
+    const missing = def.params?.find((f) => f.type !== 'check' && !String(pv[f.key] ?? '').trim());
+    if (missing) return setErr(`أكمل: ${missing.label}.`);
     setBusy(true); setErr(null);
-    const body: A.BulkBody = { action: def.key, reason: reason.trim(), ...(needType ? { confirm: 'حذف' } : {}) };
+    const params = def.params ? Object.fromEntries(def.params.map((f) => [f.key, f.type === 'remote' ? Number(pv[f.key]) : f.type === 'check' ? !!pv[f.key] : String(pv[f.key] ?? '').trim()])) : undefined;
+    const body: A.BulkBody = { action: def.key, reason: reason.trim(), ...(needType ? { confirm: 'حذف' } : {}), ...(params ? { params } : {}) };
     if (sel.sel.mode === 'all') Object.assign(body, { filter, expected: n, exclude_ids: [...sel.sel.excluded] });
     else body.ids = [...sel.sel.ids];
     try { onDone(await A.bulkAction(resource, body)); }
     catch (x) {
       const a = x as ApiError;
       if (a?.code === 'results_changed') { const now = Number(a.fields?.expected?.[0] ?? n); setN(now); setErr(`تغيّرت النتائج: أصبح العدد ${now}. راجع ثم أكّد من جديد.`); }
-      else setErr(a?.field?.('reason') ?? a?.field?.('confirm') ?? errMsg(x));
+      else setErr(a?.field?.('reason') ?? a?.field?.('confirm') ?? def.params?.map((f) => a?.field?.(f.key)).find(Boolean) ?? errMsg(x));
       setBusy(false);
     }
   };
@@ -318,6 +356,7 @@ function BulkConfirm({ def, resource, sel, total, filter, onClose, onDone }: {
     <Modal title={title} onClose={() => { if (!busy) onClose(); }}>
       <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <p style={{ margin: 0, fontSize: 15, lineHeight: 1.8 }}>{def.body(n)}</p>
+        {def.params && <ParamInputs fields={def.params} v={pv} set={(k, x) => setPv((p) => ({ ...p, [k]: x }))} />}
         {def.reason && <>
           <label htmlFor="bk-r" style={labelStyle}>السبب (يُحفظ في سجل التدقيق)</label>
           <textarea id="bk-r" rows={3} maxLength={200} value={reason} onChange={(e) => setReason(e.target.value)} style={{ ...inputStyle(null), minHeight: 80, paddingTop: 10 }} />
@@ -353,6 +392,87 @@ function ResultDialog({ def, r, onClose }: { def: BulkDef; r: A.BulkResult; onCl
       </details>
       <button onClick={onClose} style={{ ...smallBtn('primary'), minHeight: 48 }}>تم</button>
     </Modal>
+  );
+}
+
+/* ---------------- export ---------------- */
+/** CSV of the selection, or of every filtered result when nothing is selected. Built on the server (Arabic-safe). */
+export function ExportButton({ resource, sel, total, filter, sort, light = false }: {
+  resource: string; sel: Sel; total: number; filter: Record<string, string>; sort?: string; light?: boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const n = sel.count(total);
+  const go = async () => {
+    setBusy(true);
+    try {
+      const body = n === 0 || sel.sel.mode === 'all'
+        ? { filter, exclude_ids: sel.sel.mode === 'all' ? [...sel.sel.excluded] : [], sort }
+        : { ids: [...sel.sel.ids], sort };
+      const { blob, name } = await A.exportCsv(resource, body);
+      const url = URL.createObjectURL(blob); const a = document.createElement('a');
+      a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast(`صُدّر ${items(n || total)}`);
+    } catch (x) { toast(errMsg(x)); } finally { setBusy(false); }
+  };
+  return (
+    <button onClick={go} disabled={busy || total === 0} aria-busy={busy}
+      style={{ ...smallBtn(), display: 'inline-flex', gap: 6, alignItems: 'center', ...(light ? { background: 'transparent', color: color.ivory, borderColor: 'rgba(247,243,232,.5)' } : {}) }}>
+      <Icon name="download" size={16} /> {busy ? 'جارٍ التصدير…' : n ? 'تصدير المحدد' : 'تصدير النتائج'}
+    </button>
+  );
+}
+
+/** «This week» in Cairo dates, for presets. */
+export function thisWeek(): { from: string; to: string } {
+  const d = (ms: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date(ms));
+  return { from: d(Date.now()), to: d(Date.now() + 6 * 86_400_000) };
+}
+
+/* ---------------- saved views ---------------- */
+/** Named filter/sort presets: built-in ones for the section, plus the admin's own (stored on the server). */
+export function SavedViews({ section, q, update, presets = [] }: {
+  section: string; q: Record<string, string>; update: (p: Record<string, string>, push?: boolean) => void; presets?: [string, Record<string, string>][];
+}) {
+  const [mine, setMine] = useState<A.SavedView[]>([]); const [naming, setNaming] = useState<string | null>(null); const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(() => { A.savedViews(section).then(setMine).catch(() => setMine([])); }, [section]);
+  useEffect(() => { load(); }, [load]);
+  const current = new URLSearchParams(Object.entries(q).filter(([k, v]) => v && k !== 'page')).toString();
+  const apply = (query: Record<string, string>) => {
+    const cleared = Object.fromEntries(Object.keys(q).map((k) => [k, '']));
+    update({ ...cleared, ...query });
+  };
+  const save = async () => {
+    if (!naming?.trim()) return;
+    try { await A.saveView(section, naming.trim(), current); setNaming(null); setErr(null); toast('حُفظ العرض'); load(); }
+    catch (x) { setErr((x as ApiError).field?.('name') ?? errMsg(x)); }
+  };
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+      <label htmlFor={`sv-${section}`} style={{ fontSize: 13, color: color.muted }}>العروض</label>
+      <select id={`sv-${section}`} value="" onChange={(e) => {
+        const v = e.target.value; if (!v) return;
+        if (v.startsWith('p:')) apply(presets[Number(v.slice(2))][1]);
+        else { const x = mine.find((m) => String(m.id) === v.slice(2)); if (x) apply(Object.fromEntries(new URLSearchParams(x.query))); }
+      }} style={{ ...inputStyle(null), minHeight: 40, width: 'auto', fontSize: 14 }}>
+        <option value="">اختر عرضًا…</option>
+        {presets.length > 0 && <optgroup label="عروض جاهزة">{presets.map(([l], i) => <option key={l} value={`p:${i}`}>{l}</option>)}</optgroup>}
+        {mine.length > 0 && <optgroup label="عروضي">{mine.map((m) => <option key={m.id} value={`m:${m.id}`}>{m.name}</option>)}</optgroup>}
+      </select>
+      {naming === null
+        ? <button onClick={() => setNaming('')} disabled={!current} style={smallBtn()}>حفظ العرض الحالي</button>
+        : <>
+          <input aria-label="اسم العرض" autoFocus maxLength={60} value={naming} onChange={(e) => setNaming(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void save(); }}
+            style={{ ...inputStyle(null), minHeight: 40, width: 180, fontSize: 14 }} />
+          <button onClick={save} style={smallBtn('primary')}>حفظ</button>
+          <button onClick={() => { setNaming(null); setErr(null); }} style={smallBtn()}>إلغاء</button>
+        </>}
+      {mine.length > 0 && <details style={{ fontSize: 13 }}><summary style={{ cursor: 'pointer', minHeight: 32 }}>إدارة</summary>
+        <ul style={{ margin: 0, paddingInlineStart: 16 }}>{mine.map((m) => <li key={m.id} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>{m.name}
+          <button aria-label={`حذف ${m.name}`} onClick={() => A.deleteView(m.id).then(load).catch((x) => toast(errMsg(x)))} style={{ border: 'none', background: 'transparent', color: color.dangerInk, cursor: 'pointer', minHeight: 32 }}>حذف</button></li>)}</ul>
+      </details>}
+      {err && <span role="alert" style={{ color: color.dangerInk, fontSize: 13 }}>{err}</span>}
+    </div>
   );
 }
 

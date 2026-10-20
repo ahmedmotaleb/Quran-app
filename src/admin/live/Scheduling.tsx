@@ -10,6 +10,7 @@ import { chip, dateTime, errMsg, Modal, ReasonDialog, smallBtn } from './ui';
 import {
   BulkBar, type BulkDef, circleOptions, type Col, DataView, type FilterField, FilterControls, filterOf, items, listParams, Pager,
   SelectionSummary, studentOptions, teacherOptions, useListUrl, useSelection, useServerList, useUrlSearch, InlineSelectHeader, Checkbox,
+  ExportButton, SavedViews, thisWeek,
 } from './list';
 
 const CIRCLE_ST: Record<A.CircleState, { l: string; bg: string; fg: string }> = {
@@ -60,16 +61,18 @@ export function CirclesLive() {
         <input type="search" aria-label="ابحث باسم الحلقة أو المعلم" placeholder="ابحث باسم الحلقة أو المعلم" value={text} onChange={(e) => setText(e.target.value)}
           style={{ flex: '1 1 240px', minHeight: 48, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15 }} />
         <FilterControls fields={CIRCLE_FIELDS} q={q} update={update} />
+        <ExportButton resource="circles" sel={sel} total={L.data?.count ?? 0} filter={filter} sort={sort} />
         <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> حلقة جديدة</button>
       </div>
       <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
         {[['all', 'الكل'], ['draft', 'مسودة'], ['published', 'منشورة'], ['off', 'موقوفة']].map(([k, l]) => <button key={k} aria-pressed={cur === k} onClick={() => update({ state: k === 'all' ? '' : k })} style={chip(cur === k)}>{l}</button>)}
       </div>
+      <SavedViews section="circles" q={q} update={update} presets={[['المنشورة', { state: 'published' }], ['المسودات', { state: 'draft' }]]} />
       <SelectionSummary sel={sel} pageIds={L.data?.results.map((r) => r.id) ?? []} total={L.data?.count ?? 0} />
       <DataView rows={L.data?.results} cols={cols} sel={sel} total={L.data?.count ?? 0} rowLabel={(c) => c.name} sort={sort} setSort={(x) => update({ sort: x })}
         loading={L.loading} err={L.err} retry={() => void L.reload()} />
       <Pager page={page} total={L.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
-      <BulkBar resource="circles" sel={sel} total={L.data?.count ?? 0} actions={CIRCLE_ACTIONS} filter={filter} onDone={() => void L.reload()} />
+      <BulkBar resource="circles" sel={sel} total={L.data?.count ?? 0} actions={CIRCLE_ACTIONS} filter={filter} onDone={() => void L.reload()} exportable />
       {adding && <CircleForm onClose={() => setAdding(false)} onSaved={(c) => { setAdding(false); void L.reload(); setOpen(c.id); }} />}
       {open !== null && <CirclePanel id={open} onClose={() => setOpen(null)} onChanged={() => void L.reload()} />}
     </>
@@ -264,6 +267,8 @@ export function BookingsLive() {
         <input type="search" aria-label="ابحث باسم الطالب أو المعلم أو الحلقة" placeholder="ابحث باسم الطالب أو المعلم أو الحلقة" value={text} onChange={(e) => setText(e.target.value)}
           style={{ flex: '1 1 240px', minHeight: 48, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15 }} />
         <FilterControls fields={BOOKING_FIELDS} q={q} update={update} />
+        <ExportButton resource="bookings" sel={sel} total={L.data?.count ?? 0} filter={filter} sort={sort} />
+        <SavedViews section="bookings" q={q} update={update} presets={[['جلسات هذا الأسبوع', { when: 'all', status: 'confirmed', ...thisWeek() }], ['الغياب', { when: 'past', attendance: 'absent' }]]} />
       </div>
       <div role="group" aria-label="تصفية" style={{ display: 'flex', gap: 8, overflowX: 'auto', flexWrap: 'wrap' }}>
         {([['upcoming', 'القادمة'], ['past', 'السابقة']] as const).map(([k, l]) => <button key={k} aria-pressed={when === k} onClick={() => update({ when: k === 'upcoming' ? '' : k, sort: '' })} style={chip(when === k)}>{l}</button>)}
@@ -274,7 +279,7 @@ export function BookingsLive() {
       <DataView rows={L.data?.results} cols={cols} sel={sel} total={L.data?.count ?? 0} rowLabel={(b) => `${b.student.name} ${dateTime(b.starts_at)}`} sort={sort}
         setSort={(x) => update({ sort: x })} loading={L.loading} err={L.err} retry={() => void L.reload()} />
       <Pager page={page} total={L.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
-      <BulkBar resource="bookings" sel={sel} total={L.data?.count ?? 0} actions={BOOKING_ACTIONS} filter={filter} onDone={() => void L.reload()} />
+      <BulkBar resource="bookings" sel={sel} total={L.data?.count ?? 0} actions={BOOKING_ACTIONS} filter={filter} onDone={() => void L.reload()} exportable />
       {cancel && (
         <ReasonDialog title="إلغاء الحجز" body={`سيُلغى حجز ${cancel.student.name} مع ${cancel.teacher.name} (${dateTime(cancel.starts_at)}) ويُبلَّغ الطالب. يبقى السجل محفوظًا.`} ok="إلغاء الحجز"
           onClose={() => setCancel(null)} run={async (r) => { await A.cancelBooking(cancel.id, r); toast('أُلغي الحجز وأُبلغ الطالب'); await L.reload(); }} />

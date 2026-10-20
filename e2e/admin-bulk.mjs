@@ -131,7 +131,7 @@ await step('mobile width: cards with the same selection', async () => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('list', { name: /النتائج/ }).waitFor();
   await rowBox(25).check();
-  await bar().getByText(/محدد/).waitFor();
+  await bar().getByText(/^\d+ محدد$/).waitFor();
   await page.screenshot({ path: out + '/bulk-mobile.png' });
 });
 if (errs.length) { fails++; console.log('FAIL page errors', errs[0]); }

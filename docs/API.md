@@ -89,7 +89,7 @@ are Cairo calendar days `YYYY-MM-DD`.
 
 | List | Filters | Sort keys |
 | --- | --- | --- |
-| `admin/users` | `role`, `status` (archived only when asked for), `joined_from/to`, `active_from/to` (last sign-in), `approved`, `has_students`, `has_slots`, `circle`, `teacher`, `level`, `upcoming`, `overdue_review`, `linked`, `unlinked` | `name`, `email`, `joined`, `last_login`, `status` |
+| `admin/users` | `role`, `status` (archived only when asked for), `joined_from/to`, `active_from/to` (last sign-in), `approved`, `has_students`, `has_slots`, `circle`, `teacher`, `level`, `upcoming`, `overdue_review`, `linked`, `unlinked`, `course` (active enrollment: a course cohort) | `name`, `email`, `joined`, `last_login`, `status` |
 | `admin/circles` | `state`, `teacher`, `level`, `has_upcoming`, `created_from/to` | `name`, `updated`, `created`, `capacity`, `state` |
 | `admin/bookings` | `when` (`upcoming`/`past`/`all`), `status`, `attendance` (incl. `unmarked`), `teacher`, `student`, `circle`, `kind`, `from/to` | `starts`, `student`, `teacher`, `status`, `created` |
 | `admin/courses` | `state`, `teacher`, `topic`, `level`, `created_from/to` | `title`, `created`, `updated`, `state` |
@@ -115,7 +115,7 @@ Response: `{"requested": 25, "success": 23, "skipped": 1, "failed": 1, "results"
 
 | Resource | Actions | Never |
 | --- | --- | --- |
-| `users` (students, teachers, parents) | `activate`, `suspend`*, `archive`* (soft delete), `approve`, `unapprove`* (teachers only) | delete; admins are never targets |
+| `users` (students, teachers, parents) | `activate` (also restores archived), `suspend`*, `archive`* (soft delete), `approve`, `unapprove`* (teachers only), `assign_teacher`† (students), `enroll`† (students), `notify`†, `resend_setup` | delete; admins are never targets |
 | `circles` | `publish`, `disable`*, `draft`, `delete` (draft with no sessions) | delete with sessions |
 | `sessions` | `cancel`* (future only; bookings cancelled, students notified) | delete |
 | `bookings` | `cancel`* (future only; student notified) | delete; past bookings and attendance |
@@ -126,6 +126,25 @@ Response: `{"requested": 25, "success": 23, "skipped": 1, "failed": 1, "results"
 | `questions` | `remove` (retired: answers keep pointing at it) | hard delete |
 
 \* requires `reason` (3+ characters). No bulk endpoint exists for the audit log, the Quran text, recordings or notifications.
+
+† takes `params`, validated once before any record is touched (`400` with a field error otherwise):
+
+| Action | `params` | Rules |
+| --- | --- | --- |
+| `assign_teacher` | `teacher` (id), `replace` (bool) | teacher must be active and approved; suspended/archived students refused; already linked → skipped; `replace` ends the student's other active teachers |
+| `enroll` | `course` (id) | not an archived course; suspended/archived students refused; already actively enrolled → skipped |
+| `notify` | `title` (3–80), `body` (3–500) | in-app message (`admin_message`); the phone's lock screen shows only the generic text; suspended/archived skipped as refused; the audit event keeps the title and counts, not the body |
+| `resend_setup` | — | needs SMTP (`409 email_off`); only accounts without a password; at most once per 10 minutes per account (`recently_sent` → skipped); the link is emailed, never returned or logged |
+
+**`POST admin/{resource}/export`** (`users`, `circles`, `bookings`, `sessions`, `courses`, `lessons`, `enrollments`, `tests`):
+the same `ids` or `filter` (+ `exclude_ids`, `sort`) as a bulk action, up to 20,000 rows. Answers `text/csv` (UTF-8 with
+BOM, Cairo times, Arabic headers). Names, dates, states and counts only: no tokens, media URLs, private notes or
+the student's booking note. Cells starting with `= + - @` are prefixed with `'` (formula injection). Audited as
+`admin.export` (resource, mode, rows, filter).
+
+**`GET, POST admin/saved-views`, `DELETE admin/saved-views/{id}`**: an admin's own named presets for a list section
+(`students`, `teachers`, `parents`, `circles`, `bookings`, `lectures`, `quizzes`, …). The query string is validated
+with that list's filter rules before it is stored; up to 30 per admin; other admins cannot see or delete them.
 
 ## Permission matrix (learning records: assignments, bookings, feedback)
 

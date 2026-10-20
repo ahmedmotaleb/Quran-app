@@ -62,6 +62,9 @@ register(Resource(
         "draft": Action(_test_state(Test.State.DRAFT)),
         "delete": Action(_test_delete, destructive=True),
     },
+    export=[("الرقم", lambda t: t.pk), ("الاختبار", lambda t: t.title), ("الدورة", lambda t: t.course.title if t.course else ""),
+            ("المستوى", lambda t: t.level), ("الحالة", lambda t: Test.State(t.state).label), ("يفتح", lambda t: t.opens_at),
+            ("يغلق", lambda t: t.closes_at), ("المحاولات", lambda t: t.max_attempts)],
 ))
 
 

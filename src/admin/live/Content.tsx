@@ -10,6 +10,7 @@ import { chip, date, errMsg, Modal, ReasonDialog, smallBtn, useDebounced } from 
 import {
   BulkBar, type BulkDef, Checkbox, type Col, courseOptions, DataView, type FilterField, FilterControls, filterOf, InlineSelectHeader, items, listParams,
   Pager, SelectionSummary, teacherOptions, useListUrl, useSelection, useServerList, useUrlSearch,
+  ExportButton, SavedViews,
 } from './list';
 import { LessonFilePicker } from '@/components/LessonFilePicker';
 
@@ -66,6 +67,8 @@ export function CoursesLive() {
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <input type="search" aria-label="ابحث في الدورات" placeholder="ابحث في الدورات" value={text} onChange={(e) => setText(e.target.value)} style={searchStyle} />
         <FilterControls fields={COURSE_FIELDS} q={q} update={update} />
+        <ExportButton resource="courses" sel={sel} total={L.data?.count ?? 0} filter={filter} sort={sort} />
+        <SavedViews section="lectures" q={q} update={update} presets={[['بانتظار المراجعة', { state: 'pending' }], ['المؤرشفة', { state: 'archived' }]]} />
         <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> دورة جديدة</button>
       </div>
       <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
@@ -75,7 +78,7 @@ export function CoursesLive() {
       <DataView rows={L.data?.results} cols={cols} sel={sel} total={L.data?.count ?? 0} rowLabel={(c) => c.title} sort={sort} setSort={(x) => update({ sort: x })}
         loading={L.loading} err={L.err} retry={() => void L.reload()} />
       <Pager page={page} total={L.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
-      <BulkBar resource="courses" sel={sel} total={L.data?.count ?? 0} actions={COURSE_ACTIONS} filter={filter} onDone={() => void L.reload()} />
+      <BulkBar resource="courses" sel={sel} total={L.data?.count ?? 0} actions={COURSE_ACTIONS} filter={filter} onDone={() => void L.reload()} exportable />
       {adding && <CourseForm onClose={() => setAdding(false)} onSaved={(c) => { setAdding(false); void L.reload(); setOpen(c.id); }} />}
       {open !== null && <CoursePanel id={open} onClose={() => setOpen(null)} onChanged={() => void L.reload()} />}
     </>
@@ -294,6 +297,8 @@ export function QuizzesLive() {
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <input type="search" aria-label="ابحث في الاختبارات" placeholder="ابحث في الاختبارات" value={text} onChange={(e) => setText(e.target.value)} style={searchStyle} />
         <FilterControls fields={QUIZ_FIELDS} q={q} update={update} />
+        <ExportButton resource="tests" sel={sel} total={L.data?.count ?? 0} filter={filter} sort={sort} />
+        <SavedViews section="quizzes" q={q} update={update} />
         <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> اختبار جديد</button>
       </div>
       <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
@@ -303,7 +308,7 @@ export function QuizzesLive() {
       <DataView rows={L.data?.results} cols={cols} sel={sel} total={L.data?.count ?? 0} rowLabel={(t) => t.title} sort={sort} setSort={(x) => update({ sort: x })}
         loading={L.loading} err={L.err} retry={() => void L.reload()} />
       <Pager page={page} total={L.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
-      <BulkBar resource="tests" sel={sel} total={L.data?.count ?? 0} actions={QUIZ_ACTIONS} filter={filter} onDone={() => void L.reload()} />
+      <BulkBar resource="tests" sel={sel} total={L.data?.count ?? 0} actions={QUIZ_ACTIONS} filter={filter} onDone={() => void L.reload()} exportable />
       {adding && <QuizForm onClose={() => setAdding(false)} onSaved={(t) => { setAdding(false); void L.reload(); setOpen(t.id); }} />}
       {open !== null && <QuizPanel id={open} onClose={() => setOpen(null)} onChanged={() => void L.reload()} />}
     </>
