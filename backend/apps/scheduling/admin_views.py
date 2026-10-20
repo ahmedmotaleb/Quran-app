@@ -25,7 +25,8 @@ from apps.core.models import AppSettings
 from apps.core.pagination import StandardPagination
 
 from . import services
-from .models import Booking, Circle, SessionOccurrence
+from . import membership
+from .models import Booking, Circle, CircleMember, SessionOccurrence
 
 
 def _page(view, request, qs, fn):
@@ -57,6 +58,7 @@ def _circles():
     now = timezone.now()
     upcoming = Q(occurrences__status=SessionOccurrence.Status.SCHEDULED, occurrences__starts_at__gte=now)
     return Circle.objects.select_related("teacher").annotate(
+        member_count=Count("members", filter=Q(members__active=True), distinct=True),
         upcoming=Count("occurrences", filter=upcoming, distinct=True),
         booked=Count("occurrences__bookings", filter=upcoming & Q(occurrences__bookings__status=Booking.Status.CONFIRMED), distinct=True))
 
@@ -65,6 +67,7 @@ def _circle_out(c: Circle) -> dict:
     return {"id": c.id, "name": c.name, "teacher": {"id": c.teacher_id, "name": c.teacher.full_name}, "level": c.level,
             "capacity": c.capacity, "schedule_note": c.schedule_note, "state": c.state,
             "upcoming_sessions": getattr(c, "upcoming", None), "upcoming_booked_seats": getattr(c, "booked", None),
+            "members": getattr(c, "member_count", None),
             "updated_at": c.updated_at.isoformat()}
 
 
@@ -111,6 +114,9 @@ class AdminCircleDetail(AdminView):
                 most = max((o.n for o in fut), default=0)
                 if d["capacity"] < most:
                     raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"capacity": [f"لا تقل عن عدد المحجوز ({most})."]})
+                members = membership.active_count(c)
+                if d["capacity"] < members:
+                    raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"capacity": [f"لا تقل عن عدد الأعضاء ({members})."]})
                 fut.update(capacity=d["capacity"])
             for k, v in d.items():
                 setattr(c, k, v)
@@ -191,10 +197,12 @@ class AdminCircleSessions(AdminView):
                     created += 1
             except IntegrityError:  # a concurrent change took the time
                 item.update(ok=False, problem="تعارض مع جلسة أُضيفت للتو")
+        synced = membership.sync_circle(c) if created else None  # members are booked into the new sessions
         if not d["dry_run"]:
             audit("admin.circle_sessions", actor=request.user, target=c, request=request, created=created, replaced_open_slots=replaced,
                   weekday=d["weekday"], time=str(d["time"]), weeks=d["weeks"])
-        return Response({"dry_run": d["dry_run"], "created": created, "replaced_open_slots": replaced, "timezone": str(tz), "plan": plan},
+        return Response({"dry_run": d["dry_run"], "created": created, "replaced_open_slots": replaced, "timezone": str(tz), "plan": plan,
+                         "members_booked": synced["booked"] if synced else 0},
                         status=200 if d["dry_run"] else 201)
 
 
@@ -245,3 +253,37 @@ class AdminBookingCancel(AdminView):
         audit("admin.booking_cancelled", actor=request.user, target=b, request=request, reason=reason)
         b = Booking.objects.select_related("occurrence__teacher", "occurrence__circle", "student", "cancelled_by").get(pk=b.pk)
         return Response(_booking_out(b))
+
+
+# ---- Circle members --------------------------------------------------------------------
+def _member_out(m: CircleMember) -> dict:
+    return {"id": m.id, "student": {"id": m.student_id, "name": m.student.full_name}, "active": m.active,
+            "joined_at": m.created_at.isoformat(), "ended_at": m.ended_at.isoformat() if m.ended_at else None,
+            "end_reason": m.end_reason}
+
+
+class AdminCircleMembers(AdminView):
+    """GET: members (active first, then past). POST {student}: join (auto-books upcoming sessions)."""
+
+    def get(self, request, pk):
+        c = get_object_or_404(Circle, pk=pk)
+        qs = CircleMember.objects.filter(circle=c).select_related("student")
+        if request.query_params.get("all") != "1":
+            qs = qs.filter(active=True)
+        return Response({"capacity": c.capacity, "active": membership.active_count(c), "results": [_member_out(m) for m in qs[:200]]})
+
+    def post(self, request, pk):
+        c = get_object_or_404(Circle.objects.select_related("teacher"), pk=pk)
+        student = get_object_or_404(User, pk=request.data.get("student") if str(request.data.get("student", "")).isdigit() else None, role=Role.STUDENT)
+        m, r = membership.join(c, student, request.user)
+        audit("admin.circle_member_added", actor=request.user, target=m, request=request, circle=c.pk, student=student.pk, **r)
+        return Response({**_member_out(m), **r}, status=201)
+
+
+class AdminCircleMemberEnd(AdminView):
+    def post(self, request, pk):
+        m = get_object_or_404(CircleMember.objects.select_related("circle", "student"), pk=pk, active=True)
+        n = membership.leave(m, request.user, _reason(request, required=False))
+        audit("admin.circle_member_removed", actor=request.user, target=m, request=request, circle=m.circle_id,
+              student=m.student_id, bookings_cancelled=n)
+        return Response({"bookings_cancelled": n})

@@ -69,6 +69,9 @@ const PRESETS: Record<A.Role, [string, Record<string, string>][]> = {
   parent: [['دون أبناء مرتبطين', { linked: '0' }], ['بانتظار الاعتماد', { status: 'pending' }]],
 };
 
+const publishedCircles = async (): Promise<[string, string][]> =>
+  (await A.listCircles({ state: 'published', page_size: '100', sort: 'name' })).results.map((c) => [String(c.id), `${c.name} (${c.members ?? 0}/${c.capacity})`]);
+
 function peopleActions(role: A.Role): BulkDef[] {
   const base: BulkDef[] = [
     { key: 'activate', label: 'تفعيل', tone: 'primary', body: (n) => `سيُفعَّل ${items(n)} ويستطيع أصحابها الدخول.`, ok: (n) => `تفعيل ${items(n)}` },
@@ -81,6 +84,9 @@ function peopleActions(role: A.Role): BulkDef[] {
   if (role === 'student') base.push(
     { key: 'assign_teacher', label: 'تعيين معلم', title: 'تعيين معلم', params: [{ key: 'teacher', label: 'المعلم', type: 'remote', load: approvedTeachers }, { key: 'replace', label: 'إنهاء ارتباطهم بمعلميهم الحاليين', type: 'check' }],
       body: (n) => `سيُربط ${items(n)} بالمعلم المختار. من كان مرتبطًا به يُترك كما هو، والحسابات الموقوفة لا تتغيّر.`, ok: (n) => `تعيين لـ ${items(n)}` },
+    { key: 'move_to_circle', label: 'نقل إلى حلقة', title: 'نقل إلى حلقة', params: [{ key: 'circle', label: 'الحلقة (المنشورة)', type: 'remote', load: publishedCircles }],
+      body: (n) => `سينضم ${items(n)} إلى الحلقة ويُحجز لهم في كل جلساتها القادمة، وتنتهي عضويتهم في حلقاتهم الأخرى (تُلغى حجوزاتها القادمة فقط). لا يُتجاوز عدد مقاعد الحلقة.`,
+      ok: (n) => `نقل ${items(n)}` },
     { key: 'enroll', label: 'إضافة إلى دورة', title: 'إضافة إلى دورة', params: [{ key: 'course', label: 'الدورة', type: 'remote', load: courseOptions }],
       body: (n) => `سيُسجَّل ${items(n)} في الدورة المختارة. المسجّل من قبل يُترك كما هو.`, ok: (n) => `تسجيل ${items(n)}` });
   base.push(

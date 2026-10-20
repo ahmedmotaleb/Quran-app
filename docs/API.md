@@ -115,7 +115,7 @@ Response: `{"requested": 25, "success": 23, "skipped": 1, "failed": 1, "results"
 
 | Resource | Actions | Never |
 | --- | --- | --- |
-| `users` (students, teachers, parents) | `activate` (also restores archived), `suspend`*, `archive`* (soft delete), `approve`, `unapprove`* (teachers only), `assign_teacher`† (students), `enroll`† (students), `notify`†, `resend_setup` | delete; admins are never targets |
+| `users` (students, teachers, parents) | `activate` (also restores archived), `suspend`*, `archive`* (soft delete), `approve`, `unapprove`* (teachers only), `assign_teacher`† (students), `move_to_circle`† (students), `enroll`† (students), `notify`†, `resend_setup` | delete; admins are never targets |
 | `circles` | `publish`, `disable`*, `draft`, `delete` (draft with no sessions) | delete with sessions |
 | `sessions` | `cancel`* (future only; bookings cancelled, students notified) | delete |
 | `bookings` | `cancel`* (future only; student notified) | delete; past bookings and attendance |
@@ -131,10 +131,19 @@ Response: `{"requested": 25, "success": 23, "skipped": 1, "failed": 1, "results"
 
 | Action | `params` | Rules |
 | --- | --- | --- |
+| `move_to_circle` | `circle` (id) | the circle must be published; joins it (booked into every upcoming session) and leaves the student's other circles (their future bookings cancelled); full circle → refused (`circle_full`) |
 | `assign_teacher` | `teacher` (id), `replace` (bool) | teacher must be active and approved; suspended/archived students refused; already linked → skipped; `replace` ends the student's other active teachers |
 | `enroll` | `course` (id) | not an archived course; suspended/archived students refused; already actively enrolled → skipped |
 | `notify` | `title` (3–80), `body` (3–500) | in-app message (`admin_message`); the phone's lock screen shows only the generic text; suspended/archived skipped as refused; the audit event keeps the title and counts, not the body |
 | `resend_setup` | — | needs SMTP (`409 email_off`); only accounts without a password; at most once per 10 minutes per account (`recently_sent` → skipped); the link is emailed, never returned or logged |
+
+**Circle members** (owner decision 20 October 2026): `GET admin/circles/{id}/members` (`?all=1` includes past
+members), `POST admin/circles/{id}/members {student}`, `POST admin/circle-members/{id}/end {reason?}`. A member is booked
+into every upcoming session of the circle (no per-session notification; one «انضممت إلى …»). Joining needs a published
+circle and a free seat (active members < capacity, checked under a lock); capacity cannot drop below the member count.
+New circle sessions book members at once (`members_booked`), and the hourly job `sync_circle_members` fills gaps.
+A session the student cannot attend (another booking at that time) or a full session is skipped and reported.
+Leaving cancels only future bookings in that circle; past bookings and attendance stay.
 
 **`POST admin/{resource}/export`** (`users`, `circles`, `bookings`, `sessions`, `courses`, `lessons`, `enrollments`, `tests`):
 the same `ids` or `filter` (+ `exclude_ids`, `sort`) as a bulk action, up to 20,000 rows. Answers `text/csv` (UTF-8 with

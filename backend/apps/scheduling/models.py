@@ -141,3 +141,21 @@ class Booking(TimeStamped):
             models.UniqueConstraint(fields=["student", "idempotency_key"], name="booking_idempotent"),
         ]
         indexes = [models.Index(fields=["student", "status"])]
+
+
+class CircleMember(TimeStamped):
+    """A student enrolled in a circle. Members are booked into every upcoming session of the circle automatically
+    (apps.scheduling.membership); leaving cancels only future circle bookings, history stays."""
+
+    circle = models.ForeignKey(Circle, on_delete=models.PROTECT, related_name="members")
+    student = models.ForeignKey(User, on_delete=models.PROTECT, related_name="circle_memberships")
+    active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name="+")
+    ended_at = models.DateTimeField(null=True, blank=True)
+    ended_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    end_reason = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ["-active", "student__full_name"]
+        constraints = [models.UniqueConstraint(fields=["circle", "student"], condition=Q(active=True), name="one_active_circle_membership")]
+        indexes = [models.Index(fields=["circle", "active"]), models.Index(fields=["student", "active"])]

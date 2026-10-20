@@ -37,9 +37,10 @@ def _apply(qs, f):
         e = Exists(SessionOccurrence.objects.filter(teacher=OuterRef("pk"), status=SessionOccurrence.Status.SCHEDULED, starts_at__gt=now))
         qs = qs.filter(e if f["has_slots"] else ~e)
     if "circle" in f:
-        from apps.scheduling.models import Booking, Circle
+        from apps.scheduling.models import Booking, Circle, CircleMember
 
         qs = qs.filter(Exists(Circle.objects.filter(pk=f["circle"], teacher=OuterRef("pk")))
+                       | Exists(CircleMember.objects.filter(student=OuterRef("pk"), circle_id=f["circle"], active=True))
                        | Exists(Booking.objects.filter(student=OuterRef("pk"), occurrence__circle_id=f["circle"], status=Booking.Status.CONFIRMED)))
     if "teacher" in f:
         qs = qs.filter(Exists(TeacherAssignment.objects.filter(student=OuterRef("pk"), teacher_id=f["teacher"], active=True)))
@@ -166,6 +167,34 @@ def _enroll(u: User, actor, reason: str, *, course):
     Enrollment.objects.create(course=course, student=u, created_by=actor, starts_on=timezone.localdate())
 
 
+# ---- Move to a circle -------------------------------------------------------------------------
+def _circle_params(raw: dict, actor) -> dict:
+    from apps.scheduling.models import Circle
+
+    c = Circle.objects.select_related("teacher").filter(pk=raw.get("circle") if str(raw.get("circle", "")).isdigit() else None).first()
+    if c is None:
+        raise _bad("circle", "اختر حلقة.")
+    if c.state != Circle.State.PUBLISHED:
+        raise _bad("circle", "الحلقة غير منشورة.")
+    return {"circle": c}
+
+
+def _move_to_circle(u: User, actor, reason: str, *, circle):
+    from apps.scheduling import membership
+    from apps.scheduling.models import CircleMember
+
+    if u.role != Role.STUDENT:
+        raise Refuse("not_student", "ليس حساب طالب.")
+    if CircleMember.objects.filter(circle=circle, student=u, active=True).exists():
+        raise Skip("already_member", "عضو في هذه الحلقة بالفعل.")
+    try:
+        membership.join(circle, u, actor)  # checks capacity under a lock on the circle
+    except membership.MembershipError as e:
+        raise Refuse(e.code, str(e.detail)) from None
+    for old in CircleMember.objects.filter(student=u, active=True).exclude(circle=circle).select_related("circle", "student"):
+        membership.leave(old, actor, reason or f"نُقل إلى {circle.name}")
+
+
 # ---- In-app message --------------------------------------------------------------------------
 def _message_params(raw: dict, actor) -> dict:
     import uuid
@@ -239,6 +268,7 @@ register(Resource(
         "assign_teacher": Action(_assign_teacher, params=_teacher_params, audit_keys=("teacher", "replace")),
         "enroll": Action(_enroll, params=_course_params, audit_keys=("course",)),
         "notify": Action(_notify, params=_message_params, audit_keys=("title", "batch")),
+        "move_to_circle": Action(_move_to_circle, params=_circle_params, audit_keys=("circle",)),
         "resend_setup": Action(_resend_setup, params=_resend_params),
     },
     export=[

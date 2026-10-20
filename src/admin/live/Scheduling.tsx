@@ -51,6 +51,7 @@ export function CirclesLive() {
     { key: 't', label: 'المعلم', cell: (c) => c.teacher.name },
     { key: 'l', label: 'المستوى', cell: (c) => c.level || '—' },
     { key: 'cap', label: 'السعة', sort: 'capacity', latin: true, cell: (c) => c.capacity },
+    { key: 'mem', label: 'الأعضاء', latin: true, cell: (c) => c.members ?? 0 },
     { key: 'up', label: 'الجلسات القادمة', latin: true, cell: (c) => c.upcoming_sessions },
     { key: 'bk', label: 'المقاعد المحجوزة', latin: true, cell: (c) => c.upcoming_booked_seats },
     { key: 'st', label: 'الحالة', sort: 'state', cell: (c) => pill(CIRCLE_ST[c.state]) },
@@ -142,6 +143,7 @@ function CirclePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
           {c.state === 'off' && <button disabled={busy} onClick={() => act(() => A.setCircleState(c.id, 'draft'), 'أُعيدت إلى مسودة')} style={smallBtn()}>إعادة إلى مسودة</button>}
         </div>
         {c.state !== 'published' && <p style={{ margin: 0, fontSize: 13, color: color.muted }}>جلسات الحلقة لا تظهر للطلاب ولا تُحجز إلا بعد النشر.</p>}
+        <Members circle={c} onChanged={() => { void reload(); onChanged(); }} />
         <section style={{ borderTop: `1px solid ${color.divider}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>الجلسات (بتوقيت القاهرة)</h3>
           {c.sessions.length === 0 && <p style={{ margin: 0, color: color.muted }}>لا توجد جلسات بعد. اختر «جدولة جلسات».</p>}
@@ -174,6 +176,53 @@ function CirclePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
   );
 }
 
+/** Members are booked into every upcoming session of the circle; removing one cancels only their future bookings. */
+function Members({ circle, onChanged }: { circle: A.Circle; onChanged: () => void }) {
+  const [d, setD] = useState<{ capacity: number; active: number; results: A.CircleMember[] } | null>(null);
+  const [opts, setOpts] = useState<[string, string][]>([]); const [pick, setPick] = useState(''); const [busy, setBusy] = useState(false);
+  const [end, setEnd] = useState<A.CircleMember | null>(null); const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(() => { A.circleMembers(circle.id).then(setD).catch((e) => setErr(errMsg(e))); }, [circle.id]);
+  useEffect(() => { load(); studentOptions().then(setOpts).catch(() => setOpts([])); }, [load]);
+  const add = async () => {
+    if (!pick) return setErr('اختر طالبًا.');
+    setBusy(true); setErr(null);
+    try {
+      const r = await A.addCircleMember(circle.id, Number(pick));
+      toast(`أُضيف إلى الحلقة وحُجزت ${r.booked} جلسة${r.conflict ? ` (${r.conflict} تتعارض مع مواعيد أخرى)` : ''}${r.full ? ` (${r.full} مكتملة)` : ''}`);
+      setPick(''); load(); onChanged();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  const members = d?.results ?? [];
+  const ids = new Set(members.map((m) => String(m.student.id)));
+  return (
+    <section aria-labelledby={`mem-${circle.id}`} style={{ borderTop: `1px solid ${color.divider}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <h3 id={`mem-${circle.id}`} style={{ margin: 0, fontSize: 16 }}>الأعضاء {d && <span style={{ fontFamily: font.latin, color: color.muted, fontSize: 14 }}>({d.active}/{d.capacity})</span>}</h3>
+      <p style={{ margin: 0, fontSize: 13, color: color.muted }}>يُحجز للأعضاء تلقائيًا في كل جلسات الحلقة القادمة، وتُلغى حجوزاتهم القادمة فقط عند إزالتهم.</p>
+      {circle.state === 'published' && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <label htmlFor={`mem-add-${circle.id}`} style={{ ...labelStyle, fontSize: 14 }}>إضافة طالب</label>
+          <select id={`mem-add-${circle.id}`} value={pick} onChange={(e) => setPick(e.target.value)} style={{ ...inputStyle(null), width: 'auto', minWidth: 200 }}>
+            <option value="">اختر…</option>{opts.filter(([k]) => !ids.has(k)).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+          <button disabled={busy || !!(d && d.active >= d.capacity)} onClick={add} style={smallBtn('primary')}>{d && d.active >= d.capacity ? 'الحلقة مكتملة' : 'إضافة'}</button>
+        </div>
+      )}
+      <FieldError msg={err} />
+      {d && members.length === 0 && <p style={{ margin: 0, color: color.muted }}>لا يوجد أعضاء بعد.</p>}
+      {members.map((m) => (
+        <div key={m.id} style={{ display: 'flex', gap: 10, alignItems: 'center', minHeight: 44, borderTop: `1px solid ${color.divider}` }}>
+          <span style={{ flex: 1 }}>{m.student.name}</span>
+          <span style={{ fontSize: 13, color: color.muted }}>منذ {m.joined_at.slice(0, 10)}</span>
+          <button onClick={() => setEnd(m)} style={smallBtn('danger')}>إزالة</button>
+        </div>
+      ))}
+      {end && <ReasonDialog title="إزالة من الحلقة" body={`ستنتهي عضوية ${end.student.name} وتُلغى حجوزاته القادمة في هذه الحلقة، ويُبلَّغ بذلك. الجلسات السابقة والحضور تبقى.`}
+        ok="إزالة" required={false} onClose={() => setEnd(null)}
+        run={async (r) => { const x = await A.endCircleMember(end.id, r); toast(`أُزيل من الحلقة (${x.bookings_cancelled} حجز أُلغي)`); setEnd(null); load(); onChanged(); }} />}
+    </section>
+  );
+}
+
 function ScheduleDialog({ circle, onClose, onDone }: { circle: A.Circle; onClose: () => void; onDone: () => void }) {
   const [f, setF] = useState({ weekday: 6, time: '17:00', minutes: '60', weeks: '4' });
   const [plan, setPlan] = useState<A.PlanItem[] | null>(null); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
@@ -188,7 +237,7 @@ function ScheduleDialog({ circle, onClose, onDone }: { circle: A.Circle; onClose
     setBusy(true); setErr(null);
     try {
       const r = await A.scheduleCircle(circle.id, body(false));
-      toast(`أُضيفت ${r.created} جلسة${r.replaced_open_slots ? ` واستُبدل ${r.replaced_open_slots} موعد فردي غير محجوز` : ''}`); onDone(); onClose();
+      toast(`أُضيفت ${r.created} جلسة${r.replaced_open_slots ? ` واستُبدل ${r.replaced_open_slots} موعد فردي غير محجوز` : ''}${r.members_booked ? ` وحُجز للأعضاء ${r.members_booked} مقعد` : ''}`); onDone(); onClose();
     } catch (x) { setErr(errMsg(x)); setBusy(false); }
   };
   const ok = plan?.filter((p) => p.ok).length ?? 0;
