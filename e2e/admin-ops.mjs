@@ -88,6 +88,9 @@ await step('5. built-in view, then save and delete an own view', async () => {
   await page.getByRole('button', { name: 'حذف بحث سارة' }).click();
   await page.getByRole('option', { name: 'بحث سارة' }).waitFor({ state: 'detached' });
   await page.getByRole('searchbox').fill('');
+  // The search is debounced: wait until it reaches the URL, or the selection made next is reset by it.
+  await page.waitForURL((u) => !u.href.includes('q='));
+  await page.waitForLoadState('networkidle');
 });
 await step('6. archive, find under «مؤرشف», restore', async () => {
   await pick('سارة أحمد');
