@@ -6,8 +6,9 @@
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
-const SETUP_OUT = `${out}/parent-setup.txt`;
+const SETUP_OUT = resolve(out, 'parent-setup.txt');  // absolute: the helper runs from backend/
 execSync(process.env.SETUP_CMD || 'bash e2e/ci/py.sh parent_setup.py', { stdio: 'inherit', env: { ...process.env, SETUP_OUT } });
 const query = readFileSync(SETUP_OUT, 'utf8').trim();
 const PW = 'Parent-pass-2026';
