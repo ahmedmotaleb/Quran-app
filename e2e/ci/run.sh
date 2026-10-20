@@ -36,6 +36,8 @@ reseed; SOON_CMD="bash e2e/ci/py.sh soon_booking.py" run live-session
 # 3. Spaced repetition and Today plan; notifications inbox.
 reseed; DUE_CMD="bash e2e/ci/py.sh due_reviews.py" run reviews
 reseed; run inbox
+# 3b. Student mistakes: teacher records a point, student sees and opens it, follow-up task, resolve, parent summary.
+reseed; run mistakes
 # 4. Admin: real sign-in with enforced two-step verification (second server, which also has a test ayah-audio
 #    source for quran-audio), then persistent edits.
 reseed; MFA_ENFORCED=1 RESET_CMD="bash e2e/ci/py.sh mfa_reset.py" run admin http://localhost:5176/

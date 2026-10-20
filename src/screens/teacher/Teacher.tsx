@@ -23,6 +23,7 @@ import { InboxBell } from '@/screens/common/Inbox';
 import { api } from '@/api/client';
 import { discardVoiceNote, startVoiceNote, stopVoiceNote, voiceNote, voiceNoteRecording } from '@/services/voiceNote';
 import { studentProgress, type ApiProgress } from '@/api/endpoints';
+import { CorrectionForm, TeacherCorrections, TeacherCorrectionsCard } from '@/screens/common/Corrections';
 
 interface Dash {
   awaiting_review: { submission: number; student: { id: number; name: string }; title: string; age_hours: number }[];
@@ -168,6 +169,7 @@ export function TeacherDash() {
         {pend.length > 0 && <button onClick={() => tab('treviews')} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.ivory, fontSize: 14, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline' }}>عرض كل المراجعات</button>}
       </section>
       {live && <AttentionLive />}
+      {live && <TeacherCorrectionsCard />}
       {live && <TodayLive />}
       {!live && <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>جلسات اليوم</h2>
@@ -258,6 +260,7 @@ export function TeacherStudent() {
         </div>}
         {live && <StudentProgressLive key={u.id} id={Number(u.id)} />}
         {live && <ReviewSchedulesLive key={`r${u.id}`} id={Number(u.id)} />}
+        {live && <TeacherCorrections key={`c${u.id}`} ctx={{ student: Number(u.id), source: 'review' }} title="الأخطاء ونقاط المراجعة" />}
         <button onClick={() => openAssign(u.id)} style={primaryBtn(52, 16)}><Icon name="plus" /> أنشئ واجبًا لـ {u.name}</button>
         <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>الخطة</h3>
@@ -436,6 +439,8 @@ export function TeacherReview() {
             </div>
           ))}
         </section>
+        {s.liveMode && <TeacherCorrections key={`c${r.id}`} title="أخطاء في هذا التسجيل"
+          ctx={{ student: Number(r.sid), source: 'submission', submission: Number(r.id), surah: r.surah, from: r.from, to: r.to }} filter={{ submission: Number(r.id) }} />}
         <section style={{ ...card, padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>التقييم</h2>
           {([['hifz', 'الحفظ'], ['tajweed', 'التجويد'], ['fluency', 'الطلاقة']] as const).map(([k, l]) => {
@@ -738,14 +743,15 @@ function ScheduleLive() {
                 <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${color.divider}`, paddingTop: 8 }}>
                   <span style={{ fontSize: 14 }}><strong>{b.student_name}</strong>{b.assignment_title ? ` · ${b.assignment_title}` : ''}</span>
                   {b.note && <span style={muted(13)}>ملاحظة الطالب: {b.note}</span>}
-                  {started ? (
+                  {started ? (<>
                     <div role="radiogroup" aria-label={`حضور ${b.student_name}`} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       {ATT_OPTS.map(([v, l]) => {
                         const on = b.attendance === v;
                         return <button key={v} role="radio" aria-checked={on} onClick={() => setAttendance(b.id, v)} style={{ minHeight: 40, padding: '0 12px', borderRadius: 999, border: `1.5px solid ${on ? color.primary : color.borderStrong}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{l}</button>;
                       })}
                     </div>
-                  ) : (
+                    <CorrectionForm ctx={{ student: b.student, source: 'session', booking: b.id }} />
+                  </>) : (
                     <button onClick={() => openSheet({ kind: 'confirm', title: 'إلغاء الحجز؟', body: `سيُلغى موعد ${b.student_name} ويصله إشعار بذلك.`, ok: 'نعم، ألغِ الحجز', danger: true, onOk: () => { setState({ sheet: null }); teacherCancelBooking(b.id); } })}
                       style={{ alignSelf: 'flex-start', minHeight: 40, padding: '0 12px', borderRadius: 10, border: `1px solid ${color.dangerInk}`, background: 'transparent', color: color.dangerInk, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>إلغاء الحجز</button>
                   )}

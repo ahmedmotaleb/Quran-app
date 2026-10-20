@@ -547,7 +547,7 @@ export function rescheduleSession(x: Session) {
 /* ------------------------------------------------------------------ */
 export interface ReviewItem {
   id: string; taskId?: string; student: string; sid: string; title: string; range: string; dur: number; url?: string | null; at: string;
-  status: 'submitted' | 'reviewed';
+  status: 'submitted' | 'reviewed'; surah?: number; from?: number; to?: number;
 }
 /** All submissions visible to the teacher: Yousef's live tasks + other demo students. Pending first. */
 export function selectReviews(s: AppState): ReviewItem[] {

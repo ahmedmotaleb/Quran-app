@@ -1,3 +1,4 @@
+import { CorrectionsSummaryCard } from '@/screens/common/Corrections';
 import { color } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
 import { Avatar, Badge, ProgressBar, card, muted } from '@/components/ui';
@@ -209,6 +210,7 @@ function ParentLive() {
       {/* Keyed by child: switching children never shows the previous child's numbers. */}
       <ChildProgress key={kid.id} id={Number(kid.id)} />
     </section>
+    <CorrectionsSummaryCard key={`c${kid.id}`} student={Number(kid.id)} who="parent" />
     {last?.feedback && (
       <section style={{ background: color.sageTint, borderRadius: 18, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <p style={{ margin: 0, fontSize: 13, color: color.primary, fontWeight: 700 }}>أحدث تقييم · {fmtRelative(last.feedback.created_at, tz)}</p>

@@ -240,3 +240,69 @@ class ReviewEvent(models.Model):
 
     class Meta:
         ordering = ["created_at", "id"]
+
+
+class Correction(TimeStamped):
+    """One learning point a teacher records (pack prompt 33): a structured category at a Quran reference, with
+    guidance and a status. The Quran text is never copied; only surah/ayah are stored and the verified text is
+    rendered from the canonical source. Each teacher correction is its own record: recurrence is counted from the
+    same category at the same reference, never by merging records."""
+
+    class Category(models.TextChoices):
+        HIFZ = "hifz", "حفظ"
+        OMISSION = "omission", "نسيان / سقوط"
+        ADDITION = "addition", "زيادة"
+        SUBSTITUTION = "substitution", "تبديل"
+        ORDER = "order", "ترتيب"
+        MAKHARIJ = "makharij", "نطق / مخارج"
+        SIFAT = "sifat", "صفات الحروف"
+        NOON_SAKINAH = "noon_sakinah", "أحكام النون الساكنة والتنوين"
+        MEEM_SAKINAH = "meem_sakinah", "أحكام الميم الساكنة"
+        MADD = "madd", "المدود"
+        GHUNNAH = "ghunnah", "الغنة"
+        TAFKHEEM = "tafkheem", "التفخيم والترقيق"
+        WAQF = "waqf", "الوقف والابتداء"
+        FLUENCY = "fluency", "طلاقة / تردد"
+        OTHER = "other", "أخرى"
+
+    MEMORIZATION = ("hifz", "omission", "addition", "substitution", "order")
+
+    class Source(models.TextChoices):
+        SUBMISSION = "submission", "تسجيل تلاوة"
+        SESSION = "session", "جلسة مباشرة"
+        TASK = "task", "مهمة حفظ"
+        REVIEW = "review", "مهمة مراجعة"
+
+    class Priority(models.TextChoices):
+        MINOR = "minor", "بسيط"
+        REVIEW = "review", "يحتاج مراجعة"
+        IMPORTANT = "important", "مهم"
+
+    class Status(models.TextChoices):
+        NEW = "new", "جديد"
+        IMPROVING = "improving", "يتحسن"
+        CORRECTED = "corrected", "تم التصحيح"
+
+    student = models.ForeignKey(User, on_delete=models.PROTECT, related_name="corrections")
+    teacher = models.ForeignKey(User, on_delete=models.PROTECT, related_name="corrections_given")
+    source = models.CharField(max_length=12, choices=Source.choices)
+    submission = models.ForeignKey(Submission, null=True, blank=True, on_delete=models.PROTECT, related_name="corrections")
+    booking = models.ForeignKey("scheduling.Booking", null=True, blank=True, on_delete=models.PROTECT, related_name="corrections")
+    assignment = models.ForeignKey(Assignment, null=True, blank=True, on_delete=models.PROTECT, related_name="corrections")
+    surah = models.PositiveSmallIntegerField()
+    ayah = models.PositiveSmallIntegerField()
+    category = models.CharField(max_length=16, choices=Category.choices)
+    priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.REVIEW)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.NEW)
+    note = models.CharField(max_length=500, blank=True)            # to the student (also shown to the teacher)
+    guidance = models.CharField(max_length=500, blank=True)        # how to correct it (student)
+    internal_note = models.CharField(max_length=500, blank=True)   # teachers and admins only; never students or parents
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    follow_up = models.ForeignKey(Assignment, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(surah__gte=1, surah__lte=114) & Q(ayah__gte=1), name="correction_valid_reference"),
+        ]
+        indexes = [models.Index(fields=["student", "status"]), models.Index(fields=["student", "category", "surah", "ayah"])]

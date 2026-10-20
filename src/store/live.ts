@@ -71,7 +71,7 @@ export async function loadTeacherData() {
     const reviews: ReviewItem[] = sub.results.map((x) => ({
       id: String(x.id), taskId: String(x.assignment), student: x.student_name, sid: String(x.student), title: x.assignment_title,
       range: rangeL({ s: x.surah, from: x.ayah_from, to: x.ayah_to }), dur: x.duration_seconds, url: x.audio?.url ?? null,
-      at: fmtRelative(x.created_at, tz), status: x.feedback ? 'reviewed' : 'submitted',
+      at: fmtRelative(x.created_at, tz), status: x.feedback ? 'reviewed' : 'submitted', surah: x.surah, from: x.ayah_from, to: x.ayah_to,
     }));
     setState((s) => ({
       students: st.results.map(E.toStudent), tasks: a.results.map((x) => E.toTask(x, tz)), reviews, tsched: occ, grading: gr,
