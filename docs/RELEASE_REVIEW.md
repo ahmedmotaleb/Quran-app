@@ -12,7 +12,7 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 | Teacher web/PWA | PASS | Students, assignments, review queue, feedback, schedule, attendance, grading and content authoring (drafts reviewed and published by admins) are live (E2E `loop`, `schedule`, `learn`, `teacher-content`). Mistakes tracking: points recorded at an ayah from a review, a session or the student file, follow-up tasks, resolve/reopen (E2E `mistakes`) | — |
 | Parent web/PWA | PASS | E2E `parent`, `progress`: linked children only, no audio, same numbers as the student. «تسجيل دخول ولي الأمر» on the shared sign-in, `#/parent` link, setup link → parent sign-in, remembered child, mistakes summary without free text (E2E `parent-login`, `test_parent_portal.py`) | Installed-PWA parent session on a real phone (PWA QA) |
 | Product Admin Portal | PASS | Sign-in with enforced two-step verification, people, circles, bookings, courses, quizzes, settings (support email halqa.app.eg@gmail.com), audit: all on the API (E2E `admin*`). Bulk actions with select-all, CSV export, bulk teacher assignment, enrollment and in-app messages, setup-email resend, saved views, archive/restore (E2E `admin-bulk`, `admin-ops`). Subscriptions are hidden (owner decision: no charge for now) | — |
-| Backend/API + PostgreSQL | PASS | 242 tests on PostgreSQL in CI (concurrency, permissions, cross-role sweep); migrations check; `/api/ready` checks database, migrations, cache | — |
+| Backend/API + PostgreSQL | PASS | 247 tests on PostgreSQL in CI (concurrency, permissions, cross-role sweep); migrations check; `/api/ready` checks database, migrations, cache | — |
 | Quran source/import integrity | PASS | Tanzil Uthmani v1.1, 6,236 ayahs; nightly restore drill re-verifies byte-for-byte; E2E `quran` shows the screen equals the served text; no generated text | — |
 | Quran reader and audio practice | PASS | Bookmarks, reading position across devices, text size, ranges (E2E `reading`); repeat ×1–10 or continuous, speed, auto-advance (E2E `quran-audio`). Ayah audio from the licensed Quran Foundation Content API (Quran.com), production keys: Ops `audio-check` on 19 October fetched Al-Fatihah's 7 ayahs from `verses.quran.foundation` | Not yet listened to on a real phone (PWA QA) |
 | Private media storage | PASS | R2 private bucket, presigned reads; smoke after every deploy: upload, owner playback, anonymous and unsigned refused; 200 KB upload 0.7–1.4 s. Recordings deleted 48 h after the teacher's review (hourly job; never before review) | Recordings not backed up, and deleted 48 h after review (owner decisions in RECOVERY.md) |
@@ -20,7 +20,7 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 | Subscriptions/payments | NOT TESTED (not enabled) | Owner decision: no charge for now; the section is hidden in the live portal | — |
 | Notifications | PARTIAL | In-app inbox and bell for all events (E2E `inbox`); hourly reminders job runs in production; Web Push built and tested (`test_push.py`, `e2e/push.mjs`), off until `deploy/gcp-push.sh` runs | Push not yet verified on a real phone; email reminders need SMTP |
 | Live sessions | PASS | Meeting-link adapter: teacher adds the participant link (host links refused); `bookings/<id>/join` gives it only to the booked student inside the join window; early, late, cancelled, wrong-user and parent requests refused (`test_live_sessions.py`, E2E `live-session`) | Calls run in the meeting service, so the app has no evidence of who joined; the teacher marks attendance |
-| CI/E2E | PASS | Backend, Web (typecheck, build, PWA cache rules, npm audit, CSP in the production image), E2E live mode (25 suites, 7 handbook journeys) gate every PR | — |
+| CI/E2E | PASS | Backend, Web (typecheck, build, PWA cache rules, npm audit, CSP in the production image), E2E live mode (26 suites, 7 handbook journeys) gate every PR | — |
 | Security | PASS | Admin MFA enforced in production; lockout; throttles; CSP/HSTS/frame/permissions headers; argon2id; IDOR sweep; pip-audit and npm audit clean | Alerts for abuse need `gcp-ops.sh` (below) |
 | Performance/load | PARTIAL | Two runs on a Cloud Run-sized container: 50 active students + 10 staff/parents, 0 % errors, p95 21–23 ms, p99 265–310 ms, peaks 62 % CPU / 343 MiB, booking race 1 of 50 ([LOADTEST.md](LOADTEST.md)) | Not yet measured on Cloud Run + Neon itself or above 50 active users |
 | Backups/restore | PASS | Nightly drill restores production into an isolated database and verifies sign-in, Quran and media rows. Encrypted copies kept 30 days: first kept run 17 October (run 39056054938: 789 KB dump 25 s, restore 1 s, verify 4 s, `stored=yes`, artifact `halqa-db-backup-39056054938`). RPO 24 h / RTO 1 h (owner) | Neon's own extension (`pg_session_jwt`) is skipped on restore with a warning; checks pass |
@@ -54,7 +54,8 @@ Payments, push and live video are product scope, not blockers for a recitation p
 - Prompt 34, parent sign-in entry (#47).
 - Prompt 36, admin operations (#48): export, bulk assign, enroll, message, resend setup, saved views.
 - E2E made independent of the time of day: bookings are made two days ahead, and the recovery throttle is raised for the shared CI address.
-- Open: «نقل إلى حلقة» waits for a circle-membership decision.
+- Circle membership (owner decision): members are booked into every upcoming circle session; bulk «نقل إلى حلقة».
+- Test helper `past_booking.py` no longer collides with a seeded slot at certain hours.
 
 ## Changes since 16 October (`06bc3f4`)
 

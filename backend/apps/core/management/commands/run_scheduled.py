@@ -21,7 +21,7 @@ class Command(BaseCommand):
     help = "Run the hourly maintenance steps."
 
     def handle(self, **_):
-        steps = ["session_reminders", "generate_reviews"]
+        steps = ["session_reminders", "generate_reviews", "sync_circle_members"]
         if settings.MEDIA_STORAGE != "none":
             steps += ["purge_orphan_media", "purge_reviewed_recordings"]
         failed = []

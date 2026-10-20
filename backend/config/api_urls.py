@@ -92,6 +92,8 @@ urlpatterns = [
     path("admin/circles/<int:pk>", sched_admin.AdminCircleDetail.as_view()),
     path("admin/circles/<int:pk>/state", sched_admin.AdminCircleState.as_view()),
     path("admin/circles/<int:pk>/sessions", sched_admin.AdminCircleSessions.as_view()),
+    path("admin/circles/<int:pk>/members", sched_admin.AdminCircleMembers.as_view()),
+    path("admin/circle-members/<int:pk>/end", sched_admin.AdminCircleMemberEnd.as_view()),
     path("admin/sessions/<int:pk>/cancel", sched_admin.AdminOccurrenceCancel.as_view()),
     path("admin/bookings", sched_admin.AdminBookings.as_view()),
     path("admin/bookings/counts", sched_admin.AdminBookingCounts.as_view()),
