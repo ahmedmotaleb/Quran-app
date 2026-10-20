@@ -6,7 +6,7 @@ import { api, ApiError, LIVE } from '@/api/client';
 
 /** Pages opened from a link the person received: set a password (`#/reset`) or accept an invitation (`#/invite`). */
 const params = () => new URLSearchParams(window.location.hash.split('?')[1] ?? '');
-const toSignIn = () => { window.location.hash = '#/'; window.location.reload(); };
+const toSignIn = () => { window.location.hash = params().get('next') === 'parent' ? '#/parent' : '#/'; window.location.reload(); };
 
 function Frame({ title, sub, children }: { title: string; sub: string; children: ReactNode }) {
   return (

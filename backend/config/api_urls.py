@@ -11,6 +11,7 @@ from apps.learning import admin_bulk as _learn_bulk  # noqa: F401,E402
 from apps.assessments import admin_bulk as _assess_bulk  # noqa: F401,E402
 from apps.assessments import views as assessments
 from apps.learning import admin_views as learn_admin
+from apps.learning import corrections
 from apps.learning import progress
 from apps.learning import teacher_content
 from apps.learning import reviews
@@ -32,6 +33,13 @@ urlpatterns = [
     path("quran/bookmarks", quran.BookmarkList.as_view()),
     path("quran/bookmarks/<int:pk>", quran.BookmarkDetail.as_view()),
     # Learning
+    path("corrections", corrections.CorrectionList.as_view()),
+    path("corrections/categories", corrections.CorrectionCategories.as_view()),
+    path("corrections/summary", corrections.CorrectionSummary.as_view()),
+    path("corrections/<int:pk>", corrections.CorrectionDetail.as_view()),
+    path("corrections/<int:pk>/follow-up", corrections.CorrectionFollowUp.as_view()),
+    path("teacher/corrections/overview", corrections.TeacherCorrectionOverview.as_view()),
+    path("admin/corrections/summary", corrections.AdminCorrectionSummary.as_view()),
     path("assignments", learning.AssignmentList.as_view()),
     path("assignments/<int:pk>", learning.AssignmentDetail.as_view()),
     path("assignments/<int:pk>/start", learning.AssignmentStart.as_view()),

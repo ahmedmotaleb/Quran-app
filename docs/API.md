@@ -68,6 +68,12 @@ server logs.
 | `GET attempts/{id}` | scoped (owner, teacher, linked parent, admin) | |
 | `GET teacher/grading`, `POST answers/{id}/grade` | the student's teacher | recitation / short answers; points 0..question points |
 | `GET notifications`, `POST notifications/read` | signed in | own only |
+| `GET corrections?student&status&category&surah&submission&booking&open=1&recurring=1` | scoped (own student, assigned teacher, linked parent) | learning points at an ayah; `times` = how often the same category recurred at that ayah; parents get category, reference, priority, status and dates only (no note, guidance or internal note); `internal_note` only for teachers |
+| `POST corrections` | the student's teacher | `source` submission/session/task/review with a matching link (the submission, booking or task must belong to that student; a booking must be the teacher's); ayah checked against the surah; audited; the student is notified (`correction_new`, generic push text) |
+| `GET, PATCH corrections/{id}` | read scoped; edit by the student's teacher | `status` new/improving/corrected sets or clears `resolved_at`; `correction.resolved` / `correction.reopened` audited |
+| `POST corrections/{id}/follow-up` | the student's teacher | `kind` ayah/tajweed/rerecord, `days` 1–14: creates one practice task for that ayah (the review scheduler is unchanged) |
+| `GET corrections/summary?student`, `GET corrections/categories` | scoped | open/new/improving/corrected, recurring, by category, 8-week trend; never a score |
+| `GET teacher/corrections/overview`, `GET admin/corrections/summary` | teacher / admin | students with open points, repeated memorization and Tajweed points, awaiting re-check; admin: aggregate counts only |
 | `GET, POST admin/users` | admin | filters `role,status,q,unlinked=1` and the advanced filters below; `sort`; created users set their password via recovery |
 | `POST admin/users/{id}/status` | admin | `pending/active/suspended/archived`; suspension and archiving require a reason and revoke tokens |
 | `POST admin/{resource}/bulk-action` | admin | bulk actions, below |

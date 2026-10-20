@@ -2,6 +2,7 @@
  * Live-mode lessons, quizzes and progress (real records from the API).
  * Quiz grading happens on the server; recitation answers are graded by the teacher.
  */
+import { CorrectionsSummaryCard } from '@/screens/common/Corrections';
 import { useEffect, useRef, useState } from 'react';
 import { color, font } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
@@ -286,6 +287,7 @@ export function ProgressLive() {
     <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
       <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>تقدمي</h1>
       <Segmented role="group" label="الفترة الزمنية" options={[['week', 'أسبوع'], ['month', 'شهر'], ['q', '3 أشهر']] as const} value={pr} onChange={(k) => setState({ progRange: k })} />
+      <CorrectionsSummaryCard who="student" />
       {srv ? <>
         {srv.streak_days > 1 && <p style={{ margin: 0, fontSize: 14, color: color.primary, fontWeight: 700 }}>{srv.streak_days} أيام متتالية من التدرّب</p>}
         <ProgressCards p={srv} />

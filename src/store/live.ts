@@ -15,7 +15,7 @@ import { rangeL, tzOf, typeL } from '@/lib/format';
 import { SUR } from '@/data/demo';
 import { BRAND } from '@/theme/brand';
 import * as media from '@/services/media';
-import { back, reset, setState, toast, up, useApp, type AssignForm, type Mark, type ReviewDraft, type ReviewItem } from './store';
+import { back, rememberedChild, reset, setState, toast, up, useApp, type AssignForm, type Mark, type ReviewDraft, type ReviewItem } from './store';
 import { discardVoiceNote, stopVoiceNote, voiceNote, voiceNoteRecording } from '@/services/voiceNote';
 
 // Lazy: store.ts and this module import each other.
@@ -71,7 +71,7 @@ export async function loadTeacherData() {
     const reviews: ReviewItem[] = sub.results.map((x) => ({
       id: String(x.id), taskId: String(x.assignment), student: x.student_name, sid: String(x.student), title: x.assignment_title,
       range: rangeL({ s: x.surah, from: x.ayah_from, to: x.ayah_to }), dur: x.duration_seconds, url: x.audio?.url ?? null,
-      at: fmtRelative(x.created_at, tz), status: x.feedback ? 'reviewed' : 'submitted',
+      at: fmtRelative(x.created_at, tz), status: x.feedback ? 'reviewed' : 'submitted', surah: x.surah, from: x.ayah_from, to: x.ayah_to,
     }));
     setState((s) => ({
       students: st.results.map(E.toStudent), tasks: a.results.map((x) => E.toTask(x, tz)), reviews, tsched: occ, grading: gr,
@@ -92,7 +92,7 @@ export async function loadParentData() {
     const kids = k.results.map((x) => ({ id: String(x.id), name: x.full_name, level: x.level || '—' }));
     setState((s) => ({
       parent: { kids, tasks: a.results.map((x) => E.toTask(x, tz)), bookings: b.results, subs: sub.results },
-      child: kids.some((x) => x.id === s.child) ? s.child : kids[0]?.id ?? '',
+      child: [s.child, rememberedChild()].find((c) => c && kids.some((x) => x.id === c)) ?? kids[0]?.id ?? '',
       net: { ...s.net, loading: false, error: null },
     }));
   } catch (e) {
@@ -137,8 +137,10 @@ export async function login(email: string, password: string) {
     const r = await E.login(email, password);
     resetCsrf();
     applyUser(r.user);
-    up('login', { loading: false, pw: '' });
+    const viaParent = get().login.parent;
+    up('login', { loading: false, pw: '', parent: false });
     reset(homeFor(r.user.role), r.user.role);
+    if (viaParent && r.user.role !== 'parent') toast('هذا ليس حساب ولي أمر؛ فُتحت الواجهة المناسبة لحسابك.', 'alert');
     await loadData();
   } catch (e) {
     const err = e as ApiError;

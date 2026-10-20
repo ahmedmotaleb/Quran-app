@@ -4,7 +4,7 @@ import { Icon, type IconName } from '@/components/Icon';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import type { Status } from './adminData';
 import { adminLogin, adminLogout, adminRestore, goSection, sectionFromHash, mfaFinish, mfaStart, setAdmin, useAdmin, type AdminState, type Section } from './adminStore';
-import { LIVE, type ApiError } from '@/api/client';
+import { LIVE, api, type ApiError } from '@/api/client';
 import * as LA from './live/api';
 const PeopleLive = lazy(() => import('./live/People'));
 const CirclesLive = lazy(() => import('./live/Scheduling').then((m) => ({ default: m.CirclesLive })));
@@ -317,7 +317,24 @@ function OverviewLive({ c }: { c: LiveCounts }) {
           </button>
         ))}
       </section>
+      <CorrectionsAggregate />
     </>
+  );
+}
+
+/** Platform-wide learning points by category (counts only; no student names or notes). */
+function CorrectionsAggregate() {
+  const [d, setD] = useState<{ total: number; open: number; students_with_open: number; by_category: { category: string; label: string; total: number; open: number }[] } | null>(null);
+  useEffect(() => { let on = true; api<NonNullable<typeof d>>('GET', 'admin/corrections/summary').then((x) => on && setD(x)).catch(() => {}); return () => { on = false; }; }, []);
+  if (!d || !d.total) return null;
+  return (
+    <section aria-labelledby="corr-h" style={{ ...card, padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <h2 id="corr-h" style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>نقاط المراجعة التي سجّلها المعلمون</h2>
+      <p style={{ margin: 0, fontSize: 14, color: color.muted }}><span style={{ fontFamily: font.latin }}>{d.open}</span> مفتوحة من <span style={{ fontFamily: font.latin }}>{d.total}</span> لدى <span style={{ fontFamily: font.latin }}>{d.students_with_open}</span> طالب. أرقام مجمّعة فقط.</p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {d.by_category.map((x) => <span key={x.category} style={{ padding: '6px 12px', borderRadius: 999, background: color.ivory, border: `1px solid ${color.divider}`, fontSize: 13 }}>{x.label}: <strong style={{ fontFamily: font.latin }}>{x.open}</strong> / {x.total}</span>)}
+      </div>
+    </section>
   );
 }
 

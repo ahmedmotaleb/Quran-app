@@ -1,10 +1,11 @@
+import { CorrectionsSummaryCard } from '@/screens/common/Corrections';
 import { color } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
 import { Avatar, Badge, ProgressBar, card, muted } from '@/components/ui';
 import type { BadgeKind } from '@/data/types';
 import { rangeL, scoreL, timeIn, typeIcon, tzLabel, tzOf } from '@/lib/format';
 import { dayLabel, fmtDay, fmtRelative, fmtTime } from '@/lib/time';
-import { go, setState, useApp } from '@/store/store';
+import { go, pickChild, setState, useApp } from '@/store/store';
 import { teacherById, upcomingSessions } from '@/store/selectors';
 import { AttendancePill } from '@/screens/student/Progress';
 import { BRAND } from '@/theme/brand';
@@ -142,8 +143,9 @@ function ParentLive() {
   if (!P) return wrap(<p role="status" style={muted(14)}>جارٍ التحميل…</p>);
   if (!P.kids.length) return wrap(
     <div role="status" style={{ ...card, padding: 20, textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <p style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>لا يوجد أبناء مرتبطون بحسابك بعد</p>
-      <p style={muted(14, { lineHeight: 1.7 })}>تربط إدارة {BRAND.ar} حسابك بأبنائك بعد التحقق. تواصل معها إن تأخر الربط.</p>
+      <p style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>لا يوجد طالب مرتبط بحسابك حتى الآن</p>
+      <p style={muted(14, { lineHeight: 1.7 })}>تربط إدارة {BRAND.ar} حسابك بأبنائك بعد التحقق. إن تأخر الربط تواصل معها:</p>
+      <a href={`mailto:${s.pub.support_email || 'halqa.app.eg@gmail.com'}`} dir="ltr" style={{ fontSize: 15, fontWeight: 700, color: color.primary }}>{s.pub.support_email || 'halqa.app.eg@gmail.com'}</a>
     </div>,
   );
   const kid = P.kids.find((k) => k.id === s.child) ?? P.kids[0];
@@ -165,7 +167,7 @@ function ParentLive() {
       {P.kids.map((k) => {
         const on = k.id === kid.id;
         return (
-          <button key={k.id} role="tab" aria-selected={on} onClick={() => setState({ child: k.id })}
+          <button key={k.id} role="tab" aria-selected={on} onClick={() => pickChild(k.id)}
             style={{ flex: 1, minWidth: 140, minHeight: 64, borderRadius: 16, border: `1.5px solid ${on ? color.primary : color.borderChip}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.ink, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', cursor: 'pointer', textAlign: 'right' }}>
             <Avatar ini={k.name.charAt(0)} size={40} fs={17} />
             <span><span style={{ display: 'block', fontSize: 16, fontWeight: 700 }}>{k.name.split(' ')[0]}</span><span style={{ display: 'block', fontSize: 12, color: on ? color.sage : color.muted }}>المستوى {k.level}</span></span>
@@ -209,6 +211,7 @@ function ParentLive() {
       {/* Keyed by child: switching children never shows the previous child's numbers. */}
       <ChildProgress key={kid.id} id={Number(kid.id)} />
     </section>
+    <CorrectionsSummaryCard key={`c${kid.id}`} student={Number(kid.id)} who="parent" />
     {last?.feedback && (
       <section style={{ background: color.sageTint, borderRadius: 18, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <p style={{ margin: 0, fontSize: 13, color: color.primary, fontWeight: 700 }}>أحدث تقييم · {fmtRelative(last.feedback.created_at, tz)}</p>

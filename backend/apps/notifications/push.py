@@ -17,6 +17,7 @@ log = logging.getLogger(__name__)
 # kind prefix → (title, body) shown on the lock screen
 GENERIC = [
     ("feedback", ("الحلقة", "وصل تقييم جديد من معلمك.")),
+    ("correction", ("الحلقة", "أضاف معلمك ملاحظة جديدة للمراجعة.")),
     ("assignment", ("الحلقة", "لديك واجب جديد.")),
     ("review_due", ("الحلقة", "حان موعد مراجعة.")),
     ("session_reminder", ("الحلقة", "تذكير بجلسة قادمة.")),
