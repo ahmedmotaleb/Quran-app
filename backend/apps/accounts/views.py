@@ -190,7 +190,9 @@ class OnboardingView(APIView):
 def password_link(user) -> str:
     """One-use link (expires after PASSWORD_RESET_TIMEOUT) to set a password; used by recovery and admin onboarding."""
     uid = urlsafe_base64_encode(force_bytes(user.pk))
-    return f"{settings.FRONTEND_URL}/#/reset?uid={uid}&token={default_token_generator.make_token(user)}"
+    # `next=parent` only picks the sign-in screen shown afterwards; the role always comes from the server.
+    nxt = "&next=parent" if user.role == Role.PARENT else ""
+    return f"{settings.FRONTEND_URL}/#/reset?uid={uid}&token={default_token_generator.make_token(user)}{nxt}"
 
 
 def email_configured() -> bool:

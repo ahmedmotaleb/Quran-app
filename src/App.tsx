@@ -7,6 +7,7 @@ import { isStandalone } from './pwa/install';
 import { LIVE } from './api/client';
 
 const AdminApp = lazy(() => import('./admin/AdminApp'));
+import { parentLoginEntry } from '@/store/store';
 const DesignSystem = lazy(() => import('./designsystem/DesignSystem'));
 const SetPasswordPage = lazy(() => import('./screens/auth/LinkPages').then((m) => ({ default: m.SetPasswordPage })));
 const AcceptInvitePage = lazy(() => import('./screens/auth/LinkPages').then((m) => ({ default: m.AcceptInvitePage })));
@@ -28,7 +29,7 @@ function useMedia(q: string) {
   return m;
 }
 
-/** `#/admin` → admin portal, `#/design-system` → style guide, `#/reset`/`#/invite` → link pages, else → the mobile app. */
+/** `#/parent` → app on the parent sign-in, `#/admin` → admin portal, `#/design-system` → style guide, `#/reset`/`#/invite` → link pages, else → the mobile app. */
 export default function App() {
   return <><Routes /><PwaUpdate /></>;
 }
@@ -39,7 +40,19 @@ function Routes() {
   if (h.startsWith('#/design-system')) return <Suspense fallback={null}><DesignSystem /></Suspense>;
   if (h.startsWith('#/reset')) return <Suspense fallback={null}><SetPasswordPage /></Suspense>;
   if (h.startsWith('#/invite')) return <Suspense fallback={null}><AcceptInvitePage /></Suspense>;
+  if (h.startsWith('#/parent')) return <ParentEntry />;
   return <MobileApp />;
+}
+
+/** `#/parent` (or `#/parent/login`): the app opened on the parent sign-in. The hash is cleared so in-app back works. */
+function ParentEntry() {
+  useEffect(() => {
+    parentLoginEntry();
+    history.replaceState(history.state, '', location.pathname + location.search);
+    // After the parent's hash listener is attached (child effects run first).
+    setTimeout(() => window.dispatchEvent(new HashChangeEvent('hashchange')), 0);
+  }, []);
+  return null;
 }
 
 /**

@@ -93,7 +93,8 @@ const initial = () => ({
   uiScale: 'm' as 's' | 'm' | 'l',
   notif: { tasks: true, sessions: true, feedback: true, news: false } as Record<string, boolean>,
   intro: 0,
-  login: { email: '', pw: '', show: false, errors: {} as Record<string, string | null>, loading: false },
+  /** `parent`: the «تسجيل دخول ولي الأمر» entry. Only wording changes; the server decides the role and the portal. */
+  login: { email: '', pw: '', show: false, errors: {} as Record<string, string | null>, loading: false, parent: false },
   signup: { name: '', email: '', pw: '', errors: {} as Record<string, string | null> },
   forgot: { email: '', sent: false, errors: {} as Record<string, string | null> },
   ob: { step: 0, level: null as string | null, goal: null as string | null, days: ['الأحد', 'الثلاثاء', 'الخميس'], period: 'مساءً', error: null as string | null },
@@ -233,7 +234,7 @@ function onEnter(screen: Screen, p: Params) {
 
 export function startSplash() {
   clearTimeout(splashTimer);
-  splashTimer = setTimeout(() => { if (get().screen === 'splash') set({ screen: 'intro' }); }, 2000);
+  splashTimer = setTimeout(() => { if (get().screen === 'splash') set({ screen: get().login.parent ? 'login' : 'intro' }); }, 2000);
   // Live: a still-valid session (cookie or stored token) goes straight to the app.
   if (LIVE) live.bootstrap();
 }
@@ -483,11 +484,27 @@ export function obNext() {
   toast(`تم إعداد خطتك. مرحبًا بك في ${BRAND.ar}`);
 }
 export async function logout() {
+  const wasParent = get().role === 'parent';
   set({ sheet: null });
   // Live mode: the sign-in screen appears only after the server has ended the session, so reopening or
   // refreshing right away cannot restore the old account.
   if (LIVE) await live.logout();
-  reset('login', null, { login: { email: '', pw: '', show: false, errors: {}, loading: false } });
+  reset('login', null, { login: { email: '', pw: '', show: false, errors: {}, loading: false, parent: wasParent } });
+}
+/** `#/parent` link (e.g. in the setup email or a bookmark): open the parent sign-in. A signed-in session is unaffected. */
+export function parentLoginEntry() {
+  up('login', { parent: true, errors: {} });
+  const sc = get().screen;
+  if (sc === 'intro' || sc === 'login' || sc === 'signup' || sc === 'forgot') set({ screen: 'login', stack: [], params: {} });
+}
+const CHILD_KEY = 'halqa.parent.child';
+/** The parent's selected child is remembered on this device (an id only; every request is still checked server-side). */
+export function pickChild(id: string) {
+  set({ child: id });
+  try { localStorage.setItem(CHILD_KEY, id); } catch { /* storage unavailable */ }
+}
+export function rememberedChild(): string | null {
+  try { return localStorage.getItem(CHILD_KEY); } catch { return null; }
 }
 
 /* ------------------------------------------------------------------ */

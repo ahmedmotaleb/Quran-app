@@ -50,6 +50,8 @@ await step('open teacher → real slots', async () => {
   await app.getByText('الشيخ عبدالرحمن السالم').click();
   await app.getByText('المواعيد المتاحة').waitFor();
   await app.getByText('جارٍ تحميل المواعيد…').waitFor({ state: 'detached' });
+  // Two days ahead: a slot later today could fall inside the cancel window and make the cancel step time-dependent.
+  await app.getByRole('option').nth(2).click();
   const slot = app.locator('div[style*="grid"] button:not([disabled])').first();
   picked = (await slot.textContent()).trim(); await slot.click();
 });
@@ -74,6 +76,7 @@ await step('same slot is now taken for this student', async () => {
   await app.getByRole('tab', { name: 'المعلمون' }).click();
   await app.getByText('الشيخ عبدالرحمن السالم').click();
   await app.getByText('جارٍ تحميل المواعيد…').waitFor({ state: 'detached' });
+  await app.getByRole('option').nth(2).click();
   // individual slot capacity 1 → our booked one is now shown as taken
   await app.locator('button[disabled]').filter({ hasText: picked.replace('محجوز', '') }).first().waitFor();
   await page.getByRole('button', { name: /رجوع/ }).first().click();

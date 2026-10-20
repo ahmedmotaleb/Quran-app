@@ -12,7 +12,7 @@ const box: CSSProperties = { background: color.ivory, border: `1px solid ${color
 const h: CSSProperties = { margin: 0, fontSize: 14, fontWeight: 700, color: color.primary };
 const ghost: CSSProperties = { minHeight: 40, padding: '0 12px', borderRadius: 10, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer' };
 const pill = (on: boolean, extra: CSSProperties = {}): CSSProperties => ({ minHeight: 40, padding: '0 12px', borderRadius: 999, border: `1.5px solid ${on ? color.primary : color.borderStrong}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer', ...extra });
-const loginAs = (email: string) => reset('login', null, { login: { email, pw: 'halqa123', show: false, errors: {}, loading: false } });
+const loginAs = (email: string) => reset('login', null, { login: { email, pw: 'halqa123', show: false, errors: {}, loading: false, parent: false } });
 
 const FLOWS = [
   { n: '1', title: 'تسليم تلاوة ومشاهدة التقييم', steps: 'الدخول ← الرئيسية ← واجب الملك ← تسجيل ← تسليم ← «محاكاة تقييم المعلم» ← التقييم', start: () => loginAs('yousef@halqa.app') },

@@ -62,8 +62,10 @@ export function Login() {
     <form onSubmit={prevent(doLogin)} noValidate style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '12px 20px 24px', gap: 18 }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, marginTop: 4 }}>
         <Logo size={84} />
-        <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>تسجيل الدخول</h1>
-        <p style={muted(14, { margin: '4px 0 0' })}>تُعرض لك الواجهة المناسبة بحسب نوع حسابك</p>
+        <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>{L.parent ? 'تسجيل دخول ولي الأمر' : 'تسجيل الدخول'}</h1>
+        <p style={muted(14, { margin: '4px 0 0', textAlign: 'center', lineHeight: 1.7 })}>{L.parent
+          ? 'تنشئ إدارة الحلقة حساب ولي الأمر وتربطه بأبنائك، وتصلك رسالة لتعيين كلمة المرور.'
+          : 'تُعرض لك الواجهة المناسبة بحسب نوع حسابك'}</p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <label htmlFor="lg-email" style={labelStyle}>البريد الإلكتروني</label>
@@ -85,6 +87,9 @@ export function Login() {
         <button type="button" onClick={() => go('forgot')} style={linkBtn(14, { alignSelf: 'flex-start', padding: 0 })}>نسيت كلمة المرور؟</button>
       </div>
       <button type="submit" disabled={L.loading} style={primaryBtn()}>{L.loading ? 'جارٍ الدخول…' : 'تسجيل الدخول'}</button>
+      {L.parent
+        ? <button type="button" onClick={() => up('login', { parent: false, errors: {} })} style={linkBtn(14, { alignSelf: 'center' })}>لست وليّ أمر؟ دخول الطالب أو المعلم</button>
+        : <button type="button" onClick={() => up('login', { parent: true, errors: {} })} style={outlineBtn(50, 15)}><Icon name="users" /> تسجيل دخول ولي الأمر</button>}
       {!LIVE && <div style={{ background: color.sand, borderRadius: 14, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <p style={{ margin: 0, fontSize: 13, color: color.subtle }}>حسابات تجريبية (كلمة المرور {DEMO_PASSWORD}):</p>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
