@@ -64,3 +64,16 @@ class AppSettings(models.Model):
     def load(cls) -> "AppSettings":
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+
+class SavedView(TimeStamped):
+    """An admin's named filter/sort preset for one admin list (the query only, never result data)."""
+
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="saved_views")
+    section = models.CharField(max_length=32)   # admin section, e.g. students, teachers, bookings
+    name = models.CharField(max_length=60)
+    query = models.CharField(max_length=1000)    # the list's URL query string (filters + sort)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [models.UniqueConstraint(fields=["owner", "section", "name"], name="saved_view_unique_name")]

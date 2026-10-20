@@ -209,7 +209,7 @@ function Portal() {
             : s.sec === 'settings' ? <AdminSettings /> : <TableSection key={s.sec} sec={s.sec} />}
       </main>
       <AdminDialogs />
-      {s.toast && <div role="status" aria-live="polite" style={{ position: 'fixed', bottom: 24, left: 24, maxWidth: 'calc(100vw - 48px)', background: color.ink, color: color.ivory, padding: '14px 18px', borderRadius: 14, fontSize: 14, boxShadow: '0 12px 28px -12px rgba(0,0,0,.4)', zIndex: 60 }}>{s.toast}</div>}
+      {s.toast && <div role="status" aria-live="polite" style={{ position: 'fixed', bottom: 24, left: 24, maxWidth: 'calc(100vw - 48px)', background: color.ink, color: color.ivory, padding: '14px 18px', borderRadius: 14, fontSize: 14, boxShadow: '0 12px 28px -12px rgba(0,0,0,.4)', zIndex: 60, pointerEvents: 'none' }}>{s.toast}</div>}
     </div>
   );
 }

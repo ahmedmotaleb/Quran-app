@@ -10,6 +10,7 @@ from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 from apps.core.bulk import Action, FilterSpec, Refuse, Resource, Skip, date_range, p_bool, p_choice, p_date, p_int, p_text, register, search_q
+from apps.core.exceptions import ApiError
 
 from .models import AccountStatus, AuthToken, GuardianLink, LinkStatus, Role, TeacherAssignment, TeacherProfile, User
 
@@ -59,6 +60,10 @@ def _apply(qs, f):
         e = (Exists(GuardianLink.objects.filter(guardian=OuterRef("pk"), status=LinkStatus.ACTIVE))
              | Exists(GuardianLink.objects.filter(student=OuterRef("pk"), status=LinkStatus.ACTIVE)))
         qs = qs.filter(e if f["linked"] else ~e)
+    if "course" in f:  # a course cohort: students actively enrolled
+        from apps.learning.models import Enrollment
+
+        qs = qs.filter(Exists(Enrollment.objects.filter(student=OuterRef("pk"), course_id=f["course"], status=Enrollment.Status.ACTIVE)))
     if f.get("unlinked"):  # students without an active teacher (the sidebar badge)
         qs = qs.filter(role=Role.STUDENT).exclude(Exists(TeacherAssignment.objects.filter(student=OuterRef("pk"), active=True)))
     return qs
@@ -69,7 +74,7 @@ USER_FILTERS = FilterSpec(
         "role": p_choice(Role.STUDENT, Role.TEACHER, Role.PARENT), "status": p_choice(*AccountStatus.values), "q": p_text,
         "joined_from": p_date, "joined_to": p_date, "active_from": p_date, "active_to": p_date,
         "approved": p_bool, "has_students": p_bool, "has_slots": p_bool, "circle": p_int, "teacher": p_int, "level": p_text,
-        "upcoming": p_bool, "overdue_review": p_bool, "linked": p_bool, "unlinked": p_bool,
+        "upcoming": p_bool, "overdue_review": p_bool, "linked": p_bool, "unlinked": p_bool, "course": p_int,
     },
     apply=_apply,
     sorts={"name": ("full_name",), "email": ("email",), "joined": ("date_joined",), "last_login": ("last_login",), "status": ("status",)},
@@ -109,6 +114,120 @@ def _approve(on: bool):
     return run
 
 
+def _bad(field: str, msg: str):
+    return ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {field: [msg]})
+
+
+# ---- Assign a teacher ----------------------------------------------------------------------
+def _teacher_params(raw: dict, actor) -> dict:
+    t = User.objects.filter(pk=raw.get("teacher") if str(raw.get("teacher", "")).isdigit() else None, role=Role.TEACHER).first()
+    if t is None:
+        raise _bad("teacher", "اختر معلمًا.")
+    if t.status != AccountStatus.ACTIVE or not TeacherProfile.objects.filter(user=t, approved_at__isnull=False).exists():
+        raise _bad("teacher", "المعلم غير معتمد أو غير نشط.")
+    return {"teacher": t, "replace": raw.get("replace") is True}
+
+
+def _assign_teacher(u: User, actor, reason: str, *, teacher: User, replace: bool):
+    if u.role != Role.STUDENT:
+        raise Refuse("not_student", "ليس حساب طالب.")
+    if u.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
+        raise Refuse("inactive", "الحساب موقوف أو مؤرشف.")
+    current = TeacherAssignment.objects.select_for_update().filter(student=u, active=True)
+    ended = current.exclude(teacher=teacher).update(active=False, ended_at=timezone.now()) if replace else 0
+    if current.filter(teacher=teacher).exists():
+        if ended:
+            return  # the other teachers were removed; the requested one stays
+        raise Skip("already_assigned", "مرتبط بهذا المعلم بالفعل.")
+    TeacherAssignment.objects.create(teacher=teacher, student=u, created_by=actor)
+
+
+# ---- Enroll in a course ---------------------------------------------------------------------
+def _course_params(raw: dict, actor) -> dict:
+    from apps.learning.models import Course, PublishState
+
+    c = Course.objects.filter(pk=raw.get("course") if str(raw.get("course", "")).isdigit() else None).first()
+    if c is None:
+        raise _bad("course", "اختر دورة.")
+    if c.state == PublishState.ARCHIVED:
+        raise _bad("course", "لا يمكن التسجيل في دورة مؤرشفة.")
+    return {"course": c}
+
+
+def _enroll(u: User, actor, reason: str, *, course):
+    from apps.learning.models import Enrollment
+
+    if u.role != Role.STUDENT:
+        raise Refuse("not_student", "ليس حساب طالب.")
+    if u.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
+        raise Refuse("inactive", "الحساب موقوف أو مؤرشف.")
+    if Enrollment.objects.filter(course=course, student=u, status=Enrollment.Status.ACTIVE).exists():
+        raise Skip("already_enrolled", "مسجّل في هذه الدورة بالفعل.")
+    Enrollment.objects.create(course=course, student=u, created_by=actor, starts_on=timezone.localdate())
+
+
+# ---- In-app message --------------------------------------------------------------------------
+def _message_params(raw: dict, actor) -> dict:
+    import uuid
+
+    title = str(raw.get("title", "")).strip()
+    body = str(raw.get("body", "")).strip()
+    if not 3 <= len(title) <= 80:
+        raise _bad("title", "العنوان من 3 إلى 80 حرفًا.")
+    if not 3 <= len(body) <= 500:
+        raise _bad("body", "نص الرسالة من 3 إلى 500 حرف.")
+    return {"title": title, "body": body, "batch": uuid.uuid4().hex[:12]}
+
+
+def _notify(u: User, actor, reason: str, *, title: str, body: str, batch: str):
+    from apps.notifications.services import after_commit
+
+    if u.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
+        raise Refuse("inactive", "الحساب موقوف أو مؤرشف.")
+    # Kind `admin_message`: the phone's lock screen shows only the generic text, never this message.
+    after_commit(u, "admin_message", title, body, link="/inbox", dedupe=f"admin_message:{batch}:{u.pk}", data={"batch": batch})
+
+
+# ---- Resend the password-setup email ------------------------------------------------------------
+RESEND_EVERY_MINUTES = 10
+
+
+def _resend_params(raw: dict, actor) -> dict:
+    from .views import email_configured
+
+    if not email_configured():
+        raise ApiError("email_off", "إرسال البريد غير مُعدّ؛ أنشئ رابط الإعداد من صفحة الحساب وسلّمه يدويًا.", 409)
+    return {}
+
+
+def _resend_setup(u: User, actor, reason: str):
+    from datetime import timedelta
+
+    from django.conf import settings
+    from django.core.mail import send_mail
+
+    from apps.core.audit import audit
+    from apps.core.models import AuditEvent
+
+    from .views import password_link
+
+    if u.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
+        raise Refuse("inactive", "الحساب موقوف أو مؤرشف.")
+    if u.has_usable_password():
+        raise Skip("has_password", "عيّن كلمة المرور بالفعل.")
+    since = timezone.now() - timedelta(minutes=RESEND_EVERY_MINUTES)
+    if AuditEvent.objects.filter(action="admin.setup_link_issued", target_type="accounts.user", target_id=str(u.pk), created_at__gte=since).exists():
+        raise Skip("recently_sent", f"أُرسل رابط خلال آخر {RESEND_EVERY_MINUTES} دقائق.")
+    # The link is emailed only; it is never returned to the browser or written to the audit log.
+    if send_mail("مرحبًا بك في الحلقة", f"أنشئ كلمة مرور لحسابك من الرابط:\n{password_link(u)}", settings.DEFAULT_FROM_EMAIL, [u.email]) != 1:
+        raise Refuse("email_failed", "تعذّر إرسال البريد.")
+    audit("admin.setup_link_issued", actor=actor, target=u, emailed=True, bulk=True)
+
+
+def _teachers_of(u: User) -> str:
+    return "، ".join(a.teacher.full_name for a in u.teacher_assignments.filter(active=True).select_related("teacher"))
+
+
 register(Resource(
     name="users", label="accounts.user", base=_base, filters=USER_FILTERS, describe=lambda u: u.full_name,
     actions={
@@ -117,5 +236,16 @@ register(Resource(
         "archive": Action(_set_status(AccountStatus.ARCHIVED), reason_required=True, destructive=True),
         "approve": Action(_approve(True)),
         "unapprove": Action(_approve(False), reason_required=True),
+        "assign_teacher": Action(_assign_teacher, params=_teacher_params, audit_keys=("teacher", "replace")),
+        "enroll": Action(_enroll, params=_course_params, audit_keys=("course",)),
+        "notify": Action(_notify, params=_message_params, audit_keys=("title", "batch")),
+        "resend_setup": Action(_resend_setup, params=_resend_params),
     },
+    export=[
+        ("الرقم", lambda u: u.pk), ("الاسم", lambda u: u.full_name), ("البريد", lambda u: u.email), ("الهاتف", lambda u: u.phone),
+        ("النوع", lambda u: Role(u.role).label), ("الحالة", lambda u: AccountStatus(u.status).label),
+        ("المستوى", lambda u: getattr(getattr(u, "student_profile", None), "level", "") if u.role == Role.STUDENT else ""),
+        ("المعلمون", lambda u: _teachers_of(u) if u.role == Role.STUDENT else ""),
+        ("تاريخ الانضمام", lambda u: u.date_joined), ("آخر دخول", lambda u: u.last_login),
+    ],
 ))

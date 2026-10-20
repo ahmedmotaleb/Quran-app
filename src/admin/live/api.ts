@@ -1,5 +1,5 @@
 /** Admin portal API (live mode). Every call is admin-only on the server; nothing here is trusted client-side. */
-import { api, type Page } from '@/api/client';
+import { api, apiDownload, type Page } from '@/api/client';
 
 export type Role = 'student' | 'teacher' | 'parent';
 export type AccountStatus = 'pending' | 'active' | 'suspended' | 'archived';
@@ -110,7 +110,12 @@ export const listAudit = (p: { action?: string; page?: number }) => api<Page<Aud
 
 /* ---- Bulk actions (select-all + bulk toolbar) ---- */
 export type BulkResource = 'users' | 'circles' | 'bookings' | 'sessions' | 'courses' | 'lessons' | 'enrollments' | 'tests' | 'questions';
-export interface BulkBody { action: string; ids?: number[]; filter?: Record<string, string>; expected?: number; exclude_ids?: number[]; reason?: string; confirm?: string }
+export interface BulkBody { action: string; ids?: number[]; filter?: Record<string, string>; expected?: number; exclude_ids?: number[]; reason?: string; confirm?: string; params?: Record<string, unknown> }
 export interface BulkItem { id: number; label: string; outcome: 'skipped' | 'failed'; code: string; message: string }
 export interface BulkResult { requested: number; success: number; skipped: number; failed: number; results: BulkItem[]; errors: BulkItem[] }
 export const bulkAction = (resource: string, body: BulkBody) => api<BulkResult>('POST', `admin/${resource}/bulk-action`, body);
+export const exportCsv = (resource: string, body: Omit<BulkBody, 'action'> & { sort?: string }) => apiDownload(`admin/${resource}/export`, body);
+export interface SavedView { id: number; section: string; name: string; query: string }
+export const savedViews = (section: string) => api<SavedView[]>('GET', `admin/saved-views?section=${encodeURIComponent(section)}`);
+export const saveView = (section: string, name: string, query: string) => api<SavedView>('POST', 'admin/saved-views', { section, name, query });
+export const deleteView = (id: number) => api<null>('DELETE', `admin/saved-views/${id}`);

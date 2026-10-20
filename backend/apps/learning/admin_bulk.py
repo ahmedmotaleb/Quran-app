@@ -64,6 +64,9 @@ register(Resource(
         "archive": Action(_course_state(PublishState.ARCHIVED), reason_required=True),
         "delete": Action(_course_delete, destructive=True),
     },
+    export=[("الرقم", lambda c: c.pk), ("الدورة", lambda c: c.title), ("المعلم", lambda c: c.teacher.full_name), ("الموضوع", lambda c: c.topic),
+            ("المستوى", lambda c: c.level), ("الحالة", lambda c: PublishState(c.state).label),
+            ("المسجّلون", lambda c: c.enrollments.filter(status=Enrollment.Status.ACTIVE).count()), ("أُنشئت", lambda c: c.created_at)],
 ))
 
 
@@ -109,6 +112,9 @@ register(Resource(
         "archive": Action(_lesson_state(PublishState.ARCHIVED)),
         "delete": Action(_lesson_delete, destructive=True),
     },
+    export=[("الرقم", lambda l: l.pk), ("الدرس", lambda l: l.title), ("الدورة", lambda l: l.course.title), ("الترتيب", lambda l: l.order),
+            ("النوع", lambda l: Lesson.Kind(l.kind).label), ("المدة (دقائق)", lambda l: l.duration_minutes),
+            ("الحالة", lambda l: PublishState(l.state).label)],
 ))
 
 
@@ -143,4 +149,7 @@ register(Resource(
     name="enrollments", label="learning.enrollment", base=lambda: Enrollment.objects.select_related("student"), filters=ENROLLMENT_FILTERS,
     describe=lambda e: e.student.full_name,
     actions={"withdraw": Action(_enrollment_end(Enrollment.Status.WITHDRAWN)), "complete": Action(_enrollment_end(Enrollment.Status.COMPLETED))},
+    export=[("الرقم", lambda e: e.pk), ("الطالب", lambda e: e.student.full_name), ("البريد", lambda e: e.student.email),
+            ("الدورة", lambda e: e.course.title), ("الحالة", lambda e: Enrollment.Status(e.status).label), ("من", lambda e: e.starts_on),
+            ("إلى", lambda e: e.ends_on)],
 ))

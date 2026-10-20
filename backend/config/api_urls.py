@@ -2,7 +2,7 @@ from django.urls import include, path
 
 from apps.assessments import admin_views as assess_admin
 from apps.core import admin_views as core_admin
-from apps.core.bulk import AdminBulkAction
+from apps.core.bulk import AdminBulkAction, AdminBulkExport, AdminSavedViewDetail, AdminSavedViews
 # Bulk-action resources register themselves on import (users, circles, bookings, sessions, courses, lessons,
 # enrollments, tests, questions).
 from apps.accounts import admin_bulk as _users_bulk  # noqa: F401,E402
@@ -119,6 +119,9 @@ urlpatterns = [
     path("admin/questions/<int:pk>", assess_admin.AdminQuestionDetail.as_view()),
     # Settings: admin-managed, and the public subset the apps read
     path("admin/<slug:resource>/bulk-action", AdminBulkAction.as_view()),
+    path("admin/<slug:resource>/export", AdminBulkExport.as_view()),
+    path("admin/saved-views", AdminSavedViews.as_view()),
+    path("admin/saved-views/<int:pk>", AdminSavedViewDetail.as_view()),
     path("admin/settings", core_admin.AdminSettingsView.as_view()),
     path("admin/audit", core_admin.AdminAudit.as_view()),
     path("settings/public", core_admin.PublicSettings.as_view()),

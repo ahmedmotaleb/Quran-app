@@ -11,8 +11,8 @@ import { toast } from '../adminStore';
 import * as A from './api';
 import { chip, date, errMsg, LinkBox, Modal, ReasonDialog, smallBtn } from './ui';
 import {
-  BulkBar, type BulkDef, circleOptions, type Col, DataView, type FilterField, FilterControls, filterOf, items, listParams, Pager,
-  SelectionSummary, teacherOptions, useListUrl, useSelection, useServerList, useUrlSearch,
+  BulkBar, type BulkDef, circleOptions, type Col, courseOptions, DataView, ExportButton, type FilterField, FilterControls, filterOf, items, listParams, Pager,
+  SavedViews, SelectionSummary, teacherOptions, useListUrl, useSelection, useServerList, useUrlSearch,
 } from './list';
 
 const ROLE_L: Record<A.Role, { one: string; many: string; search: string; sec: string }> = {
@@ -39,6 +39,7 @@ const FIELDS: Record<A.Role, FilterField[]> = {
     { key: 'status', label: 'الحالة', type: 'select', options: STATUS_OPTS },
     { key: 'teacher', label: 'المعلم', type: 'remote', load: teacherOptions },
     { key: 'circle', label: 'الحلقة', type: 'remote', load: circleOptions },
+    { key: 'course', label: 'الدورة', type: 'remote', load: courseOptions },
     { key: 'level', label: 'المستوى', type: 'select', options: LEVELS },
     { key: 'upcoming', label: 'جلسة قادمة', type: 'bool', yes: 'لديه جلسة قادمة', no: 'دون جلسة قادمة' },
     { key: 'overdue_review', label: 'المراجعة', type: 'bool', yes: 'لديه مراجعة متأخرة', no: 'لا مراجعات متأخرة' },
@@ -62,6 +63,12 @@ const FIELDS: Record<A.Role, FilterField[]> = {
   ],
 };
 
+const PRESETS: Record<A.Role, [string, Record<string, string>][]> = {
+  student: [['طلاب بدون معلم', { unlinked: '1' }], ['مراجعات متأخرة', { overdue_review: '1' }], ['دون جلسة قادمة', { upcoming: '0', status: 'active' }], ['المؤرشفون', { status: 'archived' }]],
+  teacher: [['معلمون دون مواعيد', { has_slots: '0', status: 'active' }], ['غير معتمدين', { approved: '0' }], ['دون طلاب', { has_students: '0' }]],
+  parent: [['دون أبناء مرتبطين', { linked: '0' }], ['بانتظار الاعتماد', { status: 'pending' }]],
+};
+
 function peopleActions(role: A.Role): BulkDef[] {
   const base: BulkDef[] = [
     { key: 'activate', label: 'تفعيل', tone: 'primary', body: (n) => `سيُفعَّل ${items(n)} ويستطيع أصحابها الدخول.`, ok: (n) => `تفعيل ${items(n)}` },
@@ -69,6 +76,19 @@ function peopleActions(role: A.Role): BulkDef[] {
     { key: 'archive', label: 'أرشفة', tone: 'danger', reason: true, destructive: true, title: 'تأكيد الأرشفة',
       body: (n) => `أنت على وشك أرشفة ${items(n)}. لن يستطيع أصحابها الدخول أو استعادة كلمة المرور. تبقى مهامهم وتقييماتهم وحضورهم محفوظة، ويمكن إعادة التفعيل لاحقًا.`, ok: (n) => `أرشفة ${items(n)}` },
   ];
+  const approvedTeachers = async () => (await A.listPeople({ role: 'teacher', approved: '1', status: 'active', page_size: 100, sort: 'name' } as Parameters<typeof A.listPeople>[0]))
+    .results.map((t) => [String(t.id), t.full_name] as [string, string]);
+  if (role === 'student') base.push(
+    { key: 'assign_teacher', label: 'تعيين معلم', title: 'تعيين معلم', params: [{ key: 'teacher', label: 'المعلم', type: 'remote', load: approvedTeachers }, { key: 'replace', label: 'إنهاء ارتباطهم بمعلميهم الحاليين', type: 'check' }],
+      body: (n) => `سيُربط ${items(n)} بالمعلم المختار. من كان مرتبطًا به يُترك كما هو، والحسابات الموقوفة لا تتغيّر.`, ok: (n) => `تعيين لـ ${items(n)}` },
+    { key: 'enroll', label: 'إضافة إلى دورة', title: 'إضافة إلى دورة', params: [{ key: 'course', label: 'الدورة', type: 'remote', load: courseOptions }],
+      body: (n) => `سيُسجَّل ${items(n)} في الدورة المختارة. المسجّل من قبل يُترك كما هو.`, ok: (n) => `تسجيل ${items(n)}` });
+  base.push(
+    { key: 'notify', label: 'رسالة داخل التطبيق', title: 'رسالة داخل التطبيق',
+      params: [{ key: 'title', label: 'العنوان', type: 'text', max: 80 }, { key: 'body', label: 'نص الرسالة', type: 'textarea', max: 500, hint: 'تظهر في صندوق الإشعارات فقط؛ إشعار الهاتف يعرض نصًا عامًا دون محتوى الرسالة.' }],
+      body: (n) => `ستصل الرسالة إلى ${items(n)} (عدا الحسابات الموقوفة والمؤرشفة). يُسجَّل المرسل والعدد في سجل التدقيق.`, ok: (n) => `إرسال إلى ${items(n)}` },
+    { key: 'resend_setup', label: 'إعادة إرسال رابط الإعداد', title: 'إعادة إرسال رابط الإعداد',
+      body: (n) => `يُرسل رابط تعيين كلمة المرور بالبريد لمن لم يعيّنها بعد من ${items(n)}. لا يُعرض الرابط هنا، ولا يُرسل مرتين خلال 10 دقائق.`, ok: (n) => `إرسال لـ ${items(n)}` });
   if (role === 'teacher') base.splice(1, 0,
     { key: 'approve', label: 'اعتماد', tone: 'primary', body: (n) => `سيظهر ${items(n)} للطلاب ويمكن حجز مواعيدهم.`, ok: (n) => `اعتماد ${items(n)}` },
     { key: 'unapprove', label: 'سحب الاعتماد', reason: true, body: (n) => `لن يظهر ${items(n)} للطلاب ولن تُقبل حجوزات جديدة. الحجوزات الحالية تبقى.`, ok: (n) => `سحب اعتماد ${items(n)}` });
@@ -118,6 +138,7 @@ export default function PeopleLive({ role }: { role: A.Role }) {
         <input type="search" aria-label={L.search} placeholder={L.search} value={text} onChange={(e) => setText(e.target.value)}
           style={{ flex: '1 1 240px', minHeight: 48, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15 }} />
         <FilterControls fields={FIELDS[role]} q={q} update={update} />
+        <ExportButton resource="users" sel={sel} total={R.data?.count ?? 0} filter={filter} sort={sort} />
         <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}>
           <Icon name="plus" size={18} /> {role === 'teacher' ? 'دعوة معلم' : `إضافة ${L.one}`}
         </button>
@@ -129,11 +150,12 @@ export default function PeopleLive({ role }: { role: A.Role }) {
           </button>
         ))}
       </div>
+      <SavedViews section={L.sec} q={q} update={update} presets={PRESETS[role]} />
       <SelectionSummary sel={sel} pageIds={rows?.map((r) => r.id) ?? []} total={R.data?.count ?? 0} />
       <DataView rows={rows} cols={cols} sel={sel} total={R.data?.count ?? 0} rowLabel={(u) => u.full_name} sort={sort}
         setSort={(s) => update({ sort: s })} loading={R.loading} err={R.err} retry={reload} />
       <Pager page={page} total={R.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
-      <BulkBar resource="users" sel={sel} total={R.data?.count ?? 0} actions={peopleActions(role)} filter={filter} onDone={reload} />
+      <BulkBar resource="users" sel={sel} total={R.data?.count ?? 0} actions={peopleActions(role)} filter={filter} onDone={reload} exportable />
       {open !== null && <PersonPanel id={open} onClose={() => setOpen(null)} onChanged={reload} />}
       {adding && <AddDialog role={role} onClose={() => setAdding(false)} onDone={reload} />}
     </>
