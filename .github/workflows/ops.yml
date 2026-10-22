@@ -119,7 +119,8 @@ jobs:
           sleep 20
           gcloud logging read 'jsonPayload.msg=("account_integrity_flag" OR "account_integrity_summary") AND timestamp>="'$START'"' \
             --project "$P" --limit 300 --format json > /tmp/i.json || true
-          gcloud logging read 'resource.type="cloud_run_revision" AND (httpRequest.requestMethod="PATCH" OR httpRequest.requestMethod="PUT") AND httpRequest.requestUrl:"/api/v1/me" AND timestamp>="'$SINCE'"' \
+          # Only PATCH me (the profile endpoint the fix covers); PUT me/onboarding never accepted these fields.
+          gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.requestMethod="PATCH" AND httpRequest.requestUrl:"/api/v1/me" AND -httpRequest.requestUrl:"/api/v1/me/" AND timestamp>="'$SINCE'"' \
             --project "$P" --limit 300 --format json > /tmp/me.json || true
           python3 - <<'PY'
           import json, re
@@ -132,7 +133,7 @@ jobs:
                                         "phones_valid", "phones_invalid", "phone_numbers_shared_by_several_accounts", "verified_phones") if k in j}
               print(f"::notice title=integrity::{json.dumps(keep, ensure_ascii=False)[:500]}")
           me = json.load(open("/tmp/me.json"))
-          print(f"::notice title=profile-updates::{len(me)} PATCH/PUT me requests in the window")
+          print(f"::notice title=profile-updates::{len(me)} PATCH me requests in the window")
           for r in me[:300]:
               h = r.get("httpRequest", {})
               path = re.sub(r"\?.*", "", h.get("requestUrl", "")).split("/api/v1/")[-1]

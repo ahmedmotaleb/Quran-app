@@ -1,15 +1,17 @@
 """Read-only check, run once after the 22–23 October profile-update fix (`PATCH me` accepted role, status, email and
 mfa_enabled for about a day). Lists accounts whose current state has no matching audit trail, so the owner can review
 them. It changes nothing and prints no email addresses or names: ids, roles, dates and the reason for each flag.
+It also reports, without numbers, how the existing contact phones would normalize (before phone sign-in).
 
   python manage.py account_integrity
 """
 import json
 import logging
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 from django.core.management.base import BaseCommand
 
+from apps.accounts import phones
 from apps.accounts.models import AccountStatus, AdminProfile, Role, User
 from apps.core.models import AuditEvent
 
@@ -62,6 +64,12 @@ class Command(BaseCommand):
         for f in flags:
             log.warning("account_integrity_flag", extra=f)
             self.stdout.write(json.dumps(f))
-        summary = {"accounts": User.objects.count(), "flagged": len(flags), "phones": User.objects.exclude(phone="").count()}
+        # Existing contact phones (Part B check before the verified-phone constraint): counts only.
+        nums = [phones.normalize(p) for p in User.objects.exclude(phone="").values_list("phone", flat=True)]
+        ok = [n for n in nums if n]
+        dup = sum(1 for _, c in Counter(ok).items() if c > 1)
+        summary = {"accounts": User.objects.count(), "flagged": len(flags), "phones": len(nums), "phones_valid": len(ok),
+                   "phones_invalid": len(nums) - len(ok), "phone_numbers_shared_by_several_accounts": dup,
+                   "verified_phones": User.objects.filter(phone_verified_at__isnull=False).count()}
         log.warning("account_integrity_summary", extra=summary)
         self.stdout.write(json.dumps(summary))

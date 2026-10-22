@@ -6,6 +6,7 @@ import {
 import { DEMO_PASSWORD } from '@/data/demo';
 import { LIVE, ApiError, resetCsrf } from '@/api/client';
 import * as E from '@/api/endpoints';
+import { identifierError } from '@/store/store';
 
 /** Sidebar sections, in the order the brief lists them. */
 export type Section = 'overview' | 'students' | 'teachers' | 'parents' | 'circles' | 'bookings' | 'lectures' | 'quizzes' | 'subs' | 'settings' | 'admins';
@@ -115,8 +116,9 @@ export async function adminRestore() {
 
 /** Live mode: real admin sign-in (POST admin/auth/login), with the two-step code when the account has it on. */
 async function adminLoginLive() {
-  const L = get().login; const e: Record<string, string> = {}; const em = L.email.trim().toLowerCase();
-  if (!em) e.email = 'أدخل البريد الإلكتروني'; else if (!/^\S+@\S+\.\S+$/.test(em)) e.email = 'صيغة البريد الإلكتروني غير صحيحة';
+  const L = get().login; const e: Record<string, string> = {}; const raw = L.email.trim();
+  const em = raw.includes('@') ? raw.toLowerCase() : raw; // an email or a verified phone number (two-step code still required)
+  const bad = identifierError(em); if (bad) e.email = bad;
   if (!L.pw) e.pw = 'أدخل كلمة المرور';
   if (L.needOtp && !/^\d{6}$/.test(L.otp.trim())) e.otp = 'أدخل الرمز المكوّن من 6 أرقام';
   if (Object.keys(e).length) { set({ login: { ...L, errors: e } }); return; }

@@ -99,8 +99,8 @@ function AdminLogin() {
           <p style={{ margin: 0, fontSize: 14, color: color.muted }}>بوابة منفصلة لحسابات الإدارة فقط</p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label htmlFor="ad-email" style={labelStyle}>البريد الإلكتروني</label>
-          <input id="ad-email" type="email" dir="ltr" autoComplete="username" value={L.email} placeholder="admin@halqa.app" aria-invalid={!!L.errors.email}
+          <label htmlFor="ad-email" style={labelStyle}>البريد الإلكتروني أو رقم الهاتف</label>
+          <input id="ad-email" type="text" inputMode="email" dir="ltr" autoComplete="username" autoCapitalize="none" spellCheck={false} value={L.email} placeholder="admin@halqa.app" aria-invalid={!!L.errors.email}
             onChange={(e) => up({ email: e.target.value, errors: { ...L.errors, email: null } })} style={inputStyle(L.errors.email, true)} />
           <FieldError msg={L.errors.email} />
         </div>

@@ -36,6 +36,9 @@ jobs:
       MEDIA_LOCAL_ROOT: /tmp/halqa-media
       EMAIL_BACKEND: django.core.mail.backends.filebased.EmailBackend   # test mailbox read by e2e/lib/mailbox.mjs
       EMAIL_FILE_PATH: /tmp/halqa-mail
+      SMS_PROVIDER: file                          # phone verification codes, read by e2e/phone-login.mjs (refused when deployed)
+      SMS_FILE_PATH: /tmp/halqa-sms.jsonl
+      THROTTLE_PHONE: 1000/hour
       PYTHON: python
     steps:
       - uses: actions/checkout@v4

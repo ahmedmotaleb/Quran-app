@@ -210,6 +210,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "auth": env("THROTTLE_AUTH", "10/min"),
         "recovery": env("THROTTLE_RECOVERY", "5/hour"),
+        "phone": env("THROTTLE_PHONE", "20/hour"),  # phone verification requests (per user or IP), on top of phones.py limits
         "booking": env("THROTTLE_BOOKING", "30/min"),
         "upload": env("THROTTLE_UPLOAD", "20/hour"),
         "quran_audio": env("THROTTLE_QURAN_AUDIO", "120/min"),
@@ -256,6 +257,23 @@ EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBacken
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "") or "noreply@halqa.app"  # empty env var = default
 EMAIL_FILE_PATH = env("EMAIL_FILE_PATH", "")  # end-to-end tests: EMAIL_BACKEND=...filebased.EmailBackend writes here
 FRONTEND_URL = env("FRONTEND_URL", APP_URL or "http://localhost:5173")  # password-reset links
+
+# ---- Phone numbers and SMS (login with a verified phone) ---------------------------------
+# Numbers are stored in E.164; local numbers without a country code are read in this region (010… → +2010…).
+PHONE_DEFAULT_REGION = env("PHONE_DEFAULT_REGION", "EG") or "EG"
+# SMS provider for verification codes: "" / "none" (phone verification unavailable; email sign-in unaffected),
+# "twilio" (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_FROM or TWILIO_MESSAGING_SERVICE_SID, from Secret Manager),
+# "file" (end-to-end tests only: messages are appended to SMS_FILE_PATH; refused when deployed).
+SMS_PROVIDER = (env("SMS_PROVIDER", "") or "").lower()
+SMS_FILE_PATH = env("SMS_FILE_PATH", "")
+TWILIO_ACCOUNT_SID = env("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = env("TWILIO_AUTH_TOKEN", "")
+TWILIO_FROM = env("TWILIO_FROM", "")
+TWILIO_MESSAGING_SERVICE_SID = env("TWILIO_MESSAGING_SERVICE_SID", "")
+PHONE_CODE_MINUTES = 5          # a code expires after 5 minutes
+PHONE_CODE_ATTEMPTS = 5         # wrong tries per code
+PHONE_RESEND_SECONDS = 60       # wait before sending another code
+PHONE_SENDS_PER_HOUR = 5        # per account and per number
 
 APP_VERSION = env("APP_VERSION", "0.1.0")
 

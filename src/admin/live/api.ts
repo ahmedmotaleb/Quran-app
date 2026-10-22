@@ -4,7 +4,7 @@ import { api, apiDownload, type Page } from '@/api/client';
 export type Role = 'student' | 'teacher' | 'parent';
 export type AccountStatus = 'pending' | 'active' | 'suspended' | 'archived';
 export interface Person {
-  id: number; email: string; full_name: string; role: Role; status: AccountStatus; timezone: string; phone: string;
+  id: number; email: string; full_name: string; role: Role; status: AccountStatus; timezone: string; phone: string; phone_verified?: boolean;
   level: string; approved: boolean | null; has_password: boolean; date_joined: string; last_login: string | null;
   status_reason: string; status_changed_at: string | null;
   teachers: { id: number; name: string; assignment_id: number }[];

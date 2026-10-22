@@ -23,19 +23,15 @@ from apps.core.exceptions import ApiError
 from . import admin_access as aa
 from .models import AccountStatus, AdminProfile, AuthToken, Invitation, Role, User
 from .permissions import IsAdminRole
+from .phones import mask
 
 INVITE_DAYS = 3
-
-
-def _mask_phone(p: str) -> str:
-    p = (p or "").strip()
-    return p[:4] + "•" * max(0, len(p) - 6) + p[-2:] if len(p) > 6 else ("•" * len(p))
 
 
 def admin_out(u: User, viewer) -> dict:
     prof = getattr(u, "admin_profile", None)
     return {"id": u.pk, "full_name": u.full_name, "email": u.email,
-            "phone": u.phone if aa.has(viewer, "users.view_contact") else _mask_phone(u.phone),
+            "phone": u.phone if aa.has(viewer, "users.view_contact") else mask(u.phone_e164 or u.phone),
             "status": u.status, "mfa_enabled": u.mfa_enabled, "last_login": u.last_login.isoformat() if u.last_login else None,
             "level": prof.access_level if prof else "", "preset": prof.preset if prof else "",
             "preset_label": aa.PRESET_LABELS.get(prof.preset, "") if prof else "",

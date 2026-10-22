@@ -34,7 +34,7 @@ await step('demo credentials hint is gone in live mode', async () => {
 });
 await step('wrong password is refused', async () => {
   await signIn('admin@halqa.app', 'wrong-password-1');
-  await page.getByText('البريد الإلكتروني أو كلمة المرور غير صحيحة.').waitFor();
+  await page.getByText('البريد أو رقم الهاتف أو كلمة المرور غير صحيحة.').waitFor();
 });
 await step('a student account is refused', async () => {
   await signIn('yousef@halqa.app', 'halqa123');

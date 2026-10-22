@@ -7,7 +7,7 @@ import { api, newIdempotencyKey, type Page } from './client';
 export type ApiRole = 'student' | 'teacher' | 'parent' | 'admin';
 export interface Me {
   id: number; email: string; full_name: string; role: ApiRole; status: string; timezone: string; phone: string;
-  mfa_enabled: boolean; mfa_required?: boolean; level: string; daily_goal: string;
+  mfa_enabled: boolean; mfa_required?: boolean; level: string; daily_goal: string; phone_verified?: boolean;
   /** Admins only: access level, preset and the permissions the server grants (null for everyone else). */
   admin_access?: { level: string; preset: string; permissions: string[] } | null;
 }
@@ -39,18 +39,22 @@ export interface ApiExcuseRow extends ApiExcuse {
 }
 
 // ---- auth ----
-export const login = (email: string, password: string) => api<LoginResult>('POST', 'auth/login', { email, password, client: 'web' });
+/** `identifier`: an email or a verified phone number (the server decides which; same error either way). */
+export const login = (identifier: string, password: string) => api<LoginResult>('POST', 'auth/login', { identifier, password, client: 'web' });
 export const register = (full_name: string, email: string, password: string, timezone: string) =>
   api<LoginResult>('POST', 'auth/register', { full_name, email, password, client: 'web', timezone });
 export const logout = () => api<null>('POST', 'auth/logout');
 // Admin portal (separate sign-in; the server rejects non-admin accounts).
-export const adminLogin = (email: string, password: string, otp: string, trust_device = false) =>
-  api<LoginResult>('POST', 'admin/auth/login', { email, password, otp, client: 'web', trust_device });
+export const adminLogin = (identifier: string, password: string, otp: string, trust_device = false) =>
+  api<LoginResult>('POST', 'admin/auth/login', { identifier, password, otp, client: 'web', trust_device });
+/** «تأكيد رقم الهاتف»: a code by SMS, then confirm; the verified number becomes a sign-in identifier. */
+export const phoneStart = (phone: string) => api<{ phone: string; expires_in: number; resend_in: number }>('POST', 'me/phone/start', { phone });
+export const phoneConfirm = (code: string) => api<Me>('POST', 'me/phone/confirm', { code });
 export const mfaSetup = () => api<{ secret: string; otpauth_uri: string }>('POST', 'admin/mfa/setup');
 export const mfaConfirm = (otp: string) => api<{ mfa_enabled: boolean }>('POST', 'admin/mfa/confirm', { otp });
 export const me = () => api<Me>('GET', 'me');
 export const publicSettings = () => api<{ cancel_hours: number; open_signup: boolean; max_recording_seconds: number; join_minutes: number; org_name: string;
-  ayah_audio: AyahAudioCfg | null; support_whatsapp: string; show_support_button: boolean }>('GET', 'settings/public');
+  ayah_audio: AyahAudioCfg | null; support_whatsapp: string; show_support_button: boolean; phone_verification?: boolean }>('GET', 'settings/public');
 export const updateMe = (patch: Partial<Pick<Me, 'full_name' | 'timezone' | 'phone'>>) => api<Me>('PATCH', 'me', patch);
 export const saveOnboarding = (d: { level: string; daily_goal: string; preferred_days: string[]; preferred_period: string }) =>
   api<Me>('PUT', 'me/onboarding', d);

@@ -90,6 +90,7 @@ class PublicSettings(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        from apps.accounts.sms import configured as sms_configured
         from apps.media.services import limits
 
         c = AppSettings.load()
@@ -100,6 +101,8 @@ class PublicSettings(APIView):
                          "excuse_deadline_minutes": c.excuse_deadline_minutes,
                          "booking_horizon_days": c.booking_horizon_days, "max_recording_seconds": max_secs,
                          "max_upload_mb": max_bytes // (1024 * 1024),
+                         # «تأكيد رقم الهاتف» is offered only when an SMS provider is configured.
+                         "phone_verification": sms_configured(),
                          # null while no licensed recitation source is approved: the Mushaf then plays no audio.
                          "ayah_audio": _ayah_audio(),
                          "app_url": settings.APP_URL, "admin_url": settings.ADMIN_URL})

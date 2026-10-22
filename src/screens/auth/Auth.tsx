@@ -68,8 +68,8 @@ export function Login() {
           : 'تُعرض لك الواجهة المناسبة بحسب نوع حسابك'}</p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <label htmlFor="lg-email" style={labelStyle}>البريد الإلكتروني</label>
-        <input id="lg-email" type="email" dir="ltr" autoComplete="email" value={L.email} placeholder="name@example.com" aria-invalid={!!E.email}
+        <label htmlFor="lg-email" style={labelStyle}>البريد الإلكتروني أو رقم الهاتف</label>
+        <input id="lg-email" type="text" inputMode="email" dir="ltr" autoComplete="username" autoCapitalize="none" spellCheck={false} value={L.email} placeholder="name@example.com أو 010…" aria-invalid={!!E.email}
           onChange={(e) => up('login', { email: e.target.value, errors: { ...E, email: null } })} style={inputStyle(E.email, true)} />
         <FieldError msg={E.email} />
       </div>
