@@ -138,6 +138,10 @@ class _BaseLogin(APIView):
 
             resp = Response({"user": MeSerializer(user).data})
             start_admin_session(request, resp, user)
+            if getattr(self, "remember_device", False):
+                from . import trusted
+
+                trusted.remember(request, resp, user)
             return resp
         return Response(_session_payload(request, user, d["client"], d["device"]))
 
@@ -156,6 +160,13 @@ class AdminLoginView(_BaseLogin):
     def check_portal(self, user, d):
         if user.role != Role.ADMIN:
             raise ApiError("not_admin", "هذا الحساب لا يملك صلاحيات الإدارة.", 403)
+        if user.mfa_enabled and not d["otp"] and d["client"] != "native":
+            from . import trusted
+
+            device = trusted.trusted(self.request, user)
+            if device is not None:  # a device the admin chose to trust: the password alone is enough
+                trusted.use(self.request, device)
+                return
         if user.mfa_enabled and not totp.verify(user.mfa_secret, d["otp"]):
             if d["otp"]:
                 audit("auth.mfa_failed", actor=user, target=user, request=self.request, portal="admin")
@@ -163,6 +174,7 @@ class AdminLoginView(_BaseLogin):
                 _record_failure(user.email)
             raise ApiError("mfa_required" if not d["otp"] else "mfa_invalid",
                            "أدخل رمز التحقق من تطبيق المصادقة." if not d["otp"] else "رمز التحقق غير صحيح.", 401)
+        self.remember_device = bool(user.mfa_enabled and d["trust_device"] and d["client"] != "native")
 
 
 class LogoutView(APIView):

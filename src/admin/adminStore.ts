@@ -31,7 +31,7 @@ const initial = () => ({
   /** Live mode: the signed-in admin as the server reports it; `restoring` while the session is checked. */
   me: null as E.Me | null,
   restoring: LIVE,
-  login: { email: '', pw: '', otp: '', needOtp: false, errors: {} as Record<string, string | null>, loading: false },
+  login: { email: '', pw: '', otp: '', needOtp: false, trust: true, errors: {} as Record<string, string | null>, loading: false },
   sec: (sectionFromHash() ?? 'overview') as Section,
   q: '', f: 'all' as 'all' | Status, extra: 'all', page: 1,
   toast: null as string | null,
@@ -95,7 +95,7 @@ async function adminLoginLive() {
   if (Object.keys(e).length) { set({ login: { ...L, errors: e } }); return; }
   set({ login: { ...L, errors: {}, loading: true } });
   try {
-    const r = await E.adminLogin(em, L.pw, L.otp.trim());
+    const r = await E.adminLogin(em, L.pw, L.otp.trim(), L.needOtp && L.trust);
     resetCsrf(); // Django rotates the CSRF token on sign-in
     set({ authed: true, me: r.user, login: initial().login });
   } catch (err) {

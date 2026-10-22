@@ -32,8 +32,8 @@ export const register = (full_name: string, email: string, password: string, tim
   api<LoginResult>('POST', 'auth/register', { full_name, email, password, client: 'web', timezone });
 export const logout = () => api<null>('POST', 'auth/logout');
 // Admin portal (separate sign-in; the server rejects non-admin accounts).
-export const adminLogin = (email: string, password: string, otp: string) =>
-  api<LoginResult>('POST', 'admin/auth/login', { email, password, otp, client: 'web' });
+export const adminLogin = (email: string, password: string, otp: string, trust_device = false) =>
+  api<LoginResult>('POST', 'admin/auth/login', { email, password, otp, client: 'web', trust_device });
 export const mfaSetup = () => api<{ secret: string; otpauth_uri: string }>('POST', 'admin/mfa/setup');
 export const mfaConfirm = (otp: string) => api<{ mfa_enabled: boolean }>('POST', 'admin/mfa/confirm', { otp });
 export const me = () => api<Me>('GET', 'me');

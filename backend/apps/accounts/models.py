@@ -225,3 +225,23 @@ class AuthToken(models.Model):
     @property
     def valid(self) -> bool:
         return self.revoked_at is None and self.expires_at > dj_tz.now()
+
+
+class TrustedDevice(models.Model):
+    """An admin's browser that may skip the two-step code at sign-in for TRUST_DAYS (the password is still asked).
+
+    The browser keeps a random token in an HttpOnly cookie; only its SHA-256 is stored. `marker` binds the trust to the
+    current password and authenticator secret, so changing either (or resetting two-step verification) ends it.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="trusted_devices")
+    token_hash = models.CharField(max_length=64, unique=True)
+    marker = models.CharField(max_length=64)
+    label = models.CharField(max_length=120, blank=True)  # browser and system, from the User-Agent
+    created_at = models.DateTimeField(default=dj_tz.now)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["user", "revoked_at"])]

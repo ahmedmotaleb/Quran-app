@@ -114,6 +114,10 @@ function AdminLogin() {
             <input id="ad-otp" inputMode="numeric" autoComplete="one-time-code" dir="ltr" maxLength={6} autoFocus value={L.otp} aria-invalid={!!L.errors.otp}
               onChange={(e) => up({ otp: e.target.value.replace(/\D/g, ''), errors: { ...L.errors, otp: null } })} style={inputStyle(L.errors.otp, true)} />
             <FieldError msg={L.errors.otp} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, fontSize: 14, cursor: 'pointer' }}>
+              <input type="checkbox" checked={L.trust} onChange={(e) => up({ trust: e.target.checked })} style={{ width: 20, height: 20, accentColor: color.primary }} />
+              تذكّر هذا الجهاز 30 يومًا (لا يُطلب الرمز عليه، وتبقى كلمة المرور مطلوبة)
+            </label>
           </div>
         )}
         {L.errors.form && <p role="alert" style={{ margin: 0, fontSize: 14, color: color.danger }}>{L.errors.form}</p>}
