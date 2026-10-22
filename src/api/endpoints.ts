@@ -229,5 +229,6 @@ export const studentProgress = (id: number, from?: string, to?: string) => api<A
 export const childProgress = (id: number, from?: string, to?: string) => api<ApiProgress>('GET', `parent/children/${id}/progress?${rangeQs(from, to)}`);
 
 /* ---- ayah audio (licensed source: Quran Foundation / Quran.com) ---- */
-export interface AyahAudioCfg { provider?: 'qf' | 'template'; url: string; name: string }
-export const surahAudio = (n: number) => api<{ surah: number; reciter: string; source: string; ayahs: Record<string, string> }>('GET', `quran/audio/${n}`);
+export interface AyahAudioCfg { provider?: 'qf' | 'template'; url: string; name: string; default?: number; reciters?: { id: number; name: string }[] }
+export const surahAudio = (n: number, reciter?: number | null) =>
+  api<{ surah: number; reciter_id: number; reciter: string; source: string; ayahs: Record<string, string> }>('GET', `quran/audio/${n}${reciter ? `?reciter=${reciter}` : ''}`);

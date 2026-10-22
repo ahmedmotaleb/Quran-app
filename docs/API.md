@@ -61,6 +61,7 @@ server logs.
 | `POST bookings/{id}/reschedule` | owner | atomic: new booking + cancel old, or nothing |
 | `POST bookings/{id}/attendance` | session teacher, after start | audited |
 | `GET quran/source`, `GET quran/surahs`, `GET quran/surahs/{n}?from&to` | signed in | verbatim text from the active verified source; `503 quran_unavailable` if none |
+| `GET quran/audio/{surah}?reciter={id}` | signed in | ayah audio URLs from Quran Foundation (Quran.com) for one of the offered reciters (`settings/public` → `ayah_audio.reciters`, `default`); another id → 400; cached a day per reciter |
 | `GET lessons`, `GET lessons/{id}`, `POST lessons/{id}/complete` | learning users (complete: student) | published lessons of published courses; completion is self-reported |
 | `GET tests`, `GET tests/{id}` | student | open, published tests; questions never include answer keys |
 | `POST tests/{id}/attempts` | student | starts or resumes; enforces `max_attempts`, sets the deadline |

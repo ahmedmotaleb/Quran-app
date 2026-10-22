@@ -16,18 +16,27 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--surah", type=int, default=1)
+        parser.add_argument("--recitation", type=int, default=0, help="one recitation id; default: every offered reciter")
 
-    def handle(self, *args, surah, **opts):
+    def handle(self, *args, surah, recitation, **opts):
         if not qf_audio.configured():
             log.warning("qf_audio_check", extra={"result": "not_configured"})
             raise CommandError("Quran Foundation keys are not configured.")
-        cache.delete(f"qf:audio:{settings.QF_ENV}:{settings.QF_RECITATION_ID}:{surah}")
-        try:
-            files = qf_audio.surah_audio(surah)
-        except qf_audio.AudioUnavailable:
-            log.error("qf_audio_check", extra={"result": "failed", "env": settings.QF_ENV, "surah": surah})
-            raise CommandError("Quran Foundation request failed; see the qf_token_failed / qf_request_failed log line.") from None
-        hosts = sorted({u.split("/")[2] for u in files.values()})
-        log.info("qf_audio_check", extra={"result": "ok" if files else "empty", "env": settings.QF_ENV, "surah": surah,
-                                          "ayahs": len(files), "hosts": ",".join(hosts)})
-        self.stdout.write(f"surah {surah}: {len(files)} ayah audio files ({settings.QF_ENV}) from {', '.join(hosts) or '-'}")
+        ids = [recitation] if recitation else qf_audio.reciter_ids()
+        bad = []
+        for rid in ids:
+            cache.delete(f"qf:audio:{settings.QF_ENV}:{rid}:{surah}")
+            try:
+                files = qf_audio.surah_audio(surah, rid)
+            except (qf_audio.AudioUnavailable, ValueError):
+                log.error("qf_audio_check", extra={"result": "failed", "env": settings.QF_ENV, "surah": surah, "recitation": rid})
+                bad.append(rid)
+                continue
+            hosts = sorted({u.split("/")[2] for u in files.values()})
+            log.info("qf_audio_check", extra={"result": "ok" if files else "empty", "env": settings.QF_ENV, "surah": surah,
+                                              "recitation": rid, "ayahs": len(files), "hosts": ",".join(hosts)})
+            self.stdout.write(f"recitation {rid}, surah {surah}: {len(files)} ayah audio files ({settings.QF_ENV}) from {', '.join(hosts) or '-'}")
+            if not files:
+                bad.append(rid)
+        if bad:
+            raise CommandError(f"No audio for recitation(s) {bad}; see the qf_audio_check / qf_request_failed log lines.")

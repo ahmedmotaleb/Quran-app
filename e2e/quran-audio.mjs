@@ -96,12 +96,13 @@ await step(R.page, 'leaving the Mushaf stops the recitation', async () => {
 const Q = await (async () => {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Africa/Cairo' });
   const played = []; const asked = [];
-  await ctx.route('https://audio.e2e.test/**', (r) => { played.push(new URL(r.request().url()).pathname.split('/').pop()); return r.fulfill({ status: 200, contentType: 'audio/wav', body: WAV }); });
-  await ctx.route('**/api/v1/settings/public', async (r) => { const res = await r.fetch(); const j = await res.json(); j.ayah_audio = { provider: 'qf', name: 'مشاري راشد العفاسي · Quran.com', url: '' }; return r.fulfill({ response: res, json: j }); });
-  await ctx.route('**/api/v1/quran/audio/*', (r) => {
-    const n = Number(r.request().url().split('/').pop()); asked.push(n);
-    const ayahs = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [String(i + 1), `https://audio.e2e.test/qf/${String(n).padStart(3, '0')}${String(i + 1).padStart(3, '0')}.mp3`]));
-    return r.fulfill({ json: { surah: n, reciter: 'مشاري راشد العفاسي', source: 'Quran.com (Quran Foundation)', ayahs } });
+  await ctx.route('https://audio.e2e.test/**', (r) => { const p = new URL(r.request().url()).pathname.split('/'); played.push(`${p.at(-2)}/${p.at(-1)}`); return r.fulfill({ status: 200, contentType: 'audio/wav', body: WAV }); });
+  const RECITERS = [{ id: 12, name: 'محمود خليل الحصري — المصحف المعلم' }, { id: 7, name: 'مشاري راشد العفاسي' }];
+  await ctx.route('**/api/v1/settings/public', async (r) => { const res = await r.fetch(); const j = await res.json(); j.ayah_audio = { provider: 'qf', name: 'Quran.com', url: '', default: 12, reciters: RECITERS }; return r.fulfill({ response: res, json: j }); });
+  await ctx.route('**/api/v1/quran/audio/**', (r) => {
+    const u = new URL(r.request().url()); const n = Number(u.pathname.split('/').pop()); const rid = Number(u.searchParams.get('reciter') || 12); asked.push(`${rid}:${n}`);
+    const ayahs = Object.fromEntries(Array.from({ length: 30 }, (_, i) => [String(i + 1), `https://audio.e2e.test/qf/r${rid}/${String(n).padStart(3, '0')}${String(i + 1).padStart(3, '0')}.mp3`]));
+    return r.fulfill({ json: { surah: n, reciter_id: rid, reciter: RECITERS.find((x) => x.id === rid).name, source: 'Quran.com (Quran Foundation)', ayahs } });
   });
   const page = await ctx.newPage(); page.setDefaultTimeout(10000);
   const app = page.locator('main#scr');
@@ -122,8 +123,18 @@ await step(Q.page, 'Quran Foundation source: the surah audio list loads on open 
   await playBtn(Q).click();
   await stopBtn(Q).waitFor();
   await playBtn(Q).waitFor({ timeout: 15000 });
-  const s = String(Q.asked[0]).padStart(3, '0');
-  if (Q.played.join() !== `${s}001.mp3,${s}002.mp3`) throw new Error('played ' + Q.played.join(' '));
+  const s = Q.asked[0].split(':')[1].padStart(3, '0');
+  if (Q.played.join() !== `r12/${s}001.mp3,r12/${s}002.mp3`) throw new Error('played ' + Q.played.join(' '));  // Husary (Muallim) by default
+  await Q.app.getByText('الحصري — المصحف المعلم', { exact: false }).first().waitFor();
+});
+await step(Q.page, 'choosing another reciter plays that recitation and is remembered on the device', async () => {
+  await Q.page.getByRole('combobox', { name: 'القارئ' }).selectOption({ label: 'مشاري راشد العفاسي' });
+  Q.played.length = 0;
+  await playBtn(Q).click(); await stopBtn(Q).waitFor(); await playBtn(Q).waitFor({ timeout: 15000 });
+  if (!Q.played.length || !Q.played.every((x) => x.startsWith('r7/'))) throw new Error('played ' + Q.played.join(' '));
+  await Q.page.reload(); await Q.app.locator('[id^="ayah-"]').first().waitFor().catch(() => {});
+  const v = await Q.page.evaluate(() => localStorage.getItem('halqa.reciter'));
+  if (v !== '7') throw new Error('choice not remembered: ' + v);
 });
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
 process.exitCode = fails ? 1 : 0;

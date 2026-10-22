@@ -16,6 +16,7 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def qf(settings, monkeypatch):
     settings.QF_CLIENT_ID, settings.QF_CLIENT_SECRET, settings.QF_ENV, settings.QF_RECITATION_ID = "cid", "secret", "prelive", 7
+    settings.QF_RECITERS = [(7, "مشاري راشد العفاسي"), (12, "محمود خليل الحصري — المصحف المعلم")]
     calls = []
     pages = {
         1: {"audio_files": [{"verse_key": f"2:{i}", "url": f"Alafasy/mp3/002{i:03d}.mp3"} for i in range(1, 51)], "pagination": {"next_page": 2}},
@@ -31,7 +32,8 @@ def qf(settings, monkeypatch):
             assert req.full_url.startswith("https://prelive-oauth2.quran.foundation/")
             assert req.headers["Authorization"].startswith("Basic ") and req.data == b"grant_type=client_credentials&scope=content"
             return {"access_token": f"tok{len(calls)}", "expires_in": 3600}
-        assert req.full_url.startswith("https://apis-prelive.quran.foundation/content/api/v4/recitations/7/by_chapter/")
+        assert req.full_url.startswith(("https://apis-prelive.quran.foundation/content/api/v4/recitations/7/by_chapter/",
+                                        "https://apis-prelive.quran.foundation/content/api/v4/recitations/12/by_chapter/"))
         assert req.headers["X-client-id"] == "cid" and req.headers["X-auth-token"].startswith("tok")
         if "/by_chapter/3?" in req.full_url:
             return {"audio_files": [], "pagination": {"next_page": None}}
@@ -139,3 +141,23 @@ def test_check_command_reports_ok_and_failure(qf, monkeypatch, settings):
     settings.QF_CLIENT_ID = ""
     with pytest.raises(CommandError, match="not configured"):
         call_command("check_quran_audio")
+
+
+def test_reciter_choice_is_limited_to_the_offered_list_and_cached_separately(world, qf, settings):
+    c = client_for(world.s1)
+    a = c.get("/api/v1/quran/audio/2?reciter=12")
+    assert a.status_code == 200 and a.json()["reciter_id"] == 12 and "الحصري" in a.json()["reciter"]
+    assert any("/recitations/12/" in x.full_url for x in qf)
+    b = c.get("/api/v1/quran/audio/2")
+    assert b.json()["reciter_id"] == 7 and any("/recitations/7/" in x.full_url for x in qf)  # its own cache entry
+    bad = c.get("/api/v1/quran/audio/2?reciter=99")
+    assert bad.status_code == 400 and not any("/recitations/99/" in x.full_url for x in qf)
+    pub = APIClient().get("/api/v1/settings/public").json()["ayah_audio"]
+    assert pub["default"] == 7 and [r["id"] for r in pub["reciters"]] == [7, 12]
+
+
+def test_default_reciter_is_husary_muallim():
+    from django.conf import settings as s
+
+    if not __import__("os").environ.get("QF_RECITERS"):
+        assert s.QF_RECITERS[0][0] == 12 and "المعلم" in s.QF_RECITERS[0][1]

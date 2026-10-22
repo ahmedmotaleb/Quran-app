@@ -7,7 +7,7 @@ import type {
   Availability, Decision, Feedback, OtherSubmission, Recording, Role, Scores, Session, SurahData, SurahListItem, Student, Task, TaskStatus, TaskType, Teacher, TimedNote, TzId,
 } from '@/data/types';
 import { rangeL, typeL } from '@/lib/format';
-import { ayahAudioUrl, fetchSurah, fetchSurahList, hasSurahAudio, loadSurahAudio } from '@/services/quran';
+import { ayahAudioUrl, currentReciter, fetchSurah, fetchSurahList, hasSurahAudio, loadSurahAudio, saveReciter } from '@/services/quran';
 import { ApiError } from '@/api/client';
 import * as media from '@/services/media';
 import type { IconName } from '@/components/Icon';
@@ -47,6 +47,8 @@ export interface MushafState {
   /** repeat: times to play the range (0 = continuously); rate: playback speed; adv: carry on past the range end. */
   bookmark: number | null; playing: boolean; cur: number | null; repeat: number; rep: number; jump: string; rate: number; adv: boolean;
   list: SurahListItem[] | null; listQ: string; listErr: boolean; flash: number | null;
+  /** bumped when the reciter changes (the choice itself lives in localStorage) */
+  reciterV?: number;
   /** Live mode: the reader's saved bookmarks (all surahs) and the verified source's details. */
   marks: Mark[] | null; src: SourceInfo | null;
 }
@@ -376,15 +378,15 @@ export async function loadSurahList() {
 export function stopMushaf() { media.stopMushafAudio(); setM({ playing: false, cur: null }); }
 export function playAyah(a: number, rep: number) {
   const m = get().m; media.stopMushafAudio(); media.stopPlayback();
-  const cfg = get().pub.ayah_audio;
-  if (cfg?.provider === 'qf' && !hasSurahAudio(m.surah)) {
+  const cfg = get().pub.ayah_audio; const rid = currentReciter(cfg)?.id ?? null;
+  if (cfg?.provider === 'qf' && !hasSurahAudio(m.surah, rid)) {
     // Normally fetched when the surah opens; if not yet, fetch now and start once the list is here.
     setM({ playing: true, cur: a, rep });
-    loadSurahAudio(m.surah).then(() => { if (get().m.playing && get().m.cur === a) playAyah(a, rep); })
+    loadSurahAudio(m.surah, rid).then(() => { if (get().m.playing && get().m.cur === a) playAyah(a, rep); })
       .catch((e) => { setM({ playing: false, cur: null }); toast(e instanceof ApiError ? e.message : 'تعذّر تحميل التلاوة. تحقق من الاتصال.', 'alert'); });
     return;
   }
-  const src = ayahAudioUrl(m.surah, a, cfg);
+  const src = ayahAudioUrl(m.surah, a, cfg, rid);
   if (!src) {
     setM({ playing: false, cur: null });
     toast(cfg ? 'لا تتوفر تلاوة لهذه الآية.' : 'التلاوة الصوتية متوقفة حتى اعتماد مصدر مرخّص.', 'alert'); return;
@@ -406,6 +408,10 @@ export function playAyah(a: number, rep: number) {
   au.onerror = fail; au.play().catch(fail);
   setM({ playing: true, cur: a, rep });
   document.getElementById('ayah-' + a)?.scrollIntoView({ block: 'center', behavior: 'smooth' });  // follow the reciter
+}
+/** Switch reciter: stops what is playing; the choice is remembered on this device. */
+export function setReciter(id: number) {
+  stopMushaf(); saveReciter(id); setM({ reciterV: (get().m.reciterV ?? 0) + 1 });
 }
 /** Speed applies at once to the ayah playing now and to the next ones. */
 export function setMushafRate(rate: number) { setM({ rate }); if (media.mushafAudio.el) media.mushafAudio.el.playbackRate = rate; }
