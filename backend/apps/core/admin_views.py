@@ -98,7 +98,8 @@ class PublicSettings(APIView):
                          "booking_horizon_days": c.booking_horizon_days, "max_recording_seconds": max_secs,
                          "max_upload_mb": max_bytes // (1024 * 1024),
                          # null while no licensed recitation source is approved: the Mushaf then plays no audio.
-                         "ayah_audio": _ayah_audio()})
+                         "ayah_audio": _ayah_audio(),
+                         "app_url": settings.APP_URL, "admin_url": settings.ADMIN_URL})
 
 
 def _ayah_audio():

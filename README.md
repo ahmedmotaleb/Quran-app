@@ -32,7 +32,10 @@ Demo accounts (password `halqa123`): `yousef@halqa.app` (student), `teacher@halq
 
 ## Admin portal (`/admin/`)
 
-The portal lives at `/admin/` with its own page and web-app manifest (id and scope `/admin/`, name «إدارة الحلقة»,
+The portal runs as its own Cloud Run service (`halqa-admin`, same image, `PORTAL=admin`) at
+https://halqa-admin-835293468002.europe-west1.run.app/admin/ — a different origin from the learners' app, because
+Chrome on Android will not install a second app inside the first one's scope; the main app's `/admin/` forwards there.
+It lives at `/admin/` with its own page and web-app manifest (id and scope `/admin/`, name «إدارة الحلقة»,
 dark icon), so it installs as a separate app beside «الحلقة» («تثبيت لوحة الإدارة» on the sign-in screen and in the
 sidebar). Old `#/admin` links move there. It also has its own session (cookie `halqa_admin_session`, used only for
 requests marked `X-Halqa-Portal: admin`), so an admin and a student or teacher can stay signed in on the same phone

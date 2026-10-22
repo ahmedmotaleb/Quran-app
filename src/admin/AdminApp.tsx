@@ -39,7 +39,12 @@ import { BRAND, pageTitle } from '@/theme/brand';
 import { Logo } from '@/components/Logo';
 import { promptInstall, useInstall } from '@/pwa/install';
 
-const toApp = () => { window.location.href = '/'; };
+/** Back to the learners' app. The portal may run on its own address (the admin service), so ask the server where. */
+const toApp = async () => {
+  if (!LIVE) { window.location.href = '/'; return; }
+  try { const p = await api<{ app_url?: string }>('GET', 'settings/public'); window.location.href = p.app_url ? `${p.app_url}/` : '/'; }
+  catch { window.location.href = '/'; }
+};
 
 /** The admin portal installs as its own app («إدارة الحلقة», scope /admin/), separate from the learners' app. */
 function AdminInstall({ dark = false }: { dark?: boolean }) {
@@ -200,7 +205,7 @@ function Portal() {
   );
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: narrow ? 'column' : 'row' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: narrow ? 'column' : 'row', overflowX: 'clip' }}>
       {narrow ? (
         <header style={{ background: color.primary, color: color.ivory, position: 'sticky', top: 0, zIndex: 20 }}>{brand}{nav}</header>
       ) : (

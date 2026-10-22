@@ -39,6 +39,7 @@ jobs:
           PNUM=$(echo "${{ vars.GCP_WIF_PROVIDER }}" | cut -d/ -f2)
           echo "$PNUM" | grep -qE '^[0-9]+$' || { echo "::error::GCP_WIF_PROVIDER does not look like projects/<number>/locations/global/workloadIdentityPools/..."; exit 1; }
           echo "APP_URL=https://$SERVICE-$PNUM.$REGION.run.app" >> "$GITHUB_ENV"
+          echo "ADMIN_URL=https://$SERVICE-admin-$PNUM.$REGION.run.app" >> "$GITHUB_ENV"   # the admin portal's own address
           echo "IMAGE=$REGION-docker.pkg.dev/$PROJECT/$SERVICE/$SERVICE:${GITHUB_SHA::12}" >> "$GITHUB_ENV"
           test "$HAS_DB" = "true" || { echo "::error::Add the repository secret PROD_DATABASE_URL (the Neon connection string)."; exit 1; }
 
@@ -73,7 +74,7 @@ jobs:
             --service-account "$SERVICE-run@$PROJECT.iam.gserviceaccount.com" \
             --allow-unauthenticated --port 8080 --memory 512Mi --cpu 1 --cpu-boost \
             --min-instances 0 --max-instances 2 --concurrency 40 --timeout 120 \
-            --update-env-vars "APP_ENV=production,SKIP_MIGRATE=1,APP_URL=$APP_URL" \
+            --update-env-vars "APP_ENV=production,SKIP_MIGRATE=1,APP_URL=$APP_URL,ADMIN_URL=$ADMIN_URL" \
             --update-secrets "DATABASE_URL=$SERVICE-database-url:latest,DJANGO_SECRET_KEY=$SERVICE-secret-key:latest" \
             --quiet
           URL=$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format 'value(status.url)')
@@ -97,6 +98,28 @@ jobs:
             --service-account "$SERVICE-run@$PROJECT.iam.gserviceaccount.com" \
             --command python --args manage.py,run_scheduled --memory 512Mi --cpu 1 --max-retries 0 --task-timeout 600 \
             --env-vars-file /tmp/job-env.yaml --set-secrets "$(cat /tmp/job-secrets)" --quiet
+
+      - name: Deploy the admin portal service (same image, settings and secrets; its own address)
+        run: |
+          # A separate origin, so phones install «إدارة الحلقة» as its own app: Chrome on Android will not install a
+          # second app inside the learners' app's scope. PORTAL=admin serves only the portal; invitation and setup links
+          # still use APP_URL (the learners' app).
+          python3 - <<'PY'
+          import json, os
+          env = json.load(open("/tmp/job-env.yaml"))
+          host = os.environ["ADMIN_URL"].split("//", 1)[1]
+          env.update({"PORTAL": "admin", "ADMIN_URL": os.environ["ADMIN_URL"], "DJANGO_ALLOWED_HOSTS": host,
+                      "CSRF_TRUSTED_ORIGINS": os.environ["ADMIN_URL"], "SKIP_MIGRATE": "1"})
+          json.dump(env, open("/tmp/admin-env.yaml", "w"), ensure_ascii=False)
+          PY
+          gcloud run deploy "$SERVICE-admin" --project "$PROJECT" --region "$REGION" --image "$IMAGE" \
+            --service-account "$SERVICE-run@$PROJECT.iam.gserviceaccount.com" \
+            --allow-unauthenticated --port 8080 --memory 512Mi --cpu 1 --cpu-boost \
+            --min-instances 0 --max-instances 1 --concurrency 40 --timeout 120 \
+            --env-vars-file /tmp/admin-env.yaml --set-secrets "$(cat /tmp/job-secrets)" --quiet
+          for i in $(seq 1 30); do curl -fs --max-time 20 "$ADMIN_URL/api/ready" | grep -q '"status":"ok"' && break; sleep 5; done
+          curl -fs "$ADMIN_URL/admin/" | grep -q '/admin/manifest.webmanifest' || { echo "::error::$ADMIN_URL/admin/ does not serve the admin portal"; exit 1; }
+          echo "::notice title=Admin portal::$ADMIN_URL/admin/"
 
       - name: Check the live app
         run: |

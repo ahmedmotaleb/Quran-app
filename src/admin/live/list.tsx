@@ -173,7 +173,7 @@ export function DataView<T extends { id: number }>({ rows, cols, sel, total, row
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {cols.map((c) => c.primary
                     ? <div key={c.key} style={{ fontWeight: 700 }}>{c.cell(r)}</div>
-                    : <div key={c.key} style={{ display: 'flex', gap: 8, fontSize: 14 }}><span style={{ color: color.muted, minWidth: 96 }}>{c.label}</span><span style={{ flex: 1, fontFamily: c.latin ? font.latin : undefined }}>{c.cell(r)}</span></div>)}
+                    : <div key={c.key} style={{ display: 'flex', gap: 8, fontSize: 14, minWidth: 0 }}><span style={{ color: color.muted, minWidth: 96, flexShrink: 0 }}>{c.label}</span><span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', fontFamily: c.latin ? font.latin : undefined }}>{c.cell(r)}</span></div>)}
                   {s && <span style={{ fontSize: 12, color: color.primary, fontWeight: 700 }}>✓ محدد</span>}
                 </div>
               </li>

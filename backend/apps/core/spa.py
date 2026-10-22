@@ -19,8 +19,15 @@ def cache_headers(headers, path, url):
 def index(request, path=""):
     """Any non-API path returns the app shell (client-side screens). /admin/… returns the admin portal's own page,
     which links its own manifest so it installs as a separate app."""
+    from django.http import HttpResponseRedirect
+
     root = settings.WHITENOISE_ROOT
-    page = "admin/index.html" if request.path.startswith("/admin/") or request.path == "/admin" else "index.html"
+    admin_path = request.path.startswith("/admin/") or request.path == "/admin"
+    if settings.PORTAL == "admin" and not admin_path:
+        return HttpResponseRedirect("/admin/")  # the admin service shows only the admin portal
+    if admin_path and settings.PORTAL != "admin" and settings.ADMIN_URL:
+        return HttpResponseRedirect(f"{settings.ADMIN_URL}/admin/")  # the portal's own address (installable app)
+    page = "admin/index.html" if admin_path else "index.html"
     if root is None or not (root / page).is_file():
         raise Http404("Frontend build not found.")
     if request.path == "/admin":
