@@ -25,6 +25,9 @@ jobs:
     env:
       APP_ENV: development
       DATABASE_URL: postgres://halqa:halqa-ci-only@localhost:5432/halqa_e2e
+      # runserver starts a thread per request; persistent connections then pile up until Postgres refuses new ones
+      # ("too many clients": the cause of the intermittent CI failures). Production (gunicorn) keeps its 60 s reuse.
+      DATABASE_CONN_MAX_AGE: "0"
       SEED_PASSWORD: halqa123                     # test data only
       THROTTLE_AUTH: 1000/min                     # every browser comes from one address
       THROTTLE_BOOKING: 1000/min
