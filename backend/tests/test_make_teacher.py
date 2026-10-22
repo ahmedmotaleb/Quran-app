@@ -55,3 +55,14 @@ def test_conversion_rules(world):
     assert c.post(BULK, {"action": "make_teacher", "ids": [other.pk], "reason": "سبب"}, format="json").json()["success"] == 0
     assert User.objects.get(pk=other.pk).role == Role.ADMIN
     assert client_for(world.t1).post(BULK, {"action": "make_teacher", "ids": [world.s2.pk], "reason": "سبب"}, format="json").status_code == 403
+
+
+def test_people_search_by_phone_in_any_format(world):
+    world.p1.phone = "+20 100 123 4567"
+    world.p1.save()
+    c = client_for(world.admin)
+    for q in ("01001234567", "0100-123-4567", "+201001234567", "1001234567"):
+        ids = [u["id"] for u in c.get("/api/v1/admin/users", {"role": "parent", "q": q}).json()["results"]]
+        assert ids == [world.p1.pk], q
+    assert c.get("/api/v1/admin/users", {"role": "parent", "q": "01009999999"}).json()["results"] == []
+    assert [u["id"] for u in c.get("/api/v1/admin/users", {"role": "parent", "q": "p1@x"}).json()["results"]] == [world.p1.pk]

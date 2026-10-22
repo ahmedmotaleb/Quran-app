@@ -101,6 +101,16 @@ await step('withdraw and restore a teacher approval', async () => {
   await reopen('المعلمون', 'الشيخ خالد العمري'); await dialog().getByRole('button', { name: 'اعتماد المعلم' }).click();
   await reopen('المعلمون', 'الشيخ خالد العمري'); await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
 });
+await step('link a parent who has no account yet: search by email → create the parent and link', async () => {
+  await reopen('الطلاب', SN2);
+  await dialog().getByRole('button', { name: 'ربط بولي أمر' }).click();
+  await dialog().getByRole('searchbox', { name: 'بحث' }).fill(`dad+${stamp}@example.com`);
+  await dialog().locator('#pk-n').fill('محمود والد الطالب');
+  await dialog().getByRole('button', { name: 'إنشاء حساب ولي الأمر وربطه' }).click();
+  await page.getByText(/أُنشئ حساب ولي الأمر/).waitFor();
+  await reopen('الطلاب', SN2); await dialog().getByText('محمود والد الطالب').waitFor();
+  await page.keyboard.press('Escape'); await nav('المعلمون'); await page.getByRole('button', { name: 'دعوة معلم' }).waitFor();
+});
 let invite = '';
 await step('invite a teacher by email (plus WhatsApp); the emailed link creates an approved teacher account', async () => {
   await page.keyboard.press('Escape');

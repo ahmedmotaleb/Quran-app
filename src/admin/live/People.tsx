@@ -442,6 +442,17 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
 function PickDialog({ target, exclude, onClose, onPick }: { target: A.Role; exclude: number[]; onClose: () => void; onPick: (p: A.Person) => Promise<void> }) {
   const [q, setQ] = useState(''); const [rows, setRows] = useState<A.Person[] | null>(null);
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState<number | null>(null);
+  const [newName, setNewName] = useState('');
+  const typedEmail = /^\S+@\S+\.\S+$/.test(q.trim()) ? q.trim().toLowerCase() : '';
+  /** No parent with this email yet: create the parent account (the setup link is emailed) and link it right away. */
+  const createAndPick = async () => {
+    if (newName.trim().length < 2) return setErr('اكتب اسم ولي الأمر.');
+    setBusy(-1); setErr(null);
+    try {
+      const p = await A.createPerson(newName.trim(), typedEmail, 'parent');
+      await onPick(p); toast(p.setup_email_sent ? 'أُنشئ حساب ولي الأمر وأُرسل رابط الإعداد إلى بريده' : 'أُنشئ حساب ولي الأمر؛ أرسل رابط الإعداد من صفحته'); onClose();
+    } catch (e) { setErr(errMsg(e)); setBusy(null); }
+  };
   useEffect(() => {
     let live = true;
     const t = setTimeout(async () => {
@@ -457,14 +468,22 @@ function PickDialog({ target, exclude, onClose, onPick }: { target: A.Role; excl
   const label = target === 'teacher' ? 'اختر المعلم' : target === 'parent' ? 'اختر ولي الأمر' : 'اختر الطالب';
   return (
     <Modal title={label} onClose={onClose}>
-      <input type="search" aria-label="بحث" placeholder="ابحث بالاسم أو البريد" value={q} onChange={(e) => setQ(e.target.value)} style={inputStyle(null)} />
+      <input type="search" aria-label="بحث" placeholder="ابحث بالاسم أو البريد أو رقم الهاتف" value={q} onChange={(e) => setQ(e.target.value)} style={inputStyle(null)} />
       {err && <FieldError msg={err} />}
       {rows === null && !err && <p role="status" style={{ margin: 0, color: color.muted }}>جارٍ التحميل…</p>}
       {rows && rows.filter((r) => !exclude.includes(r.id)).length === 0 && <p style={{ margin: 0, color: color.muted }}>لا توجد حسابات نشطة مطابقة.</p>}
+      {target === 'parent' && typedEmail && rows?.length === 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: `1px solid ${color.divider}`, paddingTop: 10 }}>
+          <span style={{ fontSize: 14 }}>لا يوجد ولي أمر بالبريد <bdi dir="ltr">{typedEmail}</bdi>. أنشئ حسابه واربطه الآن:</span>
+          <label htmlFor="pk-n" style={labelStyle}>اسم ولي الأمر</label>
+          <input id="pk-n" value={newName} onChange={(e) => setNewName(e.target.value)} style={inputStyle(null)} />
+          <button disabled={busy !== null} onClick={() => void createAndPick()} style={smallBtn('primary')}>{busy === -1 ? 'جارٍ الإنشاء…' : 'إنشاء حساب ولي الأمر وربطه'}</button>
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {rows?.filter((r) => !exclude.includes(r.id)).map((r) => (
           <button key={r.id} disabled={busy !== null} onClick={() => void pick(r)} style={{ minHeight: 52, padding: '0 12px', borderRadius: 12, border: `1px solid ${color.divider}`, background: color.card, textAlign: 'right', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ flex: 1 }}><span style={{ display: 'block', fontWeight: 700 }}>{r.full_name}</span><bdi dir="ltr" style={{ fontSize: 12, color: color.muted }}>{r.email}</bdi></span>
+            <span style={{ flex: 1 }}><span style={{ display: 'block', fontWeight: 700 }}>{r.full_name}</span><bdi dir="ltr" style={{ fontSize: 12, color: color.muted }}>{r.email}{r.phone ? ` · ${r.phone}` : ''}</bdi></span>
             {target === 'teacher' && !r.approved && <span style={{ fontSize: 12, color: color.danger }}>غير معتمد</span>}
             {busy === r.id && <span style={{ fontSize: 13, color: color.muted }}>جارٍ الربط…</span>}
           </button>

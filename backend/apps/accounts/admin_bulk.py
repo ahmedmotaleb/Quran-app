@@ -15,13 +15,31 @@ from apps.core.exceptions import ApiError
 from .models import AccountStatus, AuthToken, GuardianLink, LinkStatus, Role, TeacherAssignment, TeacherProfile, User
 
 
+def _phone_q(text: str) -> Q:
+    """A phone number in any format (01001234567, +20 100 123 4567, 0100-123-4567) matches the stored number in any
+    format: compare the last 9 digits, ignoring spaces, dashes and the country code."""
+    import re
+
+    digits = re.sub(r"\D", "", text)
+    if len(digits) < 7 or re.sub(r"[\d\s+()-]", "", text):
+        return Q(pk__in=[])
+    ids = (User.objects.exclude(phone="").annotate(d=_digits("phone")).filter(d__endswith=digits[-9:]).values("pk"))
+    return Q(pk__in=ids)
+
+
+def _digits(field: str):
+    from django.db.models import F, Func, Value
+
+    return Func(F(field), Value(r"[^0-9]"), Value(""), Value("g"), function="regexp_replace")
+
+
 def _apply(qs, f):
     if "role" in f:
         qs = qs.filter(role=f["role"])
     # Archived accounts only appear when asked for explicitly.
     qs = qs.filter(status=f["status"]) if "status" in f else qs.exclude(status=AccountStatus.ARCHIVED)
     if f.get("q"):
-        qs = qs.filter(search_q(f["q"], ["full_name", "email", "phone"]))
+        qs = qs.filter(search_q(f["q"], ["full_name", "email", "phone"]) | _phone_q(f["q"]))
     qs = date_range(qs, f, "date_joined", "joined_from", "joined_to")
     qs = date_range(qs, f, "last_login", "active_from", "active_to")
     now = timezone.now()
