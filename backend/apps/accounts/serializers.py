@@ -29,13 +29,15 @@ class MeSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "mfa_enabled", "mfa_required", "level", "daily_goal",
                   "date_joined", "admin_access"]
+        # Only the name, time zone and contact phone change here. Role, status, email and two-step verification have
+        # their own audited flows (a misplaced list let `PATCH me` change them on 22–23 Oct; test_me_protected_fields).
+        read_only_fields = ["id", "email", "role", "status", "mfa_enabled", "date_joined"]
 
     def get_level(self, u) -> str:
         return _student_field(u, "level")
 
     def get_daily_goal(self, u) -> str:
         return _student_field(u, "daily_goal")
-        read_only_fields = ["id", "email", "role", "status", "mfa_enabled", "date_joined"]
 
     def get_mfa_required(self, u) -> bool:
         from .admin_access import mfa_required
