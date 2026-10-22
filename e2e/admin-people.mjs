@@ -122,6 +122,22 @@ await step('invite a teacher by email (plus WhatsApp); the emailed link creates 
   await settledReload(); await nav('المعلمون'); await openPerson(TN); await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
 });
 await page.screenshot({ path: out + '/people-teacher.png' });
+await step('a student email in «دعوة معلم»: explained, and the account is converted to a teacher', async () => {
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'دعوة معلم' }).click();
+  await dialog().locator('#ad-e').fill('admin@halqa.app');
+  await dialog().getByRole('button', { name: 'إرسال الدعوة بالبريد' }).click();
+  await dialog().getByText('هذا البريد لحساب إدارة', { exact: false }).waitFor();
+  await dialog().locator('#ad-e').fill('sara@halqa.app');
+  await dialog().getByRole('button', { name: 'إرسال الدعوة بالبريد' }).click();
+  await dialog().getByText('مسجّل بالفعل كحساب طالب', { exact: false }).waitFor();
+  await dialog().getByRole('button', { name: 'تحويل الحساب إلى معلم' }).click();
+  await dialog().getByText('أصبح الحساب (sara@halqa.app) حساب معلم معتمد', { exact: false }).waitFor();
+  await dialog().getByRole('button', { name: 'تم' }).click();
+  await settledReload(); await nav('المعلمون'); await openPerson('سارة أحمد'); await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
+  const r = await page.request.post(BASE + 'api/v1/auth/login', { data: { email: 'sara@halqa.app', password: 'halqa123', client: 'native' } });
+  if ((await r.json()).user?.role !== 'teacher') throw new Error('sara is not a teacher');
+});
 await step('a non-admin cannot call the admin API', async () => {
   const s = await b.newContext(); const r0 = await s.request.post(BASE + 'api/v1/auth/login', { data: { email: 'yousef@halqa.app', password: 'halqa123', client: 'native' } });
   const { token } = await r0.json();
