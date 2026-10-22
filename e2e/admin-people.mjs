@@ -44,8 +44,8 @@ let setupLink = '';
 await step('add a student: the setup link is emailed (nothing to copy)', async () => {
   await page.getByRole('button', { name: 'إضافة طالب' }).click();
   await dialog().locator('#ad-n').fill(SN); await dialog().locator('#ad-e').fill(`e2e+${stamp}@example.com`);
-  await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال الرابط' }).click();
-  await dialog().getByText('تم إنشاء الحساب وإرسال رابط إعداد الحساب إلى البريد', { exact: false }).waitFor();
+  await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال رابط الإعداد' }).click();
+  await dialog().getByText('تم إرسال رابط الإعداد إلى', { exact: false }).waitFor();
   if (await dialog().locator('code').count()) throw new Error('a raw link is shown');
   const m = await linkFor(`e2e+${stamp}@example.com`);
   setupLink = m.link;
@@ -57,7 +57,7 @@ await step('the new student sets a password from the link and signs in', async (
   const p2 = await ctx.newPage(); await p2.goto(setupLink.replace(/^https?:\/\/[^/]+\//, BASE));
   await p2.locator('#sp-pw').fill('E2e-Student-2026!'); await p2.locator('#sp-pw2').fill('E2e-Student-2026!');
   await p2.getByRole('button', { name: 'حفظ كلمة المرور' }).click();
-  await p2.getByText('تم تعيين كلمة المرور').waitFor();
+  await p2.getByText('تم إعداد حسابك بنجاح').waitFor();
   const r = await p2.request.post(BASE + 'api/v1/auth/login', { data: { email: `e2e+${stamp}@example.com`, password: 'E2e-Student-2026!', client: 'native' } });
   if (r.status() !== 200) throw new Error(`login ${r.status()}`);
   await p2.close();
@@ -115,37 +115,35 @@ await step('link a parent who has no account yet: search by email → create the
   await reopen('الطلاب', SN2); await dialog().getByText('محمود والد الطالب').waitFor({ timeout: 15000 });
 });
 let invite = '';
-await step('invite a teacher by email (plus WhatsApp); the emailed link creates an approved teacher account', async () => {
+await step('create a teacher: account now, setup email, password from the link, then approval', async () => {
   await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await nav('المعلمون');
-  await page.getByRole('button', { name: 'دعوة معلم' }).click();
-  await dialog().locator('#ad-e').fill(`teach+${stamp}@example.com`);
-  await dialog().getByRole('checkbox', { name: 'أرسلها عبر واتساب أيضًا' }).check(); await dialog().locator('#ad-p').fill('01001234567');
-  await dialog().getByRole('button', { name: 'إرسال الدعوة بالبريد' }).click();
-  await dialog().getByText('تم إرسال دعوة المعلم إلى البريد الإلكتروني', { exact: false }).waitFor();
-  const wa = await dialog().getByRole('link', { name: 'إرسال عبر واتساب' }).getAttribute('href');
-  if (!wa.startsWith('https://wa.me/201001234567?text=') || !decodeURIComponent(wa).includes('#/invite?code=')) throw new Error('whatsapp link ' + wa);
+  await page.getByRole('button', { name: 'إضافة / دعوة معلم' }).click();
+  await dialog().locator('#ad-n').fill(TN); await dialog().locator('#ad-e').fill(`teach+${stamp}@example.com`);
+  await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال رابط الإعداد' }).click();
+  await dialog().getByText(`تم إرسال رابط الإعداد إلى`, { exact: false }).waitFor();
   if (await dialog().locator('code').count()) throw new Error('a raw link is shown');
   const m = await linkFor(`teach+${stamp}@example.com`);
-  invite = m.link; if (!m.text.includes('صالح حتى')) throw new Error('email text: ' + m.text.slice(0, 120));
+  invite = m.link; if (!invite.includes('#/reset?uid=')) throw new Error('setup link ' + invite);
   await dialog().getByRole('button', { name: 'تم' }).click();
-  // The teacher opens it on their own device (a signed-in browser is asked to sign out first).
   const c3 = await b.newContext(); const p3 = await c3.newPage(); await p3.goto(invite.replace(/^https?:\/\/[^/]+\//, BASE));
-  await p3.locator('#iv-name').fill(TN); await p3.locator('#iv-email').fill(`teach+${stamp}@example.com`); await p3.locator('#iv-pw').fill('E2e-Teacher-2026!');
-  await p3.getByRole('button', { name: 'إنشاء الحساب' }).click(); await p3.getByText('تم إنشاء حساب المعلم').waitFor(); await c3.close();
-  await settledReload(); await nav('المعلمون'); await openPerson(TN); await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
+  await p3.locator('#sp-pw').fill('E2e-Teacher-2026!'); await p3.locator('#sp-pw2').fill('E2e-Teacher-2026!');
+  await p3.getByRole('button', { name: 'حفظ كلمة المرور' }).click(); await p3.getByText('تم إعداد حسابك بنجاح').waitFor(); await c3.close();
+  await settledReload(); await nav('المعلمون'); await openPerson(TN);
+  await dialog().getByRole('button', { name: 'اعتماد المعلم' }).click();  // account setup ≠ approval
+  await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
 });
 await page.screenshot({ path: out + '/people-teacher.png' });
-await step('a student email in «دعوة معلم»: no invitation; «ترقية إلى معلم» keeps the same account', async () => {
+await step('a student email in «دعوة معلم»: no new account; «ترقية إلى معلم» keeps the same account', async () => {
   await page.keyboard.press('Escape'); await nav('المعلمون');
-  await page.getByRole('button', { name: 'دعوة معلم' }).click();
-  await dialog().locator('#ad-e').fill('admin@halqa.app');
-  await dialog().getByRole('button', { name: 'إرسال الدعوة بالبريد' }).click();
+  await page.getByRole('button', { name: 'إضافة / دعوة معلم' }).click();
+  await dialog().locator('#ad-n').fill('معلم تجريبي'); await dialog().locator('#ad-e').fill('admin@halqa.app');
+  await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال رابط الإعداد' }).click();
   await dialog().getByText('هذا البريد لحساب إدارة', { exact: false }).waitFor();
   const before = (await (await page.request.post(BASE + 'api/v1/auth/login', { data: { email: 'sara@halqa.app', password: 'halqa123', client: 'native' } })).json()).user;
   await dialog().locator('#ad-e').fill('SARA@halqa.app');
-  await dialog().getByRole('button', { name: 'إرسال الدعوة بالبريد' }).click();
+  await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال رابط الإعداد' }).click();
   await dialog().getByText('مسجّل بالفعل كحساب طالب', { exact: false }).waitFor();
-  await dialog().getByText('لم تُرسل أي دعوة', { exact: false }).waitFor();
+  await dialog().getByText('لم يُنشأ حساب جديد', { exact: false }).waitFor();
   await dialog().getByRole('button', { name: 'ترقية إلى معلم' }).click();
   await dialog().getByText('سيتم تحويل هذا الحساب', { exact: false }).waitFor();
   await dialog().locator('#pr-r').fill('انضمت إلى فريق المعلمين');

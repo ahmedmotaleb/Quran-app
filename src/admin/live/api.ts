@@ -7,11 +7,12 @@ export interface Person {
   id: number; email: string; full_name: string; role: Role; status: AccountStatus; timezone: string; phone: string; phone_verified?: boolean;
   level: string; approved: boolean | null; has_password: boolean; date_joined: string; last_login: string | null;
   status_reason: string; status_changed_at: string | null;
+  setup_email_status: '' | 'sent' | 'failed'; setup_email_last_at: string | null; setup_email_count: number;
   teachers: { id: number; name: string; assignment_id: number }[];
   guardians: { id: number; name: string; status: string; link_id: number }[];
   children: { id: number; name: string; status: string; link_id: number }[];
 }
-export interface SetupLink { setup_email_sent: boolean; setup_link: string | null }
+export interface SetupLink { setup_email_sent: boolean; setup_link: string | null; sent_to?: string }
 export type Counts = Record<AccountStatus | 'all', number> & { unapproved?: number; unlinked?: number };
 
 type P = Record<string, string | number | undefined>;
@@ -26,7 +27,10 @@ export const updatePerson = (id: number, patch: Partial<Pick<Person, 'full_name'
 export const setPersonStatus = (id: number, status: AccountStatus, reason = '') => api<Person>('POST', `admin/users/${id}/status`, { status, reason });
 export const createPerson = (full_name: string, email: string, role: 'student' | 'parent') =>
   api<Person & SetupLink>('POST', 'admin/users', { full_name, email, role });
-export const newSetupLink = (id: number) => api<SetupLink>('POST', `admin/users/${id}/setup-link`);
+/** Emails a fresh setup link. `share` (owner only, and only when the email fails): also return the link to copy. */
+export const newSetupLink = (id: number, share = false) => api<SetupLink>('POST', `admin/users/${id}/setup-link`, share ? { share: true } : {});
+/** «إنشاء الحساب وإرسال رابط الإعداد»: the teacher account exists at once (unapproved); the setup email goes directly. */
+export const createTeacher = (full_name: string, email: string) => api<Person & SetupLink>('POST', 'admin/teachers', { full_name, email });
 export const setTeacherApproval = (id: number, approved: boolean, reason = '') => api<Person>('POST', `admin/teachers/${id}/approval`, { approved, reason });
 export const assignTeacher = (teacher: number, student: number) => api<{ id: number }>('POST', 'admin/teacher-assignments', { teacher, student });
 export const endAssignment = (id: number) => api<null>('POST', `admin/teacher-assignments/${id}/end`);

@@ -63,6 +63,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Sign-in phone (phones.py): E.164, a sign-in identifier only once verified by a code; unique among verified numbers.
     phone_e164 = models.CharField(max_length=20, blank=True, default="")
     phone_verified_at = models.DateTimeField(null=True, blank=True)
+    # Password-setup email for accounts created by an admin (teacher, student, parent): last delivery result, when, how
+    # many times. Shown in the admin record so a failed or ignored email is visible and can be resent.
+    setup_email_status = models.CharField(max_length=8, blank=True, default="")  # "" / sent / failed
+    setup_email_last_at = models.DateTimeField(null=True, blank=True)
+    setup_email_count = models.PositiveSmallIntegerField(default=0)
     is_active = models.BooleanField(default=True)  # False only for closed accounts; suspension uses `status`.
     # Why the current status was set (shown to admins), e.g. the automatic absence suspension.
     status_reason = models.CharField(max_length=200, blank=True)

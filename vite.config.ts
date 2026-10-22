@@ -49,6 +49,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        // The admin portal is online only and must never run a cached old version: its page and icons are not
+        // precached, so /admin/ always loads the current release from the network (23 Oct: a cached admin page
+        // predating «تذكّر هذا الجهاز» never sent trust_device, so every sign-in asked for the code).
+        globIgnores: ['admin/**'],
         importScripts: ['push-sw.js'], // Web Push handlers (public/push-sw.js)
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/admin\//],  // the admin app has its own page (online only)

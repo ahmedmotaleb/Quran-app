@@ -7,7 +7,7 @@ import { DAYS, SUR, TODAY_LABEL } from '@/data/demo';
 import { fmt, scoreL, timeIn, typeIcon, tzLabel, tzOf } from '@/lib/format';
 import { dateKey, dayLabel, fmtDay, fmtTime, zonedToIso as zonedIso } from '@/lib/time';
 import { gradeRecitation, reviewExcuse, saveMeetingLink, setAttendance, teacherCancelBooking, toggleSlot as toggleLiveSlot } from '@/store/live';
-import type { ApiGradingItem } from '@/api/endpoints';
+import { me as getMe, type ApiGradingItem } from '@/api/endpoints';
 import { useState } from 'react';
 import { weekDays } from '@/store/selectors';
 import { openSheet } from '@/store/store';
@@ -134,6 +134,18 @@ const TODAY_SESSIONS = [
   { h: 20, stu: 'حلقة المراجعة المسائية', type: 'جماعية · 6 طلاب', task: 'مراجعة جزء عمّ' },
 ];
 
+/** Live: an account the admin has not approved yet works, but is not offered to students (approval is separate). */
+function PendingApproval() {
+  const [pending, setPending] = useState(false);
+  useEffect(() => { let on = true; getMe().then((m) => on && setPending(m.teacher_approved === false)).catch(() => {}); return () => { on = false; }; }, []);
+  if (!pending) return null;
+  return (
+    <p role="status" style={{ margin: 0, padding: '12px 14px', borderRadius: 14, background: color.sand, fontSize: 14, lineHeight: 1.7 }}>
+      <strong>بانتظار الاعتماد:</strong> حسابك جاهز، ولن يظهر للطلاب للحجز حتى تعتمده إدارة الحلقة.
+    </p>
+  );
+}
+
 export function TeacherDash() {
   const tz = useApp((s) => s.tz); const live = useApp((s) => s.liveMode); const name = useApp((s) => s.user.name);
   const { pend, open } = useReviews();
@@ -152,6 +164,7 @@ export function TeacherDash() {
         </div>
         {live && <InboxBell />}
       </header>
+      {live && <PendingApproval />}
       <section style={{ background: color.primary, color: color.ivory, borderRadius: 20, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>تسجيلات تنتظر المراجعة</h2>

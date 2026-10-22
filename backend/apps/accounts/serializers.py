@@ -25,11 +25,12 @@ class MeSerializer(serializers.ModelSerializer):
     mfa_required = serializers.SerializerMethodField()
     admin_access = serializers.SerializerMethodField()
     phone_verified = serializers.SerializerMethodField()
+    teacher_approved = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "phone_verified", "mfa_enabled", "mfa_required",
-                  "level", "daily_goal", "date_joined", "admin_access"]
+                  "level", "daily_goal", "date_joined", "admin_access", "teacher_approved"]
         # Only the name, time zone and contact phone change here. Role, status, email and two-step verification have
         # their own audited flows (a misplaced list let `PATCH me` change them on 22–23 Oct; test_me_protected_fields).
         read_only_fields = ["id", "email", "role", "status", "mfa_enabled", "date_joined"]
@@ -42,6 +43,13 @@ class MeSerializer(serializers.ModelSerializer):
 
     def get_phone_verified(self, u) -> bool:
         return bool(u.phone_verified_at and u.phone_e164)
+
+    def get_teacher_approved(self, u):
+        """Teachers only: approved by an admin (visible to students). None for other roles."""
+        if u.role != Role.TEACHER:
+            return None
+        prof = getattr(u, "teacher_profile", None)
+        return bool(prof and prof.approved_at)
 
     def validate_phone(self, v):
         # A verified sign-in number changes only through «تأكيد رقم الهاتف» (the new number is verified first).
@@ -139,7 +147,8 @@ class AdminUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "phone_verified", "level", "approved", "has_password",
-                  "date_joined", "last_login", "teachers", "guardians", "children", "status_reason", "status_changed_at"]
+                  "date_joined", "last_login", "teachers", "guardians", "children", "status_reason", "status_changed_at",
+                  "setup_email_status", "setup_email_last_at", "setup_email_count"]
         read_only_fields = fields
 
     def to_representation(self, u):

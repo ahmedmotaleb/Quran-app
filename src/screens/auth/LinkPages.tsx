@@ -36,10 +36,11 @@ function Field({ id, label, type = 'text', value, onChange, err, auto, ltr }: {
   );
 }
 
-const Done = ({ text }: { text: string }) => (
+const Done = ({ text, title, cta = 'الذهاب إلى تسجيل الدخول' }: { text: string; title?: string; cta?: string }) => (
   <>
-    <p role="status" style={{ margin: 0, fontSize: 15, textAlign: 'center' }}>{text}</p>
-    <button onClick={toSignIn} style={primaryBtn(52, 16)}>الذهاب إلى تسجيل الدخول</button>
+    {title && <p role="status" style={{ margin: 0, fontSize: 18, fontWeight: 800, textAlign: 'center', color: color.primary }}>{title}</p>}
+    <p role={title ? undefined : 'status'} style={{ margin: 0, fontSize: 15, textAlign: 'center' }}>{text}</p>
+    <button onClick={toSignIn} style={primaryBtn(52, 16)}>{cta}</button>
   </>
 );
 
@@ -63,7 +64,7 @@ export function SetPasswordPage() {
   };
   return (
     <Frame title="تعيين كلمة المرور" sub="اختر كلمة مرور لحسابك في الحلقة">
-      {done ? <Done text="تم تعيين كلمة المرور. سجّل الدخول ببريدك وكلمة المرور الجديدة." /> : (
+      {done ? <Done title="تم إعداد حسابك بنجاح" cta="تسجيل الدخول" text="سجّل الدخول من صفحة الدخول المعتادة ببريدك وكلمة المرور الجديدة؛ تُفتح لك الواجهة المناسبة لحسابك (طالب أو معلم أو ولي أمر)." /> : (
         <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Field id="sp-pw" label="كلمة المرور الجديدة" type="password" auto="new-password" ltr value={pw} onChange={setPw} err={err.pw} />
           <Field id="sp-pw2" label="أعد كتابة كلمة المرور" type="password" auto="new-password" ltr value={pw2} onChange={setPw2} err={err.pw2} />

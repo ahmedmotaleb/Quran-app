@@ -65,7 +65,7 @@ export function Login() {
         <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>{L.parent ? 'تسجيل دخول ولي الأمر' : 'تسجيل الدخول'}</h1>
         <p style={muted(14, { margin: '4px 0 0', textAlign: 'center', lineHeight: 1.7 })}>{L.parent
           ? 'تنشئ إدارة الحلقة حساب ولي الأمر وتربطه بأبنائك، وتصلك رسالة لتعيين كلمة المرور.'
-          : 'تُعرض لك الواجهة المناسبة بحسب نوع حسابك'}</p>
+          : 'للطلاب والمعلمين: تُعرض لك الواجهة المناسبة بحسب نوع حسابك'}</p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <label htmlFor="lg-email" style={labelStyle}>البريد الإلكتروني أو رقم الهاتف</label>

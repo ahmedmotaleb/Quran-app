@@ -24,8 +24,8 @@ await step('setup link sets the password once and leads to the parent sign-in', 
   await page.goto(`${BASE}#/reset?${query}`);
   await page.locator('#sp-pw').fill(PW); await page.locator('#sp-pw2').fill(PW);
   await page.getByRole('button', { name: 'حفظ كلمة المرور' }).click();
-  await page.getByText('تم تعيين كلمة المرور.', { exact: false }).waitFor();
-  await page.getByRole('button', { name: 'الذهاب إلى تسجيل الدخول' }).click();
+  await page.getByText('تم إعداد حسابك بنجاح').waitFor();
+  await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
   await app.getByRole('heading', { name: 'تسجيل دخول ولي الأمر' }).waitFor({ timeout: 15000 });
   if (new URL(page.url()).hash) throw new Error('hash kept: ' + page.url());
 });
@@ -35,7 +35,7 @@ await step('the link cannot be used again', async () => {
   await p2.locator('#sp-pw').fill(PW + 'x'); await p2.locator('#sp-pw2').fill(PW + 'x');
   await p2.getByRole('button', { name: 'حفظ كلمة المرور' }).click();
   await p2.getByRole('alert').first().waitFor();
-  if (await p2.getByText('تم تعيين كلمة المرور.', { exact: false }).count()) throw new Error('link reused');
+  if (await p2.getByText('تم إعداد حسابك بنجاح').count()) throw new Error('link reused');
   await p2.close();
 });
 await step('parent signs in and lands on the parent portal with both children', async () => {

@@ -8,7 +8,7 @@ on:
       task:
         description: What to run
         type: choice
-        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check, upload-trace, account-integrity, trusted-devices]
+        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check, upload-trace, account-integrity, trusted-devices, migrate-teacher-invitations]
       admin_email:
         description: create-admin / promote-admin — the admin's email (create-admin takes the password from the ADMIN_PASSWORD secret; promote-admin keeps the account's password)
         required: false
@@ -18,6 +18,10 @@ on:
       hours:
         description: upload-trace / account-integrity — how many hours back to look (default 72)
         required: false
+      apply:
+        description: migrate-teacher-invitations only — create the accounts and send the setup emails (unticked = dry run)
+        type: boolean
+        default: false
       accept_tanzil_terms:
         description: import/verify only — I accept the Tanzil Quran Text license (verbatim text, attribution, link to tanzil.net)
         type: boolean
@@ -184,6 +188,41 @@ jobs:
               host = re.sub(r"^https?://([^/]+).*", r"\1", h.get("requestUrl", ""))
               lines.append(f"{r.get('timestamp','')[:19]} {h.get('status')} {host.split('.')[0]} req={h.get('requestSize','?')}B resp={h.get('responseSize','?')}B {fam(h.get('userAgent',''))}")
           print(f"::notice title=logins::{len(rows)} admin sign-in requests :: " + " | ".join(lines[:40]))
+          PY
+
+  # Open teacher invitations from the previous flow → teacher accounts + setup email (dry run unless «apply»).
+  teacher-invitations:
+    if: inputs.task == 'migrate-teacher-invitations'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Run migrate_teacher_invitations inside production
+        run: |
+          P="${{ vars.GCP_PROJECT_ID }}"
+          START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          ARGS="manage.py,migrate_teacher_invitations"
+          [ "${{ inputs.apply }}" = "true" ] && ARGS="$ARGS,--apply"
+          gcloud run jobs execute halqa-tasks --project "$P" --region europe-west1 --args "$ARGS" --wait --quiet || echo "::warning::migration failed"
+          sleep 20
+          gcloud logging read 'jsonPayload.msg=("teacher_invitation_migration" OR "teacher_invitation_migration_summary") AND timestamp>="'$START'"' \
+            --project "$P" --limit 100 --format json > /tmp/m.json || true
+          python3 - <<'PY'
+          import json
+          rows = json.load(open("/tmp/m.json"))
+          lines = []
+          for r in rows:
+              j = dict(r.get("jsonPayload") or {})
+              for k in ("ts", "level", "severity", "logger", "request_id"):
+                  j.pop(k, None)
+              lines.append(json.dumps(j, ensure_ascii=False)[:300])
+          print("::notice title=teacher-invitations::" + (" | ".join(lines) if lines else "no log lines yet"))
           PY
 
   # Media uploads (recitations, voice notes) in the last N hours: what Cloud Run answered (status, size, latency,

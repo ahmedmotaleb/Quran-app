@@ -60,13 +60,14 @@ def use(request, d: TrustedDevice) -> None:
     audit("auth.mfa_trusted_device", actor=d.user, target=d.user, request=request, device=d.pk)
 
 
-def remember(request, response, user) -> None:
+def remember(request, response, user) -> TrustedDevice:
     raw = secrets.token_urlsafe(32)
     d = TrustedDevice.objects.create(user=user, token_hash=_sha(raw), marker=marker(user), label=_label(request),
                                      expires_at=timezone.now() + timedelta(days=TRUST_DAYS))
     response.set_cookie(COOKIE, raw, max_age=TRUST_DAYS * 86400, httponly=True, secure=settings.SESSION_COOKIE_SECURE,
                         samesite="Lax", path="/")
     audit("auth.device_trusted", actor=user, target=user, request=request, device=d.pk, days=TRUST_DAYS)
+    return d
 
 
 def _out(d: TrustedDevice, current: TrustedDevice | None) -> dict:

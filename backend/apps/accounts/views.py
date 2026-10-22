@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout, password_validation, update_session_auth_hash
@@ -6,7 +7,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.db import transaction
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, F, Prefetch, Q
 from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
@@ -184,7 +185,10 @@ class _BaseLogin(APIView):
             if getattr(self, "remember_device", False):
                 from . import trusted
 
-                trusted.remember(request, resp, user)
+                d = trusted.remember(request, resp, user)
+                resp.data["trusted_device"] = {"expires_at": d.expires_at.isoformat(), "days": trusted.TRUST_DAYS}
+            if getattr(self, "used_trusted_device", False):
+                resp.data["used_trusted_device"] = True
             return resp
         return Response(_session_payload(request, user, d["client"], d["device"]))
 
@@ -209,6 +213,7 @@ class AdminLoginView(_BaseLogin):
             device = trusted.trusted(self.request, user)
             if device is not None:  # a device the admin chose to trust: the password alone is enough
                 trusted.use(self.request, device)
+                self.used_trusted_device = True
                 return
         if user.mfa_enabled and not totp.verify(user.mfa_secret, d["otp"]):
             if d["otp"]:
@@ -428,7 +433,7 @@ class AcceptInvitationView(APIView):
                 except Exception as e:
                     raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"password": [arabic_password_error(e)]})
                 user = User.objects.create_user(email, d["password"], full_name=d["full_name"], role=Role.TEACHER)
-                TeacherProfile.objects.create(user=user, approved_at=timezone.now())
+                TeacherProfile.objects.create(user=user)  # account setup ≠ approval: the admin approves separately
                 result = {"user": MeSerializer(user).data}
             elif inv.purpose == Invitation.Purpose.ADMIN_ACCOUNT:
                 # Email-bound: the account is created only for the invited address, with the inviter's chosen access.
@@ -501,15 +506,32 @@ class AdminUserList(generics.ListCreateAPIView):
         return Response({**AdminUserSerializer(user, context={"request": request}).data, **_setup_link(request, user)}, status=201)
 
 
-def _setup_link(request, user) -> dict:
-    """Email the password-setup link; without an email provider the admin gets it to pass on in person."""
+def send_setup_email(user, actor=None, request=None) -> bool:
+    """Email a password-setup link (#/reset, Django's one-use token) and record the delivery result on the account."""
     link = password_link(user)
-    role = {Role.PARENT: "ولي أمر", Role.TEACHER: "معلم"}.get(user.role, "طالب")
-    sent = send_link_email(user.email, subject="إعداد حسابك في حَلْقة",
-                           intro=f"أُنشئ لك حساب {role} في حَلْقة لتحفيظ القرآن الكريم. اختر كلمة مرور لحسابك من الرابط التالي، ثم سجّل الدخول.",
-                           cta="تعيين كلمة المرور", link=link, expires_at=None)
-    audit("admin.setup_link_issued", actor=request.user, target=user, request=request, emailed=sent)
-    return {"setup_email_sent": sent, "setup_link": None if sent else link}
+    if user.role == Role.TEACHER:
+        subject = "إعداد حساب المعلم في حَلْقة"
+        intro = ("تم إنشاء حساب معلم لك في منصة حَلْقة. اختر كلمة مرور لحسابك من الرابط التالي، ثم سجّل الدخول من صفحة "
+                 "الدخول المعتادة ببريدك وكلمة المرور. تعتمد الإدارة حسابك قبل أن يظهر للطلاب.")
+    else:
+        role = {Role.PARENT: "ولي أمر"}.get(user.role, "طالب")
+        subject = "إعداد حسابك في حَلْقة"
+        intro = f"أُنشئ لك حساب {role} في حَلْقة لتحفيظ القرآن الكريم. اختر كلمة مرور لحسابك من الرابط التالي، ثم سجّل الدخول."
+    sent = send_link_email(user.email, subject=subject, intro=intro, cta="تعيين كلمة المرور", link=link, expires_at=None)
+    User.objects.filter(pk=user.pk).update(setup_email_status="sent" if sent else "failed", setup_email_last_at=timezone.now(),
+                                           setup_email_count=F("setup_email_count") + 1)
+    audit("admin.setup_link_issued", actor=actor, target=user, request=request, emailed=sent)
+    return sent
+
+
+def _setup_link(request, user, share: bool = False) -> dict:
+    """Email the password-setup link. The link itself is returned only when the email failed and the owner asked to
+    copy it (emergency fallback); the normal flow is direct email."""
+    from .admin_access import is_owner
+
+    sent = send_setup_email(user, request.user, request)
+    link = password_link(user) if (share and not sent and is_owner(request.user)) else None
+    return {"setup_email_sent": sent, "setup_link": link, "sent_to": user.email}
 
 
 class AdminUserDetail(APIView):
@@ -548,10 +570,12 @@ class AdminUserSetupLink(APIView):
     permission_classes = [IsAdminRole]
 
     def post(self, request, pk):
-        user = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN), pk=pk, is_active=True)
+        user = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN).exclude(status=AccountStatus.DELETED), pk=pk, is_active=True)
         if user.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
             raise ApiError("suspended", "الحساب موقوف أو مؤرشف. أعد تفعيله أولًا.", 409)
-        return Response(_setup_link(request, user))
+        if user.setup_email_last_at and user.setup_email_last_at > timezone.now() - timedelta(seconds=30) and request.data.get("share") is not True:
+            raise ApiError("too_soon", "أُرسل رابط الإعداد قبل لحظات. انتظر قليلًا ثم أعد المحاولة.", 429)
+        return Response(_setup_link(request, user, share=request.data.get("share") is True))
 
 
 class AdminUserCounts(APIView):

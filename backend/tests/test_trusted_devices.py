@@ -128,3 +128,53 @@ def test_trusted_devices_report_is_read_only_and_prints_no_secrets(admin):
     assert row["audit_30d"]["auth.device_trusted"] == 1
     assert raw not in out.getvalue() and "@" not in out.getvalue()
     assert TrustedDevice.objects.count() == 1
+
+
+def test_login_reports_the_trusted_device_and_the_list_marks_it_current(admin):
+    c = browser()
+    assert login(c).json()["code"] == "mfa_required"
+    r = login(c, otp=code(admin), trust_device=True).json()
+    assert r["trusted_device"]["days"] == 30 and "used_trusted_device" not in r
+    rows = portal(c).json()["results"]
+    assert len(rows) == 1 and rows[0]["current"] is True and rows[0]["label"] == "Safari — iPhone"
+    from datetime import datetime
+
+    left = datetime.fromisoformat(rows[0]["expires_at"]) - timezone.now()
+    assert timedelta(days=29, hours=23) < left <= timedelta(days=30)
+    c.post("/api/v1/auth/logout", HTTP_X_HALQA_PORTAL="admin")
+    r = login(c).json()  # password only
+    assert r["used_trusted_device"] is True and "trusted_device" not in r
+
+
+def test_trust_ends_on_expiry_password_change_mfa_reset_and_revocation(admin):
+    from django.core.cache import cache
+
+    def trusted_browser():
+        cache.clear()  # the auth throttle (10/min) is not what this test is about
+        c = browser()
+        login(c)
+        assert login(c, otp=code(User.objects.get(pk=admin.pk)), trust_device=True).status_code == 200  # current secret
+        c.post("/api/v1/auth/logout", HTTP_X_HALQA_PORTAL="admin")
+        assert login(c).status_code == 200
+        c.post("/api/v1/auth/logout", HTTP_X_HALQA_PORTAL="admin")
+        return c
+
+    c = trusted_browser()
+    TrustedDevice.objects.update(expires_at=timezone.now() - timedelta(seconds=1))
+    assert login(c).json()["code"] == "mfa_required"  # expired
+    c = trusted_browser()
+    u = User.objects.get(pk=admin.pk)
+    u.set_password(PW)  # same text, new hash: the marker no longer matches
+    u.save()
+    assert login(c).json()["code"] == "mfa_required"
+    c = trusted_browser()
+    u = User.objects.get(pk=admin.pk)
+    u.mfa_secret = totp.new_secret()  # authenticator reset
+    u.save()
+    assert login(c).json()["code"] == "mfa_required"
+    c = trusted_browser()
+    d = TrustedDevice.objects.filter(revoked_at__isnull=True).latest("pk")
+    login(c, otp=code(User.objects.get(pk=admin.pk)))  # a session to call the API with
+    assert c.post(f"/api/v1/admin/trusted-devices/{d.pk}/revoke", HTTP_X_HALQA_PORTAL="admin").status_code == 200
+    c.post("/api/v1/auth/logout", HTTP_X_HALQA_PORTAL="admin")
+    assert login(c).json()["code"] == "mfa_required"
