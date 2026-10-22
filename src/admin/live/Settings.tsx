@@ -90,7 +90,7 @@ export default function SettingsLive() {
         <Intervals v={v.review_intervals} onChange={(x) => up({ review_intervals: x })} err={err.review_intervals} />
         {sw('open_signup', 'يسمح لأي شخص بإنشاء حساب طالب من التطبيق')}
         {sw('session_reminders', 'تذكير الطالب والمعلم قبل الجلسة (يُفعَّل عند ربط الإشعارات)')}
-        {sw('parent_weekly_report', 'ملخص أسبوعي لأولياء الأمور (يُفعَّل عند ربط الإشعارات)')}
+        {sw('parent_weekly_report', 'ملخص أسبوعي داخل التطبيق لكل ولي أمر مساء الجمعة (بتوقيت القاهرة)')}
       </Group>
       {err.form && <FieldError msg={err.form} />}
       <div style={{ position: 'sticky', bottom: 0, background: color.ivory, padding: '12px 0', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', borderTop: `1px solid ${color.divider}` }}>

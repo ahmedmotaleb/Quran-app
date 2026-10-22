@@ -3,6 +3,7 @@ independent: a failing step is reported and the job exits non-zero, but the othe
 
 - session_reminders: reminder records for sessions in the next 24 hours
 - generate_reviews: due spaced-repetition review tasks
+- parent_weekly_reports: the weekly in-app summary for parents (acts only on Friday evening, Cairo time)
 - purge_orphan_media: uploads never attached to a submission/feedback after 48 hours (needs object storage)
 - purge_reviewed_recordings: student recordings 48 hours after the teacher's review (needs object storage)
 - ops_stats: one aggregate log line (database size and connections, stored media, failed uploads) that the
@@ -21,7 +22,7 @@ class Command(BaseCommand):
     help = "Run the hourly maintenance steps."
 
     def handle(self, **_):
-        steps = ["session_reminders", "generate_reviews", "sync_circle_members", "archive_smoke_accounts"]
+        steps = ["session_reminders", "generate_reviews", "sync_circle_members", "archive_smoke_accounts", "parent_weekly_reports"]
         if settings.MEDIA_STORAGE != "none":
             steps += ["purge_orphan_media", "purge_reviewed_recordings"]
         failed = []

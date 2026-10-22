@@ -228,7 +228,7 @@ class AdminProgressSummary(APIView):
 
 
 def weekly_summary(parent) -> dict:
-    """Data for a future weekly guardian notification/email (pack prompt 14). Nothing is sent from here."""
+    """The parent's last 7 days per linked child; sent weekly by `parent_weekly_reports` and shown on demand."""
     from apps.accounts.models import AccountStatus
 
     ids = linked_child_ids(parent).values_list("student_id", flat=True)
