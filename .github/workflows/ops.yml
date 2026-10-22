@@ -114,7 +114,7 @@ jobs:
         run: |
           P="${{ vars.GCP_PROJECT_ID }}"
           SINCE=$(date -u -d "$HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)
-          gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.requestMethod="POST" AND httpRequest.requestUrl:"media" AND timestamp>="'$SINCE'"' \
+          gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.requestMethod="POST" AND (httpRequest.requestUrl:"media" OR httpRequest.requestUrl:"submissions") AND timestamp>="'$SINCE'"' \
             --project "$P" --limit 200 --format json > /tmp/req.json || echo "::warning::request log read failed"
           gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.requestMethod="POST" AND timestamp>="'$SINCE'"' \
             --project "$P" --limit 5 --format json > /tmp/any.json || true
