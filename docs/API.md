@@ -84,6 +84,8 @@ server logs.
 | `POST admin/teacher-assignments`, `POST admin/teacher-assignments/{id}/end` | admin | |
 | `POST admin/guardian-links`, `POST admin/guardian-links/{id}/revoke` | admin | |
 | `POST admin/mfa/setup`, `POST admin/mfa/confirm` | admin | TOTP (RFC 6238) |
+| `POST admin/auth/login` `trust_device: true` | admin (web) | with a correct code: sets the HttpOnly cookie `halqa_admin_trusted`; for 30 days that browser signs in with the password only (audit `auth.mfa_trusted_device`). Ends on expiry, removal, password change or authenticator change |
+| `GET/DELETE admin/trusted-devices`, `POST admin/trusted-devices/{id}/revoke` | admin (own devices only) | list (label from the User-Agent, last used, expiry, `current`) / remove all / remove one; audit `auth.device_trusted`, `auth.devices_untrusted` |
 
 ## Admin lists: search, filters, sort, bulk actions
 
@@ -119,7 +121,7 @@ Response: `{"requested": 25, "success": 23, "skipped": 1, "failed": 1, "results"
 
 | Resource | Actions | Never |
 | --- | --- | --- |
-| `users` (students, teachers, parents) | `activate` (also restores archived), `suspend`*, `archive`* (soft delete), `approve`, `unapprove`* (teachers only), `assign_teacher`† (students), `move_to_circle`† (students), `enroll`† (students), `notify`†, `resend_setup`, `delete`* (permanent; always needs `confirm: "حذف"`: an account with no activity is removed; otherwise personal data is erased — name «حساب محذوف», placeholder email, no phone/password/MFA, recordings and voice notes removed from storage, tokens/notifications/bookmarks deleted, links, memberships and future bookings ended — and educational records stay anonymous; a teacher with upcoming sessions is refused; audit `admin.user_deleted` with id, role and mode only) | admins are never targets; deleted accounts are hidden from every admin list and endpoint and can never be reactivated |
+| `users` (students, teachers, parents) | `activate` (also restores archived), `suspend`*, `archive`* (soft delete), `approve`, `unapprove`* (teachers only), `assign_teacher`† (students), `move_to_circle`† (students), `enroll`† (students), `notify`†, `resend_setup`, `make_teacher`* (students/parents → approved teacher, same email and password; learner links, memberships and future bookings end; tokens revoked; audit `admin.role_changed`), `delete`* (permanent; always needs `confirm: "حذف"`: an account with no activity is removed; otherwise personal data is erased — name «حساب محذوف», placeholder email, no phone/password/MFA, recordings and voice notes removed from storage, tokens/notifications/bookmarks deleted, links, memberships and future bookings ended — and educational records stay anonymous; a teacher with upcoming sessions is refused; audit `admin.user_deleted` with id, role and mode only) | admins are never targets; deleted accounts are hidden from every admin list and endpoint and can never be reactivated |
 | `circles` | `publish`, `disable`*, `draft`, `delete` (draft with no sessions) | delete with sessions |
 | `sessions` | `cancel`* (future only; bookings cancelled, students notified) | delete |
 | `bookings` | `cancel`* (future only; student notified) | delete; past bookings and attendance |

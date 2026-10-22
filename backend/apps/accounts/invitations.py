@@ -123,6 +123,15 @@ class InvitationListCreate(APIView):
             if existing and purpose == P.TEACHER_ACCOUNT:
                 if existing.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
                     raise ApiError("account_inactive", "لهذا البريد حساب موقوف أو مؤرشف. أعد تفعيله من صفحة الحساب.", 409)
+                if existing.role == Role.ADMIN:
+                    raise ApiError("email_is_admin", "هذا البريد لحساب إدارة، ولا يكون الحساب الواحد مديرًا ومعلمًا معًا. "
+                                   "ادعُ المعلم ببريد آخر.", 409, {"email": ["بريد حساب إدارة."]})
+                if existing.role in (Role.STUDENT, Role.PARENT) and u.role == Role.ADMIN:
+                    # One account has one role: offer to convert the existing account instead (bulk action make_teacher).
+                    label = "طالب" if existing.role == Role.STUDENT else "ولي أمر"
+                    raise ApiError("existing_learner", f"هذا البريد مسجّل بالفعل كحساب {label} ({existing.full_name}). "
+                                   "يمكنك تحويل هذا الحساب إلى حساب معلم.", 409,
+                                   {"user": [str(existing.pk)], "role": [existing.role]})
                 raise ApiError("email_taken", "لهذا البريد حساب في حَلْقة بالفعل.", 409, {"email": ["هذا البريد مسجّل بالفعل."]})
             if existing and existing.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
                 raise ApiError("account_inactive", "الحساب المرتبط بهذا البريد موقوف أو مؤرشف.", 409)

@@ -180,7 +180,7 @@ const TEACHER_INVITE_TEXT = 'السلام عليكم، دعتك إدارة حَ�
 function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => void; onDone: () => void }) {
   const [f, setF] = useState({ name: '', email: '', phone: '', wa: false });
   const [err, setErr] = useState<Record<string, string | null>>({}); const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; note: string; link?: string | null; text?: string; retry?: number } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; note: string; link?: string | null; text?: string; retry?: number; convert?: number } | null>(null);
   const email = f.email.trim().toLowerCase();
   const teacherResult = (r: Awaited<ReturnType<typeof A.inviteTeacher>>) => setResult(r.email_sent
     ? { ok: true, note: `تم إرسال دعوة المعلم إلى البريد الإلكتروني (${email}).`, link: r.link, text: TEACHER_INVITE_TEXT }
@@ -203,9 +203,21 @@ function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => voi
       onDone();
     } catch (y) {
       const a = y as ApiError;
-      if (a.code === 'already_invited') setResult({ ok: false, note: 'توجد دعوة مفتوحة لهذا البريد. أعد إرسالها بدل إنشاء دعوة جديدة.', retry: Number(a.fields?.invitation?.[0]) });
+      if (a.code === 'existing_learner') setResult({ ok: false, note: a.message, convert: Number(a.fields?.user?.[0]) });
+      else if (a.code === 'email_is_admin') setErr({ email: a.message });
+      else if (a.code === 'already_invited') setResult({ ok: false, note: 'توجد دعوة مفتوحة لهذا البريد. أعد إرسالها بدل إنشاء دعوة جديدة.', retry: Number(a.fields?.invitation?.[0]) });
       else { const fe = { name: a.field?.('full_name') ?? null, email: a.field?.('email') ?? null }; setErr(fe.name || fe.email ? fe : { form: a.message }); }
     } finally { setBusy(false); }
+  };
+  /** One account has one role: turn the existing student/parent account into an approved teacher (same email and password). */
+  const convert = async (id: number) => {
+    setBusy(true);
+    try {
+      const r = await A.bulkAction('users', { action: 'make_teacher', ids: [id], reason: 'تحويل إلى معلم من نافذة دعوة معلم' });
+      if (r.success !== 1) throw new Error(r.errors[0]?.message ?? 'تعذّر التحويل.');
+      setResult({ ok: true, note: `أصبح الحساب (${email}) حساب معلم معتمد. يدخل بنفس البريد وكلمة المرور ويظهر للطلاب.` });
+      toast('تم التحويل إلى معلم'); onDone();
+    } catch (y) { setResult((x) => x && { ...x, note: errMsg(y) }); } finally { setBusy(false); }
   };
   const resend = async (id: number) => {
     setBusy(true);
@@ -218,6 +230,10 @@ function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => voi
         <p role={result.ok ? 'status' : 'alert'} style={{ margin: 0, fontSize: 15, fontWeight: 700, color: result.ok ? color.primary : color.dangerInk }}>{result.note}</p>
         {result.link && role === 'teacher' && <WhatsAppButton text={`${result.text}\n${result.link}`} phone={f.phone} />}
         {result.link && role !== 'teacher' && <LinkBox link={result.link} note="رابط إعداد الحساب (لمرة واحدة):" message={result.text} phone={f.phone} />}
+        {result.convert ? <>
+          <p style={{ margin: 0, fontSize: 14, color: color.muted }}>عند التحويل ينتهي ارتباطه بمعلميه وأولياء أمره وحلقاته، وتُلغى حجوزاته القادمة كطالب. تبقى سجلاته السابقة محفوظة، ويُطلب منه تسجيل الدخول من جديد.</p>
+          <button disabled={busy} onClick={() => void convert(result.convert!)} style={smallBtn('primary')}>{busy ? 'جارٍ التحويل…' : 'تحويل الحساب إلى معلم'}</button>
+        </> : null}
         {result.retry ? <button disabled={busy} onClick={() => void resend(result.retry!)} style={smallBtn('primary')}>{busy ? 'جارٍ الإرسال…' : 'إعادة إرسال الدعوة'}</button> : null}
         <button onClick={onClose} style={primaryBtn(48, 15)}>تم</button></>) : (
         <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -354,6 +370,12 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
             {u.status === 'pending' && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'تم اعتماد الحساب')} style={smallBtn('primary')}>اعتماد الحساب</button>}
             {(u.status === 'suspended' || u.status === 'archived') && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'أُعيد تفعيل الحساب')} style={smallBtn('primary')}>إعادة التفعيل</button>}
             {u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('أرشفة الحساب', `لن يستطيع ${u.full_name} الدخول أو استعادة كلمة المرور. تبقى كل سجلاته محفوظة، ويمكن إعادة التفعيل لاحقًا.`, 'أرشفة الحساب', 'أُرشف الحساب', (r) => A.setPersonStatus(u.id, 'archived', r))} style={smallBtn('danger')}>أرشفة الحساب</button>}
+            {(u.role === 'student' || u.role === 'parent') && u.status !== 'suspended' && u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('تحويل إلى معلم',
+              `سيصبح ${u.full_name} معلمًا معتمدًا بنفس البريد وكلمة المرور. ينتهي ارتباطه بالمعلمين وأولياء الأمر والحلقات، وتُلغى حجوزاته القادمة. تبقى سجلاته السابقة.`,
+              'تحويل إلى معلم', 'تم التحويل إلى معلم', async (r) => {
+                const res = await A.bulkAction('users', { action: 'make_teacher', ids: [u.id], reason: r });
+                if (res.success !== 1) throw new Error(res.errors[0]?.message ?? 'تعذّر التحويل.');
+              })} style={smallBtn()}>تحويل إلى معلم</button>}
             <button disabled={busy} onClick={() => setSub({ kind: 'reason', title: 'حذف الحساب نهائيًا', typeWord: 'حذف', ok: 'حذف نهائي',
               body: `سيُحذف حساب ${u.full_name} نهائيًا ولا يمكن التراجع: لن يستطيع الدخول أبدًا، ويُمسح الاسم والبريد والهاتف والتسجيلات الصوتية. تبقى سجلات المعلمين (المهام والتقييمات والحضور) باسم «حساب محذوف» حتى تبقى الإحصاءات صحيحة. إن لم يكن للحساب أي نشاط يُحذف بالكامل.`,
               run: async (r) => {
@@ -420,6 +442,17 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
 function PickDialog({ target, exclude, onClose, onPick }: { target: A.Role; exclude: number[]; onClose: () => void; onPick: (p: A.Person) => Promise<void> }) {
   const [q, setQ] = useState(''); const [rows, setRows] = useState<A.Person[] | null>(null);
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState<number | null>(null);
+  const [newName, setNewName] = useState('');
+  const typedEmail = /^\S+@\S+\.\S+$/.test(q.trim()) ? q.trim().toLowerCase() : '';
+  /** No parent with this email yet: create the parent account (the setup link is emailed) and link it right away. */
+  const createAndPick = async () => {
+    if (newName.trim().length < 2) return setErr('اكتب اسم ولي الأمر.');
+    setBusy(-1); setErr(null);
+    try {
+      const p = await A.createPerson(newName.trim(), typedEmail, 'parent');
+      await onPick(p); toast(p.setup_email_sent ? 'أُنشئ حساب ولي الأمر وأُرسل رابط الإعداد إلى بريده' : 'أُنشئ حساب ولي الأمر؛ أرسل رابط الإعداد من صفحته'); onClose();
+    } catch (e) { setErr(errMsg(e)); setBusy(null); }
+  };
   useEffect(() => {
     let live = true;
     const t = setTimeout(async () => {
@@ -435,14 +468,22 @@ function PickDialog({ target, exclude, onClose, onPick }: { target: A.Role; excl
   const label = target === 'teacher' ? 'اختر المعلم' : target === 'parent' ? 'اختر ولي الأمر' : 'اختر الطالب';
   return (
     <Modal title={label} onClose={onClose}>
-      <input type="search" aria-label="بحث" placeholder="ابحث بالاسم أو البريد" value={q} onChange={(e) => setQ(e.target.value)} style={inputStyle(null)} />
+      <input type="search" aria-label="بحث" placeholder="ابحث بالاسم أو البريد أو رقم الهاتف" value={q} onChange={(e) => setQ(e.target.value)} style={inputStyle(null)} />
       {err && <FieldError msg={err} />}
       {rows === null && !err && <p role="status" style={{ margin: 0, color: color.muted }}>جارٍ التحميل…</p>}
       {rows && rows.filter((r) => !exclude.includes(r.id)).length === 0 && <p style={{ margin: 0, color: color.muted }}>لا توجد حسابات نشطة مطابقة.</p>}
+      {target === 'parent' && typedEmail && rows?.length === 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: `1px solid ${color.divider}`, paddingTop: 10 }}>
+          <span style={{ fontSize: 14 }}>لا يوجد ولي أمر بالبريد <bdi dir="ltr">{typedEmail}</bdi>. أنشئ حسابه واربطه الآن:</span>
+          <label htmlFor="pk-n" style={labelStyle}>اسم ولي الأمر</label>
+          <input id="pk-n" value={newName} onChange={(e) => setNewName(e.target.value)} style={inputStyle(null)} />
+          <button disabled={busy !== null} onClick={() => void createAndPick()} style={smallBtn('primary')}>{busy === -1 ? 'جارٍ الإنشاء…' : 'إنشاء حساب ولي الأمر وربطه'}</button>
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {rows?.filter((r) => !exclude.includes(r.id)).map((r) => (
           <button key={r.id} disabled={busy !== null} onClick={() => void pick(r)} style={{ minHeight: 52, padding: '0 12px', borderRadius: 12, border: `1px solid ${color.divider}`, background: color.card, textAlign: 'right', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ flex: 1 }}><span style={{ display: 'block', fontWeight: 700 }}>{r.full_name}</span><bdi dir="ltr" style={{ fontSize: 12, color: color.muted }}>{r.email}</bdi></span>
+            <span style={{ flex: 1 }}><span style={{ display: 'block', fontWeight: 700 }}>{r.full_name}</span><bdi dir="ltr" style={{ fontSize: 12, color: color.muted }}>{r.email}{r.phone ? ` · ${r.phone}` : ''}</bdi></span>
             {target === 'teacher' && !r.approved && <span style={{ fontSize: 12, color: color.danger }}>غير معتمد</span>}
             {busy === r.id && <span style={{ fontSize: 13, color: color.muted }}>جارٍ الربط…</span>}
           </button>

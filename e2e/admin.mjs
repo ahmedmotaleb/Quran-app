@@ -74,6 +74,22 @@ await step('sign-in now asks for the code, refuses a wrong one, accepts the righ
   await page.getByText(/مدير المنصة · بيانات حقيقية/).waitFor();
 });
 await page.screenshot({ path: out + '/admin-mfa-signed-in.png' });
+await step('«تذكّر هذا الجهاز» (ticked by default): next sign-in asks only for the password', async () => {
+  await page.getByRole('button', { name: /تسجيل الخروج/ }).first().click(); await page.locator('#ad-email').waitFor();
+  await signIn('admin@halqa.app', 'halqa123');
+  await page.getByText(/مدير المنصة · بيانات حقيقية/).waitFor();
+  if (await page.locator('#ad-otp').count()) throw new Error('code asked on a trusted device');
+});
+await step('Settings lists the trusted device; removing it brings the code back', async () => {
+  await page.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: /^الإعدادات/ }).click();
+  await page.getByText('(هذا الجهاز)').waitFor();
+  await page.getByRole('button', { name: 'إزالة كل الأجهزة' }).click();
+  await page.getByText('لا توجد أجهزة موثوقة.', { exact: false }).waitFor();
+  await page.getByRole('button', { name: /تسجيل الخروج/ }).first().click(); await page.locator('#ad-email').waitFor();
+  await signIn('admin@halqa.app', 'halqa123');
+  await page.locator('#ad-otp').waitFor();
+  await page.getByText('تذكّر هذا الجهاز', { exact: false }).waitFor();
+});
 if (process.env.RESET_CMD) execSync(process.env.RESET_CMD, { stdio: 'inherit' });
 if (errs.length) { fails++; console.log('page errors:', errs); }
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');

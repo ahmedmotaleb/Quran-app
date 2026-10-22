@@ -98,6 +98,7 @@ export default function SettingsLive() {
         <span style={{ fontSize: 13, color: color.muted }}>{changed.length ? `${changed.length} تغيير غير محفوظ${sensitive.length ? ' (يتطلب كلمة المرور)' : ''}` : `آخر حفظ: ${dateTime(saved.updated_at)}`}</span>
       </div>
       {askPw && <PasswordDialog fields={sensitive.map((k) => LABEL[k])} onClose={() => setAskPw(false)} run={(pw) => submit(pw)} />}
+      <TrustedDevices />
       <AuditLog key={auditKey} />
     </div>
   );
@@ -163,8 +164,37 @@ const ACTION_L: Record<string, string> = {
   'admin.circle_sessions': 'جدولة جلسات', 'admin.session_cancelled': 'إلغاء جلسة', 'admin.booking_cancelled': 'إلغاء حجز', 'admin.course_created': 'إنشاء دورة',
   'admin.course_state': 'حالة دورة', 'admin.lesson_created': 'إنشاء درس', 'admin.lesson_state': 'حالة درس', 'admin.enrolled': 'تسجيل طالب في دورة',
   'admin.enrollment_ended': 'إنهاء تسجيل', 'admin.test_created': 'إنشاء اختبار', 'admin.test_state': 'حالة اختبار', 'admin.question_versioned': 'نسخة جديدة لسؤال',
+  'auth.mfa_trusted_device': 'دخول من جهاز موثوق', 'auth.device_trusted': 'توثيق جهاز', 'auth.devices_untrusted': 'إزالة أجهزة موثوقة',
   'auth.login': 'تسجيل دخول', 'auth.login_failed': 'دخول فاشل', 'auth.mfa_failed': 'رمز تحقق خاطئ', 'auth.mfa_enabled': 'تفعيل التحقق بخطوتين',
 };
+
+/** Browsers where this admin ticked «تذكّر هذا الجهاز»: the two-step code is not asked there until the trust ends. */
+function TrustedDevices() {
+  const [rows, setRows] = useState<A.TrustedDevice[] | null>(null); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => { try { setRows((await A.listTrustedDevices()).results); setErr(null); } catch (e) { setErr(errMsg(e)); } }, []);
+  useEffect(() => { void load(); }, [load]);
+  const run = async (fn: () => Promise<unknown>, ok: string) => {
+    setBusy(true); try { await fn(); toast(ok); await load(); } catch (e) { toast(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Group title="الأجهزة الموثوقة">
+      <p style={{ margin: 0, fontSize: 14, color: color.muted }}>على هذه الأجهزة يكفي البريد وكلمة المرور لدخول الإدارة، دون رمز التحقق، لمدة 30 يومًا. تنتهي الثقة تلقائيًا عند تغيير كلمة المرور أو تطبيق المصادقة.</p>
+      {err && <p role="alert" style={{ margin: 0, color: color.danger }}>{err}</p>}
+      {rows === null && !err && <p role="status" style={{ margin: 0, color: color.muted }}>جارٍ التحميل…</p>}
+      {rows?.length === 0 && <p style={{ margin: 0, fontSize: 14 }}>لا توجد أجهزة موثوقة. فعّل «تذكّر هذا الجهاز» عند إدخال الرمز.</p>}
+      {rows?.map((d) => (
+        <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderTop: `1px solid ${color.divider}`, paddingTop: 10 }}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', fontWeight: 700 }}>{d.label}{d.current ? ' (هذا الجهاز)' : ''}</span>
+            <span style={{ display: 'block', fontSize: 13, color: color.muted }}>آخر استخدام: {d.last_used_at ? dateTime(d.last_used_at) : '—'} · تنتهي: {dateTime(d.expires_at)}</span>
+          </span>
+          <button disabled={busy} onClick={() => void run(() => A.revokeTrustedDevice(d.id), 'أُزيل الجهاز')} aria-label={`إزالة ${d.label}`} style={smallBtn('danger')}>إزالة</button>
+        </div>
+      ))}
+      {!!rows?.length && <button disabled={busy} onClick={() => void run(A.revokeAllTrustedDevices, 'أُزيلت كل الأجهزة الموثوقة')} style={{ ...smallBtn('danger'), alignSelf: 'flex-start' }}>إزالة كل الأجهزة</button>}
+    </Group>
+  );
+}
 
 function AuditLog() {
   const [f, setF] = useState('admin.');

@@ -101,9 +101,20 @@ await step('withdraw and restore a teacher approval', async () => {
   await reopen('المعلمون', 'الشيخ خالد العمري'); await dialog().getByRole('button', { name: 'اعتماد المعلم' }).click();
   await reopen('المعلمون', 'الشيخ خالد العمري'); await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
 });
+await step('link a parent who has no account yet: search by email → create the parent and link', async () => {
+  await reopen('الطلاب', SN2);
+  await dialog().getByRole('button', { name: 'ربط بولي أمر' }).click();
+  await dialog().getByRole('searchbox', { name: 'بحث' }).fill(`dad+${stamp}@example.com`);
+  await dialog().locator('#pk-n').fill('محمود والد الطالب');
+  const linked = page.waitForResponse((r) => r.request().method() === 'POST' && /guardian|link/.test(r.url()) && !r.url().includes('admin/users?'));
+  await dialog().getByRole('button', { name: 'إنشاء حساب ولي الأمر وربطه' }).click();
+  const lr = await linked; if (!lr.ok()) throw new Error('link ' + lr.status() + ' ' + (await lr.text()).slice(0, 200));
+  await page.getByRole('dialog', { name: 'اختر ولي الأمر' }).waitFor({ state: 'detached' });
+  await reopen('الطلاب', SN2); await dialog().getByText('محمود والد الطالب').waitFor({ timeout: 15000 });
+});
 let invite = '';
 await step('invite a teacher by email (plus WhatsApp); the emailed link creates an approved teacher account', async () => {
-  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await nav('المعلمون');
   await page.getByRole('button', { name: 'دعوة معلم' }).click();
   await dialog().locator('#ad-e').fill(`teach+${stamp}@example.com`);
   await dialog().getByRole('checkbox', { name: 'أرسلها عبر واتساب أيضًا' }).check(); await dialog().locator('#ad-p').fill('01001234567');
@@ -122,6 +133,22 @@ await step('invite a teacher by email (plus WhatsApp); the emailed link creates 
   await settledReload(); await nav('المعلمون'); await openPerson(TN); await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
 });
 await page.screenshot({ path: out + '/people-teacher.png' });
+await step('a student email in «دعوة معلم»: explained, and the account is converted to a teacher', async () => {
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'دعوة معلم' }).click();
+  await dialog().locator('#ad-e').fill('admin@halqa.app');
+  await dialog().getByRole('button', { name: 'إرسال الدعوة بالبريد' }).click();
+  await dialog().getByText('هذا البريد لحساب إدارة', { exact: false }).waitFor();
+  await dialog().locator('#ad-e').fill('sara@halqa.app');
+  await dialog().getByRole('button', { name: 'إرسال الدعوة بالبريد' }).click();
+  await dialog().getByText('مسجّل بالفعل كحساب طالب', { exact: false }).waitFor();
+  await dialog().getByRole('button', { name: 'تحويل الحساب إلى معلم' }).click();
+  await dialog().getByText('أصبح الحساب (sara@halqa.app) حساب معلم معتمد', { exact: false }).waitFor();
+  await dialog().getByRole('button', { name: 'تم' }).click();
+  await settledReload(); await nav('المعلمون'); await openPerson('سارة أحمد'); await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
+  const r = await page.request.post(BASE + 'api/v1/auth/login', { data: { email: 'sara@halqa.app', password: 'halqa123', client: 'native' } });
+  if ((await r.json()).user?.role !== 'teacher') throw new Error('sara is not a teacher');
+});
 await step('a non-admin cannot call the admin API', async () => {
   const s = await b.newContext(); const r0 = await s.request.post(BASE + 'api/v1/auth/login', { data: { email: 'yousef@halqa.app', password: 'halqa123', client: 'native' } });
   const { token } = await r0.json();
