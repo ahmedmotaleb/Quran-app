@@ -1,6 +1,7 @@
 /** Typed API calls and adapters from server records to the screens' data shapes. */
 import type { Feedback, Session, Student, Task, TaskStatus, Teacher } from '@/data/types';
 import { fmtRelative } from '@/lib/time';
+import { baseType, fileNameFor } from '@/services/media';
 import { api, newIdempotencyKey, type Page } from './client';
 
 export type ApiRole = 'student' | 'teacher' | 'parent' | 'admin';
@@ -74,19 +75,22 @@ export interface ApiSubmission {
 }
 export interface ApiTeacherStudent { id: number; full_name: string; level: string; birth_year: number | null; guardian_linked: boolean }
 
-export function uploadRecitation(blob: Blob, seconds: number) {
+/** Multipart body for a recording. The part keeps the type the recorder really produced (the server checks the bytes
+ *  against it) and gets a matching file name. `FormData.append(name, blob, filename)` needs no File constructor, which
+ *  older mobile browsers lack. A blob without a type is labelled with the recorder's reported type, never a guess. */
+export function audioForm(blob: Blob, mime: string, seconds: number, stem: string): FormData {
+  const type = baseType(blob.type || mime);
+  const part = blob.type ? blob : new Blob([blob], { type });
   const f = new FormData();
-  const type = (blob.type || 'audio/webm').split(';')[0];
-  f.append('file', new File([blob], 'recitation', { type }));
+  f.append('file', part, fileNameFor(type, stem));
   f.append('duration_seconds', String(Math.max(1, Math.round(seconds))));
-  return api<ApiMedia>('POST', 'media/recitations', f);
+  return f;
+}
+export function uploadRecitation(blob: Blob, seconds: number, opts: { mime?: string; uploadId?: string } = {}) {
+  return api<ApiMedia>('POST', 'media/recitations', audioForm(blob, opts.mime ?? '', seconds, 'recitation'), { uploadId: opts.uploadId });
 }
 export function uploadVoiceNote(blob: Blob, seconds: number) {
-  const f = new FormData();
-  const type = (blob.type || 'audio/webm').split(';')[0];
-  f.append('file', new File([blob], 'voice-note', { type }));
-  f.append('duration_seconds', String(Math.max(1, Math.round(seconds))));
-  return api<ApiMedia>('POST', 'media/voice-feedback', f);
+  return api<ApiMedia>('POST', 'media/voice-feedback', audioForm(blob, '', seconds, 'voice-note'));
 }
 /** A lesson file (PDF or audio) for admins/teachers. Audio length is read in the browser when possible. */
 export async function uploadLessonFile(file: File) {

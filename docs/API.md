@@ -49,7 +49,8 @@ server logs.
 | `GET, POST assignments` | list: scoped; create: teacher for assigned students | range validated against Hafs ayah counts |
 | `GET assignments/{id}` | scoped | 404 if not visible |
 | `POST assignments/{id}/start` | owning student | `not_started`/`needs_repeat` → `in_progress` |
-| `POST media/recitations` | student | multipart `file` + `duration_seconds`; type checked by declared type **and** file signature; size/duration limits; stored privately under a server-generated key |
+| (any unknown or malformed `/api/` URL) | — | JSON `{code: not_found, request_id}` 404 (never an HTML page); oversized bodies → JSON 413 |
+| `POST media/recitations` | student | multipart `file` + `duration_seconds`; type checked by declared type **and** file signature; size/duration limits; stored privately under a server-generated key. Optional `X-Upload-ID` header (8–64 letters, digits, `-`): the same student sending the same id again gets the already-stored object (200) instead of a second copy; a storage failure frees the id for the retry |
 | `POST media/voice-feedback` | teacher | same rules, for a review's voice note |
 | `GET media/{uuid}` | owner; assigned teacher once submitted; the student a voice note answers; admin | returns a short-lived read URL (presigned on S3/R2). Parents never get audio |
 | `POST assignments/{id}/submissions` | owning student | `{media}` + `Idempotency-Key`; task → `submitted`; teacher notified |

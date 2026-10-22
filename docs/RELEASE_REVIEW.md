@@ -39,7 +39,9 @@ One state per item: **PASS** (verified, with evidence), **PARTIAL** (works, with
 
 ## Release blockers, by severity
 
-1. **Real-device PWA QA not done** (medium): microphone and recording format on iPhone are the main unknowns.
+1. **Real-device recording: Android FAILED on 22 October** (high, pilot blocker): uploads succeeded but the submit
+   used an invalid task id (`assignments/NaN/submissions`, HTML 404). Fixed in code; open until the same Android phone
+   and an iPhone each pass record → upload → teacher playback. Evidence: [PWA_QA.md](PWA_QA.md#real-device-findings).
 
 Resolved 17 October: password-reset email (owner confirmed real delivery and a working link); kept encrypted
 backups (`BACKUP_PASSPHRASE` set, first stored copy verified); alerts switched on (drill passed; email receipt to

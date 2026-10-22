@@ -56,7 +56,11 @@ export interface Mark { id: number; surah: number; ayah: number; label: string }
 export interface SourceInfo { name: string; edition: string; narration: string; version: string; license: string; attribution: string; url: string }
 
 /** Live recorder state: the retry-safe submission key and the already-uploaded file. */
-const REC_LIVE = { live: LIVE, key: null as string | null, mediaId: null as string | null, err: null as string | null };
+/** Live recorder state: submission key, uploaded media id, upload id (X-Upload-ID), the honest upload stage, whether the
+ *  recording came back from this device's storage, and whether the connection returned after a failure. */
+export type RecStage = 'preparing' | 'uploading' | 'processing' | null;
+const REC_LIVE = { live: LIVE, key: null as string | null, mediaId: null as string | null, err: null as string | null,
+  uploadId: null as string | null, stage: null as RecStage, restored: false, backOnline: false, saved: false };
 
 const initial = () => ({
   /** True when a backend is configured (VITE_API_BASE_URL); demo data otherwise. */
@@ -64,6 +68,8 @@ const initial = () => ({
   /** Public platform settings from the server (live mode); safe defaults until loaded. */
   pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, join_minutes: 10, ayah_audio: null as import('@/api/endpoints').AyahAudioCfg | null, org_name: '', support_email: '', support_whatsapp: '', show_support_button: false },
   me: null as Me | null,
+  /** Unsent recordings kept on this device for the signed-in student (task id, length, when). */
+  pendingRecs: [] as { taskId: string; secs: number; createdAt: number }[],
   net: { loading: false, error: null as string | null },
   // Live mode starts empty: demo records must never appear (even briefly) before the server's data arrives.
   teachers: (LIVE ? [] : [...TEACHERS]) as Teacher[],
@@ -114,7 +120,7 @@ const initial = () => ({
     /** Live mode: request state and the Idempotency-Key for the chosen slot. */
     loading: false, busy: false, key: null as null | { occ: number; key: string },
   },
-  rec: { phase: 'idle' as RecPhase, secs: 0, task: 'k1', demo: false, prog: 0, ...REC_LIVE },
+  rec: { phase: 'idle' as RecPhase, secs: 0, task: (LIVE ? '' : 'k1') as string, demo: false, prog: 0, ...REC_LIVE },
   player: { key: null as string | null, pos: 0, dur: 0, playing: false },
   m: { surah: 67, data: null, loading: false, error: false, from: 1, to: 10, font: 26, bookmark: null, playing: false, cur: null, repeat: 1, rep: 0, rate: 1, adv: false, jump: '', list: null, listQ: '', listErr: false, flash: null, marks: null, src: null } as MushafState,
   live: { phase: 'waiting' as LivePhase, mic: true, cam: true, secs: 0, count: 272, attempt: 0, taskOpen: true, c: 0 },
@@ -229,7 +235,10 @@ function onEnter(screen: Screen, p: Params) {
   }
   if (screen === 'record') {
     media.discardRecorder();
-    set((s) => ({ rec: { phase: 'idle', secs: 0, task: p.task || s.rec.task || 'k1', demo: false, prog: 0, ...REC_LIVE } }));
+    // Live: only a real open task (the demo id 'k1' once reached the server as `assignments/NaN/submissions`).
+    const task = LIVE ? recordableTask(get(), p.task) : p.task || get().rec.task || 'k1';
+    set({ rec: { phase: 'idle', secs: 0, task, demo: false, prog: 0, ...REC_LIVE } });
+    if (LIVE && task) void live.restorePendingRecording(task);
   }
   if (screen === 'live') set({ live: { phase: 'waiting', mic: true, cam: true, secs: 0, count: 272, attempt: 0, taskOpen: true, c: 0 } });
 }
@@ -325,7 +334,19 @@ function markInProgress() {
   if (s0.liveMode) { if (t0 && (t0.status === 'not_started' || t0.status === 'needs_repeat')) live.startTask(t0.id); return; }
   set((s) => ({ tasks: s.tasks.map((t) => (t.id === s.rec.task && t.status === 'not_started' ? { ...t, status: 'in_progress' } : t)) }));
 }
+/** Tasks a recitation can be sent for: open, needing a repeat, or started. */
+export const recordable = (t: Task) => t.status === 'not_started' || t.status === 'in_progress' || t.status === 'needs_repeat';
+/** The requested task if it can take a recording, else the first one that can, else '' (nothing to record for). */
+export function recordableTask(s: AppState, wanted?: string): string {
+  const ok = s.tasks.filter(recordable);
+  return ok.find((t) => t.id === wanted)?.id ?? ok.find((t) => t.type === 'hifz')?.id ?? ok[0]?.id ?? '';
+}
 export async function startRec() {
+  if (get().liveMode) {
+    const t = recordableTask(get(), get().rec.task);
+    if (!t) return; // the screen explains there is no open task
+    if (t !== get().rec.task) up('rec', { task: t });
+  }
   media.discardRecorder();
   up('rec', { phase: 'requesting', secs: 0, demo: false });
   markInProgress();
@@ -343,9 +364,15 @@ export function stopRec() { if (!media.stopRecorder()) finishRec(); }
 function finishRec() {
   const secs = get().rec.secs;
   if (secs < 3) up('rec', { phase: 'empty' });
-  else { up('rec', { phase: 'review' }); set({ player: { key: 'rec', dur: secs, pos: 0, playing: false } }); }
+  else {
+    up('rec', { phase: 'review' }); set({ player: { key: 'rec', dur: secs, pos: 0, playing: false } });
+    if (get().liveMode) void live.keepRecording(); // saved on the device before any upload is tried
+  }
 }
-export function resetRec() { media.discardRecorder(); up('rec', { phase: 'idle', secs: 0 }); }
+export function resetRec() {
+  if (get().liveMode) void live.forgetRecording();
+  media.discardRecorder(); up('rec', { phase: 'idle', secs: 0, restored: false, saved: false, mediaId: null, key: null, uploadId: null });
+}
 /** Simulated upload — progress is driven by tick(); nothing leaves the device. */
 export function submitRec() {
   media.stopPlayback(); up('player', { playing: false });
