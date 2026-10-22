@@ -29,8 +29,13 @@ export default function SettingsLive() {
   const [saved, setSaved] = useState<A.Settings | null>(null); const [v, setV] = useState<Draft | null>(null);
   const [err, setErr] = useState<Record<string, string | null>>({}); const [loadErr, setLoadErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false); const [askPw, setAskPw] = useState(false); const [auditKey, setAuditKey] = useState(0);
-  const load = useCallback(async () => { try { const s = await A.getSettings(); setSaved(s); setV(strip(s)); setLoadErr(null); } catch (e) { setLoadErr(errMsg(e)); } }, []);
-  useEffect(() => { void load(); }, [load]);
+  // `alive` drops the answer of a request whose effect was already cleaned up (React runs mount effects twice in
+  // development): a late duplicate answer used to overwrite what the admin had just typed.
+  const load = useCallback(async (alive: () => boolean = () => true) => {
+    try { const s = await A.getSettings(); if (!alive()) return; setSaved(s); setV(strip(s)); setLoadErr(null); }
+    catch (e) { if (alive()) setLoadErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { let on = true; void load(() => on); return () => { on = false; }; }, [load]);
   if (loadErr) return <p role="alert" style={{ color: color.danger }}>{loadErr} <button onClick={() => void load()} style={smallBtn('primary')}>إعادة المحاولة</button></p>;
   if (!saved || !v) return <p role="status" style={{ color: color.muted }}>جارٍ التحميل…</p>;
 
