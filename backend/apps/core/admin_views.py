@@ -105,7 +105,8 @@ def _ayah_audio():
     from apps.quran import qf_audio
 
     if qf_audio.configured():  # licensed: Quran Foundation (URLs per surah from quran/audio/<n>)
-        return {"provider": "qf", "name": f"{settings.QF_RECITER_NAME} · Quran.com", "url": ""}
+        return {"provider": "qf", "name": f"{settings.QF_RECITER_NAME} · Quran.com", "url": "", "default": settings.QF_RECITATION_ID,
+                "reciters": [{"id": i, "name": n} for i, n in settings.QF_RECITERS]}
     if settings.AYAH_AUDIO_URL:
         return {"provider": "template", "url": settings.AYAH_AUDIO_URL, "name": settings.AYAH_AUDIO_NAME}
     return None

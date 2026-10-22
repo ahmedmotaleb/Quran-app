@@ -290,8 +290,13 @@ QF_CLIENT_SECRET = os.environ.get("QF_CLIENT_SECRET", "").strip()
 QF_ENV = os.environ.get("QF_ENV", "prelive").strip() or "prelive"
 if QF_ENV not in ("prelive", "production"):
     raise ImproperlyConfigured("QF_ENV must be prelive or production.")
-QF_RECITATION_ID = int(os.environ.get("QF_RECITATION_ID", "7") or 7)  # 7 = Mishari Rashid al-Afasy (Murattal)
-QF_RECITER_NAME = os.environ.get("QF_RECITER_NAME", "مشاري راشد العفاسي").strip()
+# Reciters offered in the Mushaf (Quran Foundation recitation ids). The first is the default (owner, 22 October 2026:
+# Sheikh al-Husary's teaching Mushaf). QF_RECITERS="12:name;7:name" replaces the list without a code change.
+QF_RECITERS = [(12, "محمود خليل الحصري — المصحف المعلم"), (7, "مشاري راشد العفاسي")]
+if os.environ.get("QF_RECITERS", "").strip():
+    QF_RECITERS = [(int(i), n.strip()) for i, _, n in (x.partition(":") for x in os.environ["QF_RECITERS"].split(";")) if i.strip().isdigit()]
+QF_RECITATION_ID = int(os.environ.get("QF_RECITATION_ID", "") or QF_RECITERS[0][0])  # the default reciter
+QF_RECITER_NAME = dict(QF_RECITERS).get(QF_RECITATION_ID, os.environ.get("QF_RECITER_NAME", "").strip())
 QF_AUDIO_HOSTS = ("verses.quran.foundation", "verses.quran.com", "download.quranicaudio.com")
 MEDIA_MAX_SECONDS = {"recitation": 20 * 60, "voice_feedback": 5 * 60, "lesson_file": 4 * 3600}
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024  # larger uploads spool to a temp file

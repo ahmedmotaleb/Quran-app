@@ -106,17 +106,24 @@ def _absolute(u: str) -> str | None:
     return full if p.scheme == "https" and p.hostname in settings.QF_AUDIO_HOSTS else None
 
 
-def surah_audio(surah: int) -> dict[int, str]:
-    """{ayah number: https URL} for one surah, from the configured recitation. Empty if QF has none for it."""
+def reciter_ids() -> list[int]:
+    return [i for i, _ in settings.QF_RECITERS] or [settings.QF_RECITATION_ID]
+
+
+def surah_audio(surah: int, recitation: int | None = None) -> dict[int, str]:
+    """{ayah number: https URL} for one surah and one offered recitation (default: the first). Empty if QF has none."""
     if not configured():
         raise AudioUnavailable
-    key = f"qf:audio:{settings.QF_ENV}:{settings.QF_RECITATION_ID}:{surah}"
+    rid = recitation or settings.QF_RECITATION_ID
+    if rid not in reciter_ids():
+        raise ValueError("recitation not offered")
+    key = f"qf:audio:{settings.QF_ENV}:{rid}:{surah}"
     if (hit := cache.get(key)) is not None:
         return {int(k): v for k, v in hit.items()}
     out: dict[int, str] = {}
     page = 1
     while page and page <= 10:  # the longest surah (286 ayahs) is 6 pages of 50
-        d = _get(f"/recitations/{settings.QF_RECITATION_ID}/by_chapter/{surah}", {"per_page": 50, "page": page})
+        d = _get(f"/recitations/{rid}/by_chapter/{surah}", {"per_page": 50, "page": page})
         for f in d.get("audio_files", []):
             vk, u = str(f.get("verse_key", "")), f.get("url") or ""
             s, _, a = vk.partition(":")

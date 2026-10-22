@@ -49,26 +49,39 @@ export async function fetchSurahList(): Promise<SurahListItem[]> {
 const pad3 = (n: number) => String(n).padStart(3, '0');
 /** Per-ayah recitation audio. Live mode: only the source the server approves (`ayah_audio` in public settings;
  *  null = no licensed source yet, no audio). Demo: Mishary Alafasy from everyayah.com. */
-export const ayahAudioUrl = (surah: number, ayah: number, cfg?: AyahAudioCfg | null) => {
+export const ayahAudioUrl = (surah: number, ayah: number, cfg?: AyahAudioCfg | null, reciter?: number | null) => {
   if (!LIVE) return `https://everyayah.com/data/Alafasy_128kbps/${pad3(surah)}${pad3(ayah)}.mp3`;
   if (!cfg) return null;
-  if (cfg.provider === 'qf') return qfAudio.get(surah)?.[String(ayah)] ?? null;
+  if (cfg.provider === 'qf') return qfAudio.get(qfKey(surah, reciter))?.[String(ayah)] ?? null;
   return cfg.url ? cfg.url.replace('{surah}', pad3(surah)).replace('{ayah}', pad3(ayah)) : null;
 };
 
-/** Quran Foundation: the server returns one surah's ayah audio URLs; kept for this page session only. */
-const qfAudio = new Map<number, Record<string, string>>();
-const qfPending = new Map<number, Promise<void>>();
-export function hasSurahAudio(surah: number) { return qfAudio.has(surah); }
-export function loadSurahAudio(surah: number): Promise<void> {
-  if (qfAudio.has(surah)) return Promise.resolve();
-  let p = qfPending.get(surah);
+/** Quran Foundation: the server returns one surah's ayah audio URLs per reciter; kept for this page session only. */
+const qfAudio = new Map<string, Record<string, string>>();
+const qfPending = new Map<string, Promise<void>>();
+const qfKey = (surah: number, reciter?: number | null) => `${reciter ?? 0}:${surah}`;
+export function hasSurahAudio(surah: number, reciter?: number | null) { return qfAudio.has(qfKey(surah, reciter)); }
+export function loadSurahAudio(surah: number, reciter?: number | null): Promise<void> {
+  const k = qfKey(surah, reciter);
+  if (qfAudio.has(k)) return Promise.resolve();
+  let p = qfPending.get(k);
   if (!p) {
-    p = surahAudio(surah).then((r) => { qfAudio.set(surah, r.ayahs); }).finally(() => qfPending.delete(surah));
-    qfPending.set(surah, p);
+    p = surahAudio(surah, reciter).then((r) => { qfAudio.set(k, r.ayahs); }).finally(() => qfPending.delete(k));
+    qfPending.set(k, p);
   }
   return p;
 }
+
+/** The reciter offered by the server that this device chose last (or the server's default). */
+const RECITER_KEY = 'halqa.reciter';
+export function currentReciter(cfg?: AyahAudioCfg | null): { id: number; name: string } | null {
+  const list = cfg?.reciters ?? [];
+  if (!list.length) return null;
+  let saved: number | null = null;
+  try { saved = Number(localStorage.getItem(RECITER_KEY)) || null; } catch { /* storage unavailable */ }
+  return list.find((r) => r.id === saved) ?? list.find((r) => r.id === cfg?.default) ?? list[0];
+}
+export function saveReciter(id: number) { try { localStorage.setItem(RECITER_KEY, String(id)); } catch { /* storage unavailable */ } }
 
 /** One ayah ("surah:ayah", e.g. "1:1") in Uthmani script. */
 export async function fetchAyah(ref: string): Promise<string> {

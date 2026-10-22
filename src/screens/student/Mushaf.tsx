@@ -5,8 +5,8 @@ import { color, font } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
 import { BackButton, Spinner, card, muted } from '@/components/ui';
 import { SUR } from '@/data/demo';
-import { loadSurahAudio } from '@/services/quran';
-import { jumpTo, loadSurah, loadSurahList, openSheet, playAyah, setMushafRate, stopMushaf, up, useApp } from '@/store/store';
+import { currentReciter, loadSurahAudio } from '@/services/quran';
+import { jumpTo, loadSurah, loadSurahList, openSheet, playAyah, setMushafRate, setReciter, stopMushaf, up, useApp } from '@/store/store';
 
 const stepBtn = { width: 32, height: 44, border: 'none', background: 'transparent', color: color.primary, cursor: 'pointer', display: 'grid', placeItems: 'center' } as const;
 const num = { fontFamily: font.latin, fontWeight: 700, fontSize: 14, minWidth: 20, textAlign: 'center' } as const;
@@ -20,9 +20,11 @@ export default function Mushaf() {
   const pubAudio = useApp((s) => s.pub.ayah_audio);
   // Licensed source (Quran Foundation): get this surah's ayah audio list as soon as it opens, so «تشغيل» starts at
   // once (phones only allow audio started directly from a tap).
-  useEffect(() => { if (LIVE && pubAudio?.provider === 'qf') loadSurahAudio(M.surah).catch(() => { /* shown when playing */ }); }, [M.surah, pubAudio?.provider]);
+  const reciter = LIVE ? currentReciter(pubAudio) : null;  // re-read when M.reciterV changes
+  useEffect(() => { if (LIVE && pubAudio?.provider === 'qf') loadSurahAudio(M.surah, reciter?.id).catch(() => { /* shown when playing */ }); },
+    [M.surah, pubAudio?.provider, reciter?.id, M.reciterV]);
   // Live mode: only an approved source (server setting); the demo keeps its sample reciter.
-  const audioName = LIVE ? (pubAudio ? pubAudio.name || 'تلاوة مرجعية' : null) : 'مشاري العفاسي (everyayah.com)';
+  const audioName = LIVE ? (pubAudio ? (reciter ? `${reciter.name} · Quran.com` : pubAudio.name || 'تلاوة مرجعية') : null) : 'مشاري العفاسي (everyayah.com)';
   const marked = (n: number) => (LIVE ? !!M.marks?.some((x) => x.surah === M.surah && x.ayah === n) : M.bookmark === n);
   const nMarks = M.marks?.length ?? 0;
   // Live: remember where the reader is (the top-most ayah in view), so the Mushaf reopens there on any device.
@@ -155,6 +157,15 @@ export default function Mushaf() {
                 style={{ minWidth: 40, minHeight: 40, border: 'none', borderRadius: 10, background: on ? color.primary : 'transparent', color: on ? color.ivory : color.primary, fontFamily: font.latin, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>{r}×</button>;
             })}
           </div>
+          {(pubAudio?.reciters?.length ?? 0) > 1 && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: color.ink, minHeight: 40 }}>
+              القارئ
+              <select aria-label="القارئ" value={reciter?.id ?? ''} onChange={(e) => setReciter(Number(e.target.value))}
+                style={{ minHeight: 40, borderRadius: 10, border: `1px solid ${color.borderChip}`, background: color.card, color: color.primary, fontWeight: 700, fontSize: 13, padding: '0 8px', maxWidth: 230 }}>
+                {pubAudio!.reciters!.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </label>
+          )}
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: color.ink, minHeight: 40, cursor: 'pointer' }}>
             <input type="checkbox" checked={M.adv} onChange={(e) => setM({ adv: e.target.checked })} style={{ width: 20, height: 20, accentColor: color.primary }} />
             متابعة بعد نهاية النطاق
