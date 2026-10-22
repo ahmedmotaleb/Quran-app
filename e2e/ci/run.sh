@@ -28,7 +28,7 @@ run() {  # suite [base-url]
 export PYTHON="$PY"
 
 # 1. Student signup/onboarding/session restore, verified Quran reader, recording → submission → feedback, parent (no audio), progress.
-reseed; run live; run quran; run reading; run quran-audio; run loop; shell_py past_booking.py; shell_py attendance.py; run parent; run progress
+reseed; run live; run quran; run reading; run quran-audio; run loop; run recording-units; shell_py past_booking.py; shell_py attendance.py; run parent; run progress
 # 2. Teacher slot → booking → cancel/reschedule → attendance; lessons and quiz with server + teacher grading;
 #    a live session joined through the teacher's meeting link.
 reseed; PAST_CMD="bash e2e/ci/py.sh past_booking.py" run schedule; run learn
@@ -48,6 +48,8 @@ reseed; MANY_CMD="bash e2e/ci/py.sh many_students.py" run admin-bulk
 reseed; run admin-ops
 reseed; run circle-members
 reseed; run account-delete
+# Recording failure found on a real Android phone (22 Oct): no demo task ids, failed uploads kept on the device.
+reseed; run recording-flow
 # 5. PWA: manifest, installability, offline shell, no API data in caches (preview builds); an update published
 #    during a recording waits until the recording is submitted.
 reseed; run pwa http://localhost:4173/

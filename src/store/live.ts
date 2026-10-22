@@ -15,6 +15,7 @@ import { rangeL, tzOf, typeL } from '@/lib/format';
 import { SUR } from '@/data/demo';
 import { BRAND } from '@/theme/brand';
 import * as media from '@/services/media';
+import * as pending from '@/services/pendingRec';
 import { back, rememberedChild, reset, setState, toast, up, useApp, type AssignForm, type Mark, type ReviewDraft, type ReviewItem } from './store';
 import { discardVoiceNote, stopVoiceNote, voiceNote, voiceNoteRecording } from '@/services/voiceNote';
 
@@ -56,6 +57,7 @@ export async function loadStudentData() {
       fb, recs, avail: {}, subs: sub.results, lessons: ls, tests: ts,
       net: { ...s.net, loading: false, error: null },
     }));
+    void refreshPendingRecordings(); // an unsent recording on this device for this student
   } catch (e) {
     setState((s) => ({ net: { ...s.net, loading: false, error: msg(e) } }));
   }
@@ -188,7 +190,8 @@ export async function logout() {
   try { await E.logout(); } catch { /* signing out locally regardless */ }
   resetCsrf();
   // Nothing from the previous account stays in memory.
-  setState({ me: null, tasks: [], sessions: [], fb: {}, recs: {}, avail: {}, reviews: null, students: [], teachers: [], parent: null, tsched: null, subs: [], lessons: null, lessonCur: null, tests: null, lq: null, grading: null });
+  media.discardRecorder(); // the next account never sees this one's recording (device copies are per account)
+  setState({ me: null, pendingRecs: [], tasks: [], sessions: [], fb: {}, recs: {}, avail: {}, reviews: null, students: [], teachers: [], parent: null, tsched: null, subs: [], lessons: null, lessonCur: null, tests: null, lq: null, grading: null });
 }
 
 export async function saveTimezone(id: TzId) {
@@ -265,33 +268,109 @@ export async function cancel(id: string) {
 }
 
 /* ---------------- recordings ---------------- */
+const uid = () => (useApp.getState().me ? String(useApp.getState().me!.id) : '');
+
+/** Arabic message for a failed recitation upload/submission, with the request id for support when there is one. */
+export function uploadError(err: unknown): string {
+  const e = err as ApiError;
+  const isApi = err instanceof ApiError || (!!err && typeof err === 'object' && 'code' in err && 'status' in err);
+  if (!isApi) return 'حدث خطأ غير متوقع أثناء الرفع. تسجيلك محفوظ؛ أعد المحاولة.';
+  const ref = e.requestId ? ` رقم الخطأ: ${e.requestId.slice(0, 12)}` : '';
+  switch (e.code) {
+    case 'network': return 'تعذّر الاتصال بالخادم. التسجيل محفوظ ويمكن إعادة المحاولة.';
+    case 'timeout': return 'استغرق رفع التسجيل وقتًا طويلًا. تحقق من الاتصال ثم أعد المحاولة.';
+    case 'file_too_large': case 'http_413': return 'حجم التسجيل أكبر من الحد المسموح.';
+    case 'invalid_file': return 'صيغة التسجيل التي أنشأها جهازك غير مدعومة بعد.';
+    case 'empty_file': return 'التسجيل فارغ. سجّل مرة أخرى.';
+    case 'storage_unavailable': case 'storage_not_configured': return 'تعذّر حفظ التسجيل على الخادم الآن. حاول مرة أخرى بعد قليل.';
+    case 'throttled': return 'محاولات رفع كثيرة. انتظر قليلًا ثم أعد المحاولة.';
+    default: return e.status >= 500 || e.code.startsWith('http_') ? `حدث خطأ أثناء رفع التسجيل. أعد المحاولة.${ref}` : e.message + (e.status >= 400 ? ref : '');
+  }
+}
+
+/** Unsent recordings of the signed-in student (for the Home reminder). */
+export async function refreshPendingRecordings() {
+  const id = uid();
+  if (!id || useApp.getState().me?.role !== 'student') { setState({ pendingRecs: [] }); return; }
+  const list = await pending.listPending(id);
+  setState({ pendingRecs: list.map((p) => ({ taskId: p.taskId, secs: p.secs, createdAt: p.createdAt })) });
+}
+
+/** Called when a recording stops: keep it on the device first, with the keys that make every retry safe. */
+export async function keepRecording() {
+  const r = useApp.getState().rec; const blob = media.recording.blob; const id = uid();
+  if (!blob || !id || !r.task) return;
+  const uploadId = r.uploadId ?? E.newIdempotencyKey(); const key = r.key ?? E.newIdempotencyKey();
+  up('rec', { uploadId, key, mediaId: null });
+  const saved = await pending.savePending({ userId: id, taskId: r.task, blob, mime: media.recording.mime || blob.type, secs: r.secs,
+    createdAt: Date.now(), state: 'ready', uploadId, idemKey: key, mediaId: null });
+  up('rec', { saved });
+  void refreshPendingRecordings();
+}
+
+/** The student chose to delete the recording (redo or «حذف التسجيل»). */
+export async function forgetRecording(taskId?: string) {
+  const id = uid(); const t = taskId ?? useApp.getState().rec.task;
+  if (id && t) await pending.deletePending(id, t);
+  void refreshPendingRecordings();
+}
+
+/** Opening the recorder for a task with an unsent recording on this device: put it back, ready to listen and send. */
+export async function restorePendingRecording(taskId: string) {
+  const id = uid(); if (!id) return;
+  const p = await pending.getPending(id, taskId);
+  const r = useApp.getState().rec;
+  if (!p || r.task !== taskId || r.phase !== 'idle') return;
+  media.restoreRecording(p.blob, p.mime);
+  setState((s) => ({ rec: { ...s.rec, phase: p.state === 'failed' ? 'failed' : 'review', secs: p.secs, restored: true, saved: true,
+    uploadId: p.uploadId, key: p.idemKey, mediaId: p.mediaId, err: p.state === 'failed' ? 'لديك تسجيل لم يتم إرساله.' : null },
+  player: { key: 'rec', dur: p.secs, pos: 0, playing: false } }));
+}
+
 /**
- * Uploads the recording, then submits it. The Idempotency-Key and the uploaded media id are kept
- * on the recorder state, so "retry" after a failure never uploads twice or submits twice.
+ * Sends the recording: upload (X-Upload-ID, so a retry reuses the copy already on the server), then the submission
+ * (Idempotency-Key). The recording stays on the device until the submission is confirmed.
  */
 export async function submitRecording() {
-  const r = get().rec;
+  const r = useApp.getState().rec;
   const blob = media.recording.blob;
+  const task = useApp.getState().tasks.find((t) => t.id === r.task);
+  if (!/^\d+$/.test(r.task) || !task) {
+    up('rec', { phase: 'failed', err: 'اختر المهمة التي تسجّل لها من «خطتي» ثم أرسل التسجيل. تسجيلك محفوظ.' });
+    return;
+  }
   if (!r.mediaId && !blob) {
     up('rec', { phase: 'failed', err: 'لا يوجد تسجيل صوتي حقيقي لرفعه. سجّل بالميكروفون ثم أعد المحاولة.' });
     return;
   }
-  const key = r.key ?? E.newIdempotencyKey();
-  up('rec', { phase: 'uploading', prog: 5, key, err: null });
+  const key = r.key ?? E.newIdempotencyKey(); const uploadId = r.uploadId ?? E.newIdempotencyKey();
+  up('rec', { phase: 'uploading', stage: 'preparing', key, uploadId, err: null, backOnline: false });
+  if (!r.saved) await keepRecording();
   try {
     let mediaId = r.mediaId;
-    if (!mediaId) { mediaId = (await E.uploadRecitation(blob!, r.secs)).id; up('rec', { mediaId, prog: 70 }); }
+    if (!mediaId) {
+      up('rec', { stage: 'uploading' });
+      mediaId = (await E.uploadRecitation(blob!, r.secs, { mime: media.recording.mime, uploadId })).id;
+      up('rec', { mediaId });
+      void pending.updatePending(uid(), r.task, { mediaId });
+    }
+    up('rec', { stage: 'processing' });
     const sub = await E.submit(+r.task, mediaId, key);
+    await pending.deletePending(uid(), r.task); // sent: nothing of it stays on the device
     setState((s) => ({
-      rec: { ...s.rec, phase: 'success', prog: 100, key: null, mediaId: null },
+      rec: { ...s.rec, phase: 'success', stage: null, prog: 100, key: null, mediaId: null, uploadId: null, restored: false, saved: false },
       tasks: s.tasks.map((t) => (t.id === r.task ? { ...t, status: 'submitted', at: 'الآن' } : t)),
       recs: { ...s.recs, [r.task]: { dur: sub.duration_seconds, url: sub.audio?.url ?? media.recording.url } },
     }));
+    void refreshPendingRecordings();
   } catch (e) {
     const err = e as ApiError;
-    // A rejected file needs a new recording; a network/server error can be retried as is.
-    if (err.status >= 400 && err.status < 500 && err.code !== 'not_submittable') up('rec', { mediaId: null });
-    up('rec', { phase: 'failed', err: msg(e) });
+    // A file the server refused needs a new upload id (it was not stored); anything else retries with the same ids.
+    if (err.status >= 400 && err.status < 500 && ['invalid_file', 'empty_file', 'file_too_large', 'http_413'].includes(err.code)) {
+      up('rec', { mediaId: null, uploadId: E.newIdempotencyKey() });
+    }
+    up('rec', { phase: 'failed', stage: null, err: uploadError(e) });
+    void pending.updatePending(uid(), r.task, { state: 'failed', uploadId: useApp.getState().rec.uploadId ?? uploadId });
   }
 }
 

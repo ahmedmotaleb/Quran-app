@@ -16,3 +16,7 @@ if settings.DEBUG or settings.APP_ENV == "staging":
 # The PWA shell for every other path (deep links, refreshes). Static files themselves are served by WhiteNoise.
 if settings.WHITENOISE_ROOT is not None:
     urlpatterns.append(re_path(r"^(?!api/|ops-admin/).*$", spa.index))
+
+handler400 = "apps.core.views.api_400"
+handler404 = "apps.core.views.api_404"
+handler500 = "apps.core.views.api_500"

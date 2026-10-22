@@ -16,6 +16,8 @@ inferred from emulation.
 | Update banner; "update now" never reloads over a recording | `e2e/pwa-update.mjs`: a new version is published mid-recording, "حدّث الآن" waits (notice moves to the top, taps pass through), the recording is submitted, then the app updates itself and the submission is on the server | CI |
 | Back button walks in-app history and never leaves the app | `e2e/pwa.mjs` (hardware back + on-screen back) | CI |
 | Microphone recording, upload and submission (fake microphone) | `e2e/loop.mjs`, `e2e/pwa-update.mjs` | CI |
+| Recording pipeline: format negotiation (WebM/Opus → MP4 → Ogg), file names, multipart part type, real MediaRecorder bytes (EBML), IndexedDB copy per account and expiry, non-JSON error messages (502/413/503/400/network/timeout), retry reusing the stored upload | `e2e/recording-units.mjs` | CI |
+| Failed upload keeps the recording; app closed and reopened → «لديك تسجيل لم يتم إرساله» → «إكمال الإرسال»; teacher plays it; another account never sees it; delete asks first; no demo/NaN task ids | `e2e/recording-flow.mjs` | CI |
 | Session survives closing and reopening | Session cookie lasts 14 days (`SESSION_COOKIE_AGE`); `e2e/live.mjs`/`admin.mjs` reload and stay signed in | CI |
 | Install help in Arabic | Account → «ثبّت التطبيق على جهازك»: the system prompt where the browser supports it, Safari steps on iPhone | code |
 | Safe areas, RTL, on-screen keyboard | `viewport-fit=cover`, `env(safe-area-inset-*)` on the shell, sheets and banners; `interactive-widget=resizes-content`; every screen is RTL | code + 390×844 screenshots |
@@ -39,6 +41,36 @@ browser and run each row. Write ✅ or ❌, plus the device and OS version.
 | 9 | Phone font size set to largest: text wraps, no clipped buttons, Mushaf text readable | | | | |
 | 10 | Mushaf: text is right-to-left with correct ayah markers; «تشغيل النطاق» plays the recitation (Quran.com), repeat and speed work, audio stops when leaving the Mushaf | | | | |
 | 11 | After the next deploy: "يتوفر إصدار جديد" appears; "حدّث الآن" updates (and waits if a recording is in progress) | | | | |
+
+## Real-device findings
+
+### Android Chrome 155 — recitation submit FAILED (22 October 2026), fix pending device re-test
+
+What the student saw: «تعذّر رفع التسجيل. حاول مرة أخرى» / «حدث خطأ غير متوقع. حاول مرة أخرى».
+
+Evidence (Cloud Run request log, read with the `upload-trace` ops task; no personal data):
+
+| Time (UTC) | Status | Request | Size |
+| --- | --- | --- | --- |
+| 12:50:02 | 201 | `media/recitations` | 93,811 B |
+| 12:50:03 | 404 | `assignments/NaN/submissions` (HTML page, 1,174 B) | — |
+| 12:50:07 | 201 | `media/recitations` (retry uploaded a second copy) | 93,810 B |
+| 12:50:08 | 404 | `assignments/NaN/submissions` | — |
+| 17:20:19 | 201 | `media/recitations` | 143,063 B |
+| 17:20:20 | 404 | `assignments/NaN/submissions` | — |
+
+Root cause: not the microphone, format, R2 or Cloud Run. Every upload succeeded. The recorder had been opened
+without a real task: Home's «سجّل تلاوتك» passed the demo task id `k1` when Home showed no open memorization task, and
+`+'k1'` is `NaN`. Django answered the invalid URL with an HTML 404, which the app showed as "unexpected error"; each
+retry uploaded the recording again.
+
+Fixed in code (see STATUS.md): real open task only (or «لا توجد مهمة مفتوحة للتسجيل الآن»), JSON errors for every
+`/api/` URL, specific Arabic messages with the request id, retry-safe uploads (`X-Upload-ID`), explicit recording
+format and matching file name, unsent recordings kept on the device (IndexedDB) with «إكمال الإرسال».
+
+**Status: FAILED until the same Android phone completes record → upload → teacher playback on the new version.**
+
+### iPhone — NOT TESTED (pilot blocker)
 
 Known platform limits:
 - **iOS PWA:** push notifications only work on iOS 16.4+ for installed apps. Web Push is built but off until VAPID keys are set (`deploy/gcp-push.sh`).

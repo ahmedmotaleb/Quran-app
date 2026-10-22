@@ -31,6 +31,24 @@ export class ApiError extends Error {
   }
 }
 
+/** Safe facts about failed requests that did not answer JSON (proxy pages, crashes): kept in memory for support and
+ *  printed to the console. Never bodies, cookies, tokens, URLs with ids or personal data. */
+export interface ApiDiag { at: string; status: number; contentType: string; requestId: string; endpoint: string; upload: boolean; size: number }
+export const diagnostics: ApiDiag[] = [];
+/** `assignments/123/submissions` → `assignments/:id/submissions` (no ids in diagnostics). */
+export const endpointCategory = (path: string) => path.replace(/^\/?api\/v1\//, '').replace(/\?.*$/, '').replace(/\/[^/]*\d[^/]*(?=\/|$)/g, '/:id');
+
+/** Arabic message for an HTTP failure that carried no JSON body (with the request id when there is one). */
+export function nonJsonMessage(status: number, requestId: string, upload: boolean): string {
+  const ref = requestId ? ` رقم الخطأ: ${requestId.slice(0, 12)}` : '';
+  if (status === 413) return upload ? 'حجم التسجيل أكبر من الحد المسموح.' : 'حجم الطلب أكبر من الحد المسموح.';
+  if (status === 404) return `تعذّر إتمام الطلب: العنوان غير موجود.${ref}`;
+  if (status === 401 || status === 403) return 'انتهت الجلسة أو لا تملك صلاحية. سجّل الدخول مرة أخرى.';
+  if (status === 429) return 'محاولات كثيرة. انتظر قليلًا ثم أعد المحاولة.';
+  if (status >= 500) return upload ? `حدث خطأ أثناء رفع التسجيل. أعد المحاولة.${ref}` : `حدث خطأ في الخادم. أعد المحاولة.${ref}`;
+  return `حدث خطأ غير متوقع. أعد المحاولة.${ref}`;
+}
+
 const OFFLINE = () => new ApiError(0, 'network', 'تعذّر الاتصال بالخادم. تحقق من الإنترنت ثم حاول مرة أخرى.');
 const TIMEOUT = () => new ApiError(0, 'timeout', 'استغرق الطلب وقتًا أطول من المتوقع. حاول مرة أخرى.');
 
@@ -70,22 +88,33 @@ async function raw(method: string, path: string, body?: unknown, headers: Record
     clearTimeout(timer);
   }
   if (res.status === 204) return null;
-  let data: Record<string, unknown> = {};
-  try { data = await res.json(); } catch { /* non-JSON (e.g. proxy error) */ }
+  let data: Record<string, unknown> | null = null;
+  const text = await res.text().catch(() => '');
+  try { data = text ? JSON.parse(text) : {}; } catch { data = null; /* non-JSON (e.g. proxy error page) */ }
+  const requestId = String(data?.request_id ?? res.headers.get('X-Request-ID') ?? '');
   if (!res.ok) {
-    throw new ApiError(res.status, String(data.code ?? 'error'), String(data.message ?? 'حدث خطأ غير متوقع. حاول مرة أخرى.'),
-      (data.fields as Record<string, string[]>) ?? {}, String(data.request_id ?? res.headers.get('X-Request-ID') ?? ''));
+    if (!data || data.code === undefined) {
+      const d: ApiDiag = { at: new Date().toISOString(), status: res.status, contentType: res.headers.get('Content-Type') ?? '',
+        requestId, endpoint: endpointCategory(path), upload: form, size: text.length };
+      diagnostics.push(d); if (diagnostics.length > 20) diagnostics.shift();
+      console.warn('api_non_json_error', d);
+      throw new ApiError(res.status, `http_${res.status}`, nonJsonMessage(res.status, requestId, form), {}, requestId);
+    }
+    throw new ApiError(res.status, String(data.code), String(data.message ?? nonJsonMessage(res.status, requestId, form)),
+      (data.fields as Record<string, string[]>) ?? {}, requestId);
   }
-  return data;
+  return data ?? {};
 }
 
 /** Retries network failures/timeouts/5xx for safe requests: GET, or writes that carry an Idempotency-Key. */
 export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown,
-  opts: { idempotencyKey?: string } = {}): Promise<T> {
+  opts: { idempotencyKey?: string; uploadId?: string } = {}): Promise<T> {
   if (!LIVE) throw new ApiError(0, 'demo', 'وضع العرض التجريبي: لا يوجد خادم متصل.');
   if (method !== 'GET') await ensureCsrf();
-  const headers = opts.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : undefined;
-  const retriable = method === 'GET' || !!opts.idempotencyKey;
+  const headers: Record<string, string> = {};
+  if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
+  if (opts.uploadId) headers['X-Upload-ID'] = opts.uploadId; // the server returns the same stored file on a retry
+  const retriable = method === 'GET' || !!opts.idempotencyKey || !!opts.uploadId;
   for (let attempt = 0; ; attempt++) {
     try {
       return (await raw(method, `/api/v1/${path.replace(/^\//, '')}`, body, headers)) as T;

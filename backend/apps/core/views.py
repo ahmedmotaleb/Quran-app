@@ -77,3 +77,39 @@ def _db_problem(msg: str) -> str:
         if needle in m:
             return label
     return "cannot connect"
+
+
+# ---- Errors outside DRF views: still JSON under /api/ ---------------------------------------
+# A URL that matches no API route (e.g. a malformed id like `assignments/NaN/submissions`), an oversized body or a
+# crash before a view runs used to answer with Django's HTML page, which the app could only show as "unexpected error".
+def _json_error(request, status: int, code: str, message: str, default):
+    from django.http import JsonResponse
+
+    from apps.core.exceptions import MESSAGES
+    from apps.core.logging import request_id_var
+
+    if not request.path.startswith("/api/"):
+        return default()
+    return JsonResponse({"code": code, "message": message or MESSAGES.get(code, ""), "request_id": request_id_var.get()}, status=status)
+
+
+def api_404(request, exception=None):
+    from django.views.defaults import page_not_found
+
+    return _json_error(request, 404, "not_found", "", lambda: page_not_found(request, exception))
+
+
+def api_400(request, exception=None):
+    from django.views.defaults import bad_request
+
+    from django.core.exceptions import RequestDataTooBig
+
+    if isinstance(exception, RequestDataTooBig):
+        return _json_error(request, 413, "file_too_large", "حجم الطلب أكبر من الحد المسموح.", lambda: bad_request(request, exception))
+    return _json_error(request, 400, "bad_request", "صيغة الطلب غير صحيحة.", lambda: bad_request(request, exception))
+
+
+def api_500(request):
+    from django.views.defaults import server_error
+
+    return _json_error(request, 500, "server_error", "", lambda: server_error(request))

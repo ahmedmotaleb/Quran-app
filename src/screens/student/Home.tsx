@@ -4,7 +4,8 @@ import { Badge, ProgressBar, card, iconTile, muted, primaryBtn } from '@/compone
 import { TODAY_LABEL } from '@/data/demo';
 import { dateKey, fmtDay } from '@/lib/time';
 import { rangeL, tzOf } from '@/lib/format';
-import { go, setState, tab, toast, useApp } from '@/store/store';
+import { go, openSheet, setState, tab, toast, useApp } from '@/store/store';
+import { forgetRecording } from '@/store/live';
 import { homeHifz, upcomingSessions } from '@/store/selectors';
 import { BRAND } from '@/theme/brand';
 import { useEffect, useState } from 'react';
@@ -76,7 +77,8 @@ export default function Home() {
   const hifzGo = () => hifz && (hifz.status === 'reviewed' ? go('feedback', { id: hifz.id }) : hifz.status === 'submitted' ? go('task', { id: hifz.id }) : go('record', { task: hifz.id }));
   const quick: { label: string; icon: IconName; click: () => void }[] = [
     { label: 'افتح المصحف', icon: 'book', click: () => go('mushaf', {}) },
-    { label: 'سجّل تلاوتك', icon: 'mic', click: () => go('record', { task: hifz ? hifz.id : 'k1' }) },
+    // The recorder picks a real open task (the demo id 'k1' must never reach the server).
+    { label: 'سجّل تلاوتك', icon: 'mic', click: () => go('record', { task: hifz ? hifz.id : s.liveMode ? '' : 'k1' }) },
     { label: 'احجز جلسة', icon: 'cal', click: bookSession },
   ];
 
@@ -93,6 +95,22 @@ export default function Home() {
           <Icon name="bell" />
         </button>}
       </header>
+
+      {s.pendingRecs.map((p) => {
+        const t = s.tasks.find((x) => x.id === p.taskId);
+        const del = () => openSheet({ kind: 'confirm', title: 'حذف التسجيل؟', body: 'لن يمكن استعادته.', ok: 'احذف التسجيل', danger: true,
+          onOk: () => { void forgetRecording(p.taskId); setState({ sheet: null }); toast('حُذف التسجيل'); } });
+        return (
+          <div key={p.taskId} role="status" style={{ ...card, padding: 14, border: `1.5px solid ${color.gold}`, background: color.goldTint, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <span style={{ fontSize: 15 }}><strong>لديك تسجيل لم يتم إرساله</strong>{t ? ` · ${t.title}` : ''} · {Math.max(1, Math.round(p.secs / 60))} د</span>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={() => go('record', { task: p.taskId })} style={primaryBtn(44, 14, { padding: '0 16px' })}>إكمال الإرسال</button>
+              <button onClick={() => go('record', { task: p.taskId })} style={{ minHeight: 44, padding: '0 14px', borderRadius: 12, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, fontWeight: 700, cursor: 'pointer' }}>الاستماع</button>
+              <button onClick={del} style={{ minHeight: 44, padding: '0 14px', borderRadius: 12, border: 'none', background: 'transparent', color: color.dangerInk, fontWeight: 700, cursor: 'pointer' }}>حذف التسجيل</button>
+            </div>
+          </div>
+        );
+      })}
 
       {newFb && (
         <button onClick={() => go('feedback', { id: newFb.id })} style={{ minHeight: 56, padding: '10px 14px', borderRadius: 14, border: `1.5px solid ${color.gold}`, background: color.goldTint, display: 'flex', alignItems: 'center', gap: 10, textAlign: 'right', cursor: 'pointer', color: color.ink }}>

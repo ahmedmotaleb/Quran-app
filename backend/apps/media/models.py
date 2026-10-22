@@ -37,9 +37,13 @@ class MediaObject(TimeStamped):
     duration_seconds = models.FloatField(null=True, blank=True)
     state = models.CharField(max_length=16, choices=State.choices, default=State.PENDING)
     rejection_reason = models.CharField(max_length=200, blank=True)
+    # Client upload id (X-Upload-ID): a retry after an ambiguous network failure gets the same object back.
+    upload_key = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         indexes = [models.Index(fields=["owner", "purpose", "state"])]
+        constraints = [models.UniqueConstraint(fields=["owner", "upload_key"], condition=~models.Q(upload_key=""),
+                                               name="media_owner_upload_key")]
 
     @property
     def is_private(self) -> bool:
