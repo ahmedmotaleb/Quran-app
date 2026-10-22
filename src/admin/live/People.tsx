@@ -79,6 +79,9 @@ function peopleActions(role: A.Role): BulkDef[] {
     { key: 'suspend', label: 'تعطيل', reason: true, title: 'تعطيل الحسابات', body: (n) => `سيُمنع أصحاب ${items(n)} من الدخول فورًا حتى إعادة التفعيل. لا يُحذف أي سجل.`, ok: (n) => `تعطيل ${items(n)}` },
     { key: 'archive', label: 'أرشفة', tone: 'danger', reason: true, destructive: true, title: 'تأكيد الأرشفة',
       body: (n) => `أنت على وشك أرشفة ${items(n)}. لن يستطيع أصحابها الدخول أو استعادة كلمة المرور. تبقى مهامهم وتقييماتهم وحضورهم محفوظة، ويمكن إعادة التفعيل لاحقًا.`, ok: (n) => `أرشفة ${items(n)}` },
+    { key: 'delete', label: 'حذف نهائي', tone: 'danger', reason: true, destructive: true, confirmAlways: true, title: 'حذف نهائي',
+      body: (n) => `سيُحذف ${items(n)} نهائيًا ولا يمكن التراجع: لا دخول بعد الآن، ويُمسح الاسم والبريد والهاتف والتسجيلات الصوتية. تبقى سجلات المعلمين باسم «حساب محذوف»، والحساب الذي لا نشاط له يُحذف بالكامل. المعلم الذي له جلسات قادمة لا يُحذف حتى تُلغى أو تُنقل.`,
+      ok: (n) => `حذف ${items(n)} نهائيًا` },
   ];
   const approvedTeachers = async () => (await A.listPeople({ role: 'teacher', approved: '1', status: 'active', page_size: 100, sort: 'name' } as Parameters<typeof A.listPeople>[0]))
     .results.map((t) => [String(t.id), t.full_name] as [string, string]);
@@ -276,7 +279,7 @@ function InvitationsPanel({ reloadKey }: { reloadKey: number }) {
 }
 
 /* ---------------- Detail panel ---------------- */
-type Sub = { kind: 'reason'; title: string; body: string; ok: string; required?: boolean; run: (r: string) => Promise<unknown> } | { kind: 'pick'; target: A.Role } | null;
+type Sub = { kind: 'reason'; title: string; body: string; ok: string; required?: boolean; typeWord?: string; run: (r: string) => Promise<unknown> } | { kind: 'pick'; target: A.Role } | null;
 
 function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => void; onChanged: () => void }) {
   const [u, setU] = useState<A.Person | null>(null); const [err, setErr] = useState<string | null>(null);
@@ -351,6 +354,13 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
             {u.status === 'pending' && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'تم اعتماد الحساب')} style={smallBtn('primary')}>اعتماد الحساب</button>}
             {(u.status === 'suspended' || u.status === 'archived') && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'أُعيد تفعيل الحساب')} style={smallBtn('primary')}>إعادة التفعيل</button>}
             {u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('أرشفة الحساب', `لن يستطيع ${u.full_name} الدخول أو استعادة كلمة المرور. تبقى كل سجلاته محفوظة، ويمكن إعادة التفعيل لاحقًا.`, 'أرشفة الحساب', 'أُرشف الحساب', (r) => A.setPersonStatus(u.id, 'archived', r))} style={smallBtn('danger')}>أرشفة الحساب</button>}
+            <button disabled={busy} onClick={() => setSub({ kind: 'reason', title: 'حذف الحساب نهائيًا', typeWord: 'حذف', ok: 'حذف نهائي',
+              body: `سيُحذف حساب ${u.full_name} نهائيًا ولا يمكن التراجع: لن يستطيع الدخول أبدًا، ويُمسح الاسم والبريد والهاتف والتسجيلات الصوتية. تبقى سجلات المعلمين (المهام والتقييمات والحضور) باسم «حساب محذوف» حتى تبقى الإحصاءات صحيحة. إن لم يكن للحساب أي نشاط يُحذف بالكامل.`,
+              run: async (r) => {
+                const res = await A.bulkAction('users', { action: 'delete', ids: [u.id], reason: r, confirm: 'حذف' });
+                if (res.success !== 1) throw new Error(res.errors[0]?.message ?? 'تعذّر الحذف.');
+                toast('حُذف الحساب نهائيًا'); onChanged(); onClose();
+              } })} style={smallBtn('danger')}>حذف نهائي</button>
             {u.status !== 'suspended' && u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('إيقاف الحساب', `سيُمنع ${u.full_name} من الدخول فورًا حتى تعيد تفعيله.`, 'إيقاف الحساب', 'تم إيقاف الحساب', (r) => A.setPersonStatus(u.id, 'suspended', r))} style={smallBtn('danger')}>إيقاف الحساب</button>}
           </div>
         ))}
@@ -391,7 +401,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
           <button disabled={busy} onClick={() => setSub({ kind: 'pick', target: 'student' })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>ربط بابن</button>
         </>))}
       </>}
-      {sub?.kind === 'reason' && <ReasonDialog title={sub.title} body={sub.body} ok={sub.ok} required={sub.required} onClose={() => setSub(null)} run={async (r) => { await sub.run(r); }} />}
+      {sub?.kind === 'reason' && <ReasonDialog title={sub.title} body={sub.body} ok={sub.ok} required={sub.required} typeWord={sub.typeWord} onClose={() => setSub(null)} run={async (r) => { await sub.run(r); }} />}
       {sub?.kind === 'pick' && u && (
         <PickDialog target={sub.target} exclude={sub.target === 'teacher' ? u.teachers.map((t) => t.id) : sub.target === 'parent' ? u.guardians.map((g) => g.id) : u.children.map((c) => c.id)}
           onClose={() => setSub(null)}

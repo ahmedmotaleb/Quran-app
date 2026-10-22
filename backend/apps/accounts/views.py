@@ -373,7 +373,7 @@ class AcceptInvitationView(APIView):
 
 # ---- Admin: users, assignments, guardian links -----------------------------------------
 def _admin_users():
-    return User.objects.exclude(role=Role.ADMIN).select_related("student_profile", "teacher_profile").prefetch_related(
+    return User.objects.exclude(role=Role.ADMIN).exclude(status=AccountStatus.DELETED).select_related("student_profile", "teacher_profile").prefetch_related(
         Prefetch("teacher_assignments", queryset=TeacherAssignment.objects.select_related("teacher")),
         Prefetch("guardians", queryset=GuardianLink.objects.select_related("guardian")),
         Prefetch("guardian_links", queryset=GuardianLink.objects.select_related("student")),
@@ -425,7 +425,7 @@ class AdminUserDetail(APIView):
         return Response(AdminUserSerializer(generics.get_object_or_404(_admin_users(), pk=pk)).data)
 
     def patch(self, request, pk):
-        user = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN), pk=pk)
+        user = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN).exclude(status=AccountStatus.DELETED), pk=pk)
         s = AdminUserUpdateSerializer(data=request.data, partial=True)
         s.is_valid(raise_exception=True)
         changed = sorted(k for k, v in s.validated_data.items() if getattr(user, k) != v)
@@ -455,10 +455,10 @@ class AdminUserCounts(APIView):
     permission_classes = [IsAdminRole]
 
     def get(self, request):
-        qs = User.objects.exclude(role=Role.ADMIN)
+        qs = User.objects.exclude(role=Role.ADMIN).exclude(status=AccountStatus.DELETED)
         if request.query_params.get("role"):
             qs = qs.filter(role=request.query_params["role"])
-        out = {s: 0 for s in AccountStatus.values}
+        out = {s: 0 for s in AccountStatus.values if s != AccountStatus.DELETED}
         for r in qs.values("status").annotate(n=Count("id")):
             out[r["status"]] = r["n"]
         out["all"] = sum(n for s, n in out.items() if s != AccountStatus.ARCHIVED)  # "all" = everyone not archived
@@ -494,7 +494,7 @@ class AdminUserStatus(APIView):
     permission_classes = [IsAdminRole]
 
     def post(self, request, pk):
-        user = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN), pk=pk)
+        user = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN).exclude(status=AccountStatus.DELETED), pk=pk)
         s = StatusChangeSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         old = user.status

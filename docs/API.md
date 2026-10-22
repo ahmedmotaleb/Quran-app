@@ -119,7 +119,7 @@ Response: `{"requested": 25, "success": 23, "skipped": 1, "failed": 1, "results"
 
 | Resource | Actions | Never |
 | --- | --- | --- |
-| `users` (students, teachers, parents) | `activate` (also restores archived), `suspend`*, `archive`* (soft delete), `approve`, `unapprove`* (teachers only), `assign_teacher`† (students), `move_to_circle`† (students), `enroll`† (students), `notify`†, `resend_setup` | delete; admins are never targets |
+| `users` (students, teachers, parents) | `activate` (also restores archived), `suspend`*, `archive`* (soft delete), `approve`, `unapprove`* (teachers only), `assign_teacher`† (students), `move_to_circle`† (students), `enroll`† (students), `notify`†, `resend_setup`, `delete`* (permanent; always needs `confirm: "حذف"`: an account with no activity is removed; otherwise personal data is erased — name «حساب محذوف», placeholder email, no phone/password/MFA, recordings and voice notes removed from storage, tokens/notifications/bookmarks deleted, links, memberships and future bookings ended — and educational records stay anonymous; a teacher with upcoming sessions is refused; audit `admin.user_deleted` with id, role and mode only) | admins are never targets; deleted accounts are hidden from every admin list and endpoint and can never be reactivated |
 | `circles` | `publish`, `disable`*, `draft`, `delete` (draft with no sessions) | delete with sessions |
 | `sessions` | `cancel`* (future only; bookings cancelled, students notified) | delete |
 | `bookings` | `cancel`* (future only; student notified) | delete; past bookings and attendance |
