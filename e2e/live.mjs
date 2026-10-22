@@ -45,14 +45,19 @@ await step('teacher directory from API', async () => {
   await page.getByRole('button', { exact: true, name: 'الجلسات' }).click();
   await app.getByText('الشيخ خالد العمري').waitFor(); await app.getByText('2 معلم').waitFor();
 });
-let picked = '';
+let picked = ''; let bookedDay = 2;
 await step('open teacher → real slots', async () => {
   await app.getByText('الشيخ عبدالرحمن السالم').click();
   await app.getByText('المواعيد المتاحة').waitFor();
   await app.getByText('جارٍ تحميل المواعيد…').waitFor({ state: 'detached' });
-  // Two days ahead: a slot later today could fall inside the cancel window and make the cancel step time-dependent.
-  await app.getByRole('option').nth(2).click();
-  const slot = app.locator('div[style*="grid"] button:not([disabled])').first();
+  // Two or more days ahead (a slot later today could fall inside the cancel window), on the first such day with a
+  // free slot: the teacher does not work every weekday.
+  const free = app.locator('div[style*="grid"] button:not([disabled])');
+  let day = 2;
+  for (; day < 7; day++) { await app.getByRole('option').nth(day).click(); if (await free.count()) break; }
+  if (day === 7) throw new Error('no free slot 2–6 days ahead');
+  bookedDay = day;
+  const slot = free.first();
   picked = (await slot.textContent()).trim(); await slot.click();
 });
 await page.screenshot({ path: out + '/l4-slots.png' });
@@ -76,7 +81,7 @@ await step('same slot is now taken for this student', async () => {
   await app.getByRole('tab', { name: 'المعلمون' }).click();
   await app.getByText('الشيخ عبدالرحمن السالم').click();
   await app.getByText('جارٍ تحميل المواعيد…').waitFor({ state: 'detached' });
-  await app.getByRole('option').nth(2).click();
+  await app.getByRole('option').nth(bookedDay).click();
   // individual slot capacity 1 → our booked one is now shown as taken
   await app.locator('button[disabled]').filter({ hasText: picked.replace('محجوز', '') }).first().waitFor();
   await page.getByRole('button', { name: /رجوع/ }).first().click();
