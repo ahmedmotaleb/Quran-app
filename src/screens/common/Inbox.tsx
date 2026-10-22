@@ -82,7 +82,7 @@ export default function Inbox() {
             <span style={{ color: color.primary, marginTop: 2 }}><Icon name={ICON[n.kind] ?? 'bell'} size={20} /></span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: 'block', fontSize: 15, fontWeight: n.read_at ? 500 : 800 }}>{n.title}{!n.read_at && <span className="sr-only"> (غير مقروء)</span>}</span>
-              {n.body && <span style={{ display: 'block', fontSize: 13, color: color.body, marginTop: 2 }}>{n.body}</span>}
+              {n.body && <span style={{ display: 'block', fontSize: 13, color: color.body, marginTop: 2, whiteSpace: 'pre-line' }}>{n.body}</span>}
               <span style={{ display: 'block', fontSize: 12, color: color.muted, marginTop: 4 }}>{fmtRelative(n.created_at, tz)}</span>
             </span>
           </button>

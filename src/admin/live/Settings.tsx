@@ -29,8 +29,13 @@ export default function SettingsLive() {
   const [saved, setSaved] = useState<A.Settings | null>(null); const [v, setV] = useState<Draft | null>(null);
   const [err, setErr] = useState<Record<string, string | null>>({}); const [loadErr, setLoadErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false); const [askPw, setAskPw] = useState(false); const [auditKey, setAuditKey] = useState(0);
-  const load = useCallback(async () => { try { const s = await A.getSettings(); setSaved(s); setV(strip(s)); setLoadErr(null); } catch (e) { setLoadErr(errMsg(e)); } }, []);
-  useEffect(() => { void load(); }, [load]);
+  // `alive` drops the answer of a request whose effect was already cleaned up (React runs mount effects twice in
+  // development): a late duplicate answer used to overwrite what the admin had just typed.
+  const load = useCallback(async (alive: () => boolean = () => true) => {
+    try { const s = await A.getSettings(); if (!alive()) return; setSaved(s); setV(strip(s)); setLoadErr(null); }
+    catch (e) { if (alive()) setLoadErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { let on = true; void load(() => on); return () => { on = false; }; }, [load]);
   if (loadErr) return <p role="alert" style={{ color: color.danger }}>{loadErr} <button onClick={() => void load()} style={smallBtn('primary')}>إعادة المحاولة</button></p>;
   if (!saved || !v) return <p role="status" style={{ color: color.muted }}>جارٍ التحميل…</p>;
 
@@ -90,7 +95,7 @@ export default function SettingsLive() {
         <Intervals v={v.review_intervals} onChange={(x) => up({ review_intervals: x })} err={err.review_intervals} />
         {sw('open_signup', 'يسمح لأي شخص بإنشاء حساب طالب من التطبيق')}
         {sw('session_reminders', 'تذكير الطالب والمعلم قبل الجلسة (يُفعَّل عند ربط الإشعارات)')}
-        {sw('parent_weekly_report', 'ملخص أسبوعي لأولياء الأمور (يُفعَّل عند ربط الإشعارات)')}
+        {sw('parent_weekly_report', 'ملخص أسبوعي داخل التطبيق لكل ولي أمر مساء الجمعة (بتوقيت القاهرة)')}
       </Group>
       {err.form && <FieldError msg={err.form} />}
       <div style={{ position: 'sticky', bottom: 0, background: color.ivory, padding: '12px 0', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', borderTop: `1px solid ${color.divider}` }}>
