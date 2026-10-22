@@ -252,6 +252,7 @@ export interface BulkDef {
   tone?: 'primary' | 'danger' | 'plain';
   reason?: boolean;                // the server requires a reason
   destructive?: boolean;           // delete / archive: «تأكيد الحذف», typed «حذف» at 10+ records
+  confirmAlways?: boolean;         // irreversible (permanent delete): typed «حذف» even for one record
   title?: string;                  // dialog title
   body: (n: number) => string;     // what will happen
   ok: (n: number) => string;       // confirm button
@@ -330,7 +331,7 @@ function BulkConfirm({ def, resource, sel, total, filter, onClose, onDone }: {
   const [reason, setReason] = useState(''); const [typed, setTyped] = useState('');
   const [pv, setPv] = useState<Record<string, unknown>>({});
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
-  const needType = !!def.destructive && n >= 10;
+  const needType = !!def.confirmAlways || (!!def.destructive && n >= 10);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (busy) return; // no second submission

@@ -42,13 +42,16 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
 }
 
 /** Asks for a reason, then runs the action; shows the server's error if it fails. */
-export function ReasonDialog({ title, body, ok, required = true, onClose, run }: {
-  title: string; body: string; ok: string; required?: boolean; onClose: () => void; run: (reason: string) => Promise<void>;
+/** Asks for a reason before a sensitive change. `typeWord`: the admin must also type this word (irreversible actions). */
+export function ReasonDialog({ title, body, ok, required = true, typeWord, onClose, run }: {
+  title: string; body: string; ok: string; required?: boolean; typeWord?: string; onClose: () => void; run: (reason: string) => Promise<void>;
 }) {
-  const [r, setR] = useState(''); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const [r, setR] = useState(''); const [typed, setTyped] = useState(''); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     if (required && r.trim().length < 3) return setErr('اكتب السبب (3 أحرف على الأقل).');
+    if (typeWord && typed.trim() !== typeWord) return setErr(`اكتب «${typeWord}» للتأكيد.`);
     setBusy(true); setErr(null);
     try { await run(r.trim()); onClose(); } catch (x) { setErr(errMsg(x)); setBusy(false); }
   };
@@ -58,6 +61,10 @@ export function ReasonDialog({ title, body, ok, required = true, onClose, run }:
         <p style={{ margin: 0, fontSize: 15 }}>{body}</p>
         <label htmlFor="rs" style={labelStyle}>السبب{required ? '' : ' (اختياري)'}</label>
         <textarea id="rs" rows={3} value={r} onChange={(e) => setR(e.target.value)} maxLength={200} style={{ ...inputStyle(err), minHeight: 88, paddingTop: 10 }} />
+        {typeWord && <>
+          <label htmlFor="rs-c" style={labelStyle}>اكتب {typeWord} للتأكيد</label>
+          <input id="rs-c" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" style={inputStyle(null)} />
+        </>}
         <FieldError msg={err} />
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="submit" disabled={busy} style={{ ...smallBtn('danger'), minHeight: 48, flex: 1, background: color.danger, color: color.ivory }}>{busy ? 'جارٍ التنفيذ…' : ok}</button>

@@ -47,6 +47,7 @@ for s in admin-people admin-scheduling admin-content admin-settings teacher-cont
 reseed; MANY_CMD="bash e2e/ci/py.sh many_students.py" run admin-bulk
 reseed; run admin-ops
 reseed; run circle-members
+reseed; run account-delete
 # 5. PWA: manifest, installability, offline shell, no API data in caches (preview builds); an update published
 #    during a recording waits until the recording is submitted.
 reseed; run pwa http://localhost:4173/

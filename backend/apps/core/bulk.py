@@ -173,6 +173,7 @@ class Action:
     run: Callable[..., None]                # (obj, actor, reason, **params) -> None; raise Skip / Refuse
     reason_required: bool = False
     destructive: bool = False               # needs the typed confirmation at CONFIRM_FROM records or more
+    confirm_always: bool = False            # irreversible: the typed confirmation is needed even for one record
     # Validates the request's `params` once, before any record is touched: (raw dict, actor) -> kwargs for `run`.
     # Raise ApiError for an invalid parameter (e.g. a teacher who is not approved).
     params: Callable[[dict, Any], dict] | None = None
@@ -233,7 +234,7 @@ class AdminBulkAction(APIView):
         mode, targets, missing, filt = resolve_targets(res, d, MAX_IDS, MAX_FILTERED, check_expected=True)
 
         requested = len(targets) + len(missing)
-        if act.destructive and requested >= CONFIRM_FROM and d.get("confirm") != CONFIRM_WORD:
+        if (act.confirm_always or (act.destructive and requested >= CONFIRM_FROM)) and d.get("confirm") != CONFIRM_WORD:
             raise ApiError("confirm_required", f"اكتب «{CONFIRM_WORD}» للتأكيد.", 400, {"confirm": [f"اكتب «{CONFIRM_WORD}» للتأكيد."]})
 
         done, skipped, results = [], [], []

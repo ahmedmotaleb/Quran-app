@@ -42,8 +42,10 @@ def test_unknown_resource_or_action_is_refused(world):
     c = client_for(world.admin)
     assert act(c, "auditevents", action="delete", ids=[1]).status_code == 404       # audit log: no bulk endpoint at all
     assert act(c, "quran", action="delete", ids=[1]).status_code == 404             # canonical Quran text: none either
-    r = act(c, "users", action="delete", ids=[world.s1.id])                          # people are never deleted
+    r = act(c, "users", action="nuke", ids=[world.s1.id])
     assert r.status_code == 400 and r.json()["code"] == "invalid_action"
+    r = act(c, "users", action="delete", ids=[world.s1.id], reason="سبب الحذف")       # permanent: always typed «حذف»
+    assert r.status_code == 400 and r.json()["code"] == "confirm_required"
     assert User.objects.filter(pk=world.s1.id).exists()
 
 

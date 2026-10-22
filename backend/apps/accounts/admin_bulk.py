@@ -1,8 +1,8 @@
 """Admin people lists: validated filters, sort and bulk actions (students, teachers, parents).
 
-People are never deleted: their tasks, recordings metadata, feedback, attendance and audit history must stay. The
-bulk actions are activate, suspend, archive (a soft delete: no sign-in, no password recovery, everything kept) and,
-for teachers, approve / withdraw approval.
+The bulk actions include activate, suspend, archive (a soft delete: no sign-in, no password recovery, everything kept,
+reversible), delete (permanent: personal data erased, educational records kept anonymous; see erase.py) and, for
+teachers, approve / withdraw approval. Deleted accounts never appear in these lists.
 """
 from __future__ import annotations
 
@@ -72,7 +72,7 @@ def _apply(qs, f):
 
 USER_FILTERS = FilterSpec(
     parsers={
-        "role": p_choice(Role.STUDENT, Role.TEACHER, Role.PARENT), "status": p_choice(*AccountStatus.values), "q": p_text,
+        "role": p_choice(Role.STUDENT, Role.TEACHER, Role.PARENT), "status": p_choice(*[x for x in AccountStatus.values if x != AccountStatus.DELETED]), "q": p_text,
         "joined_from": p_date, "joined_to": p_date, "active_from": p_date, "active_to": p_date,
         "approved": p_bool, "has_students": p_bool, "has_slots": p_bool, "circle": p_int, "teacher": p_int, "level": p_text,
         "upcoming": p_bool, "overdue_review": p_bool, "linked": p_bool, "unlinked": p_bool, "course": p_int,
@@ -84,7 +84,8 @@ USER_FILTERS = FilterSpec(
 
 
 def _base():
-    return User.objects.exclude(role=Role.ADMIN)  # admins are never targets of bulk actions
+    # Admins are never targets of bulk actions; deleted accounts are gone from the admin's view.
+    return User.objects.exclude(role=Role.ADMIN).exclude(status=AccountStatus.DELETED)
 
 
 def _set_status(new: str):
@@ -253,6 +254,15 @@ def _resend_setup(u: User, actor, reason: str):
     audit("admin.setup_link_issued", actor=actor, target=u, emailed=True, bulk=True)
 
 
+def _delete(u: User, actor, reason: str):
+    from .erase import EraseRefused, erase_user
+
+    try:
+        erase_user(u, actor)
+    except EraseRefused as e:
+        raise Refuse(e.code, e.message) from None
+
+
 def _teachers_of(u: User) -> str:
     return "، ".join(a.teacher.full_name for a in u.teacher_assignments.filter(active=True).select_related("teacher"))
 
@@ -263,6 +273,7 @@ register(Resource(
         "activate": Action(_set_status(AccountStatus.ACTIVE)),
         "suspend": Action(_set_status(AccountStatus.SUSPENDED), reason_required=True),
         "archive": Action(_set_status(AccountStatus.ARCHIVED), reason_required=True, destructive=True),
+        "delete": Action(_delete, reason_required=True, destructive=True, confirm_always=True),
         "approve": Action(_approve(True)),
         "unapprove": Action(_approve(False), reason_required=True),
         "assign_teacher": Action(_assign_teacher, params=_teacher_params, audit_keys=("teacher", "replace")),

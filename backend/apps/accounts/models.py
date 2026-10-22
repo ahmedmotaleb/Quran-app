@@ -26,6 +26,8 @@ class AccountStatus(models.TextChoices):
     # Soft delete: cannot sign in or recover a password; every record of the person (tasks, recordings
     # metadata, feedback, attendance, audit) is kept. An admin can reactivate the account.
     ARCHIVED = "archived", "مؤرشف"
+    # Permanently deleted (see accounts/erase.py): personal data erased, records kept anonymous. Never reactivated.
+    DELETED = "deleted", "محذوف"
 
 
 class UserManager(BaseUserManager):
