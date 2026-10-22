@@ -29,14 +29,16 @@ function useMedia(q: string) {
   return m;
 }
 
-/** `#/parent` → app on the parent sign-in, `#/admin` → admin portal, `#/design-system` → style guide, `#/reset`/`#/invite` → link pages, else → the mobile app. */
+/** `/admin/` → admin portal (its own page and manifest: installs as a separate app; old `#/admin` links move there),
+ *  `#/parent` → app on the parent sign-in, `#/design-system` → style guide, `#/reset`/`#/invite` → link pages, else → the mobile app. */
 export default function App() {
   return <><Routes /><PwaUpdate /></>;
 }
 
 function Routes() {
   const h = useHash();
-  if (h.startsWith('#/admin')) return <Suspense fallback={null}><AdminApp /></Suspense>;
+  if (window.location.pathname.startsWith('/admin')) return <Suspense fallback={null}><AdminApp /></Suspense>;
+  if (h.startsWith('#/admin')) { window.location.replace(`/admin/${h}`); return null; }
   if (h.startsWith('#/design-system')) return <Suspense fallback={null}><DesignSystem /></Suspense>;
   if (h.startsWith('#/reset')) return <Suspense fallback={null}><SetPasswordPage /></Suspense>;
   if (h.startsWith('#/invite')) return <Suspense fallback={null}><AcceptInvitePage /></Suspense>;

@@ -46,10 +46,15 @@ export function newIdempotencyKey(): string {
   return crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+/** The admin portal (/admin/) has its own session on the server, separate from the learners' app, so an admin and a
+ *  student can both stay signed in on one phone. Its requests say so with this header. */
+const portalHeaders = (): Record<string, string> =>
+  typeof window !== 'undefined' && window.location.pathname.startsWith('/admin') ? { 'X-Halqa-Portal': 'admin' } : {};
+
 async function raw(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<unknown> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), body instanceof FormData ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS);
-  const h: Record<string, string> = { Accept: 'application/json', ...headers };
+  const h: Record<string, string> = { Accept: 'application/json', ...portalHeaders(), ...headers };
   const form = typeof FormData !== 'undefined' && body instanceof FormData;
   if (body !== undefined && !form) h['Content-Type'] = 'application/json';
   if (csrf && method !== 'GET') h['X-CSRFToken'] = csrf;
@@ -101,7 +106,7 @@ export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
 export async function apiDownload(path: string, body: unknown): Promise<{ blob: Blob; name: string }> {
   if (!LIVE) throw new ApiError(0, 'demo', 'وضع العرض التجريبي: لا يوجد خادم متصل.');
   await ensureCsrf();
-  const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'text/csv, application/json' };
+  const h: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'text/csv, application/json', ...portalHeaders() };
   if (csrf) h['X-CSRFToken'] = csrf;
   let res: Response;
   try {

@@ -2,7 +2,7 @@
 from django.conf import settings
 from django.http import FileResponse, Http404
 
-NO_CACHE = {"/sw.js", "/index.html", "/manifest.webmanifest", "/registerSW.js"}
+NO_CACHE = {"/sw.js", "/index.html", "/manifest.webmanifest", "/registerSW.js", "/admin/index.html", "/admin/manifest.webmanifest"}
 
 
 def cache_headers(headers, path, url):
@@ -17,10 +17,16 @@ def cache_headers(headers, path, url):
 
 
 def index(request, path=""):
-    """Any non-API path returns the app shell (client-side screens)."""
+    """Any non-API path returns the app shell (client-side screens). /admin/… returns the admin portal's own page,
+    which links its own manifest so it installs as a separate app."""
     root = settings.WHITENOISE_ROOT
-    if root is None or not (root / "index.html").is_file():
+    page = "admin/index.html" if request.path.startswith("/admin/") or request.path == "/admin" else "index.html"
+    if root is None or not (root / page).is_file():
         raise Http404("Frontend build not found.")
-    resp = FileResponse(open(root / "index.html", "rb"), content_type="text/html; charset=utf-8")
+    if request.path == "/admin":
+        from django.http import HttpResponsePermanentRedirect
+
+        return HttpResponsePermanentRedirect("/admin/")
+    resp = FileResponse(open(root / page, "rb"), content_type="text/html; charset=utf-8")
     resp["Cache-Control"] = "no-cache"
     return resp

@@ -61,7 +61,7 @@ Cloud Run has no shell, so these one-off jobs run from GitHub against the Neon d
      text, refuses it unless every surah has the Hafs ayah count, stores it with its SHA-256, and
      verifies the stored copy byte-for-byte.
    - `task: create-admin`, `admin_email: you@example.com`.
-3. Sign in at `https://halqa-<number>.europe-west1.run.app/#/admin` and turn on two-step verification.
+3. Sign in at `https://halqa-<number>.europe-west1.run.app/admin/` and turn on two-step verification.
 
 `/api/ready` should now show `"quran_text":"imported"`.
 

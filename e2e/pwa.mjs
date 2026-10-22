@@ -92,6 +92,27 @@ await step(lp, 'live: offline shows the shell, not stale learner data', async ()
   if (await la.getByText('حفظ سورة الملك').count()) throw new Error('learner data shown offline');
   await lctx.setOffline(false);
 });
+// The admin portal is a separate installable app: its own page at /admin/, manifest id and scope /admin/.
+const actx = await open();
+const ap = actx.pages()[0] ?? await actx.newPage(); ap.setDefaultTimeout(10000);
+await step(ap, 'admin portal installs as its own app («إدارة الحلقة», scope /admin/)', async () => {
+  await ap.goto(DEMO + 'admin/');
+  const links = await ap.locator('link[rel="manifest"]').evaluateAll((l) => l.map((x) => x.getAttribute('href')));
+  if (links.length !== 1 || links[0] !== '/admin/manifest.webmanifest') throw new Error('manifest links ' + links);
+  const m = await (await ap.request.get(new URL(links[0], DEMO).href)).json();
+  if (m.id !== '/admin/' || m.scope !== '/admin/' || m.start_url !== '/admin/' || m.name !== 'إدارة الحلقة') throw new Error(JSON.stringify(m).slice(0, 200));
+  for (const i of m.icons) { const r = await ap.request.get(new URL(i.src, DEMO).href); if (!r.ok()) throw new Error('icon ' + i.src); }
+  await ap.locator('#ad-email').waitFor();  // the admin sign-in, not the learners' app
+  const learner = await (await ap.request.get(new URL('/manifest.webmanifest', DEMO).href)).json();
+  if (learner.id === m.id) throw new Error('same app id as the learners app');
+  await ap.waitForFunction(() => navigator.serviceWorker.ready.then(() => true), null, { timeout: 15000 });
+  const cdp = await actx.newCDPSession(ap);
+  const { installabilityErrors } = await cdp.send('Page.getInstallabilityErrors');
+  if (installabilityErrors.length) throw new Error(JSON.stringify(installabilityErrors));
+  await ap.goto(DEMO + '#/admin');  // old links move to /admin/
+  await ap.waitForURL((u) => u.pathname.startsWith('/admin/'));
+});
+await actx.close();
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
 process.exitCode = fails ? 1 : 0;
 await ctx.close(); await lctx.close();

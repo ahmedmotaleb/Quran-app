@@ -1,0 +1,20 @@
+{
+  "id": "/admin/",
+  "name": "إدارة الحلقة",
+  "short_name": "إدارة الحلقة",
+  "description": "لوحة إدارة منصة الحلقة: الطلاب والمعلمون وأولياء الأمور والحلقات والدورات والإعدادات.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/admin/",
+  "scope": "/admin/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0F4C45",
+  "theme_color": "#0F4C45",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "/admin/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/admin/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/admin/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

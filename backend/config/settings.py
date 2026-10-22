@@ -174,7 +174,7 @@ if APP_URL and APP_URL not in CSRF_TRUSTED_ORIGINS:
     CSRF_TRUSTED_ORIGINS.append(APP_URL)
 CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS", "" if IS_DEPLOYED else "http://localhost:5173,http://localhost:4173")
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_HEADERS = ["accept", "authorization", "content-type", "x-csrftoken", "x-request-id", "idempotency-key"]
+CORS_ALLOW_HEADERS = ["accept", "authorization", "content-type", "x-csrftoken", "x-request-id", "idempotency-key", "x-halqa-portal"]
 CORS_EXPOSE_HEADERS = ["x-request-id"]
 
 if IS_DEPLOYED:
@@ -196,6 +196,7 @@ if IS_DEPLOYED:
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "apps.accounts.authentication.BearerTokenAuthentication",
+        "apps.accounts.authentication.AdminPortalSessionAuthentication",  # admin portal: its own session cookie
         "apps.accounts.authentication.CsrfSessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],

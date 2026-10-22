@@ -37,8 +37,25 @@ import AdminDialogs from './AdminDialogs';
 import AdminSettings from './AdminSettings';
 import { BRAND, pageTitle } from '@/theme/brand';
 import { Logo } from '@/components/Logo';
+import { promptInstall, useInstall } from '@/pwa/install';
 
-const toApp = () => { window.location.hash = '#/'; };
+const toApp = () => { window.location.href = '/'; };
+
+/** The admin portal installs as its own app («إدارة الحلقة», scope /admin/), separate from the learners' app. */
+function AdminInstall({ dark = false }: { dark?: boolean }) {
+  const how = useInstall(); const [steps, setSteps] = useState(false);
+  if (!how) return null;
+  const btn = { minHeight: 44, borderRadius: 12, border: `1px solid ${dark ? 'rgba(247,243,232,.4)' : color.borderStrong}`, background: 'transparent',
+    color: dark ? color.ivory : color.primary, fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '0 12px' } as const;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <button type="button" onClick={() => (how === 'prompt' ? void promptInstall() : setSteps(!steps))} style={btn}><Icon name="download" size={18} /> تثبيت لوحة الإدارة</button>
+      {steps && how !== 'prompt' && <p style={{ margin: 0, fontSize: 13, lineHeight: 1.7, color: dark ? color.sage : color.muted }}>
+        {how === 'ios' ? 'في Safari: زر المشاركة ← «إضافة إلى الشاشة الرئيسية». تظهر «إدارة الحلقة» تطبيقًا مستقلًا.'
+          : 'في Chrome: القائمة ⋮ ← «تثبيت التطبيق». تظهر «إدارة الحلقة» تطبيقًا مستقلًا.'}</p>}
+    </div>
+  );
+}
 
 function useNarrow() {
   const q = '(max-width: 899px)';
@@ -101,6 +118,7 @@ function AdminLogin() {
           <button type="button" onClick={() => up({ email: 'admin@halqa.app', pw: 'halqa123', errors: {} })}
             style={{ minHeight: 40, padding: '0 12px', borderRadius: 999, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>تعبئة</button>
         </div>}
+        <AdminInstall />
         <button type="button" onClick={toApp} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.muted, fontSize: 13, textDecoration: 'underline', cursor: 'pointer' }}>العودة إلى تطبيق الجوال</button>
       </form>
     </div>
@@ -189,6 +207,7 @@ function Portal() {
         <aside style={{ flex: '0 0 248px', background: color.primary, color: color.ivory, padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 6, position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' }}>
           {brand}{nav}
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 16 }}>
+            <AdminInstall dark />
             <button onClick={toApp} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.sage, fontSize: 14, textAlign: 'right', padding: '0 14px', cursor: 'pointer', textDecoration: 'underline' }}>{LIVE ? '← تطبيق الحلقة' : '← العودة إلى نموذج الجوال'}</button>
             <button onClick={adminLogout} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.sage, fontSize: 14, textAlign: 'right', padding: '0 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="leave" size={18} /> تسجيل الخروج</button>
           </div>
