@@ -8,7 +8,7 @@ on:
       task:
         description: What to run
         type: choice
-        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check, upload-trace, account-integrity]
+        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check, upload-trace, account-integrity, trusted-devices]
       admin_email:
         description: create-admin / promote-admin — the admin's email (create-admin takes the password from the ADMIN_PASSWORD secret; promote-admin keeps the account's password)
         required: false
@@ -138,6 +138,52 @@ jobs:
               h = r.get("httpRequest", {})
               path = re.sub(r"\?.*", "", h.get("requestUrl", "")).split("/api/v1/")[-1]
               print(f"::notice title=me::{r.get('timestamp','')[:19]} {h.get('requestMethod')} {path} {h.get('status')} req={h.get('requestSize','?')}B")
+          PY
+
+  # «تذكّر هذا الجهاز» evidence: per admin (ids only) devices created/active/matching and how often trust skipped
+  # the code, plus the admin sign-in requests Cloud Run served (host, status, browser family; no cookies or bodies).
+  trusted:
+    if: inputs.task == 'trusted-devices'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Run trusted_devices_report inside production; read admin sign-in requests
+        env:
+          HOURS: ${{ inputs.hours || '72' }}
+        run: |
+          P="${{ vars.GCP_PROJECT_ID }}"
+          START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          SINCE=$(date -u -d "$HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          gcloud run jobs execute halqa-tasks --project "$P" --region europe-west1 --args manage.py,trusted_devices_report --wait --quiet || echo "::warning::report failed"
+          sleep 20
+          gcloud logging read 'jsonPayload.msg="trusted_devices_report" AND timestamp>="'$START'"' --project "$P" --limit 50 --format json > /tmp/t.json || true
+          gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.requestUrl:"/api/v1/admin/auth/login" AND timestamp>="'$SINCE'"' \
+            --project "$P" --limit 40 --format json > /tmp/l.json || true
+          python3 - <<'PY'
+          import json, re
+          for r in json.load(open("/tmp/t.json")):
+              j = dict(r.get("jsonPayload") or {})
+              for k in ("msg", "ts", "level", "severity", "logger", "request_id"):
+                  j.pop(k, None)
+              print(f"::notice title=admin::{json.dumps(j, ensure_ascii=False)[:900]}")
+          def fam(ua):
+              os_ = next((n for k, n in (("Android", "Android"), ("iPhone", "iPhone"), ("Windows", "Windows"), ("Mac OS", "Mac"), ("Linux", "Linux")) if k in ua), "?")
+              br = next((n for k, n in (("SamsungBrowser", "Samsung"), ("Edg", "Edge"), ("Firefox", "Firefox"), ("CriOS", "Chrome-iOS"), ("Chrome/", "Chrome"), ("Safari", "Safari")) if k in ua), "?")
+              return f"{br} {os_}{' webview' if '; wv)' in ua else ''}"
+          rows = json.load(open("/tmp/l.json"))
+          lines = []
+          for r in rows:
+              h = r.get("httpRequest", {})
+              host = re.sub(r"^https?://([^/]+).*", r"\1", h.get("requestUrl", ""))
+              lines.append(f"{r.get('timestamp','')[:19]} {h.get('status')} {host.split('.')[0]} req={h.get('requestSize','?')}B resp={h.get('responseSize','?')}B {fam(h.get('userAgent',''))}")
+          print(f"::notice title=logins::{len(rows)} admin sign-in requests :: " + " | ".join(lines[:40]))
           PY
 
   # Media uploads (recitations, voice notes) in the last N hours: what Cloud Run answered (status, size, latency,
