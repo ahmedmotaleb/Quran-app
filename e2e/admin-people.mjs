@@ -106,14 +106,15 @@ await step('link a parent who has no account yet: search by email → create the
   await dialog().getByRole('button', { name: 'ربط بولي أمر' }).click();
   await dialog().getByRole('searchbox', { name: 'بحث' }).fill(`dad+${stamp}@example.com`);
   await dialog().locator('#pk-n').fill('محمود والد الطالب');
+  const linked = page.waitForResponse((r) => r.request().method() === 'POST' && /guardian|link/.test(r.url()) && !r.url().includes('admin/users?'));
   await dialog().getByRole('button', { name: 'إنشاء حساب ولي الأمر وربطه' }).click();
-  await page.getByText(/أُنشئ حساب ولي الأمر/).waitFor();
-  await reopen('الطلاب', SN2); await dialog().getByText('محمود والد الطالب').waitFor();
-  await page.keyboard.press('Escape'); await nav('المعلمون'); await page.getByRole('button', { name: 'دعوة معلم' }).waitFor();
+  const lr = await linked; if (!lr.ok()) throw new Error('link ' + lr.status() + ' ' + (await lr.text()).slice(0, 200));
+  await page.getByRole('dialog', { name: 'اختر ولي الأمر' }).waitFor({ state: 'detached' });
+  await reopen('الطلاب', SN2); await dialog().getByText('محمود والد الطالب').waitFor({ timeout: 15000 });
 });
 let invite = '';
 await step('invite a teacher by email (plus WhatsApp); the emailed link creates an approved teacher account', async () => {
-  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await nav('المعلمون');
   await page.getByRole('button', { name: 'دعوة معلم' }).click();
   await dialog().locator('#ad-e').fill(`teach+${stamp}@example.com`);
   await dialog().getByRole('checkbox', { name: 'أرسلها عبر واتساب أيضًا' }).check(); await dialog().locator('#ad-p').fill('01001234567');
