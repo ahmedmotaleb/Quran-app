@@ -123,6 +123,8 @@ export default function ParentHome() {
 }
 
 const ATT: Record<string, string> = { present: 'حضر', late: 'متأخر', absent: 'غاب', excused: 'غاب بعذر' };
+/** Parents see the excuse status only (never the reason or the teacher's response). */
+const EXCUSE_L: Record<string, string> = { pending: 'الاعتذار قيد المراجعة', approved: 'تم قبول الاعتذار', rejected: 'تم رفض الاعتذار' };
 
 /** Live mode: everything below comes from the child's real records. Recordings are never shown to parents. */
 function ParentLive() {
@@ -182,6 +184,7 @@ function ParentLive() {
           <span style={{ fontSize: 18, fontWeight: 700 }}>{dayLabel(next.occurrence.starts_at, tz)} · {fmtTime(next.occurrence.starts_at, tz)}</span>
           <span style={{ fontSize: 14, color: '#E5EDE4' }}>{next.occurrence.teacher_name}</span>
           <span style={{ fontSize: 12, color: color.liveSub }}>{tzL}</span>
+          {next.excuse && <span style={{ fontSize: 13, fontWeight: 700, color: color.ivory }}>{EXCUSE_L[next.excuse.status]}</span>}
         </> : <span style={{ fontSize: 16, fontWeight: 700 }}>لا توجد جلسة محجوزة</span>}
       </section>
       <section style={{ ...card, borderRadius: 18, padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -191,7 +194,7 @@ function ParentLive() {
         </div>
         {marked.length ? <ProgressBar pct={(attended / marked.length) * 100} /> : <p style={muted(13)}>لم يسجّل المعلم حضورًا بعد.</p>}
         {marked.slice(0, 4).map((b) => (
-          <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 34 }}><span style={{ fontSize: 14 }}>{fmtDay(b.occurrence.starts_at, tz)}</span><AttendancePill a={ATT[b.attendance] ?? b.attendance} fs={12} /></div>
+          <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 34, gap: 8 }}><span style={{ fontSize: 14 }}>{fmtDay(b.occurrence.starts_at, tz)}</span>{b.excuse && <span style={{ fontSize: 12, color: color.muted, flex: 1 }}>{EXCUSE_L[b.excuse.status]}</span>}<AttendancePill a={ATT[b.attendance] ?? b.attendance} fs={12} /></div>
         ))}
       </section>
     </div>

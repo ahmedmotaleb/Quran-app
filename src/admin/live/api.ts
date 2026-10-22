@@ -6,6 +6,7 @@ export type AccountStatus = 'pending' | 'active' | 'suspended' | 'archived';
 export interface Person {
   id: number; email: string; full_name: string; role: Role; status: AccountStatus; timezone: string; phone: string;
   level: string; approved: boolean | null; has_password: boolean; date_joined: string; last_login: string | null;
+  status_reason: string; status_changed_at: string | null;
   teachers: { id: number; name: string; assignment_id: number }[];
   guardians: { id: number; name: string; status: string; link_id: number }[];
   children: { id: number; name: string; status: string; link_id: number }[];
@@ -113,7 +114,7 @@ export const removeQuestion = (id: number) => api<null>('DELETE', `admin/questio
 /* ---- Settings and audit (prompt 08) ---- */
 export interface Settings {
   org_name: string; support_email: string; support_whatsapp: string; show_support_button: boolean; default_timezone: string;
-  cancel_hours: number; join_minutes: number; individual_minutes: number; group_minutes: number; booking_horizon_days: number;
+  cancel_hours: number; excuse_deadline_minutes: number; join_minutes: number; individual_minutes: number; group_minutes: number; booking_horizon_days: number;
   booking_lead_minutes: number; open_signup: boolean; session_reminders: boolean; parent_weekly_report: boolean;
   max_recording_seconds: number; max_upload_mb: number; review_intervals: number[]; updated_at: string; sensitive: string[];
 }
@@ -136,6 +137,16 @@ export interface PromoteResult { approved: boolean; emailed: boolean; assignment
 /** Student → Teacher (same account). Reason and the typed word «ترقية» are checked again by the server. */
 export const promoteTeacher = (id: number, reason: string, approve: boolean) =>
   api<PromoteResult>('POST', `admin/users/${id}/promote-teacher`, { reason, approve, confirm: 'ترقية' });
+/** Attendance and the absence rule for one student (unexcused absences derived on the server). */
+export interface Discipline {
+  total_sessions: number; present: number; late: number; excused: number; approved_excuses: number; pending_excuses: number;
+  rejected_excuses: number; unexcused_absences: number; limit: number; suspends_at: number; suspended: boolean; status_reason: string;
+  absences: { booking: number; starts_at: string; teacher: string; attendance: string; counts: boolean; excuse: string | null }[];
+  excuses: import('@/api/endpoints').ApiExcuseRow[];
+}
+export const discipline = (id: number) => api<Discipline>('GET', `admin/users/${id}/discipline`);
+export const excuseOverride = (bookingId: number, reason: string) => api<unknown>('POST', `admin/bookings/${bookingId}/excuse-override`, { reason });
+export const adminExcuses = (status = 'pending') => api<{ results: import('@/api/endpoints').ApiExcuseRow[] }>('GET', `admin/excuses?status=${status}`);
 export const bulkAction = (resource: string, body: BulkBody) => api<BulkResult>('POST', `admin/${resource}/bulk-action`, body);
 export const exportCsv = (resource: string, body: Omit<BulkBody, 'action'> & { sort?: string }) => apiDownload(`admin/${resource}/export`, body);
 export interface SavedView { id: number; section: string; name: string; query: string }

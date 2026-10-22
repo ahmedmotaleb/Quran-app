@@ -11,7 +11,8 @@ import { dateTime, errMsg, Modal, Pager, smallBtn, Table, usePaged } from './ui'
 
 type Draft = Omit<A.Settings, 'updated_at' | 'sensitive'>;
 const NUM: [keyof Draft, string, string, number, number][] = [
-  ['cancel_hours', 'نافذة الإلغاء المجاني', 'ساعة قبل الموعد', 0, 168], ['join_minutes', 'فتح الدخول للجلسة', 'دقيقة قبل البداية', 0, 60],
+  ['cancel_hours', 'نافذة إلغاء المعلم', 'ساعة قبل الموعد', 0, 168],
+  ['excuse_deadline_minutes', 'آخر موعد لطلب الاعتذار', 'دقيقة قبل بدء الجلسة', 0, 10080], ['join_minutes', 'فتح الدخول للجلسة', 'دقيقة قبل البداية', 0, 60],
   ['booking_lead_minutes', 'أقرب حجز ممكن', 'دقيقة من الآن', 0, 10080], ['booking_horizon_days', 'أبعد حجز ممكن', 'يومًا', 1, 90],
   ['individual_minutes', 'مدة الجلسة الفردية', 'دقيقة', 10, 240], ['group_minutes', 'مدة الحلقة الجماعية', 'دقيقة', 10, 240],
   ['max_recording_seconds', 'أقصى مدة للتسجيل', 'ثانية (الحد الأعلى للخادم 1200)', 30, 3600], ['max_upload_mb', 'أقصى حجم للتسجيل', 'ميغابايت (الحد الأعلى للخادم 25)', 1, 100],

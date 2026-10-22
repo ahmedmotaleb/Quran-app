@@ -12,6 +12,7 @@ from django.contrib.postgres.constraints import ExclusionConstraint
 from django.contrib.postgres.fields import RangeOperators
 from django.db import models
 from django.db.models import F, Func, Q
+from django.utils import timezone
 
 from apps.core.models import TimeStamped
 
@@ -159,3 +160,32 @@ class CircleMember(TimeStamped):
         ordering = ["-active", "student__full_name"]
         constraints = [models.UniqueConstraint(fields=["circle", "student"], condition=Q(active=True), name="one_active_circle_membership")]
         indexes = [models.Index(fields=["circle", "active"]), models.Index(fields=["student", "active"])]
+
+
+class BookingExcuse(TimeStamped):
+    """A student's excuse for a confirmed booking (owner decision 23 Oct 2026: students no longer cancel; they ask to be
+    excused and the session's teacher decides). One per booking; the booking itself is never cancelled by it.
+
+    `status` is the effective decision. The teacher's decision (reviewed_*) and an admin's audited correction
+    (override_*) are kept side by side, so the original decision stays traceable."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "قيد المراجعة"
+        APPROVED = "approved", "مقبول"
+        REJECTED = "rejected", "مرفوض"
+
+    booking = models.OneToOneField(Booking, on_delete=models.PROTECT, related_name="excuse")
+    student = models.ForeignKey(User, on_delete=models.PROTECT, related_name="excuses")
+    reason = models.TextField(max_length=500, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    requested_at = models.DateTimeField(default=timezone.now)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    teacher_status = models.CharField(max_length=10, choices=Status.choices, blank=True)  # the teacher's own decision
+    teacher_response = models.CharField(max_length=500, blank=True)
+    override_at = models.DateTimeField(null=True, blank=True)
+    override_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    override_reason = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["status", "requested_at"]), models.Index(fields=["student", "status"])]

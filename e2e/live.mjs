@@ -86,21 +86,21 @@ await step('same slot is now taken for this student', async () => {
   await app.locator('button[disabled]').filter({ hasText: picked.replace('محجوز', '') }).first().waitFor();
   await page.getByRole('button', { name: /رجوع/ }).first().click();
 });
-await step('cancel booking', async () => {
+await step('no student cancel: «طلب اعتذار» instead; the booking stays', async () => {
   await app.getByRole('tab', { name: 'حجوزاتي' }).click();
   await app.getByText('الشيخ عبدالرحمن السالم · فردية').first().click();
-  await app.getByRole('button', { exact: true, name: 'إلغاء الحجز' }).click();
-  await page.getByRole('button', { exact: true, name: 'نعم، ألغِ الحجز' }).click();
-  await page.getByText('تم إلغاء الحجز').waitFor();
+  if (await app.getByRole('button', { exact: true, name: 'إلغاء الحجز' }).count()) throw new Error('student cancel button shown');
+  await app.getByRole('button', { exact: true, name: 'طلب اعتذار' }).click();
+  const d = page.getByRole('dialog', { name: 'طلب اعتذار عن الجلسة' });
+  await d.getByText('الشيخ عبدالرحمن السالم').waitFor();
+  await d.locator('#ex-r').fill('ظرف عائلي طارئ');
+  await d.getByRole('button', { name: 'إرسال الاعتذار' }).click();
+  await app.getByText('الاعتذار قيد المراجعة').waitFor();
+  await app.getByText('سبب الاعتذار: ظرف عائلي طارئ').waitFor();
+  if (await app.getByRole('button', { exact: true, name: 'طلب اعتذار' }).count()) throw new Error('a second request is offered');
+  await page.getByRole('button', { name: /رجوع/ }).first().click();
 });
-await step('cancelled shows in past list', async () => {
-  await page.getByRole('button', { name: /رجوع/ }).first().click().catch(() => {});
-  await page.getByRole('button', { exact: true, name: 'الجلسات' }).click();
-  await app.getByRole('tab', { name: 'حجوزاتي' }).click();
-  await app.getByText('السابقة والملغاة').waitFor();
-  await app.getByText('ملغاة').first().waitFor();
-});
-await page.screenshot({ path: out + '/l7-cancelled.png' });
+await page.screenshot({ path: out + '/l7-excuse.png' });
 await step('progress is live (no sample banner)', async () => {
   await page.getByRole('button', { exact: true, name: 'تقدمي' }).click();
   await app.getByText('دقائق التلاوة التي سجّلتها وسلّمتها').waitFor();

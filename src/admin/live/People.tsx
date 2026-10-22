@@ -44,6 +44,7 @@ const FIELDS: Record<A.Role, FilterField[]> = {
     { key: 'level', label: 'المستوى', type: 'select', options: LEVELS },
     { key: 'upcoming', label: 'جلسة قادمة', type: 'bool', yes: 'لديه جلسة قادمة', no: 'دون جلسة قادمة' },
     { key: 'overdue_review', label: 'المراجعة', type: 'bool', yes: 'لديه مراجعة متأخرة', no: 'لا مراجعات متأخرة' },
+    { key: 'unexcused', label: 'غياب بدون عذر', type: 'select', options: [['1', 'غياب واحد'], ['2', 'غيابان'], ['3', '3 أو أكثر']] },
     { key: 'joined', label: 'تاريخ الانضمام', type: 'dates', from: 'joined_from', to: 'joined_to' },
     { key: 'active', label: 'آخر نشاط', type: 'dates', from: 'active_from', to: 'active_to' },
   ],
@@ -65,7 +66,7 @@ const FIELDS: Record<A.Role, FilterField[]> = {
 };
 
 const PRESETS: Record<A.Role, [string, Record<string, string>][]> = {
-  student: [['طلاب بدون معلم', { unlinked: '1' }], ['مراجعات متأخرة', { overdue_review: '1' }], ['دون جلسة قادمة', { upcoming: '0', status: 'active' }], ['المؤرشفون', { status: 'archived' }]],
+  student: [['طلاب على وشك الإيقاف', { unexcused: '2', status: 'active' }], ['طلاب بدون معلم', { unlinked: '1' }], ['مراجعات متأخرة', { overdue_review: '1' }], ['دون جلسة قادمة', { upcoming: '0', status: 'active' }], ['المؤرشفون', { status: 'archived' }]],
   teacher: [['معلمون دون مواعيد', { has_slots: '0', status: 'active' }], ['غير معتمدين', { approved: '0' }], ['دون طلاب', { has_students: '0' }]],
   parent: [['دون أبناء مرتبطين', { linked: '0' }], ['بانتظار الاعتماد', { status: 'pending' }]],
 };
@@ -75,7 +76,8 @@ const publishedCircles = async (): Promise<[string, string][]> =>
 
 function peopleActions(role: A.Role): BulkDef[] {
   const base: BulkDef[] = [
-    { key: 'activate', label: 'تفعيل', tone: 'primary', body: (n) => `سيُفعَّل ${items(n)} ويستطيع أصحابها الدخول.`, ok: (n) => `تفعيل ${items(n)}` },
+    { key: 'activate', label: 'تفعيل', tone: 'primary', reason: true, title: 'تفعيل الحسابات',
+      body: (n) => `سيُفعَّل ${items(n)} ويستطيع أصحابها الدخول. اكتب السبب (مثل: تمت مراجعة حالة الطالب). سجل الغياب السابق لا يُمحى.`, ok: (n) => `تفعيل ${items(n)}` },
     { key: 'suspend', label: 'تعطيل', reason: true, title: 'تعطيل الحسابات', body: (n) => `سيُمنع أصحاب ${items(n)} من الدخول فورًا حتى إعادة التفعيل. لا يُحذف أي سجل.`, ok: (n) => `تعطيل ${items(n)}` },
     { key: 'archive', label: 'أرشفة', tone: 'danger', reason: true, destructive: true, title: 'تأكيد الأرشفة',
       body: (n) => `أنت على وشك أرشفة ${items(n)}. لن يستطيع أصحابها الدخول أو استعادة كلمة المرور. تبقى مهامهم وتقييماتهم وحضورهم محفوظة، ويمكن إعادة التفعيل لاحقًا.`, ok: (n) => `أرشفة ${items(n)}` },
@@ -162,6 +164,7 @@ export default function PeopleLive({ role }: { role: A.Role }) {
         ))}
       </div>
       {role === 'teacher' && <InvitationsPanel reloadKey={invKey} />}
+      {role === 'student' && <PendingExcusesPanel />}
       <SavedViews section={L.sec} q={q} update={update} presets={PRESETS[role]} />
       <SelectionSummary sel={sel} pageIds={rows?.map((r) => r.id) ?? []} total={R.data?.count ?? 0} />
       <DataView rows={rows} cols={cols} sel={sel} total={R.data?.count ?? 0} rowLabel={(u) => u.full_name} sort={sort}
@@ -356,10 +359,12 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
           </div>
         )}
 
+        {u.role === 'student' && <DisciplineSection id={u.id} onChanged={() => { void reload(); onChanged(); }} />}
+        {u.status_reason && <p style={{ margin: 0, fontSize: 14, background: u.status === 'suspended' ? color.dangerBg : color.sand, color: u.status === 'suspended' ? color.dangerInk : color.body, borderRadius: 12, padding: '8px 12px' }}>سبب الحالة: {u.status_reason}{u.status_changed_at ? ` · ${date(u.status_changed_at)}` : ''}</p>}
         {section('حالة الحساب', (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {u.status === 'pending' && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'تم اعتماد الحساب')} style={smallBtn('primary')}>اعتماد الحساب</button>}
-            {(u.status === 'suspended' || u.status === 'archived') && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'أُعيد تفعيل الحساب')} style={smallBtn('primary')}>إعادة التفعيل</button>}
+            {(u.status === 'suspended' || u.status === 'archived') && <button disabled={busy} onClick={() => reasonRun('إعادة تفعيل الحساب', `سيستطيع ${u.full_name} الدخول من جديد. سجل الغياب السابق يبقى كما هو.`, 'إعادة التفعيل', 'أُعيد تفعيل الحساب', (r) => A.setPersonStatus(u.id, 'active', r))} style={smallBtn('primary')}>إعادة التفعيل</button>}
             {u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('أرشفة الحساب', `لن يستطيع ${u.full_name} الدخول أو استعادة كلمة المرور. تبقى كل سجلاته محفوظة، ويمكن إعادة التفعيل لاحقًا.`, 'أرشفة الحساب', 'أُرشف الحساب', (r) => A.setPersonStatus(u.id, 'archived', r))} style={smallBtn('danger')}>أرشفة الحساب</button>}
             {u.role === 'student' && u.status !== 'archived' && <button disabled={busy} onClick={() => setPromote(true)} style={smallBtn()}>ترقية إلى معلم</button>}
             <button disabled={busy} onClick={() => setSub({ kind: 'reason', title: 'حذف الحساب نهائيًا', typeWord: 'حذف', ok: 'حذف نهائي',
@@ -512,5 +517,58 @@ function PromoteDialog({ id, name, onClose, onDone }: { id: number; name: string
         </div>
       </form>
     </Modal>
+  );
+}
+
+const EX_L: Record<string, string> = { pending: 'قيد المراجعة', approved: 'مقبول', rejected: 'مرفوض' };
+const ATT_L: Record<string, string> = { absent: 'غائب', excused: 'غاب بعذر' };
+
+/** «الانضباط والحضور»: the derived unexcused-absence count, the figures and each absence, with an audited
+ *  «اعتماد العذر إداريًا» per absence (the teacher's original decision stays recorded). */
+function DisciplineSection({ id, onChanged }: { id: number; onChanged: () => void }) {
+  const [d, setD] = useState<A.Discipline | null>(null); const [err, setErr] = useState<string | null>(null);
+  const [over, setOver] = useState<number | null>(null);
+  const load = useCallback(async () => { try { setD(await A.discipline(id)); setErr(null); } catch (e) { setErr(errMsg(e)); } }, [id]);
+  useEffect(() => { void load(); }, [load]);
+  if (err) return <p role="alert" style={{ margin: 0, color: color.dangerInk }}>{err}</p>;
+  if (!d) return null;
+  const n = d.unexcused_absences;
+  const head = n >= d.suspends_at ? `${n} — ${d.suspended ? 'الحساب موقوف' : 'تجاوز الحد'}` : `${n} / ${d.limit}`;
+  return (
+    <section aria-label="الانضباط والحضور" style={{ border: `1px solid ${n >= d.limit ? color.danger : color.divider}`, borderRadius: 14, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>الانضباط والحضور</h3>
+      <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color: n >= d.limit ? color.dangerInk : color.ink }}>الغياب بدون عذر: <span dir="ltr">{head}</span></p>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 13, color: color.body }}>
+        <span>الجلسات: {d.total_sessions}</span><span>حاضر: {d.present}</span><span>متأخر: {d.late}</span>
+        <span>أعذار مقبولة: {d.approved_excuses}</span><span>أعذار معلقة: {d.pending_excuses}</span><span>أعذار مرفوضة: {d.rejected_excuses}</span>
+      </div>
+      {d.absences.map((a) => (
+        <div key={a.booking} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', borderTop: `1px solid ${color.divider}`, paddingTop: 6, fontSize: 14 }}>
+          <span style={{ flex: '1 1 200px' }}>{date(a.starts_at)} · {a.teacher} · {ATT_L[a.attendance] ?? a.attendance}{a.excuse ? ` · العذر: ${EX_L[a.excuse]}` : ''}</span>
+          {a.counts && <span style={{ fontSize: 12, fontWeight: 700, color: color.dangerInk }}>يُحتسب</span>}
+          {a.excuse !== 'approved' && <button onClick={() => setOver(a.booking)} style={smallBtn()}>اعتماد العذر إداريًا</button>}
+        </div>
+      ))}
+      {over !== null && <ReasonDialog title="اعتماد العذر إداريًا" body="تصحيح إداري مُسجَّل في سجل التدقيق: يُحتسب الغياب «بعذر»، ويبقى قرار المعلم الأصلي محفوظًا. إن أصبح الطالب الموقوف تلقائيًا دون الحد فراجع الحساب وأعد تفعيله يدويًا." ok="اعتماد العذر"
+        onClose={() => setOver(null)} run={async (r) => { await A.excuseOverride(over, r); toast('اعتُمد العذر إداريًا'); await load(); onChanged(); }} />}
+    </section>
+  );
+}
+
+/** «طلبات اعتذار معلقة»: excuses waiting for a teacher's decision (admins see them all; teachers decide). */
+function PendingExcusesPanel() {
+  const [rows, setRows] = useState<import('@/api/endpoints').ApiExcuseRow[] | null>(null);
+  useEffect(() => { A.adminExcuses().then((r) => setRows(r.results)).catch(() => setRows([])); }, []);
+  if (!rows?.length) return null;
+  return (
+    <details style={{ ...card, padding: '10px 14px' }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 700, minHeight: 36 }}>طلبات اعتذار معلقة ({rows.length})</summary>
+      {rows.map((r) => (
+        <div key={r.booking} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', minHeight: 44, alignItems: 'center', borderTop: `1px solid ${color.divider}`, fontSize: 14 }}>
+          <strong>{r.student.name}</strong><span>مع {r.teacher.name}</span><span style={{ color: color.muted }}>{date(r.starts_at)}</span>
+          <span style={{ flex: '1 1 200px', color: color.body }}>{r.reason}</span>
+        </div>
+      ))}
+    </details>
   );
 }

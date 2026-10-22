@@ -61,6 +61,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     timezone = models.CharField(max_length=64, default="Africa/Cairo")
     phone = models.CharField(max_length=32, blank=True)
     is_active = models.BooleanField(default=True)  # False only for closed accounts; suspension uses `status`.
+    # Why the current status was set (shown to admins), e.g. the automatic absence suspension.
+    status_reason = models.CharField(max_length=200, blank=True)
+    status_changed_at = models.DateTimeField(null=True, blank=True)
     is_staff = models.BooleanField(default=False)  # Django admin site access (ops only).
     date_joined = models.DateTimeField(default=dj_tz.now)
     # Admin MFA (TOTP). The secret is server-side only; enabling requires confirming a code.

@@ -69,14 +69,14 @@ def test_select_ids_suspend_counts_skips_and_audit(world):
 
 def test_invalid_and_mixed_ids(world):
     c = client_for(world.admin)
-    assert act(c, "users", action="activate", ids=[]).json()["code"] == "invalid"
-    assert act(c, "users", action="activate", ids="1,2").json()["code"] == "invalid"
-    assert act(c, "users", action="activate", ids=["x"]).json()["code"] == "invalid"
-    assert act(c, "users", action="activate", ids=list(range(1, bulk.MAX_IDS + 2))).json()["code"] == "too_many"
+    assert act(c, "users", action="activate", reason="مراجعة الحساب", ids=[]).json()["code"] == "invalid"
+    assert act(c, "users", action="activate", reason="مراجعة الحساب", ids="1,2").json()["code"] == "invalid"
+    assert act(c, "users", action="activate", reason="مراجعة الحساب", ids=["x"]).json()["code"] == "invalid"
+    assert act(c, "users", action="activate", reason="مراجعة الحساب", ids=list(range(1, bulk.MAX_IDS + 2))).json()["code"] == "too_many"
     world.s1.status = AccountStatus.SUSPENDED
     world.s1.save()
     # An unknown id and an admin (never a target) are reported as failed; the valid one still runs.
-    r = act(c, "users", action="activate", ids=[world.s1.id, 999999, world.admin.id, world.s1.id]).json()
+    r = act(c, "users", action="activate", reason="مراجعة الحساب", ids=[world.s1.id, 999999, world.admin.id, world.s1.id]).json()
     assert (r["requested"], r["success"], r["failed"]) == (3, 1, 2)
     assert {e["id"] for e in r["errors"]} == {999999, world.admin.id} and all(e["code"] == "not_found" for e in r["errors"])
     world.s1.refresh_from_db()
@@ -113,7 +113,7 @@ def test_archive_is_a_soft_delete(world):
     counts = c.get(f"{A}/users/counts", {"role": "student"}).json()
     assert counts["archived"] == 1 and counts["all"] == 1
     assert act(c, "users", action="suspend", ids=[world.s1.id], reason="xxxx").json()["errors"][0]["code"] == "archived"
-    assert act(c, "users", action="activate", ids=[world.s1.id]).json()["success"] == 1
+    assert act(c, "users", action="activate", reason="مراجعة الحساب", ids=[world.s1.id]).json()["success"] == 1
 
 
 def test_teacher_only_actions_refuse_other_roles(world):
@@ -144,9 +144,9 @@ def test_select_all_filtered_results_with_expected_count(world, many):
 def test_filter_mode_is_validated_strictly(world):
     c = client_for(world.admin)
     for bad in ({"role": "admin"}, {"status": "deleted"}, {"joined_from": "yesterday"}, {"is_superuser": "1"}, {"teacher": "abc"}):
-        r = act(c, "users", action="activate", filter=bad, expected=0)
+        r = act(c, "users", action="activate", reason="مراجعة الحساب", filter=bad, expected=0)
         assert r.status_code == 400 and r.json()["code"] == "invalid_filter", bad
-    assert act(c, "users", action="activate", filter="role=student", expected=0).status_code == 400
+    assert act(c, "users", action="activate", reason="مراجعة الحساب", filter="role=student", expected=0).status_code == 400
 
 
 def test_typed_confirmation_for_large_destructive_requests(world, many):

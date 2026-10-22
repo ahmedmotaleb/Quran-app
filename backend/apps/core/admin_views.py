@@ -29,14 +29,15 @@ class SettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = AppSettings
         fields = ["org_name", "support_email", "support_whatsapp", "show_support_button", "default_timezone", "cancel_hours",
-                  "join_minutes", "individual_minutes", "group_minutes", "booking_horizon_days", "booking_lead_minutes",
+                  "excuse_deadline_minutes", "join_minutes", "individual_minutes", "group_minutes", "booking_horizon_days", "booking_lead_minutes",
                   "open_signup", "session_reminders", "parent_weekly_report", "max_recording_seconds", "max_upload_mb", "review_intervals",
                   "updated_at"]
         read_only_fields = ["updated_at"]
         extra_kwargs = {"cancel_hours": {"max_value": 168}, "booking_horizon_days": {"min_value": 1, "max_value": 90},
                         "booking_lead_minutes": {"max_value": 10080}, "max_recording_seconds": {"min_value": 30, "max_value": 3600},
                         "max_upload_mb": {"min_value": 1, "max_value": 100}, "individual_minutes": {"min_value": 10, "max_value": 240},
-                        "group_minutes": {"min_value": 10, "max_value": 240}, "join_minutes": {"max_value": 60}}
+                        "group_minutes": {"min_value": 10, "max_value": 240}, "join_minutes": {"max_value": 60},
+                        "excuse_deadline_minutes": {"max_value": 10080}}
 
     def validate_review_intervals(self, v):
         if v in (None, []):
@@ -95,6 +96,7 @@ class PublicSettings(APIView):
         return Response({"org_name": c.org_name, "support_email": c.support_email, "show_support_button": c.show_support_button,
                          "support_whatsapp": c.support_whatsapp if c.show_support_button else "", "open_signup": c.open_signup,
                          "default_timezone": c.default_timezone, "cancel_hours": c.cancel_hours, "join_minutes": c.join_minutes,
+                         "excuse_deadline_minutes": c.excuse_deadline_minutes,
                          "booking_horizon_days": c.booking_horizon_days, "max_recording_seconds": max_secs,
                          "max_upload_mb": max_bytes // (1024 * 1024),
                          # null while no licensed recitation source is approved: the Mushaf then plays no audio.

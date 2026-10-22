@@ -55,8 +55,9 @@ def test_booking_events(world, run_commits):
     assert r.status_code in (200, 201), r.json()
     assert "booking_rescheduled" in kinds(world.t1) and kinds(world.s1).count("booking_cancelled") == 0
     new_id = r.json()["id"]
-    run_commits(lambda: s1.post(f"/api/v1/bookings/{new_id}/cancel", {}, format="json"))
-    assert "booking_cancelled_by_student" in kinds(world.t1) and "booking_cancelled" not in kinds(world.s1)
+    # Students no longer cancel; an excuse request reaches the teacher instead.
+    run_commits(lambda: s1.post(f"/api/v1/bookings/{new_id}/excuse", {"reason": "ظرف عائلي طارئ"}, format="json"))
+    assert "excuse_new" in kinds(world.t1) and "booking_cancelled" not in kinds(world.s1)
     for u in (world.s2, world.t2, world.p1):
         assert kinds(u) == []
 
@@ -89,9 +90,11 @@ def test_absence_notifies_student_and_guardian_once(world, run_commits):
     t1 = client_for(world.t1)
     for _ in range(2):
         run_commits(lambda: t1.post(f"/api/v1/bookings/{b.id}/attendance", {"attendance": "absent"}, format="json"))
-    assert kinds(world.s1) == ["attendance_absent"] and kinds(world.p1) == ["child_absent"]
+    # The absence itself, plus the first-absence warning (excuse rule), each once.
+    assert sorted(kinds(world.s1)) == ["absence_warning", "attendance_absent"]
+    assert sorted(kinds(world.p1)) == ["absence_warning_child", "child_absent"]
     run_commits(lambda: t1.post(f"/api/v1/bookings/{b.id}/attendance", {"attendance": "present"}, format="json"))
-    assert kinds(world.s1) == ["attendance_absent"]  # presence is not announced
+    assert sorted(kinds(world.s1)) == ["absence_warning", "attendance_absent"]  # presence is not announced
     assert kinds(world.s2) == []
 
 

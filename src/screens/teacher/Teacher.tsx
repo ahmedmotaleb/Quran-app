@@ -6,7 +6,7 @@ import {
 import { DAYS, SUR, TODAY_LABEL } from '@/data/demo';
 import { fmt, scoreL, timeIn, typeIcon, tzLabel, tzOf } from '@/lib/format';
 import { dateKey, dayLabel, fmtDay, fmtTime, zonedToIso as zonedIso } from '@/lib/time';
-import { gradeRecitation, saveMeetingLink, setAttendance, teacherCancelBooking, toggleSlot as toggleLiveSlot } from '@/store/live';
+import { gradeRecitation, reviewExcuse, saveMeetingLink, setAttendance, teacherCancelBooking, toggleSlot as toggleLiveSlot } from '@/store/live';
 import type { ApiGradingItem } from '@/api/endpoints';
 import { useState } from 'react';
 import { weekDays } from '@/store/selectors';
@@ -23,6 +23,7 @@ import { InboxBell } from '@/screens/common/Inbox';
 import { api } from '@/api/client';
 import { discardVoiceNote, startVoiceNote, stopVoiceNote, voiceNote, voiceNoteRecording } from '@/services/voiceNote';
 import { studentProgress, type ApiProgress } from '@/api/endpoints';
+import * as E from '@/api/endpoints';
 import { CorrectionForm, TeacherCorrections, TeacherCorrectionsCard } from '@/screens/common/Corrections';
 
 interface Dash {
@@ -692,7 +693,56 @@ export function TeacherContent() {
 }
 
 /* ---------------- Live schedule (teacher's real sessions) ---------------- */
-const ATT_OPTS = [['present', 'حضر'], ['late', 'متأخر'], ['absent', 'غاب'], ['excused', 'بعذر']] as const;
+const ATT_OPTS = [['present', 'حاضر'], ['late', 'متأخر'], ['absent', 'غائب'], ['excused', 'غائب بعذر']] as const;
+const EXCUSE_BADGE: Record<string, [string, string, string]> = {
+  pending: ['اعتذار بانتظار المراجعة', color.warnBg, color.warnInk], approved: ['اعتذار مقبول', color.sageTint, color.primary],
+  rejected: ['اعتذار مرفوض', color.dangerBg, color.dangerInk],
+};
+
+/** «طلبات الاعتذار»: pending excuses for the teacher's own sessions. Approve (response optional) or reject (required). */
+function ExcusesPanel() {
+  const s = useApp(); const tz = tzOf(s.tz).iana;
+  const [rows, setRows] = useState<import('@/api/endpoints').ApiExcuseRow[] | null>(null);
+  const [rejecting, setRejecting] = useState<number | null>(null); const [text, setText] = useState('');
+  const [busy, setBusy] = useState<number | null>(null); const [err, setErr] = useState<string | null>(null);
+  const load = () => { E.teacherExcuses().then((r) => setRows(r.results)).catch(() => setRows([])); };
+  useEffect(load, [s.tsched]);
+  if (!rows?.length) return null;
+  const decide = async (id: number, ok: boolean) => {
+    if (!ok && text.trim().length < 3) return setErr('اكتب سبب رفض الاعتذار.');
+    setBusy(id); setErr(null);
+    const fail = await reviewExcuse(id, ok, ok ? '' : text);
+    setBusy(null);
+    if (fail) return setErr(fail);
+    setRejecting(null); setText(''); load();
+  };
+  return (
+    <section aria-label="طلبات الاعتذار" style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10, border: `1.5px solid ${color.gold}` }}>
+      <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800 }}>طلبات الاعتذار ({rows.length})</h2>
+      {rows.map((r) => (
+        <div key={r.booking} style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${color.divider}`, paddingTop: 8 }}>
+          <span style={{ fontSize: 15 }}><strong>{r.student.name}</strong> · {dayLabel(r.starts_at, tz)} {fmtTime(r.starts_at, tz)} · {r.kind === 'group' ? 'جماعية' : 'فردية'}</span>
+          <span style={{ fontSize: 14 }}>السبب: {r.reason}</span>
+          <span style={muted(12)}>أُرسل: {dayLabel(r.requested_at, tz)} {fmtTime(r.requested_at, tz)}</span>
+          {rejecting === r.booking ? (<>
+            <label htmlFor={`rj-${r.booking}`} style={{ fontSize: 14, fontWeight: 700 }}>سبب رفض الاعتذار</label>
+            <textarea id={`rj-${r.booking}`} rows={2} maxLength={500} value={text} onChange={(e) => setText(e.target.value)} style={{ borderRadius: 12, border: `1px solid ${color.borderStrong}`, padding: 10, fontSize: 15, fontFamily: 'inherit' }} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button disabled={busy !== null} onClick={() => void decide(r.booking, false)} style={{ minHeight: 44, padding: '0 14px', borderRadius: 12, border: 'none', background: color.danger, color: color.ivory, fontWeight: 700, cursor: 'pointer' }}>تأكيد الرفض</button>
+              <button disabled={busy !== null} onClick={() => { setRejecting(null); setErr(null); }} style={{ minHeight: 44, padding: '0 14px', borderRadius: 12, border: `1px solid ${color.borderStrong}`, background: color.card, fontWeight: 700, cursor: 'pointer' }}>رجوع</button>
+            </div>
+          </>) : (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button disabled={busy !== null} onClick={() => void decide(r.booking, true)} style={{ minHeight: 44, padding: '0 14px', borderRadius: 12, border: 'none', background: color.primary, color: color.ivory, fontWeight: 700, cursor: 'pointer' }}>قبول العذر</button>
+              <button disabled={busy !== null} onClick={() => { setRejecting(r.booking); setText(''); setErr(null); }} style={{ minHeight: 44, padding: '0 14px', borderRadius: 12, border: `1px solid ${color.dangerInk}`, background: 'transparent', color: color.dangerInk, fontWeight: 700, cursor: 'pointer' }}>رفض العذر</button>
+            </div>
+          )}
+        </div>
+      ))}
+      {err && <p role="alert" style={{ margin: 0, color: color.dangerInk, fontSize: 14 }}>{err}</p>}
+    </section>
+  );
+}
 const hhmm = (iso: string, tz: string) =>
   new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
 const hoursToHHMM = (h: number) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
@@ -732,6 +782,7 @@ function ScheduleLive() {
       <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>المواعيد</h1>
       <Segmented role="tablist" options={[['sessions', 'الجلسات'], ['avail', 'الإتاحة']] as const} value={SD.tab} onChange={(k) => up('sched', { tab: k })} />
       {SD.tab === 'sessions' && <>
+        <ExcusesPanel />
         {booked.length === 0 && <p style={muted(15, { padding: 24, textAlign: 'center' })}>لا توجد جلسات محجوزة.</p>}
         {booked.map((o) => {
           const started = new Date(o.starts_at).getTime() <= now;
@@ -742,6 +793,7 @@ function ScheduleLive() {
               {o.bookings.map((b) => (
                 <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${color.divider}`, paddingTop: 8 }}>
                   <span style={{ fontSize: 14 }}><strong>{b.student_name}</strong>{b.assignment_title ? ` · ${b.assignment_title}` : ''}</span>
+                  {b.excuse && <span style={{ alignSelf: 'flex-start', fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: EXCUSE_BADGE[b.excuse.status][1], color: EXCUSE_BADGE[b.excuse.status][2] }}>{EXCUSE_BADGE[b.excuse.status][0]}</span>}
                   {b.note && <span style={muted(13)}>ملاحظة الطالب: {b.note}</span>}
                   {started ? (<>
                     <div role="radiogroup" aria-label={`حضور ${b.student_name}`} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

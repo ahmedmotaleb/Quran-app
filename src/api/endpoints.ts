@@ -24,7 +24,16 @@ export interface ApiSlot { id: number; teacher: number; teacher_name: string; ki
 export interface ApiBooking {
   id: number; occurrence: ApiSlot; student: number; student_name: string; status: 'confirmed' | 'cancelled'; assignment: number | null;
   note: string; attendance: string; cancelled_at: string | null; cancel_reason: string; created_at: string; can_join: boolean;
-  has_meeting_link: boolean;
+  has_meeting_link: boolean; excuse: ApiExcuse | null; excuse_deadline: string; can_excuse: boolean;
+}
+/** A student's excuse for a booking. `reason`/`teacher_response` are absent for parents (status only). */
+export interface ApiExcuse {
+  booking: number; status: 'pending' | 'approved' | 'rejected'; requested_at: string; reviewed_at: string | null; overridden: boolean;
+  reason?: string; teacher_response?: string;
+}
+export interface ApiExcuseRow extends ApiExcuse {
+  student: { id: number; name: string }; teacher: { id: number; name: string }; starts_at: string; kind: string; attendance: string;
+  teacher_status: string; override_reason: string;
 }
 
 // ---- auth ----
@@ -55,7 +64,12 @@ export const slots = (teacherId: number) => api<ApiSlot[]>('GET', `teachers/${te
 export const bookings = () => api<Page<ApiBooking>>('GET', 'bookings?page_size=100');
 export const book = (occurrence: number, key: string, assignment: number | null, note: string) =>
   api<ApiBooking>('POST', 'bookings', { occurrence, assignment, note }, { idempotencyKey: key });
+/** Teacher (own session) or admin. Students cannot cancel: they send an excuse. */
 export const cancelBooking = (id: number, reason = '') => api<ApiBooking>('POST', `bookings/${id}/cancel`, { reason });
+export const requestExcuse = (id: number, reason: string) => api<ApiExcuse>('POST', `bookings/${id}/excuse`, { reason });
+export const teacherExcuses = (status = 'pending') => api<{ results: ApiExcuseRow[] }>('GET', `teacher/excuses?status=${status}`);
+export const reviewExcuse = (bookingId: number, approve: boolean, response: string) =>
+  api<ApiExcuse>('POST', `teacher/bookings/${bookingId}/excuse/${approve ? 'approve' : 'reject'}`, { response });
 export const reschedule = (id: number, occurrence: number, key: string) =>
   api<ApiBooking>('POST', `bookings/${id}/reschedule`, { occurrence }, { idempotencyKey: key });
 export { newIdempotencyKey };
@@ -118,7 +132,7 @@ export const teacherStudents = () => api<Page<ApiTeacherStudent>>('GET', 'teache
 export interface ApiTeacherOcc {
   id: number; kind: 'individual' | 'group'; starts_at: string; ends_at: string; capacity: number; status: string;
   meeting_provider: string; meeting_url: string;
-  bookings: { id: number; student: number; student_name: string; attendance: string; assignment_title: string; note: string }[];
+  bookings: { id: number; student: number; student_name: string; attendance: string; assignment_title: string; note: string; excuse: ApiExcuse | null }[];
 }
 export const teacherOccurrences = (days = 8) => api<ApiTeacherOcc[]>('GET', `teacher/occurrences?days=${days}`);
 export const openSlot = (starts_at: string, minutes = 45) => api<ApiTeacherOcc>('POST', 'teacher/occurrences', { starts_at, minutes });
@@ -194,6 +208,7 @@ export function toSession(b: ApiBooking): Session {
     id: String(b.id), t: String(o.teacher), teacherName: o.teacher_name, h: 0, type: o.kind === 'group' ? 'جماعية' : 'فردية', dur: minutes,
     status: b.status === 'cancelled' ? 'cancelled' : past ? 'completed' : 'confirmed',
     task: b.assignment ? String(b.assignment) : null, note: b.note, startsAt: o.starts_at, endsAt: o.ends_at, canJoin: b.can_join, hasLink: b.has_meeting_link, attendance: b.attendance,
+    excuse: b.excuse, canExcuse: b.can_excuse, excuseDeadline: b.excuse_deadline,
   };
 }
 

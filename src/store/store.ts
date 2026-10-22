@@ -577,14 +577,12 @@ export function confirmBooking() {
   set({ sessions, avail: markSlot(s.avail, b.t, b.day, b.h, true) });
   bookingDone(id);
 }
-export function cancelSession(x: Session) {
-  if (LIVE) { set({ sheet: null }); live.cancel(x.id); return; }
-  set((st) => ({
-    sheet: null,
-    sessions: st.sessions.map((y) => (y.id === x.id ? { ...y, status: 'cancelled' } : y)),
-    avail: x.day !== undefined ? markSlot(st.avail, x.t, x.day, x.h, false) : st.avail,
-  }));
-  toast('تم إلغاء الحجز');
+/** Students never cancel a session; they ask to be excused and the teacher decides (owner decision 23 Oct 2026). */
+export async function requestExcuse(x: Session, reason: string): Promise<string | null> {
+  if (LIVE) return live.requestExcuse(x.id, reason);
+  set((st) => ({ sessions: st.sessions.map((y) => (y.id === x.id ? { ...y, excuse: { status: 'pending', reason }, canExcuse: false } : y)) }));
+  toast('أُرسل الاعتذار إلى معلمك');
+  return null;
 }
 export function rescheduleSession(x: Session) {
   set({ bk: { t: x.t, type: x.type, day: x.day || 0, h: null, note: '', task: x.task, error: null, resched: x.id, loading: false, busy: false, key: null } });
