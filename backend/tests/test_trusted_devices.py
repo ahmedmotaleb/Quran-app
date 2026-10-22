@@ -110,3 +110,21 @@ def test_devices_are_private_to_each_admin(admin, world):
     assert client_for(world.admin).post(f"/api/v1/admin/trusted-devices/{d.pk}/revoke").status_code == 404
     assert client_for(world.admin).get("/api/v1/admin/trusted-devices").json()["results"] == []
     assert client_for(world.t1).get("/api/v1/admin/trusted-devices").status_code == 403
+
+
+def test_trusted_devices_report_is_read_only_and_prints_no_secrets(admin):
+    import json
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    c = browser()
+    login(c)
+    raw = login(c, otp=code(admin), trust_device=True).cookies[COOKIE].value
+    out = StringIO()
+    call_command("trusted_devices_report", stdout=out)
+    row = json.loads(out.getvalue().splitlines()[0])
+    assert row["admin"] == admin.pk and row["devices_active"] == 1 and row["devices_active_matching"] == 1
+    assert row["audit_30d"]["auth.device_trusted"] == 1
+    assert raw not in out.getvalue() and "@" not in out.getvalue()
+    assert TrustedDevice.objects.count() == 1
