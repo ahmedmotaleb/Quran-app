@@ -114,10 +114,12 @@ jobs:
         run: |
           P="${{ vars.GCP_PROJECT_ID }}"
           SINCE=$(date -u -d "$HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)
-          gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.requestUrl:"/api/v1/media/" AND httpRequest.requestMethod="POST" AND timestamp>="'$SINCE'"' \
-            --project "$P" --limit 100 --format json > /tmp/req.json
+          gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.requestMethod="POST" AND httpRequest.requestUrl:"media" AND timestamp>="'$SINCE'"' \
+            --project "$P" --limit 200 --format json > /tmp/req.json || echo "::warning::request log read failed"
+          gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.requestMethod="POST" AND timestamp>="'$SINCE'"' \
+            --project "$P" --limit 5 --format json > /tmp/any.json || true
           gcloud logging read 'resource.type="cloud_run_revision" AND severity>=WARNING AND (jsonPayload.msg:"media" OR jsonPayload.path:"/api/v1/media/" OR textPayload:"/api/v1/media/" OR jsonPayload.request:"/api/v1/media/") AND timestamp>="'$SINCE'"' \
-            --project "$P" --limit 100 --format json > /tmp/app.json
+            --project "$P" --limit 100 --format json > /tmp/app.json || echo "::warning::app log read failed"
           python3 - <<'PY'
           import json, re
           def family(ua):
@@ -127,7 +129,8 @@ jobs:
               wv = " webview" if "; wv)" in ua else ""
               return f"{br}{'/' + v.group(1) if v else ''} {os_}{wv}"
           reqs = json.load(open("/tmp/req.json"))
-          print(f"{len(reqs)} media upload requests")
+          anyp = json.load(open("/tmp/any.json"))
+          print(f"::notice title=counts::{len(reqs)} media upload requests; sample POST urls: {[re.sub(r'[?].*', '', (a.get('httpRequest') or {}).get('requestUrl', ''))[-60:] for a in anyp]}")
           for r in reqs:
               h = r.get("httpRequest", {})
               path = re.sub(r"\?.*", "", h.get("requestUrl", "")).split("/api/v1/")[-1]
@@ -135,7 +138,7 @@ jobs:
                       f"lat={h.get('latency','?')} {family(h.get('userAgent',''))} trace={str(r.get('trace','')).split('/')[-1][:12]}")
               print(line); print(f"::notice title=upload::{line}")
           app = json.load(open("/tmp/app.json"))
-          print(f"{len(app)} related app log lines")
+          print(f"::notice title=counts::{len(app)} related app log lines")
           for r in app:
               j = r.get("jsonPayload") or {}
               keep = {k: j[k] for k in ("msg", "status_code", "status", "error", "purpose", "bytes", "request_id", "detail", "code") if k in j}
