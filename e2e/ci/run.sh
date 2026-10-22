@@ -10,8 +10,8 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; cd "$ROOT"
 PY="${PYTHON:-python}"
 shell_py() { bash e2e/ci/py.sh "$1"; }
 reseed() {
-  (cd backend && "$PY" manage.py flush --noinput && "$PY" manage.py seed_dev >/dev/null && psql -q "$DATABASE_URL" -f quran-data.sql >/dev/null) \
-    || { echo "::error title=e2e::reseed failed"; exit 1; }
+  (cd backend && "$PY" manage.py flush --noinput && "$PY" manage.py seed_dev >/dev/null && psql -q "$DATABASE_URL" -f quran-data.sql >/dev/null) 2>/tmp/reseed.err \
+    || { echo "::error title=e2e::reseed failed: $(tail -n 3 /tmp/reseed.err 2>/dev/null | tr '\n' ' ' | cut -c1-400)"; exit 1; }
 }
 failed=(); passed=()
 run() {  # suite [base-url]
