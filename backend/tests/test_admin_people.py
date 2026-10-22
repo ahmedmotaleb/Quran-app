@@ -73,7 +73,9 @@ def test_suspend_requires_reason_and_blocks_sign_in_then_reactivate(world):
     assert c.post(f"{A}/users/{world.s2.id}/status", {"status": "suspended", "reason": "مخالفة"}, format="json").json()["status"] == "suspended"
     assert APIClient().post("/api/v1/auth/login", {"email": "s2@x.test", "password": PW}, format="json").json()["code"] == "account_suspended"
     assert c.post(f"{A}/users/{world.s2.id}/setup-link").status_code == 409
-    assert c.post(f"{A}/users/{world.s2.id}/status", {"status": "active"}, format="json").json()["status"] == "active"
+    assert c.post(f"{A}/users/{world.s2.id}/status", {"status": "active"}, format="json").status_code == 400  # reason required
+    r = c.post(f"{A}/users/{world.s2.id}/status", {"status": "active", "reason": "تمت مراجعة حالة الطالب"}, format="json").json()
+    assert r["status"] == "active" and r["status_reason"] == "تمت مراجعة حالة الطالب"
     assert APIClient().post("/api/v1/auth/login", {"email": "s2@x.test", "password": PW}, format="json").status_code == 200
 
 

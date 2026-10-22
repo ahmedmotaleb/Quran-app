@@ -257,13 +257,16 @@ export async function confirm(): Promise<string | null> {
   }
 }
 
-export async function cancel(id: string) {
+/** «طلب اعتذار»: returns an Arabic error to show in the dialog, or null when sent. */
+export async function requestExcuse(id: string, reason: string): Promise<string | null> {
   try {
-    await E.cancelBooking(+id);
+    await E.requestExcuse(+id, reason.trim());
     await loadStudentData();
-    toast('تم إلغاء الحجز');
+    toast('أُرسل الاعتذار إلى معلمك');
+    return null;
   } catch (e) {
-    toast(msg(e), 'alert');
+    const err = e as ApiError;
+    return err.field?.('reason') ?? msg(e);
   }
 }
 
@@ -444,6 +447,18 @@ export async function saveMeetingLink(occId: number, url: string): Promise<strin
   catch (e) { return e instanceof ApiError ? (e.fields.url?.[0] ?? e.message) : msg(e); }
   await refreshSchedule();
   return null;
+}
+
+/** Teacher decides a student's excuse (a response is required to reject). Returns an Arabic error, or null. */
+export async function reviewExcuse(bookingId: number, approve: boolean, response: string): Promise<string | null> {
+  try {
+    await E.reviewExcuse(bookingId, approve, response.trim());
+    toast(approve ? 'قُبل العذر وأُبلغ الطالب' : 'رُفض العذر وأُبلغ الطالب');
+    await refreshSchedule();
+    return null;
+  } catch (e) {
+    return (e as ApiError).field?.('response') ?? msg(e);
+  }
 }
 
 export async function teacherCancelBooking(bookingId: number) {

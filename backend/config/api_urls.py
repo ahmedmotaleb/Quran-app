@@ -87,6 +87,10 @@ urlpatterns = [
     path("bookings/<int:pk>/reschedule", scheduling.BookingReschedule.as_view()),
     path("bookings/<int:pk>/attendance", scheduling.BookingAttendance.as_view()),
     path("bookings/<int:pk>/join", scheduling.BookingJoin.as_view()),
+    path("bookings/<int:pk>/excuse", scheduling.BookingExcuseCreate.as_view()),
+    path("teacher/excuses", scheduling.TeacherExcuses.as_view()),
+    path("teacher/bookings/<int:pk>/excuse/approve", scheduling.TeacherExcuseApprove.as_view()),
+    path("teacher/bookings/<int:pk>/excuse/reject", scheduling.TeacherExcuseReject.as_view()),
     # Admin: circles, sessions, bookings
     path("admin/circles", sched_admin.AdminCircles.as_view()),
     path("admin/circles/<int:pk>", sched_admin.AdminCircleDetail.as_view()),
@@ -98,6 +102,9 @@ urlpatterns = [
     path("admin/bookings", sched_admin.AdminBookings.as_view()),
     path("admin/bookings/counts", sched_admin.AdminBookingCounts.as_view()),
     path("admin/bookings/<int:pk>/cancel", sched_admin.AdminBookingCancel.as_view()),
+    path("admin/excuses", sched_admin.AdminExcuses.as_view()),
+    path("admin/bookings/<int:pk>/excuse-override", sched_admin.AdminExcuseOverride.as_view()),
+    path("admin/users/<int:pk>/discipline", sched_admin.AdminStudentDiscipline.as_view()),
     # Admin: courses, lessons, enrollments, quizzes
     path("teacher/content", teacher_content.TeacherContent.as_view()),
     path("teacher/courses", teacher_content.TeacherCourses.as_view()),

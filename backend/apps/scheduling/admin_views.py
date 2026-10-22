@@ -287,3 +287,61 @@ class AdminCircleMemberEnd(AdminView):
         audit("admin.circle_member_removed", actor=request.user, target=m, request=request, circle=m.circle_id,
               student=m.student_id, bookings_cancelled=n)
         return Response({"bookings_cancelled": n})
+
+
+# ---- Excuses and the absence rule (admin) ------------------------------------------------------
+class AdminExcuses(APIView):
+    """GET ?status=pending (default) | approved | rejected | all, optional ?student= — every excuse."""
+
+    permission_classes = [IsAdminRole]
+
+    def get(self, request):
+        from .models import BookingExcuse
+        from .views import _excuse_rows
+
+        qs = BookingExcuse.objects.all()
+        st = request.query_params.get("status", "pending")
+        if st != "all":
+            qs = qs.filter(status=st)
+        if str(request.query_params.get("student", "")).isdigit():
+            qs = qs.filter(student_id=int(request.query_params["student"]))
+        return Response({"results": _excuse_rows(qs)})
+
+
+class AdminExcuseOverride(APIView):
+    """«اعتماد العذر إداريًا»: an audited correction (reason required); the teacher's decision stays recorded."""
+
+    permission_classes = [IsAdminRole]
+
+    def post(self, request, pk):
+        from . import excuses
+        from .views import excuse_out
+
+        ex = excuses.admin_override(booking_id=pk, admin=request.user, reason=str(request.data.get("reason", "")), request=request)
+        return Response(excuse_out(ex))
+
+
+class AdminStudentDiscipline(APIView):
+    """Attendance/discipline figures for one student, with the bookings that count and every excuse."""
+
+    permission_classes = [IsAdminRole]
+
+    def get(self, request, pk):
+        from apps.accounts.models import Role, User
+
+        from . import excuses
+        from .models import Booking, BookingExcuse
+        from .views import _excuse_rows
+
+        s = User.objects.filter(pk=pk, role=Role.STUDENT).first()
+        if s is None:
+            raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
+        absences = (Booking.objects.filter(student=s, status=Booking.Status.CONFIRMED, attendance__in=["absent", "excused"])
+                    .select_related("occurrence__teacher").order_by("-occurrence__starts_at")[:50])
+        ex = {e.booking_id: e for e in BookingExcuse.objects.filter(student=s)}
+        counted = set(Booking.objects.filter(excuses.unexcused_q(), student=s).values_list("pk", flat=True))
+        return Response({**excuses.summary(s),
+                         "absences": [{"booking": b.pk, "starts_at": b.occurrence.starts_at.isoformat(), "teacher": b.occurrence.teacher.full_name,
+                                       "attendance": b.attendance, "counts": b.pk in counted,
+                                       "excuse": ex[b.pk].status if b.pk in ex else None} for b in absences],
+                         "excuses": _excuse_rows(BookingExcuse.objects.filter(student=s))})

@@ -510,8 +510,11 @@ class AdminUserStatus(APIView):
         s = StatusChangeSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         old = user.status
+        if old == AccountStatus.SUSPENDED and s.validated_data["status"] == AccountStatus.ACTIVE and len(s.validated_data["reason"].strip()) < 3:
+            raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"reason": ["اذكر سبب إعادة التفعيل."]})
         user.status = s.validated_data["status"]
-        user.save(update_fields=["status"])
+        user.status_reason, user.status_changed_at = s.validated_data["reason"].strip()[:200], timezone.now()
+        user.save(update_fields=["status", "status_reason", "status_changed_at"])
         if user.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
             # Sessions are re-checked on every request; native tokens are revoked outright.
             AuthToken.objects.filter(user=user, revoked_at__isnull=True).update(revoked_at=timezone.now())

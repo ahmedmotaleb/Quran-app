@@ -44,7 +44,7 @@ class BookingScopeMixin:
 
     def get_queryset(self):
         u = self.request.user
-        qs = Booking.objects.select_related("occurrence__teacher", "student")
+        qs = Booking.objects.select_related("occurrence__teacher", "student", "excuse")
         if u.role == Role.TEACHER:
             qs = qs.filter(occurrence__teacher=u)
         else:
@@ -136,13 +136,15 @@ class BookingAttendance(APIView):
             raise ApiError("not_started", "لا يمكن تسجيل الحضور قبل بدء الجلسة.", 409)
         s = AttendanceSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        old = b.attendance
-        b.attendance, b.attendance_marked_by, b.attendance_marked_at = s.validated_data["attendance"], request.user, timezone.now()
-        b.save(update_fields=["attendance", "attendance_marked_by", "attendance_marked_at", "updated_at"])
-        audit("booking.attendance", actor=request.user, target=b, request=request, old=old, new=b.attendance)
-        if b.attendance != old:
-            from django.db import transaction as tx
+        from django.db import transaction as tx
 
+        from . import excuses
+        with tx.atomic():  # the mark and the absence rule (warnings / suspension) succeed or fail together
+            b = Booking.objects.select_for_update().select_related("occurrence").get(pk=b.pk)
+            old = b.attendance
+            excuses.mark_attendance(b, s.validated_data["attendance"], request.user)
+            audit("booking.attendance", actor=request.user, target=b, request=request, old=old, new=b.attendance)
+        if b.attendance != old:
             from .services import notify_attendance
             tx.on_commit(lambda: notify_attendance(b.pk))
         return Response(BookingSerializer(b).data)
@@ -170,7 +172,7 @@ class TeacherOccurrences(APIView):
         today = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
         qs = (SessionOccurrence.objects.filter(teacher=request.user, starts_at__gte=today - timedelta(days=7), starts_at__lt=today + timedelta(days=days + 1))
               .exclude(status=SessionOccurrence.Status.CANCELLED)
-              .prefetch_related(Prefetch("bookings", queryset=Booking.objects.select_related("student", "assignment")))
+              .prefetch_related(Prefetch("bookings", queryset=Booking.objects.select_related("student", "assignment", "excuse")))
               .order_by("starts_at"))
         return Response(TeacherOccurrenceSerializer(qs, many=True).data)
 
@@ -263,3 +265,70 @@ class BookingJoin(APIView):
         from .meeting import LABELS
 
         return Response({"url": o.meeting_url, "provider": o.meeting_provider, "provider_label": LABELS.get(o.meeting_provider, "")})
+
+
+# ---- Excuses (owner decision 23 Oct 2026; rules in excuses.py) ----------------------------------
+def excuse_out(ex, *, private: bool = True) -> dict:
+    """`private`: the reason and the teacher's response (student, teacher, admin). Parents get the status only."""
+    out = {"booking": ex.booking_id, "status": ex.status, "requested_at": ex.requested_at.isoformat(),
+           "reviewed_at": ex.reviewed_at.isoformat() if ex.reviewed_at else None, "overridden": bool(ex.override_at)}
+    if private:
+        out.update(reason=ex.reason, teacher_response=ex.teacher_response)
+    return out
+
+
+class BookingExcuseCreate(APIView):
+    """Student: «طلب اعتذار» for an own confirmed booking, before the deadline. One per booking."""
+
+    permission_classes = [IsStudent]
+    throttle_scope = "booking"
+
+    def post(self, request, pk):
+        from . import excuses
+
+        ex, created = excuses.request_excuse(booking_id=pk, student=request.user, reason=str(request.data.get("reason", "")), request=request)
+        return Response(excuse_out(ex), status=201 if created else 200)
+
+
+class TeacherExcuseReview(APIView):
+    """Teacher of the session: approve (response optional) or reject (response required)."""
+
+    permission_classes = [IsTeacher]
+    approve = True
+
+    def post(self, request, pk):
+        from . import excuses
+
+        ex = excuses.review(booking_id=pk, teacher=request.user, approve=self.approve, response=str(request.data.get("response", "")), request=request)
+        return Response(excuse_out(ex))
+
+
+class TeacherExcuseApprove(TeacherExcuseReview):
+    approve = True
+
+
+class TeacherExcuseReject(TeacherExcuseReview):
+    approve = False
+
+
+def _excuse_rows(qs):
+    return [{**excuse_out(ex), "student": {"id": ex.student_id, "name": ex.student.full_name},
+             "teacher": {"id": ex.booking.occurrence.teacher_id, "name": ex.booking.occurrence.teacher.full_name},
+             "starts_at": ex.booking.occurrence.starts_at.isoformat(), "kind": ex.booking.occurrence.kind,
+             "attendance": ex.booking.attendance, "teacher_status": ex.teacher_status, "override_reason": ex.override_reason}
+            for ex in qs.select_related("student", "booking__occurrence__teacher").order_by("requested_at")[:200]]
+
+
+class TeacherExcuses(APIView):
+    """GET ?status=pending (default) | approved | rejected | all — excuses for the teacher's own sessions."""
+
+    permission_classes = [IsTeacher]
+
+    def get(self, request):
+        from .models import BookingExcuse
+
+        qs = BookingExcuse.objects.filter(booking__occurrence__teacher=request.user)
+        st = request.query_params.get("status", "pending")
+        if st != "all":
+            qs = qs.filter(status=st)
+        return Response({"results": _excuse_rows(qs)})

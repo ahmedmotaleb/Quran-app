@@ -108,17 +108,20 @@ class TestBookingApi:
         assert r.status_code == 201
         bid = r.json()["id"]
         assert c.post("/api/v1/bookings", {"occurrence": occ.pk}, HTTP_IDEMPOTENCY_KEY="api-1").status_code == 200
-        assert c.post(f"/api/v1/bookings/{bid}/cancel").json()["status"] == "cancelled"
+        # Students never cancel (owner decision 23 Oct 2026); the teacher can, and the seat is free again.
+        assert c.post(f"/api/v1/bookings/{bid}/cancel").json()["code"] == "excuse_instead"
+        assert client_for(world.t1).post(f"/api/v1/bookings/{bid}/cancel").json()["status"] == "cancelled"
         assert client_for(world.s2).post("/api/v1/bookings", {"occurrence": occ.pk}, HTTP_IDEMPOTENCY_KEY="api-2").status_code == 201
 
     def test_missing_idempotency_key_rejected(self, world):
         r = client_for(world.s1).post("/api/v1/bookings", {"occurrence": occurrence(world.t1).pk})
         assert r.json()["code"] == "idempotency_key_required"
 
-    def test_student_cannot_cancel_inside_window_but_teacher_can(self, world):
-        occ = occurrence(world.t1, in_hours=5)  # default cancel window 12 h, lead time 60 min
+    def test_student_cannot_cancel_at_all_but_teacher_can(self, world):
+        occ = occurrence(world.t1, in_hours=5)
         b, _ = services.book(student=world.s1, occurrence_id=occ.pk, idempotency_key="w")
-        assert client_for(world.s1).post(f"/api/v1/bookings/{b.pk}/cancel").json()["code"] == "cancel_window"
+        r = client_for(world.s1).post(f"/api/v1/bookings/{b.pk}/cancel")
+        assert r.status_code == 403 and r.json()["code"] == "excuse_instead" and "طلب اعتذار" in r.json()["message"]
         assert client_for(world.t1).post(f"/api/v1/bookings/{b.pk}/cancel").status_code == 200
 
     def test_other_users_cannot_see_or_cancel_booking(self, world):

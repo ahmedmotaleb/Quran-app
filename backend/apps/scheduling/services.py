@@ -83,6 +83,9 @@ def cancel(*, booking_id: int, by, reason: str = "", now: datetime | None = None
         is_teacher = b.occurrence.teacher_id == by.pk
         if not (is_owner or is_teacher or by.role == Role.ADMIN):
             raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
+        if is_owner and by.role == Role.STUDENT and reason != "rescheduled":
+            # Owner decision (23 Oct 2026): students never cancel; they send «طلب اعتذار» (apps/scheduling/excuses.py).
+            raise ApiError("excuse_instead", "لا يمكن إلغاء الجلسة. إن لم تستطع الحضور فأرسل «طلب اعتذار».", 403)
         if b.status != Booking.Status.CONFIRMED:
             return b  # idempotent
         if b.occurrence.starts_at <= now:
@@ -93,8 +96,6 @@ def cancel(*, booking_id: int, by, reason: str = "", now: datetime | None = None
         b.save(update_fields=["status", "cancelled_at", "cancelled_by", "cancel_reason", "updated_at"])
         if not is_owner and reason != "rescheduled":
             transaction.on_commit(lambda: _notify_cancelled(b.pk))
-        elif is_owner and reason != "rescheduled":
-            transaction.on_commit(lambda: _notify_teacher(b.pk, "booking_cancelled_by_student", "ألغى طالب حجزه"))
         return b
 
 

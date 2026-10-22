@@ -72,9 +72,9 @@ if (process.env.PAST_CMD) execSync(process.env.PAST_CMD, { stdio: 'inherit' });
 const Y = await session('teacher@halqa.app');
 await step(Y.page, 'attendance on a past session', async () => {
   await Y.page.getByRole('navigation').getByRole('button', { exact: true, name: 'المواعيد' }).click();
-  await Y.app.getByRole('radio', { name: 'غاب' }).first().click();
+  await Y.app.getByRole('radio', { name: 'غائب', exact: true }).first().click();
   await Y.page.getByText('حُفظ الحضور').waitFor();
-  await Y.app.getByRole('radio', { name: 'غاب', checked: true }).first().waitFor();
+  await Y.app.getByRole('radio', { name: 'غائب', exact: true, checked: true }).first().waitFor();
 });
 await Y.page.screenshot({ path: out + '/t2-sessions.png' });
 console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no page errors');

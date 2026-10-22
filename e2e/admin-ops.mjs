@@ -99,7 +99,7 @@ await step('6. archive, find under «مؤرشف», restore', async () => {
   await page.getByRole('button', { name: 'سارة أحمد', exact: true }).waitFor({ state: 'detached' });
   await page.getByRole('group', { name: 'تصفية حسب الحالة' }).getByRole('button', { name: /مؤرشف/ }).click();
   await pick('سارة أحمد');
-  await run('تفعيل');
+  await run('تفعيل', (d) => d.locator('#bk-r').fill('تمت مراجعة حالة الطالب'));
   await page.getByText('تم تنفيذ الإجراء على عنصر واحد').last().waitFor();
 });
 await page.screenshot({ path: out + '/admin-ops.png' });

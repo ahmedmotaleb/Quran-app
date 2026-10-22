@@ -74,7 +74,9 @@ await step('suspend needs a reason; reactivate; both persist', async () => {
   await dialog().getByRole('button', { name: 'إيقاف الحساب' }).click();
   await dialog().getByText('اكتب السبب (3 أحرف على الأقل).').waitFor();
   await dialog().locator('#rs').fill('اختبار الإيقاف'); await dialog().getByRole('button', { name: 'إيقاف الحساب' }).click();
-  await reopen('الطلاب', SN2); await dialog().getByRole('button', { name: 'إعادة التفعيل' }).click();
+  await reopen('الطلاب', SN2); await dialog().getByText('سبب الحالة: اختبار الإيقاف', { exact: false }).waitFor();
+  await dialog().getByRole('button', { name: 'إعادة التفعيل' }).click();
+  await dialog().locator('#rs').fill('تمت مراجعة حالة الطالب'); await dialog().getByRole('button', { name: 'إعادة التفعيل' }).click();
   await reopen('الطلاب', SN2); await dialog().getByRole('button', { name: 'إيقاف الحساب' }).waitFor();
 });
 await step('link the student to a teacher and a parent; both persist', async () => {

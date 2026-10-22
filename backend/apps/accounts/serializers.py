@@ -109,7 +109,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "level", "approved", "has_password",
-                  "date_joined", "last_login", "teachers", "guardians", "children"]
+                  "date_joined", "last_login", "teachers", "guardians", "children", "status_reason", "status_changed_at"]
         read_only_fields = fields
 
     def get_teachers(self, u):

@@ -57,6 +57,8 @@ reseed; run account-delete
 # Recording failure found on a real Android phone (22 Oct): no demo task ids, failed uploads kept on the device.
 reseed; run recording-flow
 reseed; run admin-dialogs
+# Excuses and the absence rule: no student cancel, teacher decides, 3rd unexcused absence suspends.
+reseed; ABS_CMD="bash e2e/ci/py.sh absences.py" run excuses
 # 5. PWA: manifest, installability, offline shell, no API data in caches (preview builds); an update published
 #    during a recording waits until the recording is submitted.
 reseed; run pwa http://localhost:4173/

@@ -1,13 +1,14 @@
+import { useState, type FormEvent } from 'react';
 import { color, font } from '@/theme/tokens';
-import type { Slot } from '@/data/types';
+import type { Session, Slot } from '@/data/types';
 import { Icon } from '@/components/Icon';
 import {
-  Avatar, BackHeader, Badge, Chips, KVCard, SearchInput, card, dangerOutlineBtn, iconTile, listBtn, muted, outlineBtn, primaryBtn,
+  Avatar, BackHeader, Badge, Chips, FieldError, KVCard, SearchInput, card, iconTile, inputStyle, labelStyle, listBtn, muted, outlineBtn, primaryBtn,
 } from '@/components/ui';
 import { LESSONS } from '@/data/demo';
 import { dayL, timeIn, tzLabel, type BadgeSpec } from '@/lib/format';
 import {
-  back, cancelSession, confirmBooking, go, openSheet, openTeacher, replace, rescheduleSession, reset, setState, startQuiz, toast, up, useApp,
+  back, confirmBooking, requestExcuse, go, openTeacher, replace, rescheduleSession, reset, setState, startQuiz, toast, up, useApp,
 } from '@/store/store';
 import { decoSession, pastSessions, slotTime, teacherById, upcomingSessions, weekDays } from '@/store/selectors';
 import { loadStudentData } from '@/store/live';
@@ -317,13 +318,12 @@ export function BookingDone() {
 
 export function SessionDetails() {
   const s = useApp();
+  const [asking, setAsking] = useState(false);
   const x0 = s.sessions.find((y) => y.id === s.params.id);
   if (!x0) return <BackHeader title="تفاصيل الجلسة" />;
   const x = decoSession(x0, s);
-  const cancel = () => openSheet({
-    kind: 'confirm', title: 'إلغاء الحجز؟', body: `سيُلغى موعدك مع ${x.teacherName} (${x.when}). الإلغاء مجاني قبل الموعد بـ ${useApp.getState().pub.cancel_hours} ساعة.`, ok: 'نعم، ألغِ الحجز', danger: true,
-    onOk: () => cancelSession(x0),
-  });
+  const ex = x0.excuse;
+  const att = ATTENDANCE[x0.attendance ?? ''];
   return (
     <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
       <BackHeader title="تفاصيل الجلسة" />
@@ -337,7 +337,9 @@ export function SessionDetails() {
           ['التاريخ والوقت', <span style={{ textAlign: 'left' }}><span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>{x.dateFull} · {x.timeL}</span><span style={{ display: 'block', fontSize: 12, color: color.muted }}>{x.tzL}</span></span>],
           ['النوع والمدة', `${x.type} · ${x.dur} دقيقة`],
           ['مهمة الجلسة', x.taskL],
+          ...(att ? [['الحضور', att] as [string, string]] : []),
         ]} />
+        {ex && <ExcuseStatus ex={ex} />}
         {x.note && <p style={{ margin: 0, fontSize: 14, color: color.body, background: color.sand, padding: 12, borderRadius: 12 }}>ملاحظتك: {x.note}</p>}
         {x.summary && (
           <div style={{ background: color.sageTint, borderRadius: 16, padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -352,11 +354,60 @@ export function SessionDetails() {
             {x.notToday && <p style={muted(13, { textAlign: 'center' })}>يُفتح دخول الجلسة قبل الموعد بـ 10 دقائق.</p>}
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => rescheduleSession(x0)} style={outlineBtn(52, 15, { flex: 1 })}>إعادة الجدولة</button>
-              <button onClick={cancel} style={dangerOutlineBtn(52, 15, { flex: 1 })}>إلغاء الحجز</button>
+              {/* Students never cancel: they ask to be excused and the teacher decides. */}
+              {!ex && (s.liveMode ? x0.canExcuse : true) && <button onClick={() => setAsking(true)} style={outlineBtn(52, 15, { flex: 1 })}>طلب اعتذار</button>}
             </div>
+            {!ex && s.liveMode && !x0.canExcuse && <p style={muted(13, { textAlign: 'center' })}>انتهى وقت إرسال الاعتذار. سيتم تسجيل الغياب بدون عذر إذا لم تحضر.</p>}
           </div>
         )}
       </div>
+      {asking && <ExcuseDialog x={x0} teacher={x.teacherName} when={`${x.dateFull} · ${x.timeL}`} type={`${x.type} · ${x.dur} دقيقة`} onClose={() => setAsking(false)} />}
+    </div>
+  );
+}
+
+const ATTENDANCE: Record<string, string> = { present: 'حضر', late: 'حضر متأخرًا', absent: 'غائب', excused: 'غاب بعذر' };
+
+function ExcuseStatus({ ex }: { ex: NonNullable<Session['excuse']> }) {
+  const [label, bg, fg] = ex.status === 'pending' ? ['الاعتذار قيد المراجعة', color.warnBg, color.warnInk]
+    : ex.status === 'approved' ? ['تم قبول الاعتذار', color.sageTint, color.primary] : ['تم رفض الاعتذار', color.dangerBg, color.dangerInk];
+  return (
+    <div role="status" style={{ background: bg, color: fg, borderRadius: 12, padding: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <strong style={{ fontSize: 15 }}>{label}</strong>
+      {ex.reason && <span style={{ fontSize: 14, color: color.body }}>سبب الاعتذار: {ex.reason}</span>}
+      {ex.teacher_response && <span style={{ fontSize: 14, color: color.body }}>رد المعلم: {ex.teacher_response}</span>}
+    </div>
+  );
+}
+
+/** «طلب اعتذار عن الجلسة»: the reason (5–500 characters) goes to the teacher, who approves or rejects it. */
+function ExcuseDialog({ x, teacher, when, type, onClose }: { x: Session; teacher: string; when: string; type: string; onClose: () => void }) {
+  const [reason, setReason] = useState(''); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    const r = reason.trim();
+    if (r.length < 5) return setErr('اكتب سبب الاعتذار (5 أحرف على الأقل).');
+    setBusy(true); setErr(null);
+    const fail = await requestExcuse(x, r);
+    if (fail) { setErr(fail); setBusy(false); } else onClose();
+  };
+  return (
+    <div role="dialog" aria-modal="true" aria-label="طلب اعتذار عن الجلسة" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}
+      style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(20,33,31,.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <form noValidate onSubmit={submit} style={{ background: color.ivory, width: '100%', maxWidth: 520, borderRadius: '20px 20px 0 0', padding: '20px 16px calc(20px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>طلب اعتذار عن الجلسة</h2>
+        <KVCard rows={[['المعلم', teacher], ['الموعد', when], ['نوع الجلسة', type]]} />
+        <p style={muted(13)}>لن يُلغى الحجز. يراجع معلمك الاعتذار ويقبله أو يرفضه.</p>
+        <label htmlFor="ex-r" style={labelStyle}>سبب الاعتذار</label>
+        <textarea id="ex-r" autoFocus rows={4} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} style={{ ...inputStyle(err), minHeight: 110, paddingTop: 10 }} />
+        <span style={muted(12)}>{reason.trim().length}/500</span>
+        <FieldError msg={err} />
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button type="button" disabled={busy} onClick={onClose} style={outlineBtn(52, 15, { flex: 1 })}>إلغاء</button>
+          <button type="submit" disabled={busy} style={primaryBtn(52, 15, { flex: 2 })}>{busy ? 'جارٍ الإرسال…' : 'إرسال الاعتذار'}</button>
+        </div>
+      </form>
     </div>
   );
 }

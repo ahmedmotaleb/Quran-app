@@ -146,7 +146,7 @@ def test_archived_list_and_restore_are_audited(world):
     assert admin.get(f"{A}/users", {"role": "student"}).json()["count"] == 1  # hidden from the normal list
     archived = admin.get(f"{A}/users", {"role": "student", "status": "archived"}).json()
     assert [u["id"] for u in archived["results"]] == [world.s2.id]
-    assert act(admin, "users", action="activate", ids=[world.s2.id]).json()["success"] == 1
+    assert act(admin, "users", action="activate", reason="مراجعة الحساب", ids=[world.s2.id]).json()["success"] == 1
     world.s2.refresh_from_db()
     assert world.s2.status == AccountStatus.ACTIVE
     assert AuditEvent.objects.filter(action="admin.bulk_activate").exists()

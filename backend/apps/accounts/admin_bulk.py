@@ -83,6 +83,17 @@ def _apply(qs, f):
         from apps.learning.models import Enrollment
 
         qs = qs.filter(Exists(Enrollment.objects.filter(student=OuterRef("pk"), course_id=f["course"], status=Enrollment.Status.ACTIVE)))
+    if "unexcused" in f:  # unexcused absences (derived from attendance + excuses): 1, 2 or 3 = three or more
+        from django.db.models import Count, IntegerField, Subquery
+        from django.db.models.functions import Coalesce
+
+        from apps.scheduling.excuses import unexcused_q
+        from apps.scheduling.models import Booking
+
+        n = (Booking.objects.filter(unexcused_q(), student=OuterRef("pk")).order_by().values("student")
+             .annotate(c=Count("pk")).values("c"))
+        qs = qs.filter(role=Role.STUDENT).annotate(_unexcused=Coalesce(Subquery(n, output_field=IntegerField()), 0))
+        qs = qs.filter(_unexcused__gte=3) if f["unexcused"] == "3" else qs.filter(_unexcused=int(f["unexcused"]))
     if f.get("unlinked"):  # students without an active teacher (the sidebar badge)
         qs = qs.filter(role=Role.STUDENT).exclude(Exists(TeacherAssignment.objects.filter(student=OuterRef("pk"), active=True)))
     return qs
@@ -93,7 +104,7 @@ USER_FILTERS = FilterSpec(
         "role": p_choice(Role.STUDENT, Role.TEACHER, Role.PARENT), "status": p_choice(*[x for x in AccountStatus.values if x != AccountStatus.DELETED]), "q": p_text,
         "joined_from": p_date, "joined_to": p_date, "active_from": p_date, "active_to": p_date,
         "approved": p_bool, "has_students": p_bool, "has_slots": p_bool, "circle": p_int, "teacher": p_int, "level": p_text,
-        "upcoming": p_bool, "overdue_review": p_bool, "linked": p_bool, "unlinked": p_bool, "course": p_int,
+        "upcoming": p_bool, "overdue_review": p_bool, "linked": p_bool, "unlinked": p_bool, "course": p_int, "unexcused": p_choice("1", "2", "3"),
     },
     apply=_apply,
     sorts={"name": ("full_name",), "email": ("email",), "joined": ("date_joined",), "last_login": ("last_login",), "status": ("status",)},
@@ -112,8 +123,8 @@ def _set_status(new: str):
             raise Skip("unchanged", "في هذه الحالة بالفعل.")
         if new == AccountStatus.SUSPENDED and u.status == AccountStatus.ARCHIVED:
             raise Refuse("archived", "الحساب مؤرشف؛ أعد تفعيله أولًا.")
-        u.status = new
-        u.save(update_fields=["status"])
+        u.status, u.status_reason, u.status_changed_at = new, reason[:200], timezone.now()
+        u.save(update_fields=["status", "status_reason", "status_changed_at"])
         if new in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
             AuthToken.objects.filter(user=u, revoked_at__isnull=True).update(revoked_at=timezone.now())
     return run
@@ -288,7 +299,8 @@ def _teachers_of(u: User) -> str:
 register(Resource(
     name="users", label="accounts.user", base=_base, filters=USER_FILTERS, describe=lambda u: u.full_name,
     actions={
-        "activate": Action(_set_status(AccountStatus.ACTIVE)),
+        # A reason is required: reactivating a suspended account (e.g. after the absence rule) must be explained.
+        "activate": Action(_set_status(AccountStatus.ACTIVE), reason_required=True),
         "suspend": Action(_set_status(AccountStatus.SUSPENDED), reason_required=True),
         "archive": Action(_set_status(AccountStatus.ARCHIVED), reason_required=True, destructive=True),
         "delete": Action(_delete, reason_required=True, destructive=True, confirm_always=True),

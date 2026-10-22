@@ -38,7 +38,9 @@ class AppSettings(models.Model):
     support_whatsapp = models.CharField(max_length=32, blank=True)
     show_support_button = models.BooleanField(default=False)
     default_timezone = models.CharField(max_length=64, default="Africa/Cairo")
-    cancel_hours = models.PositiveSmallIntegerField(default=12)
+    cancel_hours = models.PositiveSmallIntegerField(default=12)  # teachers' cancellations (students ask for an excuse)
+    # A student may send «طلب اعتذار» until this many minutes before the session starts.
+    excuse_deadline_minutes = models.PositiveSmallIntegerField(default=60)
     join_minutes = models.PositiveSmallIntegerField(default=10)
     individual_minutes = models.PositiveSmallIntegerField(default=45)
     group_minutes = models.PositiveSmallIntegerField(default=60)
