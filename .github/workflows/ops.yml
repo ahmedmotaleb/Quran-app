@@ -8,12 +8,15 @@ on:
       task:
         description: What to run
         type: choice
-        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check]
+        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check, upload-trace]
       admin_email:
         description: create-admin / promote-admin — the admin's email (create-admin takes the password from the ADMIN_PASSWORD secret; promote-admin keeps the account's password)
         required: false
       url:
         description: smoke-test only — the app address, e.g. https://halqa-<number>.europe-west1.run.app/
+        required: false
+      hours:
+        description: upload-trace only — how many hours back to look (default 72)
         required: false
       accept_tanzil_terms:
         description: import/verify only — I accept the Tanzil Quran Text license (verbatim text, attribution, link to tanzil.net)
@@ -88,6 +91,56 @@ jobs:
               line = f"{r.get('timestamp','')[:19]} {json.dumps(keep, ensure_ascii=False)[:400]}"
               print(line)
               print(f"::notice title=error::{line}")
+          PY
+
+  # Media uploads (recitations, voice notes) in the last N hours: what Cloud Run answered (status, size, latency,
+  # response type, request id, browser/OS family) and the app's own warning/error lines for those requests. No
+  # cookies, no bodies, no full user agent, no URLs with tokens.
+  upload-trace:
+    if: inputs.task == 'upload-trace'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Read upload requests and related app log lines
+        env:
+          HOURS: ${{ inputs.hours || '72' }}
+        run: |
+          P="${{ vars.GCP_PROJECT_ID }}"
+          SINCE=$(date -u -d "$HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.requestUrl:"/api/v1/media/" AND httpRequest.requestMethod="POST" AND timestamp>="'$SINCE'"' \
+            --project "$P" --limit 100 --format json > /tmp/req.json
+          gcloud logging read 'resource.type="cloud_run_revision" AND severity>=WARNING AND (jsonPayload.msg:"media" OR jsonPayload.path:"/api/v1/media/" OR textPayload:"/api/v1/media/" OR jsonPayload.request:"/api/v1/media/") AND timestamp>="'$SINCE'"' \
+            --project "$P" --limit 100 --format json > /tmp/app.json
+          python3 - <<'PY'
+          import json, re
+          def family(ua):
+              os_ = next((n for k, n in (("Android", "Android"), ("iPhone", "iPhone"), ("iPad", "iPad"), ("Windows", "Windows"), ("Mac OS", "Mac"), ("Linux", "Linux")) if k in ua), "?")
+              br = next((n for k, n in (("SamsungBrowser", "Samsung"), ("EdgA", "Edge"), ("Edg/", "Edge"), ("Firefox", "Firefox"), ("CriOS", "Chrome-iOS"), ("Chrome/", "Chrome"), ("Safari", "Safari")) if k in ua), "?")
+              v = re.search(r"(?:Chrome|CriOS|Version)/(\d+)", ua)
+              wv = " webview" if "; wv)" in ua else ""
+              return f"{br}{'/' + v.group(1) if v else ''} {os_}{wv}"
+          reqs = json.load(open("/tmp/req.json"))
+          print(f"{len(reqs)} media upload requests")
+          for r in reqs:
+              h = r.get("httpRequest", {})
+              path = re.sub(r"\?.*", "", h.get("requestUrl", "")).split("/api/v1/")[-1]
+              line = (f"{r.get('timestamp','')[:19]} {h.get('status')} {path} req={h.get('requestSize','?')}B resp={h.get('responseSize','?')}B "
+                      f"lat={h.get('latency','?')} {family(h.get('userAgent',''))} trace={str(r.get('trace','')).split('/')[-1][:12]}")
+              print(line); print(f"::notice title=upload::{line}")
+          app = json.load(open("/tmp/app.json"))
+          print(f"{len(app)} related app log lines")
+          for r in app:
+              j = r.get("jsonPayload") or {}
+              keep = {k: j[k] for k in ("msg", "status_code", "status", "error", "purpose", "bytes", "request_id", "detail", "code") if k in j}
+              line = f"{r.get('timestamp','')[:19]} {r.get('severity')} {json.dumps(keep, ensure_ascii=False)[:300] if keep else (r.get('textPayload') or '')[:300]}"
+              print(line); print(f"::notice title=app::{line}")
           PY
 
   drill:
