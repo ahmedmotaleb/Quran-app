@@ -31,8 +31,18 @@ export const assignTeacher = (teacher: number, student: number) => api<{ id: num
 export const endAssignment = (id: number) => api<null>('POST', `admin/teacher-assignments/${id}/end`);
 export const linkGuardian = (guardian: number, student: number) => api<{ id: number }>('POST', 'admin/guardian-links', { guardian, student });
 export const revokeGuardian = (id: number, reason: string) => api<null>('POST', `admin/guardian-links/${id}/revoke`, { reason });
-export const inviteTeacher = (email: string) =>
-  api<{ id: number; link: string; expires_at: string; emailed: boolean }>('POST', 'invitations', { purpose: 'teacher_account', email, days: 7 });
+export interface Invitation {
+  id: number; purpose: 'teacher_account' | 'guardian_link' | 'student_teacher'; purpose_label: string; email: string;
+  status: 'pending' | 'failed' | 'expired' | 'accepted' | 'revoked'; email_status: '' | 'sent' | 'failed'; send_count: number;
+  last_sent_at: string | null; expires_at: string; created_at: string; created_by: string | null;
+}
+type InviteSent = Invitation & { email_sent: boolean; link?: string };
+/** The server emails the invitation; `share` also returns the link once, to send over WhatsApp. */
+export const inviteTeacher = (email: string, share = false) =>
+  api<InviteSent>('POST', 'invitations', { purpose: 'teacher_account', email, days: 7, share_link: share });
+export const listInvitations = (purpose?: string) => api<{ results: Invitation[] }>('GET', `invitations?open=1${purpose ? `&purpose=${purpose}` : ''}`);
+export const resendInvitation = (id: number, share = false) => api<InviteSent>('POST', `invitations/${id}/resend`, { share_link: share });
+export const revokeInvitation = (id: number) => api<Invitation>('POST', `invitations/${id}/revoke`);
 
 /* ---- Circles, sessions, bookings (prompt 06) ---- */
 export type CircleState = 'draft' | 'published' | 'off';

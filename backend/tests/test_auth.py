@@ -118,7 +118,8 @@ class TestRecovery:
 @pytest.mark.django_db
 class TestInvitations:
     def test_teacher_invitation_creates_teacher_once(self, world):
-        code = client_for(world.admin).post("/api/v1/invitations", {"purpose": "teacher_account", "email": "newt@x.test"}).json()["code"]
+        code = client_for(world.admin).post("/api/v1/invitations", {"purpose": "teacher_account", "email": "newt@x.test", "share_link": True},
+                                           format="json").json()["link"].split("code=")[1]
         body = {"code": code, "full_name": "معلم جديد", "email": "newt@x.test", "password": PW}
         assert APIClient().post("/api/v1/auth/invitations/accept", body).status_code == 201
         assert User.objects.get(email="newt@x.test").role == Role.TEACHER
@@ -130,7 +131,8 @@ class TestInvitations:
 
     def test_guardian_link_via_invitation(self, world):
         p2 = make_user("p2@x.test", Role.PARENT)
-        code = client_for(world.admin).post("/api/v1/invitations", {"purpose": "guardian_link", "student": world.s2.pk}).json()["code"]
+        code = client_for(world.admin).post("/api/v1/invitations", {"purpose": "guardian_link", "student": world.s2.pk, "share_link": True},
+                                           format="json").json()["link"].split("code=")[1]
         assert client_for(p2).post("/api/v1/auth/invitations/accept", {"code": code}).status_code == 201
         kids = client_for(p2).get("/api/v1/parent/children").json()["results"]
         assert [k["id"] for k in kids] == [world.s2.pk]
@@ -217,18 +219,3 @@ def test_password_reset_lifecycle_and_no_secret_in_logs(world, settings, caplog)
     text = " ".join(f"{r.getMessage()} {r.__dict__}" for r in caplog.records)
     assert "email_not_sent_no_provider" in text and "token=" not in text and "#/reset" not in text
 
-
-def test_teacher_invitation_is_emailed_when_email_is_configured(world, settings):
-    from django.core import mail
-
-    settings.EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"  # email_configured() → False
-    r = client_for(world.admin).post("/api/v1/invitations", {"purpose": "teacher_account", "email": "t9@x.test"}).json()
-    assert r["emailed"] is False and "#/invite?code=" in r["link"] and not mail.outbox
-    from unittest import mock
-
-    with mock.patch("apps.accounts.views.email_configured", return_value=True):
-        r = client_for(world.admin).post("/api/v1/invitations", {"purpose": "teacher_account", "email": "t10@x.test"}).json()
-    assert r["emailed"] is True and len(mail.outbox) == 1
-    m = mail.outbox[0]
-    assert m.to == ["t10@x.test"] and r["link"] in m.body and "معلمًا" in m.subject + m.body
-    assert "code" not in str(AuditEvent.objects.filter(action="invitation.created").last().data)

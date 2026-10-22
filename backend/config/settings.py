@@ -249,6 +249,7 @@ EMAIL_TIMEOUT = 10
 EMAIL_BACKEND = env("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend" if EMAIL_HOST else (
     "apps.core.mail.SuppressedBackend" if IS_DEPLOYED else "django.core.mail.backends.console.EmailBackend"))
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", "") or "noreply@halqa.app"  # empty env var = default
+EMAIL_FILE_PATH = env("EMAIL_FILE_PATH", "")  # end-to-end tests: EMAIL_BACKEND=...filebased.EmailBackend writes here
 FRONTEND_URL = env("FRONTEND_URL", APP_URL or "http://localhost:5173")  # password-reset links
 
 APP_VERSION = env("APP_VERSION", "0.1.0")

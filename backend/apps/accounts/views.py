@@ -29,7 +29,7 @@ from .models import (
 )
 from .permissions import IsAdminRole, IsLearningUser, IsParent, IsStudent, IsTeacher, assigned_student_ids, linked_child_ids
 from .serializers import (
-    AcceptInvitationSerializer, AdminCreateUserSerializer, AdminUserSerializer, AdminUserUpdateSerializer, GuardianLinkSerializer, InvitationCreateSerializer,
+    AcceptInvitationSerializer, AdminCreateUserSerializer, AdminUserSerializer, AdminUserUpdateSerializer, GuardianLinkSerializer,
     LoginSerializer, MeSerializer, OnboardingSerializer, RegisterSerializer, StatusChangeSerializer, TeacherAssignmentSerializer,
     TeacherPublicSerializer, TeacherStudentSerializer, arabic_password_error,
 )
@@ -195,8 +195,7 @@ def password_link(user) -> str:
     return f"{settings.FRONTEND_URL}/#/reset?uid={uid}&token={default_token_generator.make_token(user)}{nxt}"
 
 
-def email_configured() -> bool:
-    return "smtp" in settings.EMAIL_BACKEND
+from .emails import email_configured, send_link_email  # noqa: E402,F401  (email_configured is used by admin_bulk)
 
 
 class PasswordForgotView(APIView):
@@ -301,50 +300,6 @@ class MfaConfirmView(APIView):
 
 
 # ---- Invitations -----------------------------------------------------------------------
-class InvitationCreateView(APIView):
-    """Admins invite teachers/parents; teachers can invite students to join them."""
-
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        s = InvitationCreateSerializer(data=request.data)
-        s.is_valid(raise_exception=True)
-        d = s.validated_data
-        purpose, user = d["purpose"], request.user
-        allowed = (user.role == Role.ADMIN) or (user.role == Role.TEACHER and purpose == Invitation.Purpose.STUDENT_TEACHER)
-        if not allowed:
-            raise ApiError("permission_denied", "ليست لديك صلاحية لهذا الإجراء.", 403)
-        inv, raw = Invitation.issue(
-            purpose=purpose, created_by=user, days=d["days"], email=d["email"].lower(), student=d.get("student"),
-            teacher=user if purpose == Invitation.Purpose.STUDENT_TEACHER else None,
-        )
-        link = f"{settings.FRONTEND_URL}/#/invite?code={raw}"
-        emailed = _email_invitation(inv, link, d["days"]) if d["email"] else False
-        audit("invitation.created", actor=user, target=inv, request=request, purpose=purpose, emailed=emailed)
-        return Response({"id": inv.pk, "code": raw, "expires_at": inv.expires_at, "purpose": purpose, "link": link,
-                         "emailed": emailed}, status=201)
-
-
-INVITE_TEXT = {
-    Invitation.Purpose.TEACHER_ACCOUNT: ("دعوة للانضمام معلمًا في الحلقة",
-                                         "السلام عليكم،\nدعتك إدارة الحلقة للانضمام معلمًا في منصة تحفيظ القرآن الكريم.\n"
-                                         "أنشئ حسابك من الرابط التالي (صالح {days} أيام ولمرة واحدة):\n{link}"),
-}
-
-
-def _email_invitation(inv, link: str, days: int) -> bool:
-    """Send the invitation link to the invited address when email is configured. Never raises; the admin still
-    gets the link to share another way."""
-    text = INVITE_TEXT.get(inv.purpose, ("دعوة من الحلقة", "السلام عليكم،\nلديك دعوة في منصة الحلقة:\n{link}"))
-    if not email_configured():
-        return False
-    try:
-        return send_mail(text[0], text[1].format(link=link, days=days), settings.DEFAULT_FROM_EMAIL, [inv.email]) == 1
-    except Exception as e:  # noqa: BLE001
-        log.error("invitation_email_failed", extra={"error": type(e).__name__})
-        return False
-
-
 class AcceptInvitationView(APIView):
     """
     teacher_account: creates a teacher account (anonymous caller).
@@ -440,12 +395,10 @@ class AdminUserList(generics.ListCreateAPIView):
 def _setup_link(request, user) -> dict:
     """Email the password-setup link; without an email provider the admin gets it to pass on in person."""
     link = password_link(user)
-    sent = False
-    if email_configured():
-        try:
-            sent = send_mail("مرحبًا بك في الحلقة", f"أنشئ كلمة مرور لحسابك من الرابط:\n{link}", settings.DEFAULT_FROM_EMAIL, [user.email]) == 1
-        except Exception as e:  # noqa: BLE001
-            log.error("setup_email_failed", extra={"error": type(e).__name__})
+    role = {Role.PARENT: "ولي أمر", Role.TEACHER: "معلم"}.get(user.role, "طالب")
+    sent = send_link_email(user.email, subject="إعداد حسابك في حَلْقة",
+                           intro=f"أُنشئ لك حساب {role} في حَلْقة لتحفيظ القرآن الكريم. اختر كلمة مرور لحسابك من الرابط التالي، ثم سجّل الدخول.",
+                           cta="تعيين كلمة المرور", link=link, expires_at=None)
     audit("admin.setup_link_issued", actor=request.user, target=user, request=request, emailed=sent)
     return {"setup_email_sent": sent, "setup_link": None if sent else link}
 

@@ -69,6 +69,9 @@ server logs.
 | `GET attempts/{id}` | scoped (owner, teacher, linked parent, admin) | |
 | `GET teacher/grading`, `POST answers/{id}/grade` | the student's teacher | recitation / short answers; points 0..question points |
 | `GET notifications`, `POST notifications/read` | signed in | own only |
+| `POST invitations` | admin (any purpose); teacher (`student_teacher` only) | `{purpose, email, days?, student?, share_link?}`: issues a one-time code and **emails** the link; answers `{id, status, email_status, email_sent, expires_at, …}` without the code or link; `share_link: true` (to also send it over WhatsApp) returns `link` once. `409 email_taken` / `account_inactive` / `already_invited` (with the open invitation's id) |
+| `GET invitations?open=1&purpose=` | admin (all), teacher (own) | status only (`pending`, `failed`, `expired`, `accepted`, `revoked`); never codes |
+| `POST invitations/{id}/resend`, `POST invitations/{id}/revoke` | admin or the inviter | resend issues a new code (the old one stops working) with a fresh expiry and emails it; `429 too_soon` within a minute |
 | `GET corrections?student&status&category&surah&submission&booking&open=1&recurring=1` | scoped (own student, assigned teacher, linked parent) | learning points at an ayah; `times` = how often the same category recurred at that ayah; parents get category, reference, priority, status and dates only (no note, guidance or internal note); `internal_note` only for teachers |
 | `POST corrections` | the student's teacher | `source` submission/session/task/review with a matching link (the submission, booking or task must belong to that student; a booking must be the teacher's); ayah checked against the surah; audited; the student is notified (`correction_new`, generic push text) |
 | `GET, PATCH corrections/{id}` | read scoped; edit by the student's teacher | `status` new/improving/corrected sets or clears `resolved_at`; `correction.resolved` / `correction.reopened` audited |
