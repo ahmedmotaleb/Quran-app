@@ -21,7 +21,7 @@ async function learner(email) {
 }
 const call = (p, method, path, body) => p.evaluate(async ([m, u, bd]) => {
   const csrf = (await (await fetch('/api/v1/auth/csrf', { credentials: 'include' })).json()).csrfToken;
-  const r = await fetch(u, { method: m, credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf }, body: bd ? JSON.stringify(bd) : undefined });
+  const r = await fetch(u, { method: m, credentials: 'include', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf, ...(u.startsWith('/api/v1/admin/') ? { 'X-Halqa-Portal': 'admin' } : {}) }, body: bd ? JSON.stringify(bd) : undefined });
   return { status: r.status, body: await r.json().catch(() => null) };
 }, [method, '/api/v1/' + path, body]);
 const step = async (p, name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await p.screenshot({ path: `${out}/tcontent-fail-${name.replace(/\W+/g, '_')}.png` }); } };

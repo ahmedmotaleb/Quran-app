@@ -5,6 +5,19 @@ import { fileURLToPath, URL } from 'node:url';
 
 const IVORY = '#F7F3E8';
 
+/** The admin portal is its own installable app (admin/index.html links /admin/manifest.webmanifest). The PWA plugin
+ *  adds the learners' manifest to every page; remove it from the admin page so each page has exactly one. */
+const adminOwnManifest = {
+  name: 'admin-own-manifest',
+  enforce: 'post' as const,
+  transformIndexHtml: {
+    order: 'post' as const,
+    handler(html: string, ctx: { path: string }) {
+      return ctx.path.startsWith('/admin/') ? html.replace(/<link rel="manifest" href="\/manifest\.webmanifest"[^>]*>/g, '') : html;
+    },
+  },
+};
+
 export default defineConfig({
   plugins: [
     react(),
@@ -38,7 +51,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
         importScripts: ['push-sw.js'], // Web Push handlers (public/push-sw.js)
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        navigateFallbackDenylist: [/^\/api\//, /^\/admin\//],  // the admin app has its own page (online only)
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           { urlPattern: /^https:\/\/fonts\.googleapis\.com\//, handler: 'StaleWhileRevalidate', options: { cacheName: 'google-fonts-css' } },
@@ -51,7 +64,9 @@ export default defineConfig({
       },
       devOptions: { enabled: false },
     }),
+    adminOwnManifest,
   ],
+  build: { rollupOptions: { input: { main: fileURLToPath(new URL('./index.html', import.meta.url)), admin: fileURLToPath(new URL('./admin/index.html', import.meta.url)) } } },
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   // Dev: with VITE_API_BASE_URL=/ the app calls same-origin /api and Vite forwards it to Django.
   server: { proxy: { '/api': { target: process.env.API_PROXY_TARGET || 'http://localhost:8000', changeOrigin: false } } },

@@ -13,7 +13,7 @@ const { settled } = trackWrites(page);
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 let fails = 0;
 const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await page.screenshot({ path: `${out}/bulk-fail-${name.replace(/\W+/g, '_')}.png` }); } };
-const api = async (path) => page.evaluate(async (p) => (await fetch('/api/v1/' + p, { credentials: 'include' })).json(), path);
+const api = async (path) => page.evaluate(async (p) => (await fetch('/api/v1/' + p, { credentials: 'include', headers: { 'X-Halqa-Portal': 'admin' } })).json(), path);
 const status = () => page.getByRole('status').filter({ hasText: /تم تحديد/ }).first();
 const bar = () => page.getByRole('toolbar', { name: 'إجراءات على المحدد' });
 const dialog = () => page.getByRole('dialog').last();

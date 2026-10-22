@@ -102,7 +102,7 @@ export function Login() {
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
         {openSignup ? <p style={muted(15)}>ليس لديك حساب؟ <button type="button" onClick={() => go('signup')} style={linkBtn(15, { fontWeight: 800, padding: '0 4px' })}>أنشئ حساب طالب</button></p>
           : <p style={muted(14, { textAlign: 'center' })}>التسجيل مغلق حاليًا. تواصل مع إدارة الحلقة لإنشاء حسابك.</p>}
-        <button type="button" onClick={() => { window.location.hash = '#/admin'; }} style={{ fontSize: 13, color: color.muted, minHeight: 44, display: 'flex', alignItems: 'center', border: 'none', background: 'transparent', textDecoration: 'underline', cursor: 'pointer' }}>دخول الإدارة</button>
+        <button type="button" onClick={() => { window.location.href = '/admin/'; }} style={{ fontSize: 13, color: color.muted, minHeight: 44, display: 'flex', alignItems: 'center', border: 'none', background: 'transparent', textDecoration: 'underline', cursor: 'pointer' }}>دخول الإدارة</button>
       </div>
     </form>
   );

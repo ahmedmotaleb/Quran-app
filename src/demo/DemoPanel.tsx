@@ -48,7 +48,7 @@ export default function DemoPanel() {
           {quick.map((q) => <button key={q.label} onClick={q.click} style={{ minHeight: 44, borderRadius: 12, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{q.label}</button>)}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <a href="#/admin" style={{ flex: 1, minHeight: 44, borderRadius: 12, background: color.primary, color: color.ivory, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>لوحة الإدارة (ديسكتوب)</a>
+          <a href="/admin/" style={{ flex: 1, minHeight: 44, borderRadius: 12, background: color.primary, color: color.ivory, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>لوحة الإدارة (ديسكتوب)</a>
           <a href="#/design-system" style={{ flex: 1, minHeight: 44, borderRadius: 12, background: color.sage, color: color.primary, fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>نظام التصميم</a>
         </div>
         <p style={{ margin: 0, fontSize: 13, color: color.muted }}>الشاشة الحالية: <strong style={{ color: color.ink }}>{SCREEN_NAMES[s.screen]}{roleL}</strong></p>

@@ -132,6 +132,13 @@ class _BaseLogin(APIView):
         self.check_portal(user, d)
         cache.delete(_lock_key(email))
         audit("auth.login", actor=user, target=user, request=request, client=d["client"], portal=self.portal)
+        if self.portal == "admin" and d["client"] != "native":
+            # The portal's own session: signing in here never replaces a learner's session on the same device.
+            from .authentication import start_admin_session
+
+            resp = Response({"user": MeSerializer(user).data})
+            start_admin_session(request, resp, user)
+            return resp
         return Response(_session_payload(request, user, d["client"], d["device"]))
 
     def check_portal(self, user, d):
@@ -164,8 +171,14 @@ class LogoutView(APIView):
     def post(self, request):
         if isinstance(request.auth, AuthToken):
             AuthToken.objects.filter(pk=request.auth.pk).update(revoked_at=timezone.now())
-        logout(request)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        from .authentication import end_admin_session, is_admin_portal
+
+        resp = Response(status=status.HTTP_204_NO_CONTENT)
+        if is_admin_portal(request._request):
+            end_admin_session(request, resp)  # the learner session on this device stays signed in
+        else:
+            logout(request)
+        return resp
 
 
 class MeView(generics.RetrieveUpdateAPIView):

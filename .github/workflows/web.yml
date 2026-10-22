@@ -31,6 +31,9 @@ jobs:
           dups=$(grep -o 'url:"[^"]*"' dist/sw.js | sort | uniq -d | wc -l); test "$dups" = 0
           # API responses must never be cached by the service worker.
           if grep -o 'urlPattern:[^,]*' dist/sw.js | grep -q '/api/'; then echo "service worker caches /api"; exit 1; fi
+          # The admin portal is a separate installable app: its own page with exactly one manifest (id/scope /admin/).
+          grep -q 'href="/admin/manifest.webmanifest"' dist/admin/index.html && ! grep -q 'href="/manifest.webmanifest"' dist/admin/index.html
+          node -e "const m=JSON.parse(require('fs').readFileSync('dist/admin/manifest.webmanifest','utf8'));if(m.id!=='/admin/'||m.scope!=='/admin/'||m.start_url!=='/admin/') throw new Error('admin manifest scope')"
       - uses: actions/upload-artifact@v4
         with:
           name: halqa-pwa-${{ github.sha }}
@@ -61,6 +64,8 @@ jobs:
           curl -fs localhost:8090/ | grep -q 'manifest'
           curl -fsI localhost:8090/sw.js | grep -qi 'cache-control: no-cache'
           curl -fs localhost:8090/some/deep/link | grep -q '<div id="root">'
+          curl -fs localhost:8090/admin/ | grep -q '/admin/manifest.webmanifest'          # the admin app's own page
+          curl -fs localhost:8090/admin/manifest.webmanifest | grep -q '"scope": "/admin/"'
           # Security headers on pages, static files and the API (Content-Security-Policy, HSTS-ready, no framing).
           for u in / /sw.js /api/health; do curl -fsI localhost:8090$u | grep -qi "content-security-policy: default-src 'self'" || { echo "no CSP on $u"; exit 1; }; done
           curl -fsI localhost:8090/ | grep -qi 'x-frame-options: deny'

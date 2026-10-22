@@ -5,7 +5,7 @@ Django + DRF + PostgreSQL API in `backend/`. Production runs on Google Cloud Run
 `docs/DEPLOY.md`); the current, evidence-based status of every area is in `docs/STATUS.md`.
 
 **Current state (17 October 2026, `main`):** the student, teacher and parent apps and the admin portal
-(`#/admin`) run on the real API in production: https://halqa-835293468002.europe-west1.run.app. The
+(`/admin/`, installable as its own app «إدارة الحلقة») run on the real API in production: https://halqa-835293468002.europe-west1.run.app. The
 installable client is a PWA; there is no native Android app (not required). Owner decisions in force:
 no charging yet (subscriptions hidden), ayah audio from the licensed Quran Foundation (Quran.com) source, recordings deleted
 48 hours after the teacher's review, live classes through teacher-provided meeting links. Remaining work needs
@@ -30,7 +30,13 @@ full-screen and respects the safe areas.
 Demo accounts (password `halqa123`): `yousef@halqa.app` (student), `teacher@halqa.app`,
 `parent@halqa.app`. Public sign-up only ever creates a student account.
 
-## Admin portal (`#/admin`)
+## Admin portal (`/admin/`)
+
+The portal lives at `/admin/` with its own page and web-app manifest (id and scope `/admin/`, name «إدارة الحلقة»,
+dark icon), so it installs as a separate app beside «الحلقة» («تثبيت لوحة الإدارة» on the sign-in screen and in the
+sidebar). Old `#/admin` links move there. It also has its own session (cookie `halqa_admin_session`, used only for
+requests marked `X-Halqa-Portal: admin`), so an admin and a student or teacher can stay signed in on the same phone
+without replacing each other's account.
 
 **Live:** in live mode, sign-in (with enforced two-step verification), the overview, students, teachers,
 parents, circles, bookings, lectures (courses, lessons, enrollments, lesson files), quizzes, review and publishing
@@ -141,7 +147,7 @@ cd .. && VITE_API_BASE_URL=/ npm run dev  # Vite proxies /api → :8000
 
 Seeded accounts (development only): `yousef@halqa.app`, `teacher@halqa.app`,
 `parent@halqa.app`; password from `SEED_PASSWORD` (default `halqa123`). Admins sign in at
-`#/admin` only.
+`/admin/` only.
 
 ## Layout
 
