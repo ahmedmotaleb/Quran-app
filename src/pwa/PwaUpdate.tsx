@@ -1,7 +1,8 @@
 /** Registers the service worker and offers new versions without interrupting the user. "Update now" never
  *  reloads over a recording: while one is being made, reviewed, uploaded or waiting for a retry, the update waits and
- *  applies itself once the recording is sent or discarded. The admin portal (no recording there) updates itself as soon
- *  as a new version is found, and checks on every open, so admins never keep working on an old portal. */
+ *  applies itself once the recording is sent or discarded. The admin portal checks on every open: a new version found
+ *  right after opening (before any typing) or while the tab is in the background is applied at once; otherwise a banner
+ *  at the top asks, so a half-filled form is never reloaded away. */
 import { useEffect, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useApp } from '@/store/store';
@@ -10,6 +11,7 @@ import { voiceNote, voiceNoteRecording } from '@/services/voiceNote';
 import { color } from '@/theme/tokens';
 
 const ADMIN = () => window.location.pathname.startsWith('/admin');
+const OPENED_AT = Date.now();
 const BUSY = new Set(['requesting', 'recording', 'paused', 'review', 'uploading', 'failed']);
 
 export default function PwaUpdate() {
@@ -29,9 +31,20 @@ export default function PwaUpdate() {
     const t = setInterval(() => { if (!busy()) { clearInterval(t); updateServiceWorker(true); } }, 1000);
     return () => clearInterval(t);
   }); // re-evaluated on every render so it sees the latest recording state
-  useEffect(() => { if (needRefresh && ADMIN()) void updateServiceWorker(true); }, [needRefresh, updateServiceWorker]);
+  useEffect(() => {
+    if (!needRefresh || !ADMIN()) return;
+    const apply = () => { if (document.visibilityState === 'hidden' || Date.now() - OPENED_AT < 20_000) void updateServiceWorker(true); };
+    apply();
+    document.addEventListener('visibilitychange', apply);
+    return () => document.removeEventListener('visibilitychange', apply);
+  }, [needRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!needRefresh) return null;
-  if (ADMIN()) return <div role="status" dir="rtl" lang="ar" style={{ position: 'fixed', top: 8, insetInline: 12, zIndex: 1000, background: color.primary, color: color.ivory, borderRadius: 12, padding: '8px 12px', textAlign: 'center', fontSize: 14, fontWeight: 700, maxWidth: 360, marginInline: 'auto' }}>جارٍ تحديث لوحة الإدارة…</div>;
+  if (ADMIN()) return (
+    <div role="status" dir="rtl" lang="ar" style={{ position: 'fixed', top: 8, insetInline: 12, zIndex: 1000, background: color.primary, color: color.ivory, borderRadius: 12, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 10, maxWidth: 520, marginInline: 'auto', boxShadow: '0 10px 30px -10px rgba(0,0,0,.4)' }}>
+      <span style={{ flex: 1, fontSize: 14, fontWeight: 700 }}>يتوفر إصدار جديد من لوحة الإدارة. احفظ عملك ثم حدّث.</span>
+      <button onClick={() => void updateServiceWorker(true)} style={{ minHeight: 40, padding: '0 14px', borderRadius: 10, border: 'none', background: color.ivory, color: color.primary, fontWeight: 800, cursor: 'pointer' }}>حدّث الآن</button>
+    </div>
+  );
   return (
     // While waiting, the notice moves to the top and lets taps through, so it never covers the recorder's own
     // buttons (the submit button sits at the bottom of the screen).
