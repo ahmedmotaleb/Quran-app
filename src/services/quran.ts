@@ -60,13 +60,19 @@ export const ayahAudioUrl = (surah: number, ayah: number, cfg?: AyahAudioCfg | n
 const qfAudio = new Map<string, Record<string, string>>();
 const qfPending = new Map<string, Promise<void>>();
 const qfKey = (surah: number, reciter?: number | null) => `${reciter ?? 0}:${surah}`;
+/** When the chosen reciter has no audio for a surah the server plays another offered reciter; its name, per surah. */
+const qfFallback = new Map<string, string>();
+export function fallbackReciter(surah: number, reciter?: number | null) { return qfFallback.get(qfKey(surah, reciter)) ?? null; }
 export function hasSurahAudio(surah: number, reciter?: number | null) { return qfAudio.has(qfKey(surah, reciter)); }
 export function loadSurahAudio(surah: number, reciter?: number | null): Promise<void> {
   const k = qfKey(surah, reciter);
   if (qfAudio.has(k)) return Promise.resolve();
   let p = qfPending.get(k);
   if (!p) {
-    p = surahAudio(surah, reciter).then((r) => { qfAudio.set(k, r.ayahs); }).finally(() => qfPending.delete(k));
+    p = surahAudio(surah, reciter).then((r) => {
+      qfAudio.set(k, r.ayahs);
+      if (r.requested && r.reciter_id !== r.requested) qfFallback.set(k, r.reciter); else qfFallback.delete(k);
+    }).finally(() => qfPending.delete(k));
     qfPending.set(k, p);
   }
   return p;

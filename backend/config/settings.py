@@ -297,7 +297,8 @@ if os.environ.get("QF_RECITERS", "").strip():
     QF_RECITERS = [(int(i), n.strip()) for i, _, n in (x.partition(":") for x in os.environ["QF_RECITERS"].split(";")) if i.strip().isdigit()]
 QF_RECITATION_ID = int(os.environ.get("QF_RECITATION_ID", "") or QF_RECITERS[0][0])  # the default reciter
 QF_RECITER_NAME = dict(QF_RECITERS).get(QF_RECITATION_ID, os.environ.get("QF_RECITER_NAME", "").strip())
-QF_AUDIO_HOSTS = ("verses.quran.foundation", "verses.quran.com", "download.quranicaudio.com")
+# Quran.com serves some recitations (e.g. al-Husary's Muallim) from its quranicaudio mirrors.
+QF_AUDIO_HOSTS = ("verses.quran.foundation", "verses.quran.com", "download.quranicaudio.com", "mirrors.quranicaudio.com")
 MEDIA_MAX_SECONDS = {"recitation": 20 * 60, "voice_feedback": 5 * 60, "lesson_file": 4 * 3600}
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024  # larger uploads spool to a temp file
 

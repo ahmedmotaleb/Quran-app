@@ -121,14 +121,20 @@ def surah_audio(surah: int, recitation: int | None = None) -> dict[int, str]:
     if (hit := cache.get(key)) is not None:
         return {int(k): v for k, v in hit.items()}
     out: dict[int, str] = {}
+    dropped: set[str] = set()
     page = 1
     while page and page <= 10:  # the longest surah (286 ayahs) is 6 pages of 50
         d = _get(f"/recitations/{rid}/by_chapter/{surah}", {"per_page": 50, "page": page})
         for f in d.get("audio_files", []):
             vk, u = str(f.get("verse_key", "")), f.get("url") or ""
             s, _, a = vk.partition(":")
-            if s == str(surah) and a.isdigit() and (absu := _absolute(u)):
-                out[int(a)] = absu
+            if s == str(surah) and a.isdigit():
+                if absu := _absolute(u):
+                    out[int(a)] = absu
+                else:
+                    dropped.add(urllib.parse.urlsplit(urllib.parse.urljoin(CDN, u)).hostname or "?")
         page = (d.get("pagination") or {}).get("next_page")
+    if dropped:  # a host we do not allow (e.g. a new CDN): visible in the logs, never passed to browsers
+        log.warning("qf_audio_hosts_dropped", extra={"recitation": rid, "surah": surah, "hosts": ",".join(sorted(dropped))})
     cache.set(key, {str(k): v for k, v in out.items()}, URLS_TTL)
     return out

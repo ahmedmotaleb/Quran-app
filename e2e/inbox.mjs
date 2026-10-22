@@ -36,8 +36,13 @@ await step(S.page, 'the student sees an unread badge, opens the inbox and the ta
   await S.app.getByText(title).first().waitFor();
 });
 await step(S.page, 'opening marks it read; no duplicates', async () => {
-  const n = await call(S.page, 'GET', 'notifications');
-  const mine = n.body.results.filter((x) => x.body.includes(title));
+  // The mark-read request may still be on its way after the tap: poll briefly.
+  let mine = [];
+  for (let i = 0; i < 25; i++) {
+    mine = (await call(S.page, 'GET', 'notifications')).body.results.filter((x) => x.body.includes(title));
+    if (mine.length === 1 && mine[0].read_at) break;
+    await S.page.waitForTimeout(200);
+  }
   if (mine.length !== 1 || !mine[0].read_at) throw new Error(JSON.stringify(mine));
 });
 await step(T.page, 'the teacher did not get the student notification', async () => {

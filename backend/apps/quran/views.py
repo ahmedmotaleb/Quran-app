@@ -133,11 +133,18 @@ class SurahAudio(APIView):
             raise ApiError("invalid", "قارئ غير متاح.", 400, {"reciter": ["اختر قارئًا من القائمة."]})
         try:
             files = qf_audio.surah_audio(number, rid)
+            used = rid
+            # The chosen reciter has nothing for this surah: play another offered reciter rather than nothing.
+            for other in [i for i in qf_audio.reciter_ids() if i != rid] if not files else []:
+                files = qf_audio.surah_audio(number, other)
+                if files:
+                    used = other
+                    break
         except qf_audio.AudioUnavailable:
             raise ApiError("audio_unavailable", "التلاوة غير متاحة الآن. حاول بعد قليل.", 503) from None
         if not files:
             msg = ("التلاوة متاحة حاليًا للفاتحة والبقرة فقط حتى تكتمل الموافقة على المصدر."
                    if settings.QF_ENV == "prelive" else "لا تتوفر تلاوة لهذه السورة من المصدر.")
             raise ApiError("audio_not_available_for_surah", msg, 404)
-        return Response({"surah": number, "reciter_id": rid, "reciter": dict(settings.QF_RECITERS).get(rid, ""), "source": "Quran.com (Quran Foundation)",
+        return Response({"surah": number, "reciter_id": used, "requested": rid, "reciter": dict(settings.QF_RECITERS).get(used, ""), "source": "Quran.com (Quran Foundation)",
                          "ayahs": {str(k): v for k, v in sorted(files.items())}})

@@ -45,7 +45,7 @@ jobs:
           START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           gcloud run jobs execute halqa-tasks --project "$P" --region europe-west1 --args manage.py,check_quran_audio --wait --quiet || echo "check failed"
           sleep 20
-          gcloud logging read 'jsonPayload.msg=("qf_audio_check" OR "qf_token_failed" OR "qf_request_failed") AND timestamp>="'$START'"' \
+          gcloud logging read 'jsonPayload.msg=("qf_audio_check" OR "qf_token_failed" OR "qf_request_failed" OR "qf_audio_hosts_dropped") AND timestamp>="'$START'"' \
             --project "$P" --limit 10 --format json > /tmp/a.json
           python3 - <<'PY'
           import json
@@ -54,10 +54,11 @@ jobs:
               print("::warning title=audio-check::no log lines yet")
           for r in rows:
               j = r.get("jsonPayload") or {}
-              keep = {k: j[k] for k in ("msg", "result", "env", "surah", "ayahs", "hosts", "path", "status", "error", "detail") if k in j}
+              keep = {k: j[k] for k in ("msg", "result", "env", "surah", "recitation", "ayahs", "hosts", "path", "status", "error", "detail") if k in j}
               print(f"::notice title=audio-check::{json.dumps(keep, ensure_ascii=False)[:500]}")
-          ok = any((r.get("jsonPayload") or {}).get("result") == "ok" for r in rows)
-          raise SystemExit(0 if ok else 1)
+          checks = [r.get("jsonPayload") or {} for r in rows if (r.get("jsonPayload") or {}).get("msg") == "qf_audio_check"]
+          # Every offered reciter must have audio.
+          raise SystemExit(0 if checks and all(c.get("result") == "ok" for c in checks) else 1)
           PY
 
   errors:

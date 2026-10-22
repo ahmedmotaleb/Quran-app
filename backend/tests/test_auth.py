@@ -216,3 +216,19 @@ def test_password_reset_lifecycle_and_no_secret_in_logs(world, settings, caplog)
         anon.post("/api/v1/auth/password/forgot", {"email": "s1@x.test"}, format="json")
     text = " ".join(f"{r.getMessage()} {r.__dict__}" for r in caplog.records)
     assert "email_not_sent_no_provider" in text and "token=" not in text and "#/reset" not in text
+
+
+def test_teacher_invitation_is_emailed_when_email_is_configured(world, settings):
+    from django.core import mail
+
+    settings.EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"  # email_configured() → False
+    r = client_for(world.admin).post("/api/v1/invitations", {"purpose": "teacher_account", "email": "t9@x.test"}).json()
+    assert r["emailed"] is False and "#/invite?code=" in r["link"] and not mail.outbox
+    from unittest import mock
+
+    with mock.patch("apps.accounts.views.email_configured", return_value=True):
+        r = client_for(world.admin).post("/api/v1/invitations", {"purpose": "teacher_account", "email": "t10@x.test"}).json()
+    assert r["emailed"] is True and len(mail.outbox) == 1
+    m = mail.outbox[0]
+    assert m.to == ["t10@x.test"] and r["link"] in m.body and "معلمًا" in m.subject + m.body
+    assert "code" not in str(AuditEvent.objects.filter(action="invitation.created").last().data)

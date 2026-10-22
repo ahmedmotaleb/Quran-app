@@ -170,9 +170,9 @@ export default function PeopleLive({ role }: { role: A.Role }) {
 
 /* ---------------- Add / invite ---------------- */
 function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => void; onDone: () => void }) {
-  const [f, setF] = useState({ name: '', email: '' });
+  const [f, setF] = useState({ name: '', email: '', phone: '' });
   const [err, setErr] = useState<Record<string, string | null>>({}); const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ link: string | null; note: string } | null>(null);
+  const [result, setResult] = useState<{ link: string | null; note: string; message?: string } | null>(null);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const x: Record<string, string> = {};
@@ -183,11 +183,14 @@ function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => voi
     try {
       if (role === 'teacher') {
         const r = await A.inviteTeacher(f.email.trim().toLowerCase());
-        setResult({ link: r.link, note: 'أرسل هذا الرابط إلى المعلم بنفسك (واتساب أو بريد). صالح 7 أيام ولمرة واحدة، ويُنشئ حسابًا معتمدًا.' });
+        setResult({ link: r.link, message: 'السلام عليكم، دعتك إدارة الحلقة للانضمام معلمًا. أنشئ حسابك من هذا الرابط (صالح 7 أيام ولمرة واحدة):',
+          note: r.emailed ? `أُرسلت الدعوة تلقائيًا إلى ${f.email.trim()}. يمكنك أيضًا إرسالها عبر واتساب. صالحة 7 أيام ولمرة واحدة.`
+            : 'تعذّر إرسال البريد الآن؛ أرسل الرابط عبر واتساب أو انسخه. صالح 7 أيام ولمرة واحدة، ويُنشئ حسابًا معتمدًا.' });
       } else {
         const r = await A.createPerson(f.name.trim(), f.email.trim().toLowerCase(), role);
         setResult(r.setup_email_sent ? { link: null, note: 'تم إنشاء الحساب وأُرسل رابط تعيين كلمة المرور إلى بريده.' }
-          : { link: r.setup_link, note: 'تم إنشاء الحساب. البريد غير مفعّل على الخادم بعد، فأرسل هذا الرابط بنفسك ليعيّن كلمة المرور (صالح لمرة واحدة).' });
+          : { link: r.setup_link, message: 'السلام عليكم، أُنشئ حسابك في منصة الحلقة. عيّن كلمة المرور من هذا الرابط (صالح لمرة واحدة):',
+              note: 'تم إنشاء الحساب. تعذّر إرسال البريد، فأرسل هذا الرابط عبر واتساب أو انسخه ليعيّن كلمة المرور (صالح لمرة واحدة).' });
       }
       onDone();
     } catch (y) {
@@ -198,7 +201,7 @@ function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => voi
   };
   return (
     <Modal title={role === 'teacher' ? 'دعوة معلم' : `إضافة ${ROLE_L[role].one}`} onClose={onClose}>
-      {result ? (<>{result.link ? <LinkBox link={result.link} note={result.note} /> : <p role="status" style={{ margin: 0 }}>{result.note}</p>}
+      {result ? (<>{result.link ? <LinkBox link={result.link} note={result.note} message={result.message} phone={f.phone} /> : <p role="status" style={{ margin: 0 }}>{result.note}</p>}
         <button onClick={onClose} style={primaryBtn(48, 15)}>تم</button></>) : (
         <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {role !== 'teacher' && <>
@@ -209,8 +212,11 @@ function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => voi
           <label htmlFor="ad-e" style={labelStyle}>البريد الإلكتروني</label>
           <input id="ad-e" type="email" dir="ltr" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} aria-invalid={!!err.email} style={inputStyle(err.email, true)} />
           <FieldError msg={err.email} />
+          <label htmlFor="ad-p" style={labelStyle}>رقم واتساب (اختياري)</label>
+          <input id="ad-p" type="tel" dir="ltr" inputMode="tel" placeholder="01xxxxxxxxx" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} style={inputStyle(null, true)} />
+          <span style={{ fontSize: 12, color: color.muted }}>{role === 'teacher' ? 'تُرسل الدعوة إلى البريد تلقائيًا، ويمكنك إرسالها أيضًا عبر واتساب إلى هذا الرقم.' : 'يُرسل رابط تعيين كلمة المرور إلى البريد تلقائيًا.'}</span>
           {err.form && <FieldError msg={err.form} />}
-          <button type="submit" disabled={busy} style={primaryBtn(48, 15)}>{busy ? 'جارٍ الحفظ…' : role === 'teacher' ? 'إنشاء رابط الدعوة' : 'إنشاء الحساب'}</button>
+          <button type="submit" disabled={busy} style={primaryBtn(48, 15)}>{busy ? 'جارٍ الحفظ…' : role === 'teacher' ? 'إرسال الدعوة' : 'إنشاء الحساب'}</button>
         </form>
       )}
     </Modal>

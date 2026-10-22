@@ -318,9 +318,31 @@ class InvitationCreateView(APIView):
             purpose=purpose, created_by=user, days=d["days"], email=d["email"].lower(), student=d.get("student"),
             teacher=user if purpose == Invitation.Purpose.STUDENT_TEACHER else None,
         )
-        audit("invitation.created", actor=user, target=inv, request=request, purpose=purpose)
-        return Response({"id": inv.pk, "code": raw, "expires_at": inv.expires_at, "purpose": purpose,
-                         "link": f"{settings.FRONTEND_URL}/#/invite?code={raw}"}, status=201)
+        link = f"{settings.FRONTEND_URL}/#/invite?code={raw}"
+        emailed = _email_invitation(inv, link, d["days"]) if d["email"] else False
+        audit("invitation.created", actor=user, target=inv, request=request, purpose=purpose, emailed=emailed)
+        return Response({"id": inv.pk, "code": raw, "expires_at": inv.expires_at, "purpose": purpose, "link": link,
+                         "emailed": emailed}, status=201)
+
+
+INVITE_TEXT = {
+    Invitation.Purpose.TEACHER_ACCOUNT: ("دعوة للانضمام معلمًا في الحلقة",
+                                         "السلام عليكم،\nدعتك إدارة الحلقة للانضمام معلمًا في منصة تحفيظ القرآن الكريم.\n"
+                                         "أنشئ حسابك من الرابط التالي (صالح {days} أيام ولمرة واحدة):\n{link}"),
+}
+
+
+def _email_invitation(inv, link: str, days: int) -> bool:
+    """Send the invitation link to the invited address when email is configured. Never raises; the admin still
+    gets the link to share another way."""
+    text = INVITE_TEXT.get(inv.purpose, ("دعوة من الحلقة", "السلام عليكم،\nلديك دعوة في منصة الحلقة:\n{link}"))
+    if not email_configured():
+        return False
+    try:
+        return send_mail(text[0], text[1].format(link=link, days=days), settings.DEFAULT_FROM_EMAIL, [inv.email]) == 1
+    except Exception as e:  # noqa: BLE001
+        log.error("invitation_email_failed", extra={"error": type(e).__name__})
+        return False
 
 
 class AcceptInvitationView(APIView):
