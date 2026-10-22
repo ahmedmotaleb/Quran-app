@@ -1,5 +1,6 @@
 from django.urls import path
 
+from . import invitations as inv
 from . import views as v
 
 urlpatterns = [
@@ -14,7 +15,9 @@ urlpatterns = [
     path("auth/invitations/accept", v.AcceptInvitationView.as_view()),
     path("me", v.MeView.as_view()),
     path("me/onboarding", v.OnboardingView.as_view()),
-    path("invitations", v.InvitationCreateView.as_view()),
+    path("invitations", inv.InvitationListCreate.as_view()),
+    path("invitations/<int:pk>/resend", inv.InvitationResend.as_view()),
+    path("invitations/<int:pk>/revoke", inv.InvitationRevoke.as_view()),
     path("teachers", v.TeacherDirectory.as_view()),
     path("teachers/<int:pk>", v.TeacherDetail.as_view()),
     path("teacher/students", v.MyStudents.as_view()),

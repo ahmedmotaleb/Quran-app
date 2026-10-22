@@ -8,8 +8,9 @@ import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui'
 import { Icon } from '@/components/Icon';
 import type { ApiError } from '@/api/client';
 import { toast } from '../adminStore';
+import { card } from '../AdminTables';
 import * as A from './api';
-import { chip, date, errMsg, LinkBox, Modal, ReasonDialog, smallBtn } from './ui';
+import { chip, date, errMsg, LinkBox, Modal, ReasonDialog, smallBtn, WhatsAppButton } from './ui';
 import {
   BulkBar, type BulkDef, circleOptions, type Col, courseOptions, DataView, ExportButton, type FilterField, FilterControls, filterOf, items, listParams, Pager,
   SavedViews, SelectionSummary, teacherOptions, useListUrl, useSelection, useServerList, useUrlSearch,
@@ -116,6 +117,7 @@ export default function PeopleLive({ role }: { role: A.Role }) {
   const filter = filterOf(params);
   const sel = useSelection(JSON.stringify(filter));
   const [open, setOpen] = useState<number | null>(null); const [adding, setAdding] = useState(false);
+  const [invKey, setInvKey] = useState(0);
   const reload = () => { void R.reload(); reloadCounts(); };
 
   const cur = q.unlinked === '1' ? 'unlinked' : q.status ?? 'all';
@@ -156,6 +158,7 @@ export default function PeopleLive({ role }: { role: A.Role }) {
           </button>
         ))}
       </div>
+      {role === 'teacher' && <InvitationsPanel reloadKey={invKey} />}
       <SavedViews section={L.sec} q={q} update={update} presets={PRESETS[role]} />
       <SelectionSummary sel={sel} pageIds={rows?.map((r) => r.id) ?? []} total={R.data?.count ?? 0} />
       <DataView rows={rows} cols={cols} sel={sel} total={R.data?.count ?? 0} rowLabel={(u) => u.full_name} sort={sort}
@@ -163,45 +166,56 @@ export default function PeopleLive({ role }: { role: A.Role }) {
       <Pager page={page} total={R.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
       <BulkBar resource="users" sel={sel} total={R.data?.count ?? 0} actions={peopleActions(role)} filter={filter} onDone={reload} exportable />
       {open !== null && <PersonPanel id={open} onClose={() => setOpen(null)} onChanged={reload} />}
-      {adding && <AddDialog role={role} onClose={() => setAdding(false)} onDone={reload} />}
+      {adding && <AddDialog role={role} onClose={() => setAdding(false)} onDone={() => { reload(); setInvKey((k) => k + 1); }} />}
     </>
   );
 }
 
 /* ---------------- Add / invite ---------------- */
+const TEACHER_INVITE_TEXT = 'السلام عليكم، دعتك إدارة حَلْقة للانضمام معلمًا. أنشئ حسابك من هذا الرابط (صالح 7 أيام ولمرة واحدة):';
+
 function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => void; onDone: () => void }) {
-  const [f, setF] = useState({ name: '', email: '', phone: '' });
+  const [f, setF] = useState({ name: '', email: '', phone: '', wa: false });
   const [err, setErr] = useState<Record<string, string | null>>({}); const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ link: string | null; note: string; message?: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; note: string; link?: string | null; text?: string; retry?: number } | null>(null);
+  const email = f.email.trim().toLowerCase();
+  const teacherResult = (r: Awaited<ReturnType<typeof A.inviteTeacher>>) => setResult(r.email_sent
+    ? { ok: true, note: `تم إرسال دعوة المعلم إلى البريد الإلكتروني (${email}).`, link: r.link, text: TEACHER_INVITE_TEXT }
+    : { ok: false, note: 'تعذّر إرسال البريد الآن. أعد إرسال الدعوة بعد دقيقة.', link: r.link, text: TEACHER_INVITE_TEXT, retry: r.id });
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const x: Record<string, string> = {};
     if (role !== 'teacher' && f.name.trim().length < 2) x.name = 'اكتب الاسم الكامل.';
-    if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) x.email = 'صيغة البريد الإلكتروني غير صحيحة.';
+    if (!/^\S+@\S+\.\S+$/.test(email)) x.email = 'صيغة البريد الإلكتروني غير صحيحة.';
     if (Object.keys(x).length) return setErr(x);
     setBusy(true); setErr({});
     try {
-      if (role === 'teacher') {
-        const r = await A.inviteTeacher(f.email.trim().toLowerCase());
-        setResult({ link: r.link, message: 'السلام عليكم، دعتك إدارة الحلقة للانضمام معلمًا. أنشئ حسابك من هذا الرابط (صالح 7 أيام ولمرة واحدة):',
-          note: r.emailed ? `أُرسلت الدعوة تلقائيًا إلى ${f.email.trim()}. يمكنك أيضًا إرسالها عبر واتساب. صالحة 7 أيام ولمرة واحدة.`
-            : 'تعذّر إرسال البريد الآن؛ أرسل الرابط عبر واتساب أو انسخه. صالح 7 أيام ولمرة واحدة، ويُنشئ حسابًا معتمدًا.' });
-      } else {
-        const r = await A.createPerson(f.name.trim(), f.email.trim().toLowerCase(), role);
-        setResult(r.setup_email_sent ? { link: null, note: 'تم إنشاء الحساب وأُرسل رابط تعيين كلمة المرور إلى بريده.' }
-          : { link: r.setup_link, message: 'السلام عليكم، أُنشئ حسابك في منصة الحلقة. عيّن كلمة المرور من هذا الرابط (صالح لمرة واحدة):',
-              note: 'تم إنشاء الحساب. تعذّر إرسال البريد، فأرسل هذا الرابط عبر واتساب أو انسخه ليعيّن كلمة المرور (صالح لمرة واحدة).' });
+      if (role === 'teacher') teacherResult(await A.inviteTeacher(email, f.wa));
+      else {
+        const r = await A.createPerson(f.name.trim(), email, role);
+        setResult(r.setup_email_sent ? { ok: true, note: `تم إنشاء الحساب وإرسال رابط إعداد الحساب إلى البريد (${email}).` }
+          : { ok: false, link: r.setup_link, text: 'السلام عليكم، أُنشئ حسابك في منصة حَلْقة. عيّن كلمة المرور من هذا الرابط (صالح لمرة واحدة):',
+              note: 'تم إنشاء الحساب، لكن تعذّر إرسال البريد. أرسل الرابط عبر واتساب، أو أعد الإرسال لاحقًا من صفحة الحساب.' });
       }
       onDone();
     } catch (y) {
       const a = y as ApiError;
-      const fe = { name: a.field?.('full_name') ?? null, email: a.field?.('email') ?? null };
-      setErr(fe.name || fe.email ? fe : { form: a.message });
+      if (a.code === 'already_invited') setResult({ ok: false, note: 'توجد دعوة مفتوحة لهذا البريد. أعد إرسالها بدل إنشاء دعوة جديدة.', retry: Number(a.fields?.invitation?.[0]) });
+      else { const fe = { name: a.field?.('full_name') ?? null, email: a.field?.('email') ?? null }; setErr(fe.name || fe.email ? fe : { form: a.message }); }
     } finally { setBusy(false); }
+  };
+  const resend = async (id: number) => {
+    setBusy(true);
+    try { teacherResult(await A.resendInvitation(id, f.wa)); toast('أُعيد إرسال الدعوة'); onDone(); }
+    catch (y) { setResult((r) => r && { ...r, note: (y as ApiError).message }); } finally { setBusy(false); }
   };
   return (
     <Modal title={role === 'teacher' ? 'دعوة معلم' : `إضافة ${ROLE_L[role].one}`} onClose={onClose}>
-      {result ? (<>{result.link ? <LinkBox link={result.link} note={result.note} message={result.message} phone={f.phone} /> : <p role="status" style={{ margin: 0 }}>{result.note}</p>}
+      {result ? (<>
+        <p role={result.ok ? 'status' : 'alert'} style={{ margin: 0, fontSize: 15, fontWeight: 700, color: result.ok ? color.primary : color.dangerInk }}>{result.note}</p>
+        {result.link && role === 'teacher' && <WhatsAppButton text={`${result.text}\n${result.link}`} phone={f.phone} />}
+        {result.link && role !== 'teacher' && <LinkBox link={result.link} note="رابط إعداد الحساب (لمرة واحدة):" message={result.text} phone={f.phone} />}
+        {result.retry ? <button disabled={busy} onClick={() => void resend(result.retry!)} style={smallBtn('primary')}>{busy ? 'جارٍ الإرسال…' : 'إعادة إرسال الدعوة'}</button> : null}
         <button onClick={onClose} style={primaryBtn(48, 15)}>تم</button></>) : (
         <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {role !== 'teacher' && <>
@@ -212,14 +226,52 @@ function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => voi
           <label htmlFor="ad-e" style={labelStyle}>البريد الإلكتروني</label>
           <input id="ad-e" type="email" dir="ltr" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} aria-invalid={!!err.email} style={inputStyle(err.email, true)} />
           <FieldError msg={err.email} />
-          <label htmlFor="ad-p" style={labelStyle}>رقم واتساب (اختياري)</label>
-          <input id="ad-p" type="tel" dir="ltr" inputMode="tel" placeholder="01xxxxxxxxx" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} style={inputStyle(null, true)} />
-          <span style={{ fontSize: 12, color: color.muted }}>{role === 'teacher' ? 'تُرسل الدعوة إلى البريد تلقائيًا، ويمكنك إرسالها أيضًا عبر واتساب إلى هذا الرقم.' : 'يُرسل رابط تعيين كلمة المرور إلى البريد تلقائيًا.'}</span>
+          <span style={{ fontSize: 12, color: color.muted }}>{role === 'teacher' ? 'تُرسل حَلْقة الدعوة إلى هذا البريد مباشرة (صالحة 7 أيام ولمرة واحدة).' : 'تُرسل حَلْقة رابط إعداد الحساب إلى هذا البريد مباشرة.'}</span>
+          {role === 'teacher' && <>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, minHeight: 40 }}>
+              <input type="checkbox" checked={f.wa} onChange={(e) => setF({ ...f, wa: e.target.checked })} style={{ width: 20, height: 20 }} /> أرسلها عبر واتساب أيضًا
+            </label>
+            {f.wa && <>
+              <label htmlFor="ad-p" style={labelStyle}>رقم واتساب (اختياري)</label>
+              <input id="ad-p" type="tel" dir="ltr" inputMode="tel" placeholder="01xxxxxxxxx" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} style={inputStyle(null, true)} />
+            </>}
+          </>}
           {err.form && <FieldError msg={err.form} />}
-          <button type="submit" disabled={busy} style={primaryBtn(48, 15)}>{busy ? 'جارٍ الحفظ…' : role === 'teacher' ? 'إرسال الدعوة' : 'إنشاء الحساب'}</button>
+          <button type="submit" disabled={busy} style={primaryBtn(48, 15)}>{busy ? 'جارٍ الإرسال…' : role === 'teacher' ? 'إرسال الدعوة بالبريد' : 'إنشاء الحساب وإرسال الرابط'}</button>
         </form>
       )}
     </Modal>
+  );
+}
+
+const INV_ST: Record<A.Invitation['status'], [string, string]> = {
+  pending: ['أُرسلت، بانتظار القبول', color.primary], failed: ['تعذّر الإرسال', color.dangerInk], expired: ['انتهت صلاحيتها', color.muted],
+  accepted: ['قُبلت', color.primary], revoked: ['أُلغيت', color.muted],
+};
+
+/** Open teacher invitations (no codes): resend (new code, fresh expiry) or cancel. */
+function InvitationsPanel({ reloadKey }: { reloadKey: number }) {
+  const [rows, setRows] = useState<A.Invitation[] | null>(null); const [busy, setBusy] = useState<number | null>(null);
+  const load = useCallback(() => { A.listInvitations('teacher_account').then((r) => setRows(r.results)).catch(() => setRows([])); }, []);
+  useEffect(() => { load(); }, [load, reloadKey]);
+  if (!rows?.length) return null;
+  const run = async (id: number, fn: () => Promise<unknown>, ok: string) => {
+    setBusy(id);
+    try { await fn(); toast(ok); load(); } catch (e) { toast(errMsg(e)); } finally { setBusy(null); }
+  };
+  return (
+    <details style={{ ...card, padding: '10px 14px' }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 700, minHeight: 36 }}>دعوات المعلمين المفتوحة ({rows.length})</summary>
+      {rows.map((r) => (
+        <div key={r.id} style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', minHeight: 48, borderTop: `1px solid ${color.divider}` }}>
+          <bdi dir="ltr" style={{ flex: '1 1 200px', fontFamily: font.latin }}>{r.email || '—'}</bdi>
+          <span style={{ fontSize: 13, fontWeight: 700, color: INV_ST[r.status][1] }}>{INV_ST[r.status][0]}</span>
+          <span style={{ fontSize: 12, color: color.muted }}>حتى {date(r.expires_at)}{r.send_count > 1 ? ` · أُرسلت ${r.send_count} مرات` : ''}</span>
+          {r.email && <button disabled={busy === r.id} onClick={() => void run(r.id, () => A.resendInvitation(r.id), 'أُعيد إرسال الدعوة')} style={smallBtn('primary')}>إعادة إرسال الدعوة</button>}
+          <button disabled={busy === r.id} onClick={() => void run(r.id, () => A.revokeInvitation(r.id), 'أُلغيت الدعوة')} style={smallBtn('danger')}>إلغاء</button>
+        </div>
+      ))}
+    </details>
   );
 }
 
@@ -288,7 +340,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
             {row('كلمة المرور', u.has_password ? 'معيّنة' : <span style={{ color: color.danger }}>لم تُعيَّن بعد</span>)}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
               <button onClick={() => setEdit({ full_name: u.full_name, phone: u.phone })} style={smallBtn()}>تعديل البيانات</button>
-              {u.status !== 'suspended' && u.status !== 'archived' && <button disabled={busy} onClick={() => act(async () => setLink((await A.newSetupLink(u.id)).setup_link), 'تم إنشاء رابط تعيين كلمة المرور')} style={smallBtn()}>رابط تعيين كلمة المرور</button>}
+              {u.status !== 'suspended' && u.status !== 'archived' && <button disabled={busy} onClick={() => act(async () => { const r = await A.newSetupLink(u.id); setLink(r.setup_link); if (!r.setup_email_sent) throw new Error('تعذّر إرسال البريد؛ أُظهر الرابط لإرساله عبر واتساب.'); }, 'أُرسل رابط إعداد الحساب إلى البريد')} style={smallBtn()}>إرسال رابط إعداد الحساب</button>}
             </div>
             {link && <LinkBox link={link} note="أرسل هذا الرابط إلى صاحب الحساب بنفسك. صالح لمرة واحدة؛ ولا تشاركه مع غيره." />}
           </div>

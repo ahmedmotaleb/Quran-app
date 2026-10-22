@@ -53,7 +53,7 @@ def ready(request):
     # What still needs owner configuration (informational; does not affect readiness).
     features = {
         "media_storage": storage_status(),
-        "email": "smtp" if "smtp" in settings.EMAIL_BACKEND else "log_only",
+        "email": "smtp" if "smtp" in settings.EMAIL_BACKEND else "test_mailbox" if "filebased" in settings.EMAIL_BACKEND else "log_only",
         "push": "configured" if settings.VAPID_PUBLIC_KEY and settings.VAPID_PRIVATE_KEY else "not_configured",
         "ayah_audio": (f"quran_foundation_{settings.QF_ENV}" if settings.QF_CLIENT_ID and settings.QF_CLIENT_SECRET
                        else "template" if settings.AYAH_AUDIO_URL else "off"),

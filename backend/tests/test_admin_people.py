@@ -112,7 +112,8 @@ def test_assign_and_unassign_teacher_and_parent_links(world):
 
 def test_teacher_invitation_link_creates_approved_teacher(world):
     c = client_for(world.admin)
-    r = c.post("/api/v1/invitations", {"purpose": "teacher_account", "email": "newt@x.test"}, format="json").json()
+    r = c.post("/api/v1/invitations", {"purpose": "teacher_account", "email": "newt@x.test", "share_link": True}, format="json").json()
+    r["code"] = r["link"].split("code=")[1]
     assert "/#/invite?code=" in r["link"]
     anon = APIClient()
     acc = anon.post("/api/v1/auth/invitations/accept", {"code": r["code"], "full_name": "معلم جديد", "email": "newt@x.test", "password": PW}, format="json")

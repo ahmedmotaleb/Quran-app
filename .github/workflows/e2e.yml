@@ -31,6 +31,8 @@ jobs:
       THROTTLE_UPLOAD: 1000/hour
       THROTTLE_RECOVERY: 1000/hour                # password setup/reset pages in several suites
       MEDIA_LOCAL_ROOT: /tmp/halqa-media
+      EMAIL_BACKEND: django.core.mail.backends.filebased.EmailBackend   # test mailbox read by e2e/lib/mailbox.mjs
+      EMAIL_FILE_PATH: /tmp/halqa-mail
       PYTHON: python
     steps:
       - uses: actions/checkout@v4

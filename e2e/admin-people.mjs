@@ -3,6 +3,7 @@
 // Every check that matters reloads the page first, so it reads what the server stored, not local state.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 import { trackWrites } from './lib/settle.mjs';
+import { linkFor } from './lib/mailbox.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: 'Africa/Cairo', permissions: ['clipboard-read', 'clipboard-write'] });
@@ -40,12 +41,15 @@ await step('search filters on the server', async () => {
   await page.getByRole('searchbox', { name: 'ابحث بالاسم أو البريد' }).fill('');
 });
 let setupLink = '';
-await step('add a student and get a one-use setup link', async () => {
+await step('add a student: the setup link is emailed (nothing to copy)', async () => {
   await page.getByRole('button', { name: 'إضافة طالب' }).click();
   await dialog().locator('#ad-n').fill(SN); await dialog().locator('#ad-e').fill(`e2e+${stamp}@example.com`);
-  await dialog().getByRole('button', { name: 'إنشاء الحساب' }).click();
-  setupLink = (await dialog().locator('code').innerText()).trim();
-  if (!setupLink.includes('#/reset?uid=')) throw new Error('no setup link');
+  await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال الرابط' }).click();
+  await dialog().getByText('تم إنشاء الحساب وإرسال رابط إعداد الحساب إلى البريد', { exact: false }).waitFor();
+  if (await dialog().locator('code').count()) throw new Error('a raw link is shown');
+  const m = await linkFor(`e2e+${stamp}@example.com`);
+  setupLink = m.link;
+  if (!setupLink.includes('#/reset?uid=')) throw new Error('no setup link in the email');
   await dialog().getByRole('button', { name: 'تم' }).click();
   await settledReload(); await nav('الطلاب'); await page.getByRole('button', { name: SN, exact: true }).waitFor();
 });
@@ -98,13 +102,19 @@ await step('withdraw and restore a teacher approval', async () => {
   await reopen('المعلمون', 'الشيخ خالد العمري'); await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
 });
 let invite = '';
-await step('invite a teacher; the link creates an approved teacher account', async () => {
+await step('invite a teacher by email (plus WhatsApp); the emailed link creates an approved teacher account', async () => {
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'دعوة معلم' }).click();
-  await dialog().locator('#ad-e').fill(`teach+${stamp}@example.com`); await dialog().locator('#ad-p').fill('01001234567'); await dialog().getByRole('button', { name: 'إرسال الدعوة' }).click();
+  await dialog().locator('#ad-e').fill(`teach+${stamp}@example.com`);
+  await dialog().getByRole('checkbox', { name: 'أرسلها عبر واتساب أيضًا' }).check(); await dialog().locator('#ad-p').fill('01001234567');
+  await dialog().getByRole('button', { name: 'إرسال الدعوة بالبريد' }).click();
+  await dialog().getByText('تم إرسال دعوة المعلم إلى البريد الإلكتروني', { exact: false }).waitFor();
   const wa = await dialog().getByRole('link', { name: 'إرسال عبر واتساب' }).getAttribute('href');
   if (!wa.startsWith('https://wa.me/201001234567?text=') || !decodeURIComponent(wa).includes('#/invite?code=')) throw new Error('whatsapp link ' + wa);
-  invite = (await dialog().locator('code').innerText()).trim(); await dialog().getByRole('button', { name: 'تم' }).click();
+  if (await dialog().locator('code').count()) throw new Error('a raw link is shown');
+  const m = await linkFor(`teach+${stamp}@example.com`);
+  invite = m.link; if (!m.text.includes('صالح حتى')) throw new Error('email text: ' + m.text.slice(0, 120));
+  await dialog().getByRole('button', { name: 'تم' }).click();
   // The teacher opens it on their own device (a signed-in browser is asked to sign out first).
   const c3 = await b.newContext(); const p3 = await c3.newPage(); await p3.goto(invite.replace(/^https?:\/\/[^/]+\//, BASE));
   await p3.locator('#iv-name').fill(TN); await p3.locator('#iv-email').fill(`teach+${stamp}@example.com`); await p3.locator('#iv-pw').fill('E2e-Teacher-2026!');

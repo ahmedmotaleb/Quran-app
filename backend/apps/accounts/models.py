@@ -165,6 +165,21 @@ class Invitation(TimeStamped):
     max_uses = models.PositiveSmallIntegerField(default=1)
     uses = models.PositiveSmallIntegerField(default=0)
     revoked_at = models.DateTimeField(null=True, blank=True)
+    revoke_reason = models.CharField(max_length=20, blank=True)  # "replaced" when a resend issued a new code
+    # Delivery metadata only (never the link or code).
+    email_status = models.CharField(max_length=8, blank=True)    # "", "sent", "failed"
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+    send_count = models.PositiveSmallIntegerField(default=0)
+
+    @property
+    def status(self) -> str:
+        if self.uses >= self.max_uses:
+            return "accepted"
+        if self.revoked_at:
+            return "revoked"
+        if self.expires_at <= dj_tz.now():
+            return "expired"
+        return "failed" if self.email_status == "failed" else "pending"
 
     @classmethod
     def issue(cls, *, purpose, created_by, days=7, **fields) -> tuple["Invitation", str]:

@@ -77,6 +77,16 @@ export function whatsappUrl(text: string, phone = '') {
   return `https://wa.me/${d}?text=${encodeURIComponent(text)}`;
 }
 
+/** One button that opens WhatsApp with the message and link ready (no link shown on screen). */
+export function WhatsAppButton({ text, phone = '' }: { text: string; phone?: string }) {
+  return (
+    <a href={whatsappUrl(text, phone)} target="_blank" rel="noopener noreferrer"
+      style={{ ...smallBtn(), display: 'inline-flex', alignItems: 'center', alignSelf: 'flex-start', textDecoration: 'none', background: '#25D366', color: '#0B3B22', borderColor: '#25D366', fontWeight: 800 }}>
+      إرسال عبر واتساب
+    </a>
+  );
+}
+
 export function LinkBox({ link, note, message, phone }: { link: string; note: string; message?: string; phone?: string }) {
   const copy = async () => { try { await navigator.clipboard.writeText(link); toast('نُسخ الرابط'); } catch { /* user can select it */ } };
   const wa = whatsappUrl(`${message ?? 'السلام عليكم، هذا رابطك في منصة الحلقة:'}\n${link}`, phone);
