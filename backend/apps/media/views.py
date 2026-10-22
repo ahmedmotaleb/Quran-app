@@ -1,4 +1,7 @@
+import re
+
 from django.conf import settings
+from django.db import IntegrityError
 from django.http import FileResponse, Http404
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny
@@ -13,6 +16,7 @@ from . import services
 from .models import MediaObject
 from .storage import get_storage, verify_read_token
 
+UPLOAD_KEY = re.compile(r"[A-Za-z0-9-]{8,64}")
 NOT_FOUND = ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
 
 
@@ -27,10 +31,24 @@ class _Upload(APIView):
     purpose = ""
 
     def post(self, request):
+        key = request.headers.get("X-Upload-ID", "").strip()
+        if key and not UPLOAD_KEY.fullmatch(key):
+            raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400)
+        if key:  # a retry of an upload that already reached the server: same object, nothing stored twice
+            done = MediaObject.objects.filter(owner=request.user, upload_key=key).first()
+            if done is not None:
+                if done.purpose != self.purpose or done.state != MediaObject.State.VALIDATED:
+                    raise ApiError("upload_id_conflict", "أعد المحاولة.", 409)
+                return Response(_out(done, request), status=200)
         f = request.FILES.get("file")
         if f is None:
             raise ApiError("invalid", "أرفق ملف التسجيل.", 400, {"file": ["أرفق ملف التسجيل."]})
-        m = services.store_audio(owner=request.user, purpose=self.purpose, upload=f, duration_seconds=request.data.get("duration_seconds"))
+        try:
+            m = services.store_audio(owner=request.user, purpose=self.purpose, upload=f,
+                                     duration_seconds=request.data.get("duration_seconds"), upload_key=key)
+        except IntegrityError:  # the same upload id finished in a parallel request
+            m = MediaObject.objects.get(owner=request.user, upload_key=key)
+            return Response(_out(m, request), status=200)
         audit("media.uploaded", actor=request.user, target=m, request=request, purpose=self.purpose, size=m.size_bytes)
         return Response(_out(m, request), status=201)
 

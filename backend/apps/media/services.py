@@ -46,7 +46,7 @@ def limits(purpose: str) -> tuple[int, int]:
 PDF_TYPE = {"application/pdf": ("pdf", lambda h: h[:5] == b"%PDF-")}
 
 
-def store_audio(*, owner, purpose: str, upload, duration_seconds) -> MediaObject:
+def store_audio(*, owner, purpose: str, upload, duration_seconds, upload_key: str = "") -> MediaObject:
     """Validates type (declared + magic bytes), size and duration; streams to private storage.
     Lesson files may also be PDFs, and their duration is optional (a PDF has none)."""
     if settings.MEDIA_STORAGE == "none":
@@ -85,14 +85,15 @@ def store_audio(*, owner, purpose: str, upload, duration_seconds) -> MediaObject
     # Server-generated key: no user-controlled path components.
     key = f"{purpose}/{owner.pk}/{mid}.{ext}"
     m = MediaObject.objects.create(id=mid, owner=owner, purpose=purpose, key=key, content_type=declared,
-                                   size_bytes=upload.size, sha256=digest.hexdigest(), duration_seconds=dur)
+                                   size_bytes=upload.size, sha256=digest.hexdigest(), duration_seconds=dur, upload_key=upload_key)
     try:
         get_storage().save(key, f, declared)
     except StorageError as e:
         log.error("media_store_failed", extra={"purpose": purpose, "error": type(e.__cause__ or e).__name__, "bytes": upload.size})
         m.state = MediaObject.State.REJECTED
         m.rejection_reason = "storage_error"
-        m.save(update_fields=["state", "rejection_reason", "updated_at"])
+        m.upload_key = ""  # the retry with the same upload id may try again
+        m.save(update_fields=["state", "rejection_reason", "upload_key", "updated_at"])
         raise ApiError("storage_unavailable", "تعذّر حفظ التسجيل الآن. حاول مرة أخرى بعد قليل.", 503) from None
     # Type, signature, size and checksum were verified above; transcoding/virus scanning is not in scope yet.
     m.state = MediaObject.State.VALIDATED

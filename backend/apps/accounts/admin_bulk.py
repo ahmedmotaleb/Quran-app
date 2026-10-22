@@ -63,7 +63,7 @@ def _apply(qs, f):
     if "teacher" in f:
         qs = qs.filter(Exists(TeacherAssignment.objects.filter(student=OuterRef("pk"), teacher_id=f["teacher"], active=True)))
     if f.get("level"):
-        qs = qs.filter(student_profile__level__iexact=f["level"])
+        qs = qs.filter(role=Role.STUDENT, student_profile__level__iexact=f["level"])
     if "upcoming" in f:
         from apps.scheduling.models import Booking
 
@@ -281,38 +281,6 @@ def _delete(u: User, actor, reason: str):
         raise Refuse(e.code, e.message) from None
 
 
-def _make_teacher(u: User, actor, reason: str):
-    """Convert a student or parent account into an approved teacher (one account has one role). Their past records
-    stay; what only makes sense for a learner ends now: teacher links, circle memberships, future bookings and guardian
-    links. Signed-in devices are signed out so the app reopens as a teacher."""
-    from apps.scheduling.models import Booking, CircleMember
-
-    if u.role == Role.TEACHER:
-        raise Skip("already_teacher", "حساب معلم بالفعل.")
-    if u.role not in (Role.STUDENT, Role.PARENT):
-        raise Refuse("not_convertible", "لا يمكن تحويل هذا الحساب.")
-    if u.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
-        raise Refuse("inactive", "الحساب موقوف أو مؤرشف؛ أعد تفعيله أولًا.")
-    now = timezone.now()
-    TeacherAssignment.objects.filter(student=u, active=True).update(active=False, ended_at=now)
-    GuardianLink.objects.filter(Q(student=u) | Q(guardian=u), status=LinkStatus.ACTIVE).update(status=LinkStatus.REVOKED, updated_at=now)
-    CircleMember.objects.filter(student=u, active=True).update(active=False, ended_at=now, ended_by=actor,
-                                                               end_reason="تحوّل الحساب إلى معلم", updated_at=now)
-    Booking.objects.filter(student=u, status=Booking.Status.CONFIRMED, occurrence__starts_at__gt=now).update(
-        status=Booking.Status.CANCELLED, cancelled_at=now, cancelled_by=actor, cancel_reason="تحوّل الحساب إلى معلم", updated_at=now)
-    old = u.role
-    u.role, u.status = Role.TEACHER, AccountStatus.ACTIVE
-    u.save(update_fields=["role", "status"])
-    prof, _ = TeacherProfile.objects.get_or_create(user=u)
-    if not prof.approved_at:
-        prof.approved_at = now
-        prof.save(update_fields=["approved_at"])
-    AuthToken.objects.filter(user=u, revoked_at__isnull=True).update(revoked_at=now)
-    from apps.core.audit import audit
-
-    audit("admin.role_changed", actor=actor, target=u, old=old, new=Role.TEACHER)
-
-
 def _teachers_of(u: User) -> str:
     return "، ".join(a.teacher.full_name for a in u.teacher_assignments.filter(active=True).select_related("teacher"))
 
@@ -324,7 +292,6 @@ register(Resource(
         "suspend": Action(_set_status(AccountStatus.SUSPENDED), reason_required=True),
         "archive": Action(_set_status(AccountStatus.ARCHIVED), reason_required=True, destructive=True),
         "delete": Action(_delete, reason_required=True, destructive=True, confirm_always=True),
-        "make_teacher": Action(_make_teacher, reason_required=True),
         "approve": Action(_approve(True)),
         "unapprove": Action(_approve(False), reason_required=True),
         "assign_teacher": Action(_assign_teacher, params=_teacher_params, audit_keys=("teacher", "replace")),

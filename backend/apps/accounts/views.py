@@ -613,3 +613,25 @@ class MyChildren(generics.ListAPIView):
 
 # Re-exported for tests that need to call bearer auth directly.
 __all__ = ["BearerTokenAuthentication"]
+
+
+class AdminUserPromoteTeacher(APIView):
+    """Student → Teacher, one account at a time (same id, email, password and history). See promotion.py."""
+
+    permission_classes = [IsAdminRole]
+
+    def post(self, request, pk):
+        from .promotion import PromotionRefused, promote_to_teacher
+
+        reason = str(request.data.get("reason", "")).strip()[:200]
+        if len(reason) < 3:
+            raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"reason": ["اكتب سبب الترقية (3 أحرف على الأقل)."]})
+        if str(request.data.get("confirm", "")).strip() != "ترقية":
+            raise ApiError("confirm_required", "اكتب «ترقية» للتأكيد.", 400, {"confirm": ["اكتب «ترقية» للتأكيد."]})
+        approve = request.data.get("approve") is True
+        try:
+            r = promote_to_teacher(pk, request.user, reason=reason, approve=approve, request=request)
+        except PromotionRefused as e:
+            raise ApiError(e.code, e.message, 404 if e.code == "not_found" else 409) from None
+        out = {k: v for k, v in r.items() if k != "user"}
+        return Response({**out, "person": AdminUserSerializer(_admin_users().get(pk=pk)).data})

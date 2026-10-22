@@ -49,7 +49,8 @@ server logs.
 | `GET, POST assignments` | list: scoped; create: teacher for assigned students | range validated against Hafs ayah counts |
 | `GET assignments/{id}` | scoped | 404 if not visible |
 | `POST assignments/{id}/start` | owning student | `not_started`/`needs_repeat` → `in_progress` |
-| `POST media/recitations` | student | multipart `file` + `duration_seconds`; type checked by declared type **and** file signature; size/duration limits; stored privately under a server-generated key |
+| (any unknown or malformed `/api/` URL) | — | JSON `{code: not_found, request_id}` 404 (never an HTML page); oversized bodies → JSON 413 |
+| `POST media/recitations` | student | multipart `file` + `duration_seconds`; type checked by declared type **and** file signature; size/duration limits; stored privately under a server-generated key. Optional `X-Upload-ID` header (8–64 letters, digits, `-`): the same student sending the same id again gets the already-stored object (200) instead of a second copy; a storage failure frees the id for the retry |
 | `POST media/voice-feedback` | teacher | same rules, for a review's voice note |
 | `GET media/{uuid}` | owner; assigned teacher once submitted; the student a voice note answers; admin | returns a short-lived read URL (presigned on S3/R2). Parents never get audio |
 | `POST assignments/{id}/submissions` | owning student | `{media}` + `Idempotency-Key`; task → `submitted`; teacher notified |
@@ -79,6 +80,7 @@ server logs.
 | `GET corrections/summary?student`, `GET corrections/categories` | scoped | open/new/improving/corrected, recurring, by category, 8-week trend; never a score |
 | `GET teacher/corrections/overview`, `GET admin/corrections/summary` | teacher / admin | students with open points, repeated memorization and Tajweed points, awaiting re-check; admin: aggregate counts only |
 | `GET, POST admin/users` | admin | filters `role,status,q,unlinked=1` and the advanced filters below; `sort`; created users set their password via recovery |
+| `POST admin/users/{id}/promote-teacher` | admin | Student → Teacher for ONE account (no bulk, no other role change): body `reason` (3+ chars), `confirm: "ترقية"`, `approve` (default false). Same id, email, password and history; ends active teacher links, circle memberships, future bookings («تمت ترقية الحساب إلى معلم»), guardian links to the account, active enrollments and review plans; creates an unapproved TeacherProfile unless `approve`; revokes tokens and sessions; emails the user (no password); audit `admin.user_promoted_to_teacher` with reason and counts. Teacher/parent/admin/archived/deleted → refused |
 | `POST admin/users/{id}/status` | admin | `pending/active/suspended/archived`; suspension and archiving require a reason and revoke tokens |
 | `POST admin/{resource}/bulk-action` | admin | bulk actions, below |
 | `POST admin/teacher-assignments`, `POST admin/teacher-assignments/{id}/end` | admin | |
@@ -121,7 +123,7 @@ Response: `{"requested": 25, "success": 23, "skipped": 1, "failed": 1, "results"
 
 | Resource | Actions | Never |
 | --- | --- | --- |
-| `users` (students, teachers, parents) | `activate` (also restores archived), `suspend`*, `archive`* (soft delete), `approve`, `unapprove`* (teachers only), `assign_teacher`† (students), `move_to_circle`† (students), `enroll`† (students), `notify`†, `resend_setup`, `make_teacher`* (students/parents → approved teacher, same email and password; learner links, memberships and future bookings end; tokens revoked; audit `admin.role_changed`), `delete`* (permanent; always needs `confirm: "حذف"`: an account with no activity is removed; otherwise personal data is erased — name «حساب محذوف», placeholder email, no phone/password/MFA, recordings and voice notes removed from storage, tokens/notifications/bookmarks deleted, links, memberships and future bookings ended — and educational records stay anonymous; a teacher with upcoming sessions is refused; audit `admin.user_deleted` with id, role and mode only) | admins are never targets; deleted accounts are hidden from every admin list and endpoint and can never be reactivated |
+| `users` (students, teachers, parents) | `activate` (also restores archived), `suspend`*, `archive`* (soft delete), `approve`, `unapprove`* (teachers only), `assign_teacher`† (students), `move_to_circle`† (students), `enroll`† (students), `notify`†, `resend_setup`, `delete`* (permanent; always needs `confirm: "حذف"`: an account with no activity is removed; otherwise personal data is erased — name «حساب محذوف», placeholder email, no phone/password/MFA, recordings and voice notes removed from storage, tokens/notifications/bookmarks deleted, links, memberships and future bookings ended — and educational records stay anonymous; a teacher with upcoming sessions is refused; audit `admin.user_deleted` with id, role and mode only) | admins are never targets; deleted accounts are hidden from every admin list and endpoint and can never be reactivated |
 | `circles` | `publish`, `disable`*, `draft`, `delete` (draft with no sessions) | delete with sessions |
 | `sessions` | `cancel`* (future only; bookings cancelled, students notified) | delete |
 | `bookings` | `cancel`* (future only; student notified) | delete; past bookings and attendance |

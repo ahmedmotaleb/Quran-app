@@ -33,6 +33,7 @@ urlpatterns = [
     path("admin/users/counts", v.AdminUserCounts.as_view()),
     path("admin/users/<int:pk>", v.AdminUserDetail.as_view()),
     path("admin/users/<int:pk>/status", v.AdminUserStatus.as_view()),
+    path("admin/users/<int:pk>/promote-teacher", v.AdminUserPromoteTeacher.as_view()),
     path("admin/users/<int:pk>/setup-link", v.AdminUserSetupLink.as_view()),
     path("admin/teachers/<int:pk>/approval", v.AdminTeacherApproval.as_view()),
     path("admin/teacher-assignments", v.AdminAssignmentCreate.as_view()),
