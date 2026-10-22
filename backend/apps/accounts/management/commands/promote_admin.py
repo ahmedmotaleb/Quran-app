@@ -24,6 +24,9 @@ class Command(BaseCommand):
         old = user.role
         user.role, user.is_staff, user.is_superuser, user.status = Role.ADMIN, True, True, AccountStatus.ACTIVE
         user.save(update_fields=["role", "is_staff", "is_superuser", "status"])
+        from apps.accounts.admin_access import ensure_owner
+
+        ensure_owner(user)  # the ops recovery path makes an owner
         # Sign the account out everywhere so no session keeps the old role.
         ended = 0
         for s in Session.objects.all().iterator():

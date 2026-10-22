@@ -38,10 +38,23 @@ class IsAdminRole(HasRole):
     def has_permission(self, request, view):
         if not super().has_permission(request, view):
             return False
-        if settings.ADMIN_REQUIRE_MFA and not request.user.mfa_enabled and not getattr(view, "mfa_setup_view", False):
+        from .admin_access import mfa_required
+
+        if mfa_required(request.user) and not request.user.mfa_enabled and not getattr(view, "mfa_setup_view", False):
             from apps.core.exceptions import ApiError
 
             raise ApiError("mfa_setup_required", "فعّل التحقق بخطوتين أولًا لاستخدام بوابة الإدارة.", 403)
+        # Granular access (admin_access.py): every admin view declares what it needs; nothing declared → refused.
+        from . import admin_access as aa
+
+        if getattr(view, "mfa_setup_view", False) or getattr(view, "admin_any", False):
+            return True
+        need = aa.required(view, request)
+        if need is None:
+            from apps.core.exceptions import ApiError
+
+            raise ApiError("admin_permission_denied", "ليست لديك صلاحية لهذا الإجراء.", 403)
+        aa.require(request.user, need)
         return True
 
 
@@ -49,6 +62,15 @@ class IsContentAuthor(HasRole):
     """Admins, and teachers for their own draft content."""
 
     roles = (Role.ADMIN, Role.TEACHER)
+
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+        if request.user.role == Role.ADMIN:
+            from .admin_access import has
+
+            return has(request.user, "lessons.manage")
+        return True
 
 
 class IsLearningUser(HasRole):

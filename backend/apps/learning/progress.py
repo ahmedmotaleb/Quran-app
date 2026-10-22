@@ -221,6 +221,7 @@ class ChildProgress(APIView):
 
 
 class AdminProgressSummary(APIView):
+    admin_perm = "analytics.view"
     permission_classes = [IsAdminRole]
 
     def get(self, request):

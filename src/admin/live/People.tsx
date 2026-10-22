@@ -7,7 +7,7 @@ import { color, font } from '@/theme/tokens';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import { Icon } from '@/components/Icon';
 import type { ApiError } from '@/api/client';
-import { toast } from '../adminStore';
+import { can, toast } from '../adminStore';
 import { card } from '../AdminTables';
 import * as A from './api';
 import { chip, date, errMsg, LinkBox, Modal, ReasonDialog, smallBtn, WhatsAppButton } from './ui';
@@ -81,7 +81,7 @@ function peopleActions(role: A.Role): BulkDef[] {
     { key: 'suspend', label: 'تعطيل', reason: true, title: 'تعطيل الحسابات', body: (n) => `سيُمنع أصحاب ${items(n)} من الدخول فورًا حتى إعادة التفعيل. لا يُحذف أي سجل.`, ok: (n) => `تعطيل ${items(n)}` },
     { key: 'archive', label: 'أرشفة', tone: 'danger', reason: true, destructive: true, title: 'تأكيد الأرشفة',
       body: (n) => `أنت على وشك أرشفة ${items(n)}. لن يستطيع أصحابها الدخول أو استعادة كلمة المرور. تبقى مهامهم وتقييماتهم وحضورهم محفوظة، ويمكن إعادة التفعيل لاحقًا.`, ok: (n) => `أرشفة ${items(n)}` },
-    { key: 'delete', label: 'حذف نهائي', tone: 'danger', reason: true, destructive: true, confirmAlways: true, title: 'حذف نهائي',
+    { key: 'delete', label: 'حذف نهائي', tone: 'danger', reason: true, destructive: true, confirmAlways: true, freshMfa: true, title: 'حذف نهائي',
       body: (n) => `أنت على وشك حذف ${accounts(n)} نهائيًا. لا يمكن التراجع عن هذا الإجراء. لا دخول بعد الآن، ويُمسح الاسم والبريد والهاتف والتسجيلات الصوتية. تبقى سجلات المعلمين باسم «حساب محذوف»، والحساب الذي لا نشاط له يُحذف بالكامل. المعلم الذي له جلسات قادمة لا يُحذف حتى تُلغى أو تُنقل. (للإيقاف القابل للتراجع استخدم «أرشفة».)`,
       ok: (n) => `حذف ${accounts(n)} نهائيًا` },
   ];
@@ -152,9 +152,9 @@ export default function PeopleLive({ role }: { role: A.Role }) {
           style={{ flex: '1 1 240px', minHeight: 48, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15 }} />
         <FilterControls fields={FIELDS[role]} q={q} update={update} />
         <ExportButton resource="users" sel={sel} total={R.data?.count ?? 0} filter={filter} sort={sort} />
-        <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}>
+        {can(role === 'teacher' ? 'invitations.send' : 'users.create') && <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}>
           <Icon name="plus" size={18} /> {role === 'teacher' ? 'دعوة معلم' : `إضافة ${L.one}`}
-        </button>
+        </button>}
       </div>
       <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
         {quick.map(([k, l, n]) => (
@@ -163,7 +163,7 @@ export default function PeopleLive({ role }: { role: A.Role }) {
           </button>
         ))}
       </div>
-      {role === 'teacher' && <InvitationsPanel reloadKey={invKey} />}
+      {role === 'teacher' && can('invitations.send') && <InvitationsPanel reloadKey={invKey} />}
       {role === 'student' && <PendingExcusesPanel />}
       <SavedViews section={L.sec} q={q} update={update} presets={PRESETS[role]} />
       <SelectionSummary sel={sel} pageIds={rows?.map((r) => r.id) ?? []} total={R.data?.count ?? 0} />
@@ -288,7 +288,7 @@ function InvitationsPanel({ reloadKey }: { reloadKey: number }) {
 }
 
 /* ---------------- Detail panel ---------------- */
-type Sub = { kind: 'reason'; title: string; body: string; ok: string; required?: boolean; typeWord?: string; run: (r: string) => Promise<unknown> } | { kind: 'pick'; target: A.Role } | null;
+type Sub = { kind: 'reason'; title: string; body: string; ok: string; required?: boolean; typeWord?: string; otp?: boolean; run: (r: string, otp: string) => Promise<unknown> } | { kind: 'pick'; target: A.Role } | null;
 
 function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => void; onChanged: () => void }) {
   const [u, setU] = useState<A.Person | null>(null); const [err, setErr] = useState<string | null>(null);
@@ -352,8 +352,8 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
             {row('آخر دخول', date(u.last_login))}
             {row('كلمة المرور', u.has_password ? 'معيّنة' : <span style={{ color: color.danger }}>لم تُعيَّن بعد</span>)}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-              <button onClick={() => setEdit({ full_name: u.full_name, phone: u.phone })} style={smallBtn()}>تعديل البيانات</button>
-              {u.status !== 'suspended' && u.status !== 'archived' && <button disabled={busy} onClick={() => act(async () => { const r = await A.newSetupLink(u.id); setLink(r.setup_link); if (!r.setup_email_sent) throw new Error('تعذّر إرسال البريد؛ أُظهر الرابط لإرساله عبر واتساب.'); }, 'أُرسل رابط إعداد الحساب إلى البريد')} style={smallBtn()}>إرسال رابط إعداد الحساب</button>}
+              {can('users.edit') && <button onClick={() => setEdit({ full_name: u.full_name, phone: u.phone })} style={smallBtn()}>تعديل البيانات</button>}
+              {can('invitations.send') && u.status !== 'suspended' && u.status !== 'archived' && <button disabled={busy} onClick={() => act(async () => { const r = await A.newSetupLink(u.id); setLink(r.setup_link); if (!r.setup_email_sent) throw new Error('تعذّر إرسال البريد؛ أُظهر الرابط لإرساله عبر واتساب.'); }, 'أُرسل رابط إعداد الحساب إلى البريد')} style={smallBtn()}>إرسال رابط إعداد الحساب</button>}
             </div>
             {link && <LinkBox link={link} note="أرسل هذا الرابط إلى صاحب الحساب بنفسك. صالح لمرة واحدة؛ ولا تشاركه مع غيره." />}
           </div>
@@ -363,25 +363,25 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
         {u.status_reason && <p style={{ margin: 0, fontSize: 14, background: u.status === 'suspended' ? color.dangerBg : color.sand, color: u.status === 'suspended' ? color.dangerInk : color.body, borderRadius: 12, padding: '8px 12px' }}>سبب الحالة: {u.status_reason}{u.status_changed_at ? ` · ${date(u.status_changed_at)}` : ''}</p>}
         {section('حالة الحساب', (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {u.status === 'pending' && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'تم اعتماد الحساب')} style={smallBtn('primary')}>اعتماد الحساب</button>}
-            {(u.status === 'suspended' || u.status === 'archived') && <button disabled={busy} onClick={() => reasonRun('إعادة تفعيل الحساب', `سيستطيع ${u.full_name} الدخول من جديد. سجل الغياب السابق يبقى كما هو.`, 'إعادة التفعيل', 'أُعيد تفعيل الحساب', (r) => A.setPersonStatus(u.id, 'active', r))} style={smallBtn('primary')}>إعادة التفعيل</button>}
-            {u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('أرشفة الحساب', `لن يستطيع ${u.full_name} الدخول أو استعادة كلمة المرور. تبقى كل سجلاته محفوظة، ويمكن إعادة التفعيل لاحقًا.`, 'أرشفة الحساب', 'أُرشف الحساب', (r) => A.setPersonStatus(u.id, 'archived', r))} style={smallBtn('danger')}>أرشفة الحساب</button>}
-            {u.role === 'student' && u.status !== 'archived' && <button disabled={busy} onClick={() => setPromote(true)} style={smallBtn()}>ترقية إلى معلم</button>}
-            <button disabled={busy} onClick={() => setSub({ kind: 'reason', title: 'حذف الحساب نهائيًا', typeWord: 'حذف', ok: 'حذف نهائي',
+            {can('users.suspend') && u.status === 'pending' && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'تم اعتماد الحساب')} style={smallBtn('primary')}>اعتماد الحساب</button>}
+            {can('users.suspend') && (u.status === 'suspended' || u.status === 'archived') && <button disabled={busy} onClick={() => reasonRun('إعادة تفعيل الحساب', `سيستطيع ${u.full_name} الدخول من جديد. سجل الغياب السابق يبقى كما هو.`, 'إعادة التفعيل', 'أُعيد تفعيل الحساب', (r) => A.setPersonStatus(u.id, 'active', r))} style={smallBtn('primary')}>إعادة التفعيل</button>}
+            {can('users.archive') && u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('أرشفة الحساب', `لن يستطيع ${u.full_name} الدخول أو استعادة كلمة المرور. تبقى كل سجلاته محفوظة، ويمكن إعادة التفعيل لاحقًا.`, 'أرشفة الحساب', 'أُرشف الحساب', (r) => A.setPersonStatus(u.id, 'archived', r))} style={smallBtn('danger')}>أرشفة الحساب</button>}
+            {can('users.promote_teacher') && u.role === 'student' && u.status !== 'archived' && <button disabled={busy} onClick={() => setPromote(true)} style={smallBtn()}>ترقية إلى معلم</button>}
+            {can('users.delete_permanent') && <button disabled={busy} onClick={() => setSub({ kind: 'reason', title: 'حذف الحساب نهائيًا', typeWord: 'حذف', otp: true, ok: 'حذف نهائي',
               body: `سيُحذف حساب ${u.full_name} نهائيًا ولا يمكن التراجع: لن يستطيع الدخول أبدًا، ويُمسح الاسم والبريد والهاتف والتسجيلات الصوتية. تبقى سجلات المعلمين (المهام والتقييمات والحضور) باسم «حساب محذوف» حتى تبقى الإحصاءات صحيحة. إن لم يكن للحساب أي نشاط يُحذف بالكامل.`,
-              run: async (r) => {
-                const res = await A.bulkAction('users', { action: 'delete', ids: [u.id], reason: r, confirm: 'حذف' });
+              run: async (r, otp) => {
+                const res = await A.bulkAction('users', { action: 'delete', ids: [u.id], reason: r, confirm: 'حذف', ...(otp ? { otp } : {}) });
                 if (res.success !== 1) throw new Error(res.errors[0]?.message ?? 'تعذّر الحذف.');
                 toast('حُذف الحساب نهائيًا'); onChanged(); onClose();
-              } })} style={smallBtn('danger')}>حذف نهائي</button>
-            {u.status !== 'suspended' && u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('إيقاف الحساب', `سيُمنع ${u.full_name} من الدخول فورًا حتى تعيد تفعيله.`, 'إيقاف الحساب', 'تم إيقاف الحساب', (r) => A.setPersonStatus(u.id, 'suspended', r))} style={smallBtn('danger')}>إيقاف الحساب</button>}
+              } })} style={smallBtn('danger')}>حذف نهائي</button>}
+            {can('users.suspend') && u.status !== 'suspended' && u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('إيقاف الحساب', `سيُمنع ${u.full_name} من الدخول فورًا حتى تعيد تفعيله.`, 'إيقاف الحساب', 'تم إيقاف الحساب', (r) => A.setPersonStatus(u.id, 'suspended', r))} style={smallBtn('danger')}>إيقاف الحساب</button>}
           </div>
         ))}
 
         {u.role === 'teacher' && section('الاعتماد', (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <span>{u.approved ? 'معتمد: يظهر للطلاب ويمكن حجز مواعيده.' : 'غير معتمد: لا يظهر للطلاب.'}</span>
-            {u.approved
+            {!can('teachers.approve') ? null : u.approved
               ? <button disabled={busy} onClick={() => reasonRun('سحب اعتماد المعلم', 'لن يظهر المعلم للطلاب ولن تُقبل حجوزات جديدة معه. الحجوزات الحالية تبقى.', 'سحب الاعتماد', 'سُحب الاعتماد', (r) => A.setTeacherApproval(u.id, false, r))} style={smallBtn('danger')}>سحب الاعتماد</button>
               : <button disabled={busy} onClick={() => act(() => A.setTeacherApproval(u.id, true), 'تم اعتماد المعلم')} style={smallBtn('primary')}>اعتماد المعلم</button>}
           </div>
@@ -391,30 +391,30 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
           {u.teachers.length === 0 && <p style={{ margin: 0, color: color.danger, fontSize: 14 }}>غير مرتبط بأي معلم.</p>}
           {u.teachers.map((t) => (
             <div key={t.assignment_id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ flex: 1 }}>{t.name}</span>
-              <button disabled={busy} onClick={() => reasonRun('إنهاء الربط بالمعلم', `سيتوقف ${t.name} عن رؤية مهام ${u.full_name} وتسجيلاته الجديدة. السجل السابق يبقى.`, 'إنهاء الربط', 'أُنهي الربط', () => A.endAssignment(t.assignment_id), false)} aria-label={`إنهاء الربط بـ${t.name}`} style={smallBtn('danger')}>إنهاء الربط</button></div>
+              {can('teachers.assign') && <button disabled={busy} onClick={() => reasonRun('إنهاء الربط بالمعلم', `سيتوقف ${t.name} عن رؤية مهام ${u.full_name} وتسجيلاته الجديدة. السجل السابق يبقى.`, 'إنهاء الربط', 'أُنهي الربط', () => A.endAssignment(t.assignment_id), false)} aria-label={`إنهاء الربط بـ${t.name}`} style={smallBtn('danger')}>إنهاء الربط</button>}</div>
           ))}
-          <button disabled={busy} onClick={() => setSub({ kind: 'pick', target: 'teacher' })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>ربط بمعلم</button>
+          {can('teachers.assign') && <button disabled={busy} onClick={() => setSub({ kind: 'pick', target: 'teacher' })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>ربط بمعلم</button>}
         </>))}
 
         {u.role === 'student' && section('أولياء الأمور', (<>
           {u.guardians.length === 0 && <p style={{ margin: 0, color: color.muted, fontSize: 14 }}>لا يوجد ولي أمر مرتبط.</p>}
           {u.guardians.map((g) => (
             <div key={g.link_id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ flex: 1 }}>{g.name}</span>
-              <button disabled={busy} onClick={() => reasonRun('فك ربط ولي الأمر', `لن يرى ${g.name} بيانات ${u.full_name} بعد الآن.`, 'فك الربط', 'فُكّ الربط', (r) => A.revokeGuardian(g.link_id, r))} aria-label={`فك ربط ${g.name}`} style={smallBtn('danger')}>فك الربط</button></div>
+              {can('parents.link_child') && <button disabled={busy} onClick={() => reasonRun('فك ربط ولي الأمر', `لن يرى ${g.name} بيانات ${u.full_name} بعد الآن.`, 'فك الربط', 'فُكّ الربط', (r) => A.revokeGuardian(g.link_id, r))} aria-label={`فك ربط ${g.name}`} style={smallBtn('danger')}>فك الربط</button>}</div>
           ))}
-          <button disabled={busy} onClick={() => setSub({ kind: 'pick', target: 'parent' })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>ربط بولي أمر</button>
+          {can('parents.link_child') && <button disabled={busy} onClick={() => setSub({ kind: 'pick', target: 'parent' })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>ربط بولي أمر</button>}
         </>))}
 
         {u.role === 'parent' && section('الأبناء', (<>
           {u.children.length === 0 && <p style={{ margin: 0, color: color.muted, fontSize: 14 }}>لا يوجد أبناء مرتبطون.</p>}
           {u.children.map((c) => (
             <div key={c.link_id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ flex: 1 }}>{c.name}</span>
-              <button disabled={busy} onClick={() => reasonRun('فك ربط الابن', `لن يرى ${u.full_name} بيانات ${c.name} بعد الآن.`, 'فك الربط', 'فُكّ الربط', (r) => A.revokeGuardian(c.link_id, r))} aria-label={`فك ربط ${c.name}`} style={smallBtn('danger')}>فك الربط</button></div>
+              {can('parents.link_child') && <button disabled={busy} onClick={() => reasonRun('فك ربط الابن', `لن يرى ${u.full_name} بيانات ${c.name} بعد الآن.`, 'فك الربط', 'فُكّ الربط', (r) => A.revokeGuardian(c.link_id, r))} aria-label={`فك ربط ${c.name}`} style={smallBtn('danger')}>فك الربط</button>}</div>
           ))}
-          <button disabled={busy} onClick={() => setSub({ kind: 'pick', target: 'student' })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>ربط بابن</button>
+          {can('parents.link_child') && <button disabled={busy} onClick={() => setSub({ kind: 'pick', target: 'student' })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>ربط بابن</button>}
         </>))}
       </>}
-      {sub?.kind === 'reason' && <ReasonDialog title={sub.title} body={sub.body} ok={sub.ok} required={sub.required} typeWord={sub.typeWord} onClose={() => setSub(null)} run={async (r) => { await sub.run(r); }} />}
+      {sub?.kind === 'reason' && <ReasonDialog title={sub.title} body={sub.body} ok={sub.ok} required={sub.required} typeWord={sub.typeWord} otp={sub.otp} onClose={() => setSub(null)} run={async (r, otp) => { await sub.run(r, otp); }} />}
       {promote && u && <PromoteDialog id={u.id} name={u.full_name} onClose={() => setPromote(false)}
         onDone={() => { setPromote(false); toast('تمت ترقية الحساب إلى معلم. سيُطلب من المستخدم تسجيل الدخول من جديد.'); onChanged(); void reload(); }} />}
       {sub?.kind === 'pick' && u && (
@@ -546,7 +546,7 @@ function DisciplineSection({ id, onChanged }: { id: number; onChanged: () => voi
         <div key={a.booking} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', borderTop: `1px solid ${color.divider}`, paddingTop: 6, fontSize: 14 }}>
           <span style={{ flex: '1 1 200px' }}>{date(a.starts_at)} · {a.teacher} · {ATT_L[a.attendance] ?? a.attendance}{a.excuse ? ` · العذر: ${EX_L[a.excuse]}` : ''}</span>
           {a.counts && <span style={{ fontSize: 12, fontWeight: 700, color: color.dangerInk }}>يُحتسب</span>}
-          {a.excuse !== 'approved' && <button onClick={() => setOver(a.booking)} style={smallBtn()}>اعتماد العذر إداريًا</button>}
+          {can('excuses.review') && a.excuse !== 'approved' && <button onClick={() => setOver(a.booking)} style={smallBtn()}>اعتماد العذر إداريًا</button>}
         </div>
       ))}
       {over !== null && <ReasonDialog title="اعتماد العذر إداريًا" body="تصحيح إداري مُسجَّل في سجل التدقيق: يُحتسب الغياب «بعذر»، ويبقى قرار المعلم الأصلي محفوظًا. إن أصبح الطالب الموقوف تلقائيًا دون الحد فراجع الحساب وأعد تفعيله يدويًا." ok="اعتماد العذر"

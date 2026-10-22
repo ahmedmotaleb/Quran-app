@@ -8,6 +8,8 @@ export type ApiRole = 'student' | 'teacher' | 'parent' | 'admin';
 export interface Me {
   id: number; email: string; full_name: string; role: ApiRole; status: string; timezone: string; phone: string;
   mfa_enabled: boolean; mfa_required?: boolean; level: string; daily_goal: string;
+  /** Admins only: access level, preset and the permissions the server grants (null for everyone else). */
+  admin_access?: { level: string; preset: string; permissions: string[] } | null;
 }
 export interface LoginResult { user: Me; token?: string }
 

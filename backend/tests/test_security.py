@@ -155,3 +155,17 @@ def test_ayah_audio_is_off_until_a_source_is_approved(client, settings):
     assert client.get("/api/v1/settings/public").json()["ayah_audio"] == {"provider": "template", "url": settings.AYAH_AUDIO_URL, "name": "قارئ مرخّص"}
     media = build_csp().split("media-src")[1].split(";")[0]
     assert "https://audio.example.org" in media
+
+
+@pytest.mark.django_db
+def test_me_protected_fields_cannot_be_changed():
+    """Regression (22–23 Oct): `PATCH me` must never change role, status, email or two-step verification."""
+    from apps.accounts.models import AccountStatus, Role
+
+    u2 = make_user("me-guard2@x.test")
+    r = client_for(u2).patch("/api/v1/me", {"role": "admin", "status": "suspended", "email": "evil@x.test", "mfa_enabled": True,
+                                            "full_name": "اسم جديد"}, format="json")
+    assert r.status_code == 200
+    u2.refresh_from_db()
+    assert (u2.role, u2.status, u2.email, u2.mfa_enabled, u2.full_name) == (Role.STUDENT, AccountStatus.ACTIVE, "me-guard2@x.test", False, "اسم جديد")
+    assert r.json()["role"] == "student"

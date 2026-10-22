@@ -215,6 +215,7 @@ def _ids(raw) -> list[int]:
 
 
 class AdminBulkAction(APIView):
+    admin_any = True  # own data, or checks per action/resource inside
     permission_classes = [IsAdminRole]
 
     def post(self, request, resource: str):
@@ -226,6 +227,14 @@ class AdminBulkAction(APIView):
         act = res.actions.get(name) if isinstance(name, str) else None
         if act is None:
             raise ApiError("invalid_action", "إجراء غير مسموح على هذا النوع.", 400, {"action": ["اختر إجراءً صالحًا."]})
+        from apps.accounts import admin_access as aa
+
+        need = aa.bulk_perm(resource, name)
+        if need is None:
+            raise ApiError("admin_permission_denied", "ليست لديك صلاحية لهذا الإجراء.", 403)
+        aa.require(request.user, need)
+        if (resource, name) in aa.FRESH_MFA_ACTIONS:
+            aa.require_fresh_mfa(request)
         reason = str(d.get("reason", "")).strip()[:200]
         if act.reason_required and len(reason) < 3:
             raise ApiError("invalid", "اكتب سبب الإجراء.", 400, {"reason": ["اكتب سبب الإجراء (3 أحرف على الأقل)."]})
@@ -317,6 +326,7 @@ def _cell(v) -> str:
 class AdminBulkExport(APIView):
     """CSV of the selected rows or of the whole filtered result (same rules as bulk actions; up to 20,000 rows).
     UTF-8 with a BOM so Excel shows Arabic correctly; times in Cairo time. One audit event per export."""
+    admin_any = True  # own data, or checks per action/resource inside
 
     permission_classes = [IsAdminRole]
 
@@ -330,6 +340,13 @@ class AdminBulkExport(APIView):
         res = REGISTRY.get(resource)
         if res is None or not res.export:
             raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
+        from apps.accounts import admin_access as aa
+
+        read = aa.bulk_perm(resource, None)
+        aa.require(request.user, "exports.create")
+        aa.require(request.user, read or "admins.manage")
+        if resource == "users":  # the people export carries emails and phone numbers
+            aa.require(request.user, "users.view_contact")
         d = request.data if isinstance(request.data, dict) else {}
         mode, targets, _missing, filt = resolve_targets(res, d, MAX_EXPORT, MAX_EXPORT, check_expected=False)
         qs = res.base().filter(pk__in=targets)
@@ -372,6 +389,7 @@ SAVED_VIEW_LIMIT = 30
 class AdminSavedViews(APIView):
     """GET ?section= → the admin's own presets; POST {section, name, query}. The query is validated against the
     section's filter rules before it is stored, so a preset can never carry unknown keys or free-form data."""
+    admin_any = True  # own data, or checks per action/resource inside
 
     permission_classes = [IsAdminRole]
     SECTIONS = {"students": "users", "teachers": "users", "parents": "users", "circles": "circles", "bookings": "bookings",
@@ -419,6 +437,7 @@ class AdminSavedViews(APIView):
 
 
 class AdminSavedViewDetail(APIView):
+    admin_any = True  # own data, or checks per action/resource inside
     permission_classes = [IsAdminRole]
 
     def delete(self, request, pk: int):

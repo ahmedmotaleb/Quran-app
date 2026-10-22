@@ -145,6 +145,7 @@ class TeacherTestDetail(APIView):
 class AdminContentDrafts(APIView):
     """What waits for an admin to review and publish: draft lessons (in courses that are not archived) and draft
     quizzes, with how many came from teachers."""
+    admin_perm = "courses.view"
 
     permission_classes = [IsAdminRole]
 

@@ -75,9 +75,12 @@ export function SetPasswordPage() {
   );
 }
 
-/** `#/invite?code=…` — a teacher creates their account from the admin's invitation. */
+/** `#/invite?code=…` — a teacher (or, with `kind=admin`, a new admin) creates their account from the invitation.
+ *  `kind` only changes the wording; the server decides what the invitation creates. */
 export function AcceptInvitePage() {
   const code = params().get('code') ?? '';
+  const admin = params().get('kind') === 'admin';
+  const [portal, setPortal] = useState<string | null>(null);
   const [f, setF] = useState({ name: '', email: '', pw: '' });
   const [err, setErr] = useState<Record<string, string | null>>({}); const [busy, setBusy] = useState(false); const [done, setDone] = useState(false);
   const submit = async (e: FormEvent) => {
@@ -89,7 +92,8 @@ export function AcceptInvitePage() {
     if (Object.keys(x).length) return setErr(x);
     setBusy(true); setErr({});
     try {
-      await api('POST', 'auth/invitations/accept', { code, full_name: f.name.trim(), email: f.email.trim().toLowerCase(), password: f.pw });
+      const r = await api<{ admin_url?: string }>('POST', 'auth/invitations/accept', { code, full_name: f.name.trim(), email: f.email.trim().toLowerCase(), password: f.pw });
+      if (r?.admin_url) setPortal(r.admin_url);
       setDone(true);
     } catch (y) {
       const a = y as ApiError;
@@ -98,10 +102,14 @@ export function AcceptInvitePage() {
     } finally { setBusy(false); }
   };
   return (
-    <Frame title="الانضمام معلمًا" sub="أنشئ حسابك من دعوة إدارة الحلقة">
-      {done ? <Done text="تم إنشاء حساب المعلم. سجّل الدخول من التطبيق." /> : (
+    <Frame title={admin ? 'الانضمام إلى إدارة حَلْقة' : 'الانضمام معلمًا'} sub={admin ? 'أنشئ حساب المسؤول من الدعوة التي وصلت إلى بريدك' : 'أنشئ حسابك من دعوة إدارة الحلقة'}>
+      {done && portal ? <>
+        <p role="status" style={{ margin: 0, fontSize: 15, textAlign: 'center', lineHeight: 1.8 }}>تم إنشاء حساب المسؤول. سجّل الدخول من لوحة الإدارة، وستُطلب منك تفعيل التحقق بخطوتين قبل فتح أي قسم.</p>
+        <a href={portal} style={{ ...primaryBtn(52, 16), textDecoration: 'none' }}>الذهاب إلى لوحة الإدارة</a>
+      </> : done ? <Done text="تم إنشاء حساب المعلم. سجّل الدخول من التطبيق." /> : (
         <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Field id="iv-name" label="الاسم الكامل" auto="name" value={f.name} onChange={(v) => setF({ ...f, name: v })} err={err.name} />
+          {admin && <p style={{ margin: 0, fontSize: 14, color: color.muted }}>اكتب البريد نفسه الذي وصلته الدعوة؛ الرابط صالح لمرة واحدة.</p>}
           <Field id="iv-email" label="البريد الإلكتروني" type="email" auto="email" ltr value={f.email} onChange={(v) => setF({ ...f, email: v })} err={err.email} />
           <Field id="iv-pw" label="كلمة المرور" type="password" auto="new-password" ltr value={f.pw} onChange={(v) => setF({ ...f, pw: v })} err={err.pw} />
           {err.form && <FieldError msg={err.form} />}

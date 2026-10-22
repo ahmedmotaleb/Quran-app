@@ -23,22 +23,31 @@ class MeSerializer(serializers.ModelSerializer):
     level = serializers.SerializerMethodField()
     daily_goal = serializers.SerializerMethodField()
     mfa_required = serializers.SerializerMethodField()
+    admin_access = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "mfa_enabled", "mfa_required", "level", "daily_goal", "date_joined"]
+        fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "mfa_enabled", "mfa_required", "level", "daily_goal",
+                  "date_joined", "admin_access"]
+        # Only the name, time zone and contact phone change here. Role, status, email and two-step verification have
+        # their own audited flows (a misplaced list let `PATCH me` change them on 22–23 Oct; test_me_protected_fields).
+        read_only_fields = ["id", "email", "role", "status", "mfa_enabled", "date_joined"]
 
     def get_level(self, u) -> str:
         return _student_field(u, "level")
 
     def get_daily_goal(self, u) -> str:
         return _student_field(u, "daily_goal")
-        read_only_fields = ["id", "email", "role", "status", "mfa_enabled", "date_joined"]
 
     def get_mfa_required(self, u) -> bool:
-        from django.conf import settings
+        from .admin_access import mfa_required
 
-        return u.role == "admin" and settings.ADMIN_REQUIRE_MFA
+        return u.role == "admin" and mfa_required(u)
+
+    def get_admin_access(self, u):
+        from .admin_access import access_out
+
+        return access_out(u)
 
     def validate_timezone(self, v):
         return validate_tz(v)

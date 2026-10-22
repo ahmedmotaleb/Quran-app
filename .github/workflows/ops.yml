@@ -8,7 +8,7 @@ on:
       task:
         description: What to run
         type: choice
-        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check, upload-trace]
+        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check, upload-trace, account-integrity]
       admin_email:
         description: create-admin / promote-admin — the admin's email (create-admin takes the password from the ADMIN_PASSWORD secret; promote-admin keeps the account's password)
         required: false
@@ -16,7 +16,7 @@ on:
         description: smoke-test only — the app address, e.g. https://halqa-<number>.europe-west1.run.app/
         required: false
       hours:
-        description: upload-trace only — how many hours back to look (default 72)
+        description: upload-trace / account-integrity — how many hours back to look (default 72)
         required: false
       accept_tanzil_terms:
         description: import/verify only — I accept the Tanzil Quran Text license (verbatim text, attribution, link to tanzil.net)
@@ -91,6 +91,52 @@ jobs:
               line = f"{r.get('timestamp','')[:19]} {json.dumps(keep, ensure_ascii=False)[:400]}"
               print(line)
               print(f"::notice title=error::{line}")
+          PY
+
+  # Read-only check after the profile-update fix (22–23 Oct): accounts whose role, status or two-step verification has
+  # no matching audit event (ids and reasons only), counts of existing phones, and the profile updates (`PATCH me`)
+  # Cloud Run served in the last N hours (status and size only; bodies are never logged).
+  integrity:
+    if: inputs.task == 'account-integrity'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Run account_integrity inside production and read its lines
+        env:
+          HOURS: ${{ inputs.hours || '72' }}
+        run: |
+          P="${{ vars.GCP_PROJECT_ID }}"
+          START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          SINCE=$(date -u -d "$HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          gcloud run jobs execute halqa-tasks --project "$P" --region europe-west1 --args manage.py,account_integrity --wait --quiet || echo "::warning::check failed"
+          sleep 20
+          gcloud logging read 'jsonPayload.msg=("account_integrity_flag" OR "account_integrity_summary") AND timestamp>="'$START'"' \
+            --project "$P" --limit 300 --format json > /tmp/i.json || true
+          gcloud logging read 'resource.type="cloud_run_revision" AND (httpRequest.requestMethod="PATCH" OR httpRequest.requestMethod="PUT") AND httpRequest.requestUrl:"/api/v1/me" AND timestamp>="'$SINCE'"' \
+            --project "$P" --limit 300 --format json > /tmp/me.json || true
+          python3 - <<'PY'
+          import json, re
+          rows = json.load(open("/tmp/i.json"))
+          if not rows:
+              print("::warning title=integrity::no log lines yet")
+          for r in rows:
+              j = r.get("jsonPayload") or {}
+              keep = {k: j[k] for k in ("msg", "user", "role", "status", "joined", "last_login", "flags", "accounts", "flagged", "phones",
+                                        "phones_valid", "phones_invalid", "phone_numbers_shared_by_several_accounts", "verified_phones") if k in j}
+              print(f"::notice title=integrity::{json.dumps(keep, ensure_ascii=False)[:500]}")
+          me = json.load(open("/tmp/me.json"))
+          print(f"::notice title=profile-updates::{len(me)} PATCH/PUT me requests in the window")
+          for r in me[:300]:
+              h = r.get("httpRequest", {})
+              path = re.sub(r"\?.*", "", h.get("requestUrl", "")).split("/api/v1/")[-1]
+              print(f"::notice title=me::{r.get('timestamp','')[:19]} {h.get('requestMethod')} {path} {h.get('status')} req={h.get('requestSize','?')}B")
           PY
 
   # Media uploads (recitations, voice notes) in the last N hours: what Cloud Run answered (status, size, latency,

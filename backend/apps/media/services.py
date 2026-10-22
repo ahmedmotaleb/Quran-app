@@ -106,8 +106,13 @@ def can_read(user, m: MediaObject) -> bool:
     Voice feedback: its teacher, and the student whose submission it answers. Parents: never."""
     if not user.is_authenticated or m.state != MediaObject.State.VALIDATED:
         return False
-    if user.role == Role.ADMIN or m.owner_id == user.pk:
+    if m.owner_id == user.pk:
         return True
+    if user.role == Role.ADMIN:  # private recordings and voice notes: submissions.view; content files: courses.view
+        from apps.accounts.admin_access import has
+
+        return has(user, "courses.view" if m.purpose in (MediaObject.Purpose.LESSON_FILE, MediaObject.Purpose.COURSE_COVER)
+                   else "submissions.view")
     from apps.learning.models import Feedback, Submission
 
     if m.purpose == MediaObject.Purpose.RECITATION and user.role == Role.TEACHER:

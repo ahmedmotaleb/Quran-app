@@ -11,11 +11,16 @@ PW = "correct-horse-battery-9"
 
 
 def make_user(email, role=Role.STUDENT, **kw):
+    kw_owner = kw.pop("owner", True)  # admins are owners unless a test asks otherwise
     u = User.objects.create_user(email, PW, full_name=kw.pop("full_name", email.split("@")[0]), role=role, **kw)
     if role == Role.STUDENT:
         StudentProfile.objects.create(user=u)
     if role == Role.TEACHER:
         TeacherProfile.objects.create(user=u, approved_at=timezone.now())
+    if role == Role.ADMIN and kw_owner:
+        from apps.accounts.admin_access import ensure_owner
+
+        ensure_owner(u)
     return u
 
 

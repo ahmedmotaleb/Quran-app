@@ -8,7 +8,7 @@ import { LIVE, ApiError, resetCsrf } from '@/api/client';
 import * as E from '@/api/endpoints';
 
 /** Sidebar sections, in the order the brief lists them. */
-export type Section = 'overview' | 'students' | 'teachers' | 'parents' | 'circles' | 'bookings' | 'lectures' | 'quizzes' | 'subs' | 'settings';
+export type Section = 'overview' | 'students' | 'teachers' | 'parents' | 'circles' | 'bookings' | 'lectures' | 'quizzes' | 'subs' | 'settings' | 'admins';
 export type Dialog =
   | { kind: 'link'; id: number; approve: boolean }
   | { kind: 'user'; id: number | null; role: UserRole }
@@ -19,7 +19,34 @@ export type Dialog =
   | { kind: 'confirm'; title: string; body: string; ok: string; onOk: () => void }
   | null;
 
-const SECTIONS: Section[] = ['overview', 'students', 'teachers', 'parents', 'circles', 'bookings', 'lectures', 'quizzes', 'subs', 'settings'];
+const SECTIONS: Section[] = ['overview', 'students', 'teachers', 'parents', 'circles', 'bookings', 'lectures', 'quizzes', 'subs', 'settings', 'admins'];
+
+/** What each section needs (the server checks every request; this only hides what would be refused). */
+export const SECTION_PERM: Partial<Record<Section, string[]>> = {
+  students: ['users.view'], teachers: ['teachers.view'], parents: ['parents.view'], circles: ['circles.view'], bookings: ['bookings.view'],
+  lectures: ['courses.view'], quizzes: ['courses.view'], settings: ['settings.view', 'audit.view'], admins: ['admins.manage'],
+};
+/** The signed-in admin's permissions (owners hold every permission). Demo mode: everything. */
+export function can(perm: string): boolean {
+  const a = get().me?.admin_access;
+  return !a ? !get().me : a.permissions.includes(perm);
+}
+/** Mirrors the server's bulk-action map (admin_access.py); hides buttons the server would refuse. */
+const USER_ACTIONS: Record<string, string> = { activate: 'users.suspend', suspend: 'users.suspend', archive: 'users.archive', delete: 'users.delete_permanent',
+  approve: 'teachers.approve', unapprove: 'teachers.approve', assign_teacher: 'teachers.assign', enroll: 'courses.manage', notify: 'notifications.send',
+  move_to_circle: 'circles.manage', resend_setup: 'invitations.send' };
+const BULK_WRITE: Record<string, string> = { tests: 'quizzes.manage', questions: 'quizzes.manage', courses: 'courses.manage', lessons: 'lessons.manage',
+  enrollments: 'courses.manage', circles: 'circles.manage', bookings: 'bookings.manage', sessions: 'sessions.manage' };
+export function canBulk(resource: string, action: string): boolean {
+  const p = resource === 'users' ? USER_ACTIONS[action] : BULK_WRITE[resource];
+  return !!p && can(p);
+}
+/** Irreversible actions and admin changes ask for a current authenticator code (when two-step verification is on). */
+export const needsFreshOtp = () => !!get().me?.mfa_enabled;
+export function canSection(sec: Section): boolean {
+  const need = SECTION_PERM[sec];
+  return !need || need.some(can);
+}
 /** `#/admin/<section>?…` → the section (list filters after `?` belong to that section's screen). */
 export function sectionFromHash(): Section | null {
   const m = window.location.hash.match(/^#\/admin\/([a-z]+)/);

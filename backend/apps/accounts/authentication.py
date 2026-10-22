@@ -66,6 +66,9 @@ def start_admin_session(request, response, user) -> None:
     s.set_expiry(settings.SESSION_COOKIE_AGE)
     s.save()
     rotate_token(request)
+    from django.contrib.auth.models import update_last_login
+
+    update_last_login(None, user)  # the portal session bypasses django.contrib.auth.login (shown in «الإدارة والصلاحيات»)
     response.set_cookie(ADMIN_COOKIE, s.session_key, max_age=settings.SESSION_COOKIE_AGE, httponly=True,
                         secure=settings.SESSION_COOKIE_SECURE, samesite="Lax", path="/")
 

@@ -125,7 +125,7 @@ export const listAudit = (p: { action?: string; page?: number }) => api<Page<Aud
 
 /* ---- Bulk actions (select-all + bulk toolbar) ---- */
 export type BulkResource = 'users' | 'circles' | 'bookings' | 'sessions' | 'courses' | 'lessons' | 'enrollments' | 'tests' | 'questions';
-export interface BulkBody { action: string; ids?: number[]; filter?: Record<string, string>; expected?: number; exclude_ids?: number[]; reason?: string; confirm?: string; params?: Record<string, unknown> }
+export interface BulkBody { action: string; ids?: number[]; filter?: Record<string, string>; expected?: number; exclude_ids?: number[]; reason?: string; confirm?: string; params?: Record<string, unknown>; otp?: string }
 export interface BulkItem { id: number; label: string; outcome: 'skipped' | 'failed'; code: string; message: string }
 export interface BulkResult { requested: number; success: number; skipped: number; failed: number; results: BulkItem[]; errors: BulkItem[] }
 export interface TrustedDevice { id: number; label: string; created_at: string; expires_at: string; last_used_at: string | null; current: boolean }
@@ -153,3 +153,21 @@ export interface SavedView { id: number; section: string; name: string; query: s
 export const savedViews = (section: string) => api<SavedView[]>('GET', `admin/saved-views?section=${encodeURIComponent(section)}`);
 export const saveView = (section: string, name: string, query: string) => api<SavedView>('POST', 'admin/saved-views', { section, name, query });
 export const deleteView = (id: number) => api<null>('DELETE', `admin/saved-views/${id}`);
+
+/* ---------------- admins & permissions (owner request, 23 October 2026) ---------------- */
+export interface AdminRow {
+  id: number; full_name: string; email: string; phone: string; status: AccountStatus; mfa_enabled: boolean; last_login: string | null;
+  level: 'owner' | 'admin' | ''; preset: string; preset_label: string; permissions: string[]; is_self: boolean;
+}
+export interface AdminInvite extends Omit<Invitation, 'purpose'> { purpose: 'admin_account'; level: string; preset: string }
+export interface AdminsPage {
+  results: AdminRow[]; invitations: AdminInvite[];
+  permissions: Record<string, string>; presets: Record<string, string[]>; preset_labels: Record<string, string>;
+}
+export interface AdminAccess { level: 'owner' | 'admin'; preset: string; permissions: string[] }
+export const listAdmins = () => api<AdminsPage>('GET', 'admin/admins');
+export const inviteAdmin = (d: AdminAccess & { full_name: string; email: string; otp: string }) =>
+  api<{ id: number; email_sent: boolean; expires_at: string }>('POST', 'admin/admins', d);
+export const updateAdmin = (id: number, d: AdminAccess & { otp: string }) => api<AdminRow>('PATCH', `admin/admins/${id}`, d);
+export const setAdminStatus = (id: number, status: 'active' | 'suspended', reason: string, otp: string) =>
+  api<AdminRow>('POST', `admin/admins/${id}/status`, { status, reason, otp });

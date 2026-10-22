@@ -76,6 +76,7 @@ def _out(d: TrustedDevice, current: TrustedDevice | None) -> dict:
 
 class TrustedDeviceList(APIView):
     """GET: the signed-in admin's trusted devices. DELETE: remove them all (the code is asked again everywhere)."""
+    admin_any = True  # own data, or checks per action/resource inside
 
     permission_classes = [IsAdminRole]
 
@@ -94,6 +95,7 @@ class TrustedDeviceList(APIView):
 
 
 class TrustedDeviceRevoke(APIView):
+    admin_any = True  # own data, or checks per action/resource inside
     permission_classes = [IsAdminRole]
 
     def post(self, request, pk):
