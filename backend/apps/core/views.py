@@ -7,6 +7,8 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from apps.accounts.sms import status as sms_status
+
 log = logging.getLogger(__name__)
 
 
@@ -54,6 +56,7 @@ def ready(request):
     features = {
         "media_storage": storage_status(),
         "email": "smtp" if "smtp" in settings.EMAIL_BACKEND else "test_mailbox" if "filebased" in settings.EMAIL_BACKEND else "log_only",
+        "sms": sms_status(),  # phone verification ("not_configured" = unavailable; email sign-in unaffected)
         "push": "configured" if settings.VAPID_PUBLIC_KEY and settings.VAPID_PRIVATE_KEY else "not_configured",
         "ayah_audio": (f"quran_foundation_{settings.QF_ENV}" if settings.QF_CLIENT_ID and settings.QF_CLIENT_SECRET
                        else "template" if settings.AYAH_AUDIO_URL else "off"),

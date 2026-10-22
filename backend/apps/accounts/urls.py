@@ -16,6 +16,8 @@ urlpatterns = [
     path("auth/invitations/accept", v.AcceptInvitationView.as_view()),
     path("me", v.MeView.as_view()),
     path("me/onboarding", v.OnboardingView.as_view()),
+    path("me/phone/start", v.PhoneStartView.as_view()),
+    path("me/phone/confirm", v.PhoneConfirmView.as_view()),
     path("invitations", inv.InvitationListCreate.as_view()),
     path("invitations/<int:pk>/resend", inv.InvitationResend.as_view()),
     path("invitations/<int:pk>/revoke", inv.InvitationRevoke.as_view()),

@@ -307,10 +307,14 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
     e.preventDefault(); if (!edit || !u) return;
     if (edit.full_name.trim().length < 2) return setEditErr({ full_name: 'اكتب الاسم الكامل.' });
     setBusy(true);
-    try { setU(await A.updatePerson(u.id, { full_name: edit.full_name.trim(), phone: edit.phone.trim() })); setEdit(null); setEditErr({}); toast('حُفظت البيانات'); onChanged(); }
+    // The phone is sent only when it changed and may be edited (masked without users.view_contact; a verified
+    // number is changed by its owner after verifying the new one).
+    const phone = phoneEditable && edit.phone.trim() !== u.phone ? { phone: edit.phone.trim() } : {};
+    try { setU(await A.updatePerson(u.id, { full_name: edit.full_name.trim(), ...phone })); setEdit(null); setEditErr({}); toast('حُفظت البيانات'); onChanged(); }
     catch (x) { const a = x as ApiError; setEditErr({ full_name: a.field?.('full_name') ?? null, phone: a.field?.('phone') ?? null, form: a.message }); }
     finally { setBusy(false); }
   };
+  const phoneEditable = !!u && can('users.view_contact') && !u.phone_verified;
   const reasonRun = (title: string, body: string, ok: string, done: string, run: (r: string) => Promise<unknown>, required = true) =>
     setSub({ kind: 'reason', title, body, ok, required, run: async (r) => { await run(r); toast(done); await reload(); onChanged(); } });
 
@@ -334,7 +338,8 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
             <input id="ed-n" value={edit.full_name} onChange={(e) => setEdit({ ...edit, full_name: e.target.value })} style={inputStyle(editErr.full_name)} />
             <FieldError msg={editErr.full_name} />
             <label htmlFor="ed-p" style={labelStyle}>رقم الهاتف</label>
-            <input id="ed-p" dir="ltr" inputMode="tel" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} style={inputStyle(editErr.phone, true)} />
+            <input id="ed-p" dir="ltr" inputMode="tel" value={edit.phone} disabled={!phoneEditable} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} style={inputStyle(editErr.phone, true)} />
+            {!phoneEditable && <span style={{ fontSize: 12, color: color.muted }}>{u.phone_verified ? 'رقم مؤكد: يغيّره صاحب الحساب من «تأكيد رقم الهاتف».' : 'الرقم مخفي؛ تعديله يتطلب صلاحية عرض البريد والهاتف.'}</span>}
             <FieldError msg={editErr.phone ?? (editErr.full_name ? null : editErr.form)} />
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="submit" disabled={busy} style={{ ...smallBtn('primary'), minHeight: 44 }}>حفظ</button>
@@ -345,7 +350,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {row('الحالة', <Pill st={u.status} />)}
             {row('البريد', <bdi dir="ltr" style={{ fontFamily: font.latin }}>{u.email}</bdi>)}
-            {row('الهاتف', u.phone ? <bdi dir="ltr">{u.phone}</bdi> : '—')}
+            {row('الهاتف', u.phone ? <><bdi dir="ltr">{u.phone}</bdi>{u.phone_verified && <span style={{ marginInlineStart: 8, fontSize: 12, fontWeight: 700, color: color.primary }}>مؤكد · يدخل به</span>}</> : '—')}
             {u.role === 'student' && row('المستوى', u.level || '—')}
             {row('المنطقة الزمنية', <bdi dir="ltr">{u.timezone}</bdi>)}
             {row('انضم في', date(u.date_joined))}

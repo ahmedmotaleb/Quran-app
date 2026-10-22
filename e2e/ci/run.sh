@@ -53,6 +53,7 @@ for s in admin-people admin-scheduling admin-content admin-settings teacher-cont
 reseed; MANY_CMD="bash e2e/ci/py.sh many_students.py" run admin-bulk
 reseed; run admin-ops
 reseed; run admin-admins
+reseed; run phone-login
 reseed; run circle-members
 reseed; run account-delete
 # Recording failure found on a real Android phone (22 Oct): no demo task ids, failed uploads kept on the device.

@@ -60,7 +60,24 @@ def _person_perm(view, request):
 def _status_perm(view, request):
     return "users.archive" if str(request.data.get("status", "")) == AccountStatus.ARCHIVED else "users.suspend"
 
-BAD_CREDENTIALS = ApiError("bad_credentials", "البريد الإلكتروني أو كلمة المرور غير صحيحة.", 400)
+BAD_CREDENTIALS = ApiError("bad_credentials", "البريد أو رقم الهاتف أو كلمة المرور غير صحيحة.", 400)
+
+
+def _resolve_identifier(ident: str) -> tuple[str, str]:
+    """(email to authenticate, lockout key). An email is used as typed (lowercase); a phone number counts only when it
+    is verified on an account, and then signs in that account. The lockout key is the account's email whenever the
+    identifier names an account, so switching between email and phone never resets the failure count."""
+    from . import phones
+
+    ident = ident.strip()
+    if "@" in ident:
+        e = ident.lower()
+        return e, e
+    phone = phones.normalize(ident)
+    if not phone:
+        return "", "invalid:" + ident.lower()[:64]
+    u = User.objects.filter(phone_e164=phone, phone_verified_at__isnull=False).only("email").first()
+    return (u.email, u.email) if u else ("", "phone:" + phone)
 LOCKED = ApiError("account_locked", "محاولات دخول كثيرة غير ناجحة. انتظر ربع ساعة ثم حاول مجددًا أو أعد تعيين كلمة المرور.", 429)
 
 
@@ -85,7 +102,7 @@ def _record_failure(email: str) -> None:
         n = 1
         cache.set(k, 1, settings.LOGIN_LOCKOUT_MINUTES * 60)
     if n == settings.LOGIN_LOCKOUT_FAILURES:
-        audit("auth.locked", email_domain=email.split("@")[-1], minutes=settings.LOGIN_LOCKOUT_MINUTES)
+        audit("auth.locked", email_domain=email.split("@")[-1] if "@" in email else "", minutes=settings.LOGIN_LOCKOUT_MINUTES)
         log.warning("auth_locked", extra={"minutes": settings.LOGIN_LOCKOUT_MINUTES})
 
 
@@ -140,22 +157,24 @@ class _BaseLogin(APIView):
         s = LoginSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
-        email = d["email"].strip().lower()
-        if _locked(email):
+        email, lock = _resolve_identifier(d["identifier"])
+        via = "email" if "@" in d["identifier"] else "phone"
+        if _locked(lock):
             raise LOCKED
-        user = authenticate(request, username=email, password=d["password"])
+        # Unknown identifiers still run the password hasher (same timing as a wrong password).
+        user = authenticate(request, username=email or "unknown@account.invalid", password=d["password"])
         if user is None:
-            audit("auth.login_failed", request=request, email_domain=email.split("@")[-1], portal=self.portal)
+            audit("auth.login_failed", request=request, email_domain=email.split("@")[-1] if email else "", via=via, portal=self.portal)
             log.warning("login_failed", extra={"portal": self.portal})
-            _record_failure(email)
+            _record_failure(lock)
             raise BAD_CREDENTIALS
         if user.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
             raise ApiError("account_suspended", "تم إيقاف هذا الحساب. تواصل مع إدارة الحلقة.", 403)
         if not user.can_sign_in:
             raise ApiError("account_pending", "حسابك بانتظار اعتماد الإدارة.", 403)
         self.check_portal(user, d)
-        cache.delete(_lock_key(email))
-        audit("auth.login", actor=user, target=user, request=request, client=d["client"], portal=self.portal)
+        cache.delete(_lock_key(lock))
+        audit("auth.login", actor=user, target=user, request=request, client=d["client"], portal=self.portal, via=via)
         if self.portal == "admin" and d["client"] != "native":
             # The portal's own session: signing in here never replaces a learner's session on the same device.
             from .authentication import start_admin_session
@@ -223,6 +242,28 @@ class MeView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class PhoneStartView(APIView):
+    """«تأكيد رقم الهاتف»: send a one-time code to a number (any signed-in account; admins too)."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_scope = "phone"
+
+    def post(self, request):
+        from . import phones
+
+        return Response(phones.start(request.user, request.data.get("phone", ""), request))
+
+
+class PhoneConfirmView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_scope = "phone"
+
+    def post(self, request):
+        from . import phones
+
+        return Response(MeSerializer(phones.confirm(request.user, request.data.get("code", ""), request)).data)
 
 
 class OnboardingView(APIView):
@@ -457,7 +498,7 @@ class AdminUserList(generics.ListCreateAPIView):
             if user.role == Role.STUDENT:
                 StudentProfile.objects.create(user=user)
             audit("admin.user_created", actor=request.user, target=user, request=request, role=user.role)
-        return Response({**AdminUserSerializer(user).data, **_setup_link(request, user)}, status=201)
+        return Response({**AdminUserSerializer(user, context={"request": request}).data, **_setup_link(request, user)}, status=201)
 
 
 def _setup_link(request, user) -> dict:
@@ -478,19 +519,26 @@ class AdminUserDetail(APIView):
     permission_classes = [IsAdminRole]
 
     def get(self, request, pk):
-        return Response(AdminUserSerializer(generics.get_object_or_404(_admin_users(), pk=pk)).data)
+        return Response(AdminUserSerializer(generics.get_object_or_404(_admin_users(), pk=pk), context={"request": request}).data)
 
     def patch(self, request, pk):
         user = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN).exclude(status=AccountStatus.DELETED), pk=pk)
         s = AdminUserUpdateSerializer(data=request.data, partial=True)
         s.is_valid(raise_exception=True)
         changed = sorted(k for k, v in s.validated_data.items() if getattr(user, k) != v)
+        if "phone" in changed:
+            from .admin_access import require
+
+            require(request.user, "users.view_contact")  # the number is masked for admins without it
+            if user.phone_verified_at:
+                raise ApiError("phone_verified", "رقم الهاتف مؤكد؛ يغيّره صاحب الحساب من «تأكيد رقم الهاتف» بعد تأكيد الرقم الجديد.", 409,
+                               {"phone": ["رقم مؤكد لا يُعدَّل من هنا."]})
         for k in changed:
             setattr(user, k, s.validated_data[k])
         if changed:
             user.save(update_fields=changed)
             audit("admin.user_updated", actor=request.user, target=user, request=request, fields=changed)
-        return Response(AdminUserSerializer(_admin_users().get(pk=pk)).data)
+        return Response(AdminUserSerializer(_admin_users().get(pk=pk), context={"request": request}).data)
 
 
 class AdminUserSetupLink(APIView):
@@ -546,7 +594,7 @@ class AdminTeacherApproval(APIView):
             t.status = AccountStatus.ACTIVE
             t.save(update_fields=["status"])
         audit("admin.teacher_approval", actor=request.user, target=t, request=request, approved=approve, reason=reason)
-        return Response(AdminUserSerializer(_admin_users().get(pk=pk)).data)
+        return Response(AdminUserSerializer(_admin_users().get(pk=pk), context={"request": request}).data)
 
 
 class AdminUserStatus(APIView):
@@ -567,7 +615,7 @@ class AdminUserStatus(APIView):
             # Sessions are re-checked on every request; native tokens are revoked outright.
             AuthToken.objects.filter(user=user, revoked_at__isnull=True).update(revoked_at=timezone.now())
         audit("admin.user_status", actor=request.user, target=user, request=request, old=old, new=user.status, reason=s.validated_data["reason"])
-        return Response(AdminUserSerializer(_admin_users().get(pk=pk)).data)
+        return Response(AdminUserSerializer(_admin_users().get(pk=pk), context={"request": request}).data)
 
 
 class AdminAssignmentCreate(generics.CreateAPIView):
@@ -690,4 +738,4 @@ class AdminUserPromoteTeacher(APIView):
         except PromotionRefused as e:
             raise ApiError(e.code, e.message, 404 if e.code == "not_found" else 409) from None
         out = {k: v for k, v in r.items() if k != "user"}
-        return Response({**out, "person": AdminUserSerializer(_admin_users().get(pk=pk)).data})
+        return Response({**out, "person": AdminUserSerializer(_admin_users().get(pk=pk), context={"request": request}).data})

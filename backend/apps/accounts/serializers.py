@@ -24,11 +24,12 @@ class MeSerializer(serializers.ModelSerializer):
     daily_goal = serializers.SerializerMethodField()
     mfa_required = serializers.SerializerMethodField()
     admin_access = serializers.SerializerMethodField()
+    phone_verified = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "mfa_enabled", "mfa_required", "level", "daily_goal",
-                  "date_joined", "admin_access"]
+        fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "phone_verified", "mfa_enabled", "mfa_required",
+                  "level", "daily_goal", "date_joined", "admin_access"]
         # Only the name, time zone and contact phone change here. Role, status, email and two-step verification have
         # their own audited flows (a misplaced list let `PATCH me` change them on 22–23 Oct; test_me_protected_fields).
         read_only_fields = ["id", "email", "role", "status", "mfa_enabled", "date_joined"]
@@ -38,6 +39,16 @@ class MeSerializer(serializers.ModelSerializer):
 
     def get_daily_goal(self, u) -> str:
         return _student_field(u, "daily_goal")
+
+    def get_phone_verified(self, u) -> bool:
+        return bool(u.phone_verified_at and u.phone_e164)
+
+    def validate_phone(self, v):
+        # A verified sign-in number changes only through «تأكيد رقم الهاتف» (the new number is verified first).
+        u = self.instance
+        if u is not None and u.phone_verified_at and (v or "").strip() != (u.phone or ""):
+            raise serializers.ValidationError("غيّر رقمك المؤكد من «تأكيد رقم الهاتف»؛ يُؤكَّد الرقم الجديد قبل استبدال القديم.")
+        return v
 
     def get_mfa_required(self, u) -> bool:
         from .admin_access import mfa_required
@@ -93,12 +104,21 @@ def arabic_password_error(exc) -> str:
 
 
 class LoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    # «البريد الإلكتروني أو رقم الهاتف». `email` is still accepted from older app versions.
+    identifier = serializers.CharField(required=False, allow_blank=True, max_length=254, trim_whitespace=True)
+    email = serializers.CharField(required=False, allow_blank=True, max_length=254)
     password = serializers.CharField(trim_whitespace=False)
     client = serializers.ChoiceField(choices=["web", "native"], default="web")
     device = serializers.CharField(required=False, allow_blank=True, max_length=120, default="")
     otp = serializers.CharField(required=False, allow_blank=True, max_length=8, default="")
     trust_device = serializers.BooleanField(required=False, default=False)  # admin portal: skip the code here for 30 days
+
+    def validate(self, attrs):
+        ident = (attrs.get("identifier") or attrs.get("email") or "").strip()
+        if not ident:
+            raise serializers.ValidationError({"identifier": ["اكتب البريد الإلكتروني أو رقم الهاتف."]})
+        attrs["identifier"] = ident
+        return attrs
 
 
 class OnboardingSerializer(serializers.ModelSerializer):
@@ -114,12 +134,27 @@ class AdminUserSerializer(serializers.ModelSerializer):
     level = serializers.SerializerMethodField()
     approved = serializers.SerializerMethodField()
     has_password = serializers.SerializerMethodField()
+    phone_verified = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "level", "approved", "has_password",
+        fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "phone_verified", "level", "approved", "has_password",
                   "date_joined", "last_login", "teachers", "guardians", "children", "status_reason", "status_changed_at"]
         read_only_fields = fields
+
+    def to_representation(self, u):
+        # Full phone numbers only with `users.view_contact` (masked otherwise, and when no request is given).
+        from .admin_access import has
+        from .phones import mask
+
+        out = super().to_representation(u)
+        req = self.context.get("request")
+        if out.get("phone") and not (req is not None and has(req.user, "users.view_contact")):
+            out["phone"] = mask(u.phone_e164 or out["phone"])
+        return out
+
+    def get_phone_verified(self, u) -> bool:
+        return bool(u.phone_verified_at and u.phone_e164)
 
     def get_teachers(self, u):
         return [{"id": a.teacher_id, "name": a.teacher.full_name, "assignment_id": a.id} for a in u.teacher_assignments.all() if a.active]

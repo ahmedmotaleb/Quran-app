@@ -11,6 +11,47 @@ the server default zone, Africa/Cairo). Lists are paginated:
 | Web app / admin portal | Session cookie (HttpOnly, SameSite=Lax). Writes need `X-CSRFToken` (get the cookie from `GET /auth/csrf`). |
 | Native clients (none at present — the app is a PWA and uses the cookie session) | `Authorization: Bearer <token>` from `POST /auth/login` with `"client":"native"`. Only a SHA-256 hash is stored. The token expires (30 days by default) and is revoked by logout, password change/reset or suspension. |
 
+### Sign-in identifier: email or verified phone
+
+`POST auth/login` and `POST admin/auth/login` take `identifier`. Older clients may still send `email`.
+
+**Identifier**
+- An email address, or a phone number that its owner has **verified**.
+- Phones are normalized to E.164 with `phonenumbers`. Local numbers are read in `PHONE_DEFAULT_REGION` (EG by default), so `010…` becomes `+2010…`.
+- Every failure gets the same generic answer: «البريد أو رقم الهاتف أو كلمة المرور غير صحيحة.» This covers an unknown email, an unknown or unverified number, and a wrong password.
+- An unknown identifier still runs the password hasher.
+
+**Account rules**
+- The lockout counts failures per account, so switching between email and phone does not reset it.
+- Suspension and archive apply whichever identifier is used.
+- Admins still need their authenticator code.
+- Password reset stays email-only.
+
+**`POST me/phone/start {phone}`**
+- Sends a 6-digit code by SMS.
+- Only an HMAC of the code is stored.
+- The code expires after 5 minutes, allows 5 wrong tries and works once.
+- There is a 60-second wait between sends, and at most 5 sends per hour per account and per number. The `phone` scope also throttles requests.
+
+**`POST me/phone/confirm {code}`**
+- On success, the number becomes the account's sign-in number.
+- A verified number belongs to one account (partial unique constraint).
+- Changing numbers works the same way: the old number keeps working until the new one is confirmed.
+- `PATCH me` cannot change a verified number.
+
+**SMS provider (`sms.py`)**
+- `SMS_PROVIDER=twilio`, with credentials from Secret Manager.
+- `file` is for end-to-end tests only.
+- With no provider, `settings/public.phone_verification` is false, `me/phone/start` answers 503 `sms_unavailable`, and email sign-in is unchanged.
+
+**Admin views**
+- Admin views mask phones (`+20•••••••678`) unless the admin has `users.view_contact`.
+- Admins cannot edit a verified number.
+
+**Audit events**
+- `phone.code_sent`, `phone.verify_failed`, `phone.verified` (masked numbers).
+- `auth.login` / `auth.login_failed` carry `via`.
+
 ## Errors
 
 Every error looks like this:

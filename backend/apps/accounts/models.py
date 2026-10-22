@@ -59,7 +59,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     role = models.CharField(max_length=16, choices=Role.choices, default=Role.STUDENT)
     status = models.CharField(max_length=16, choices=AccountStatus.choices, default=AccountStatus.ACTIVE)
     timezone = models.CharField(max_length=64, default="Africa/Cairo")
-    phone = models.CharField(max_length=32, blank=True)
+    phone = models.CharField(max_length=32, blank=True)  # contact number as entered (E.164 once verified)
+    # Sign-in phone (phones.py): E.164, a sign-in identifier only once verified by a code; unique among verified numbers.
+    phone_e164 = models.CharField(max_length=20, blank=True, default="")
+    phone_verified_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)  # False only for closed accounts; suspension uses `status`.
     # Why the current status was set (shown to admins), e.g. the automatic absence suspension.
     status_reason = models.CharField(max_length=200, blank=True)
@@ -76,8 +79,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = ["full_name"]
 
     class Meta:
-        constraints = [models.UniqueConstraint(Lower("email"), name="user_email_ci_unique")]
-        indexes = [models.Index(fields=["role", "status"])]
+        constraints = [
+            models.UniqueConstraint(Lower("email"), name="user_email_ci_unique"),
+            models.UniqueConstraint(fields=["phone_e164"], condition=models.Q(phone_verified_at__isnull=False) & ~models.Q(phone_e164=""),
+                                    name="user_verified_phone_unique"),
+        ]
+        indexes = [models.Index(fields=["role", "status"]), models.Index(fields=["phone_e164"], name="user_phone_e164_idx")]
 
     def __str__(self):
         return f"{self.full_name} <{self.email}>"
@@ -276,3 +283,19 @@ class AdminProfile(models.Model):
 
         self.permissions = sorted(validate(self.permissions or []))  # never an unknown name
         super().save(*args, **kwargs)
+
+
+class PhoneVerification(models.Model):
+    """One code sent to a number (phones.py). Only an HMAC of the code is stored; used once; expires in 5 minutes."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="phone_verifications")
+    phone_e164 = models.CharField(max_length=20)
+    code_hash = models.CharField(max_length=64)
+    created_at = models.DateTimeField(default=dj_tz.now)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    outcome = models.CharField(max_length=24, blank=True)  # verified / replaced / too_many_attempts / send_failed
+
+    class Meta:
+        indexes = [models.Index(fields=["user", "created_at"]), models.Index(fields=["phone_e164", "created_at"])]

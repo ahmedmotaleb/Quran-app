@@ -8,3 +8,4 @@ gunicorn==26.2.0
 whitenoise==6.12.0
 boto3==1.40.70  # S3-compatible private media (R2)
 pywebpush==2.0.3  # optional Web Push (off until VAPID keys are configured)
+phonenumbers==9.0.38  # phone numbers normalized to E.164 (login with a verified phone)

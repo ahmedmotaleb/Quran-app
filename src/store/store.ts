@@ -66,7 +66,7 @@ const initial = () => ({
   /** True when a backend is configured (VITE_API_BASE_URL); demo data otherwise. */
   liveMode: LIVE,
   /** Public platform settings from the server (live mode); safe defaults until loaded. */
-  pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, join_minutes: 10, ayah_audio: null as import('@/api/endpoints').AyahAudioCfg | null, org_name: '', support_email: '', support_whatsapp: '', show_support_button: false },
+  pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, join_minutes: 10, ayah_audio: null as import('@/api/endpoints').AyahAudioCfg | null, org_name: '', support_email: '', support_whatsapp: '', show_support_button: false, phone_verification: false },
   me: null as Me | null,
   /** Unsent recordings kept on this device for the signed-in student (task id, length, when). */
   pendingRecs: [] as { taskId: string; secs: number; createdAt: number }[],
@@ -470,11 +470,20 @@ export function pickSurah(x: SurahListItem) {
 /* Auth & onboarding (simulated)                                        */
 /* ------------------------------------------------------------------ */
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
+/** Sign-in identifier: an email, or a phone number (digits, spaces, +, dashes; Arabic digits too). */
+export const PHONE_RE = /^[+\d٠-٩۰-۹][\d٠-٩۰-۹ ()-]{6,19}$/;
+export function identifierError(v: string): string | null {
+  if (!v) return 'أدخل البريد الإلكتروني أو رقم الهاتف';
+  if (v.includes('@')) return EMAIL_RE.test(v) ? null : 'صيغة البريد الإلكتروني غير صحيحة';
+  return PHONE_RE.test(v) ? null : 'اكتب بريدًا إلكترونيًا أو رقم هاتف صحيحًا';
+}
 /** The server enforces 10 (Django MinimumLengthValidator); the demo keeps the design's 8. */
 export const PW_MIN = LIVE ? 10 : 8;
 export function doLogin() {
-  const L = get().login; const e: Record<string, string> = {}; const em = L.email.trim().toLowerCase();
-  if (!em) e.email = 'أدخل بريدك الإلكتروني'; else if (!EMAIL_RE.test(em)) e.email = 'صيغة البريد الإلكتروني غير صحيحة';
+  const L = get().login; const e: Record<string, string> = {}; const raw = L.email.trim();
+  const em = raw.includes('@') ? raw.toLowerCase() : raw;
+  const bad = identifierError(em); if (bad) e.email = bad;
+  else if (!LIVE && !em.includes('@')) e.email = 'الدخول برقم الهاتف متاح في التطبيق الحقيقي بعد تأكيد الرقم.';
   if (!L.pw) e.pw = 'أدخل كلمة المرور'; else if (!LIVE && L.pw.length < 6) e.pw = 'كلمة المرور 6 أحرف على الأقل';
   if (LIVE) { if (Object.keys(e).length) up('login', { errors: e }); else live.login(em, L.pw); return; }
   if (!e.email && ACCOUNTS[em] === 'admin') e.email = 'حساب الإدارة يدخل من بوابة الإدارة المنفصلة.';

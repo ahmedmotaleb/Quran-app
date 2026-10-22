@@ -1,11 +1,12 @@
 import { color, font } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
-import { BackButton, Segmented, Switch, card, dangerOutlineBtn } from '@/components/ui';
+import { BackButton, FieldError, Segmented, Switch, card, dangerOutlineBtn, inputStyle, labelStyle, outlineBtn, primaryBtn } from '@/components/ui';
 import { tzOf } from '@/lib/format';
 import { go, logout, openSheet, setState, toast, up, useApp } from '@/store/store';
 import { INSTALL_STEPS, promptInstall, useInstall } from '@/pwa/install';
-import { LIVE } from '@/api/client';
-import { useEffect, useState } from 'react';
+import { LIVE, type ApiError } from '@/api/client';
+import * as E from '@/api/endpoints';
+import { useEffect, useState, type FormEvent } from 'react';
 import { disablePush, enablePush, pushState, type PushState } from '@/pwa/push';
 
 const NOTIFS = [['tasks', 'تذكير بالواجبات'], ['sessions', 'تذكير قبل الجلسات'], ['feedback', 'تقييمات المعلم'], ['news', 'أخبار الحلقة']] as const;
@@ -69,6 +70,7 @@ export default function Account() {
           <span style={{ fontSize: 14, fontWeight: 700 }}>{tz.label} ({tz.gmt})</span><span style={{ color: color.primary }}><Icon name="chevL" size={18} /></span>
         </button>
       </section>
+      {LIVE && <PhoneRow />}
       <InstallRow />
       {LIVE && <PushRow />}
       <section style={{ ...card, padding: '4px 16px' }}>
@@ -81,6 +83,65 @@ export default function Account() {
         style={dangerOutlineBtn(52, 16)}><Icon name="leave" /> تسجيل الخروج</button>
       <p style={{ margin: 0, fontSize: 12, color: color.muted, textAlign: 'center', fontFamily: font.latin }}>{LIVE ? 'HALQA · v0.1' : 'HALQA · v0.1 prototype'}</p>
     </div>
+  );
+}
+
+/** «تأكيد رقم الهاتف»: a verified number becomes a second way to sign in (with the same password). The current
+ *  verified number stays until the new one is confirmed. Hidden when no SMS provider is configured. */
+function PhoneRow() {
+  const available = useApp((st) => st.pub.phone_verification);
+  const [me, setMe] = useState<E.Me | null>(null);
+  const [step, setStep] = useState<'view' | 'number' | 'code'>('view');
+  const [num, setNum] = useState(''); const [code, setCode] = useState(''); const [sentTo, setSentTo] = useState('');
+  const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false); const [wait, setWait] = useState(0);
+  useEffect(() => { let on = true; E.me().then((m) => on && setMe(m)).catch(() => {}); return () => { on = false; }; }, []);
+  useEffect(() => { if (wait <= 0) return; const t = setTimeout(() => setWait((w) => w - 1), 1000); return () => clearTimeout(t); }, [wait]);
+  if (!available || !me) return null;
+  const send = async (e?: FormEvent) => {
+    e?.preventDefault(); if (busy) return;
+    if (num.trim().length < 8) return setErr('اكتب رقم هاتفك، مثل 01012345678.');
+    setBusy(true); setErr(null);
+    try { const r = await E.phoneStart(num.trim()); setSentTo(r.phone); setWait(r.resend_in); setCode(''); setStep('code'); }
+    catch (x) { const a = x as ApiError; setErr(a.field?.('phone') ?? a.message); const w = Number(a.fields?.resend_in?.[0]); if (w) setWait(w); }
+    finally { setBusy(false); }
+  };
+  const confirm = async (e: FormEvent) => {
+    e.preventDefault(); if (busy) return;
+    if (!/^\d{6}$/.test(code)) return setErr('أدخل الرمز المكوّن من 6 أرقام.');
+    setBusy(true); setErr(null);
+    try { setMe(await E.phoneConfirm(code)); setStep('view'); toast('تم تأكيد رقم الهاتف. يمكنك الدخول به مع كلمة المرور نفسها.'); }
+    catch (x) { setErr((x as ApiError).message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <section aria-labelledby="phone-h" style={{ ...card, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <h2 id="phone-h" style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>تأكيد رقم الهاتف</h2>
+      {step === 'view' && <>
+        <p style={{ margin: 0, fontSize: 14, color: color.muted, lineHeight: 1.7 }}>
+          {me.phone_verified ? <>رقمك المؤكد: <bdi dir="ltr" style={{ fontFamily: font.latin }}>{me.phone}</bdi>. يمكنك الدخول به أو بالبريد مع كلمة المرور نفسها.</>
+            : 'أكّد رقم هاتفك لتتمكن من الدخول به بدل البريد. استعادة كلمة المرور تبقى عبر البريد.'}
+        </p>
+        <button onClick={() => { setStep('number'); setErr(null); setNum(''); }} style={outlineBtn(48, 15)}>{me.phone_verified ? 'تغيير الرقم' : 'تأكيد رقم الهاتف'}</button>
+      </>}
+      {step === 'number' && <form noValidate onSubmit={send} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <label htmlFor="ph-num" style={labelStyle}>رقم الهاتف</label>
+        <input id="ph-num" type="tel" inputMode="tel" dir="ltr" autoComplete="tel" value={num} placeholder="01012345678" onChange={(e) => setNum(e.target.value)} style={inputStyle(err, true)} />
+        {me.phone_verified && <span style={{ fontSize: 13, color: color.muted }}>يبقى رقمك الحالي فعّالًا حتى تؤكد الرقم الجديد.</span>}
+        <FieldError msg={err} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="submit" disabled={busy || wait > 0} style={{ ...primaryBtn(48, 15), flex: 1 }}>{busy ? 'جارٍ الإرسال…' : wait > 0 ? `انتظر ${wait} ث` : 'إرسال رمز التأكيد'}</button>
+          <button type="button" onClick={() => setStep('view')} style={outlineBtn(48, 15)}>إلغاء</button>
+        </div>
+      </form>}
+      {step === 'code' && <form noValidate onSubmit={confirm} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <p style={{ margin: 0, fontSize: 14 }}>أرسلنا رمزًا من 6 أرقام إلى <bdi dir="ltr" style={{ fontFamily: font.latin }}>{sentTo}</bdi>. صالح 5 دقائق.</p>
+        <label htmlFor="ph-code" style={labelStyle}>رمز التأكيد</label>
+        <input id="ph-code" inputMode="numeric" autoComplete="one-time-code" dir="ltr" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} style={inputStyle(err, true)} />
+        <FieldError msg={err} />
+        <button type="submit" disabled={busy} style={primaryBtn(48, 15)}>{busy ? 'جارٍ التحقق…' : 'تأكيد'}</button>
+        <button type="button" disabled={busy || wait > 0} onClick={() => void send()} style={outlineBtn(44, 14)}>{wait > 0 ? `إعادة الإرسال بعد ${wait} ث` : 'إعادة إرسال الرمز'}</button>
+      </form>}
+    </section>
   );
 }
 
