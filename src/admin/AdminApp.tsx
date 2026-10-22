@@ -3,7 +3,7 @@ import { color, font } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import type { Status } from './adminData';
-import { adminLogin, adminLogout, adminRestore, goSection, sectionFromHash, mfaFinish, mfaStart, setAdmin, useAdmin, type AdminState, type Section } from './adminStore';
+import { adminLogin, adminLogout, adminRestore, can, canSection, goSection, sectionFromHash, mfaFinish, mfaStart, setAdmin, useAdmin, type AdminState, type Section } from './adminStore';
 import { LIVE, api, type ApiError } from '@/api/client';
 import * as LA from './live/api';
 const PeopleLive = lazy(() => import('./live/People'));
@@ -13,8 +13,9 @@ const BookingsLive = lazy(() => import('./live/Scheduling').then((m) => ({ defau
 const CoursesLive = lazy(() => import('./live/Content').then((m) => ({ default: m.CoursesLive })));
 const QuizzesLive = lazy(() => import('./live/Content').then((m) => ({ default: m.QuizzesLive })));
 const SettingsLive = lazy(() => import('./live/Settings'));
+const AdminsLive = lazy(() => import('./live/Admins'));
 const LIVE_OTHER: Partial<Record<Section, () => JSX.Element>> = {
-  settings: () => <SettingsLive />, circles: () => <CirclesLive />, bookings: () => <BookingsLive />, lectures: () => <CoursesLive />, quizzes: () => <QuizzesLive />,
+  settings: () => <SettingsLive />, admins: () => <AdminsLive />, circles: () => <CirclesLive />, bookings: () => <BookingsLive />, lectures: () => <CoursesLive />, quizzes: () => <QuizzesLive />,
 };
 
 /** Sections that run on the real API in live mode; the rest still show demo data (labelled). */
@@ -25,9 +26,11 @@ function useLiveCounts(sec: Section) {
   useEffect(() => {
     if (!LIVE) return;
     let on = true;
-    Promise.all((['student', 'teacher', 'parent'] as const).map((r) => LA.peopleCounts(r).then((x) => [r, x] as const)))
+    // Only what this admin may see (the server would refuse the rest).
+    const roles = ([['student', 'users.view'], ['teacher', 'teachers.view'], ['parent', 'parents.view']] as const).filter(([, p]) => can(p)).map(([r]) => r);
+    Promise.all(roles.map((r) => LA.peopleCounts(r).then((x) => [r, x] as const)))
       .then((xs) => { if (on) setC((p) => ({ ...p, ...Object.fromEntries(xs) })); }).catch(() => { /* badges are optional */ });
-    LA.contentDrafts().then((d) => { if (on) setC((p) => ({ ...p, drafts: d })); }).catch(() => {});
+    if (can('courses.view')) LA.contentDrafts().then((d) => { if (on) setC((p) => ({ ...p, drafts: d })); }).catch(() => {});
     return () => { on = false; };
   }, [sec]);
   return c;
@@ -138,10 +141,10 @@ function AdminLogin() {
 const NAV: [Section, string, IconName][] = [
   ['overview', 'نظرة عامة', 'home'], ['students', 'الطلاب', 'user'], ['teachers', 'المعلمون', 'award'], ['parents', 'أولياء الأمور', 'users'],
   ['circles', 'الحلقات', 'target'], ['bookings', 'الحجوزات', 'cal'], ['lectures', 'المحاضرات', 'video'], ['quizzes', 'الاختبارات', 'plan'],
-  ['subs', 'الاشتراكات', 'file'], ['settings', 'الإعدادات', 'settings'],
+  ['subs', 'الاشتراكات', 'file'], ['settings', 'الإعدادات', 'settings'], ['admins', 'الإدارة والصلاحيات', 'shield'],
 ];
 // No payments yet (owner decision): the live portal has no Subscriptions section; the demo keeps its sample.
-const NAV_SHOWN = LIVE ? NAV.filter(([k]) => k !== 'subs') : NAV;
+const NAV_SHOWN = LIVE ? NAV.filter(([k]) => k !== 'subs') : NAV.filter(([k]) => k !== 'admins');
 const todayCairo = () => new Intl.DateTimeFormat('ar-EG', { timeZone: 'Africa/Cairo', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 const TITLES: Record<Section, string> = {
   overview: LIVE ? '' : 'الأحد 11 أكتوبر 2026',
@@ -154,6 +157,7 @@ const TITLES: Record<Section, string> = {
   quizzes: 'مراجعة الاختبارات قبل نشرها للطلاب',
   subs: 'حالة الباقات ومواعيد التجديد',
   settings: 'إعدادات المنصة العامة',
+  admins: 'من يدخل لوحة الإدارة وما يستطيع فعله',
 };
 
 /** Items awaiting admin action, per section (shown as sidebar badges and on the overview). */
@@ -176,7 +180,8 @@ function Portal() {
   const liveRole = LIVE ? LIVE_SECTIONS[s.sec] : undefined;
   const liveOther = LIVE ? LIVE_OTHER[s.sec] : undefined;
   const demoBadge = LIVE && !liveRole && !liveOther && s.sec !== 'overview';
-  useEffect(() => { if (LIVE && s.sec === 'subs') goSection('overview'); }, [s.sec]);
+  // A section this admin may not open (old link, permissions changed) falls back to the overview.
+  useEffect(() => { if (LIVE && (s.sec === 'subs' || !canSection(s.sec))) goSection('overview'); }, [s.sec, s.me]);
   useEffect(() => { // browser back/forward between sections
     const on = () => { const x = sectionFromHash() ?? 'overview'; if (x !== useAdmin.getState().sec) goSection(x, true); };
     window.addEventListener('popstate', on);
@@ -188,7 +193,7 @@ function Portal() {
     <nav aria-label="أقسام الإدارة" style={narrow
       ? { display: 'flex', gap: 4, overflowX: 'auto', padding: '0 12px 10px', margin: '0 -0px' }
       : { display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {NAV_SHOWN.map(([k, l, ic]) => {
+      {NAV_SHOWN.filter(([k]) => !LIVE || canSection(k)).map(([k, l, ic]) => {
         const cur = s.sec === k; const c = counts[k] ?? 0;
         return (
           <button key={k} onClick={() => goSection(k)} aria-current={cur ? 'page' : undefined}
@@ -324,11 +329,12 @@ function OverviewLive({ c }: { c: LiveCounts }) {
     ['lectures', c.drafts?.lessons ?? 0, `دروس مسودة بانتظار المراجعة والنشر${c.drafts?.lessons_by_teachers ? ` (${c.drafts.lessons_by_teachers} من المعلمين)` : ''}`],
     ['quizzes', c.drafts?.tests ?? 0, `اختبارات مسودة بانتظار المراجعة والنشر${c.drafts?.tests_by_teachers ? ` (${c.drafts.tests_by_teachers} من المعلمين)` : ''}`],
   ];
-  const open = todo.filter(([, k]) => k > 0);
+  const open = todo.filter(([k, v]) => v > 0 && canSection(k));
+  const shown = kpis.filter((k) => canSection(k.go));
   return (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14 }}>
-        {kpis.map((k) => (
+        {shown.map((k) => (
           <button key={k.l} onClick={() => goSection(k.go)} style={{ ...card, padding: 18, textAlign: 'right', cursor: 'pointer', color: color.ink }}>
             <p style={{ margin: 0, fontSize: 14, color: color.muted }}>{k.l}</p>
             <p style={{ margin: '6px 0 0', fontSize: 30, fontWeight: 800, fontFamily: font.latin }}>{k.v}</p>
@@ -345,7 +351,7 @@ function OverviewLive({ c }: { c: LiveCounts }) {
           </button>
         ))}
       </section>
-      <CorrectionsAggregate />
+      {can('analytics.view') && <CorrectionsAggregate />}
     </>
   );
 }

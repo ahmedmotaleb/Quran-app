@@ -22,7 +22,9 @@ export function messages() {
   for (const f of files) {
     for (const raw of readFileSync(f, 'utf8').split(/\n-{79}\n/)) {
       const to = /^To: (.+)$/m.exec(raw)?.[1]?.trim(); if (!to) continue;
-      const subject = /^Subject: (.+)$/m.exec(raw)?.[1] ?? '';
+      // Folded header lines and RFC 2047 encoded words (non-ASCII subjects).
+      const subject = (/^Subject:((?:.*)(?:\n[ \t].*)*)/m.exec(raw)?.[1] ?? '').replace(/\n[ \t]+/g, ' ').trim()
+        .replace(/=\?utf-8\?([bq])\?([^?]*)\?=\s*/gi, (_, e, t) => decode(t, e.toLowerCase() === 'b' ? 'base64' : 'quoted-printable'));
       let text = '';
       for (const part of raw.split(/\n--[^\n]+\n/)) {
         if (!/Content-Type: text\/plain/i.test(part)) continue;

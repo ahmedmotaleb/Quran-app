@@ -5,7 +5,7 @@ import { color, font } from '@/theme/tokens';
 import { FieldError, Switch, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import type { ApiError } from '@/api/client';
 import { card } from '../AdminTables';
-import { toast } from '../adminStore';
+import { toast, can } from '../adminStore';
 import * as A from './api';
 import { dateTime, errMsg, Modal, Pager, smallBtn, Table, usePaged } from './ui';
 
@@ -25,7 +25,16 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
   return <section style={{ ...card, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}><h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{title}</h2>{children}</section>;
 }
 
+/** Sections shown follow the admin's permissions (the server refuses the rest): settings.view / settings.manage,
+ *  audit.view; every admin manages their own trusted devices. */
 export default function SettingsLive() {
+  if (!can('settings.view')) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 820 }}><TrustedDevices />{can('audit.view') && <AuditLog />}</div>
+  );
+  return <SettingsForm />;
+}
+
+function SettingsForm() {
   const [saved, setSaved] = useState<A.Settings | null>(null); const [v, setV] = useState<Draft | null>(null);
   const [err, setErr] = useState<Record<string, string | null>>({}); const [loadErr, setLoadErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false); const [askPw, setAskPw] = useState(false); const [auditKey, setAuditKey] = useState(0);
@@ -98,14 +107,14 @@ export default function SettingsLive() {
         {sw('parent_weekly_report', 'ملخص أسبوعي داخل التطبيق لكل ولي أمر مساء الجمعة (بتوقيت القاهرة)')}
       </Group>
       {err.form && <FieldError msg={err.form} />}
-      <div style={{ position: 'sticky', bottom: 0, background: color.ivory, padding: '12px 0', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', borderTop: `1px solid ${color.divider}` }}>
+      {can('settings.manage') && <div style={{ position: 'sticky', bottom: 0, background: color.ivory, padding: '12px 0', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', borderTop: `1px solid ${color.divider}` }}>
         <button onClick={() => void submit().catch(() => {})} disabled={busy || !changed.length} style={primaryBtn(48, 15, { padding: '0 22px' })}>{busy ? 'جارٍ الحفظ…' : 'حفظ التغييرات'}</button>
         <button onClick={() => { setV(strip(saved)); setErr({}); }} disabled={!changed.length} style={smallBtn()}>تراجع</button>
         <span style={{ fontSize: 13, color: color.muted }}>{changed.length ? `${changed.length} تغيير غير محفوظ${sensitive.length ? ' (يتطلب كلمة المرور)' : ''}` : `آخر حفظ: ${dateTime(saved.updated_at)}`}</span>
-      </div>
+      </div>}
       {askPw && <PasswordDialog fields={sensitive.map((k) => LABEL[k])} onClose={() => setAskPw(false)} run={(pw) => submit(pw)} />}
       <TrustedDevices />
-      <AuditLog key={auditKey} />
+      {can('audit.view') && <AuditLog key={auditKey} />}
     </div>
   );
 }

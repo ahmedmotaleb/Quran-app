@@ -168,6 +168,47 @@ the student's booking note. Cells starting with `= + - @` are prefixed with `'` 
 (`students`, `teachers`, `parents`, `circles`, `bookings`, `lectures`, `quizzes`, …). The query string is validated
 with that list's filter rules before it is stored; up to 30 per admin; other admins cannot see or delete them.
 
+## Admin accounts and permissions («الإدارة والصلاحيات»)
+
+Every admin has an access level: **owner** (every permission) or **admin** (exactly the permissions granted). The
+granted set comes from a preset (مدير أكاديمي، خدمة العملاء، إدارة المحتوى، مسؤول الجلسات، مشاهدة فقط) or a custom
+choice. The registry and presets live in `backend/apps/accounts/admin_access.py`. Every admin endpoint declares what
+it needs (`admin_perm`), and `IsAdminRole` refuses anything undeclared. An admin account without a profile has no
+access. A refusal is **403 `admin_permission_denied`** with `fields.permission`. `GET me` returns `admin_access`
+(`level`, `preset`, `permissions`), and the portal shows only the sections and buttons those permissions allow.
+
+**`GET admin/admins`** (`admins.manage`): admins (phones masked without `users.view_contact`), open admin
+invitations, the permission names with Arabic labels, and the presets.
+
+**`POST admin/admins`** `{full_name, email, level, preset, permissions?, otp}`: emails a one-time invitation, subject
+«دعوة للانضمام إلى إدارة حَلْقة». It expires after 3 days and is bound to that email address; a new invitation
+replaces the open one. The invitee accepts at `#/invite?code=…&kind=admin` and must turn on two-step verification at
+their first portal sign-in.
+
+**`PATCH admin/admins/{id}`** `{level, preset, permissions?, otp}` changes an admin's access. It applies from that
+admin's next request.
+
+**`POST admin/admins/{id}/status`** `{status: suspended|active, reason, otp}` suspends or reactivates an admin.
+Suspending ends their sessions.
+
+Rules, enforced on the server:
+- Nobody changes their own access.
+- Only an owner creates, edits or suspends an owner.
+- Nobody grants a permission they don't hold.
+- There is always at least one active owner (409 `last_owner`).
+
+**Fresh MFA:** inviting, editing or suspending an admin, and permanent delete (`users` bulk action `delete`), need a
+current authenticator code in `otp` (403 `fresh_mfa_required`), even inside a signed-in session.
+
+**Audit events:**
+- `admin.invited`, `admin.setup_completed`, `admin.mfa_enabled`.
+- `admin.permission_changed` (with `added` and `removed`).
+- `admin.preset_changed`.
+- `admin.suspended`, `admin.reactivated`.
+
+Bulk actions map to permissions in `admin_access.USER_ACTIONS` and `BULK_WRITE`. Exports need `exports.create`, the
+list's read permission, and, for people, `users.view_contact`.
+
 ## Permission matrix (learning records: assignments, bookings, feedback)
 
 | Role | Can read | Can write |
@@ -175,7 +216,7 @@ with that list's filter rules before it is stored; up to 30 per admin; other adm
 | Student | own | start own tasks, book/cancel/reschedule own sessions |
 | Teacher | students with an active `TeacherAssignment`; own sessions' bookings | assignments for assigned students; attendance for own sessions; cancel own sessions' bookings |
 | Parent | children with an **active** `GuardianLink` (read-only) | — |
-| Admin | everything (admin endpoints) | users, links, assignments, status; all changes audited |
+| Admin | what their permissions allow (see «Admin accounts and permissions») | the same; all changes audited |
 
 Objects outside your scope return **404** (not 403), so IDs can't be probed.
 

@@ -62,6 +62,7 @@ SENSITIVE = {"open_signup", "max_upload_mb", "max_recording_seconds", "default_t
 
 
 class AdminSettingsView(AdminView):
+    admin_perm = {"read": "settings.view", "write": "settings.manage"}
     def get(self, request):
         return Response({**SettingsSerializer(AppSettings.load()).data, "sensitive": sorted(SENSITIVE)})
 
@@ -116,6 +117,7 @@ def _ayah_audio():
 
 
 class AdminAudit(AdminView):
+    admin_perm = "audit.view"
     def get(self, request):
         qs = AuditEvent.objects.select_related("actor").order_by("-created_at", "-id")
         p = request.query_params

@@ -4,7 +4,7 @@ import { color, font } from '@/theme/tokens';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import { Icon } from '@/components/Icon';
 import type { ApiError } from '@/api/client';
-import { toast } from '../adminStore';
+import { can, toast } from '../adminStore';
 import * as A from './api';
 import { chip, dateTime, errMsg, Modal, ReasonDialog, smallBtn } from './ui';
 import {
@@ -63,7 +63,7 @@ export function CirclesLive() {
           style={{ flex: '1 1 240px', minHeight: 48, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15 }} />
         <FilterControls fields={CIRCLE_FIELDS} q={q} update={update} />
         <ExportButton resource="circles" sel={sel} total={L.data?.count ?? 0} filter={filter} sort={sort} />
-        <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> حلقة جديدة</button>
+        {can('circles.manage') && <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> حلقة جديدة</button>}
       </div>
       <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
         {[['all', 'الكل'], ['draft', 'مسودة'], ['published', 'منشورة'], ['off', 'موقوفة']].map(([k, l]) => <button key={k} aria-pressed={cur === k} onClick={() => update({ state: k === 'all' ? '' : k })} style={chip(cur === k)}>{l}</button>)}
@@ -136,11 +136,11 @@ function CirclePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
         </div>
         {c.schedule_note && <p style={{ margin: 0, color: color.muted, fontSize: 14 }}>{c.schedule_note}</p>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={() => setSub('edit')} style={smallBtn()}>تعديل</button>
-          <button onClick={() => setSub('schedule')} style={smallBtn()}>جدولة جلسات</button>
-          {c.state !== 'published' && <button disabled={busy} onClick={() => act(() => A.setCircleState(c.id, 'published'), 'نُشرت الحلقة')} style={smallBtn('primary')}>نشر</button>}
-          {c.state === 'published' && <button disabled={busy} onClick={() => setSub({ reason: 'off' })} style={smallBtn('danger')}>إيقاف</button>}
-          {c.state === 'off' && <button disabled={busy} onClick={() => act(() => A.setCircleState(c.id, 'draft'), 'أُعيدت إلى مسودة')} style={smallBtn()}>إعادة إلى مسودة</button>}
+          {can('circles.manage') && <button onClick={() => setSub('edit')} style={smallBtn()}>تعديل</button>}
+          {can('sessions.manage') && <button onClick={() => setSub('schedule')} style={smallBtn()}>جدولة جلسات</button>}
+          {can('circles.manage') && c.state !== 'published' && <button disabled={busy} onClick={() => act(() => A.setCircleState(c.id, 'published'), 'نُشرت الحلقة')} style={smallBtn('primary')}>نشر</button>}
+          {can('circles.manage') && c.state === 'published' && <button disabled={busy} onClick={() => setSub({ reason: 'off' })} style={smallBtn('danger')}>إيقاف</button>}
+          {can('circles.manage') && c.state === 'off' && <button disabled={busy} onClick={() => act(() => A.setCircleState(c.id, 'draft'), 'أُعيدت إلى مسودة')} style={smallBtn()}>إعادة إلى مسودة</button>}
         </div>
         {c.state !== 'published' && <p style={{ margin: 0, fontSize: 13, color: color.muted }}>جلسات الحلقة لا تظهر للطلاب ولا تُحجز إلا بعد النشر.</p>}
         <Members circle={c} onChanged={() => { void reload(); onChanged(); }} />
@@ -153,7 +153,7 @@ function CirclePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
               {cancellable.length > 1 && (cancellable.includes(s.id) ? <Checkbox checked={sel.has(s.id)} onChange={() => sel.toggle(s.id)} label={`تحديد جلسة ${dateTime(s.starts_at)}`} /> : <span style={{ width: 22 }} />)}
               <span style={{ flex: 1 }}>{dateTime(s.starts_at)}</span>
               <span style={{ fontFamily: font.latin, color: color.muted }}>{s.booked}/{s.capacity}</span>
-              {s.status === 'scheduled' ? <button disabled={busy || new Date(s.starts_at) <= new Date()} onClick={() => setSub({ cancel: s })} style={smallBtn('danger')}>إلغاء الجلسة</button>
+              {s.status === 'scheduled' && can('sessions.manage') ? <button disabled={busy || new Date(s.starts_at) <= new Date()} onClick={() => setSub({ cancel: s })} style={smallBtn('danger')}>إلغاء الجلسة</button>
                 : pill(s.status === 'cancelled' ? BOOK_ST.cancelled : { l: 'مكتملة', bg: '#ECE7DB', fg: '#45534E' })}
             </div>
           ))}
@@ -204,7 +204,7 @@ function Members({ circle, onChanged }: { circle: A.Circle; onChanged: () => voi
           <select id={`mem-add-${circle.id}`} value={pick} onChange={(e) => setPick(e.target.value)} style={{ ...inputStyle(null), width: 'auto', minWidth: 200 }}>
             <option value="">اختر…</option>{opts.filter(([k]) => !ids.has(k)).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
-          <button disabled={busy || !!(d && d.active >= d.capacity)} onClick={add} style={smallBtn('primary')}>{d && d.active >= d.capacity ? 'الحلقة مكتملة' : 'إضافة'}</button>
+          {can('circles.manage') && <button disabled={busy || !!(d && d.active >= d.capacity)} onClick={add} style={smallBtn('primary')}>{d && d.active >= d.capacity ? 'الحلقة مكتملة' : 'إضافة'}</button>}
         </div>
       )}
       <FieldError msg={err} />
@@ -213,7 +213,7 @@ function Members({ circle, onChanged }: { circle: A.Circle; onChanged: () => voi
         <div key={m.id} style={{ display: 'flex', gap: 10, alignItems: 'center', minHeight: 44, borderTop: `1px solid ${color.divider}` }}>
           <span style={{ flex: 1 }}>{m.student.name}</span>
           <span style={{ fontSize: 13, color: color.muted }}>منذ {m.joined_at.slice(0, 10)}</span>
-          <button onClick={() => setEnd(m)} style={smallBtn('danger')}>إزالة</button>
+          {can('circles.manage') && <button onClick={() => setEnd(m)} style={smallBtn('danger')}>إزالة</button>}
         </div>
       ))}
       {end && <ReasonDialog title="إزالة من الحلقة" body={`ستنتهي عضوية ${end.student.name} وتُلغى حجوزاته القادمة في هذه الحلقة، ويُبلَّغ بذلك. الجلسات السابقة والحضور تبقى.`}
@@ -308,7 +308,7 @@ export function BookingsLive() {
     { key: 'a', label: 'الحضور', cell: (b) => ATT[b.attendance] ?? '—' },
     { key: 'st', label: 'الحالة', sort: 'status', cell: (b) => <>{pill(BOOK_ST[b.status])}{b.status === 'cancelled' && b.cancel_reason && <span style={{ display: 'block', fontSize: 12, color: color.muted, marginTop: 4 }}>{b.cancelled_by ? `${b.cancelled_by}: ` : ''}{b.cancel_reason}</span>}</> },
     { key: 'x', label: 'إجراء', cell: (b) => (b.status === 'confirmed' && new Date(b.starts_at) > new Date()
-      ? <button onClick={() => setCancel(b)} aria-label={`إلغاء حجز ${b.student.name}`} style={smallBtn('danger')}>إلغاء</button> : <span style={{ color: color.faint }}>—</span>) },
+      && can('bookings.manage') ? <button onClick={() => setCancel(b)} aria-label={`إلغاء حجز ${b.student.name}`} style={smallBtn('danger')}>إلغاء</button> : <span style={{ color: color.faint }}>—</span>) },
   ];
   return (
     <>

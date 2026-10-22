@@ -4,7 +4,7 @@ import { color, font } from '@/theme/tokens';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import { Icon } from '@/components/Icon';
 import type { ApiError } from '@/api/client';
-import { toast } from '../adminStore';
+import { can, toast } from '../adminStore';
 import * as A from './api';
 import { chip, date, errMsg, Modal, ReasonDialog, smallBtn, useDebounced } from './ui';
 import {
@@ -69,7 +69,7 @@ export function CoursesLive() {
         <FilterControls fields={COURSE_FIELDS} q={q} update={update} />
         <ExportButton resource="courses" sel={sel} total={L.data?.count ?? 0} filter={filter} sort={sort} />
         <SavedViews section="lectures" q={q} update={update} presets={[['بانتظار المراجعة', { state: 'pending' }], ['المؤرشفة', { state: 'archived' }]]} />
-        <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> دورة جديدة</button>
+        {can('courses.manage') && <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> دورة جديدة</button>}
       </div>
       <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
         {[['all', 'الكل'], ['draft', 'مسودة'], ['published', 'منشورة'], ['archived', 'مؤرشفة']].map(([k, l]) => <button key={k} aria-pressed={f === k} onClick={() => update({ state: k === 'all' ? '' : k })} style={chip(f === k)}>{l}</button>)}
@@ -143,10 +143,10 @@ function CoursePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>{pill(c.state)}<span>{c.teacher.name}</span><span style={{ color: color.muted }}>· {c.restricted ? 'للمسجلين فقط' : 'متاحة لكل الطلاب'}</span></div>
         {c.description && <p style={{ margin: 0, fontSize: 14 }}>{c.description}</p>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={() => setSub('edit')} style={smallBtn()}>تعديل</button>
-          {c.state !== 'published' && <button disabled={busy} onClick={() => act(() => A.setCourseState(c.id, 'published'), 'نُشرت الدورة')} style={smallBtn('primary')}>نشر</button>}
-          {c.state === 'published' && <button disabled={busy} onClick={() => act(() => A.setCourseState(c.id, 'draft'), 'أُعيدت إلى مسودة')} style={smallBtn()}>إلغاء النشر</button>}
-          {c.state !== 'archived' && <button disabled={busy} onClick={() => setSub('archive')} style={smallBtn('danger')}>أرشفة</button>}
+          {can('courses.manage') && <button onClick={() => setSub('edit')} style={smallBtn()}>تعديل</button>}
+          {can('courses.manage') && c.state !== 'published' && <button disabled={busy} onClick={() => act(() => A.setCourseState(c.id, 'published'), 'نُشرت الدورة')} style={smallBtn('primary')}>نشر</button>}
+          {can('courses.manage') && c.state === 'published' && <button disabled={busy} onClick={() => act(() => A.setCourseState(c.id, 'draft'), 'أُعيدت إلى مسودة')} style={smallBtn()}>إلغاء النشر</button>}
+          {can('courses.manage') && c.state !== 'archived' && <button disabled={busy} onClick={() => setSub('archive')} style={smallBtn('danger')}>أرشفة</button>}
         </div>
         <section style={{ borderTop: `1px solid ${color.divider}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>الدروس</h3>
@@ -158,13 +158,13 @@ function CoursePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
               <span style={{ fontFamily: font.latin, color: color.muted, minWidth: 24 }}>{l.order}</span>
               <span style={{ flex: 1, minWidth: 160 }}>{l.title} <span style={{ fontSize: 12, color: color.muted }}>· {KIND_L[l.kind]}</span></span>
               {pill(l.state)}
-              <button onClick={() => setSub({ lesson: l })} aria-label={`تعديل ${l.title}`} style={smallBtn()}>تعديل</button>
-              {l.state === 'published'
+              {can('lessons.manage') && <button onClick={() => setSub({ lesson: l })} aria-label={`تعديل ${l.title}`} style={smallBtn()}>تعديل</button>}
+              {!can('lessons.manage') ? null : l.state === 'published'
                 ? <button disabled={busy} onClick={() => act(() => A.setLessonState(l.id, 'draft'), 'أُلغي نشر الدرس')} aria-label={`إلغاء نشر ${l.title}`} style={smallBtn()}>إلغاء النشر</button>
                 : <button disabled={busy} onClick={() => act(() => A.setLessonState(l.id, 'published'), 'نُشر الدرس')} aria-label={`نشر ${l.title}`} style={smallBtn('primary')}>نشر</button>}
             </div>
           ))}
-          <button onClick={() => setSub({ lesson: null })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>إضافة درس</button>
+          {can('lessons.manage') && <button onClick={() => setSub({ lesson: null })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>إضافة درس</button>}
         </section>
         <section style={{ borderTop: `1px solid ${color.divider}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16 }}>المسجلون {c.restricted ? '' : <span style={{ fontSize: 13, color: color.muted, fontWeight: 400 }}>(الدورة مفتوحة؛ التسجيل للمتابعة فقط)</span>}</h3>
@@ -174,10 +174,10 @@ function CoursePanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
             <div key={e.id} style={{ display: 'flex', gap: 8, alignItems: 'center', minHeight: 44 }}>
               {activeEnr.length > 1 && (activeEnr.includes(e.id) ? <Checkbox checked={esel.has(e.id)} onChange={() => esel.toggle(e.id)} label={`تحديد ${e.student.name}`} /> : <span style={{ width: 22 }} />)}
               <span style={{ flex: 1 }}>{e.student.name}</span>{pill(e.status)}<span style={{ fontSize: 12, color: color.muted }}>{e.starts_on ? date(e.starts_on) : ''}</span>
-              {e.status === 'active' && <button onClick={() => setEnd(e)} aria-label={`إنهاء تسجيل ${e.student.name}`} style={smallBtn('danger')}>إنهاء</button>}
+              {can('courses.manage') && e.status === 'active' && <button onClick={() => setEnd(e)} aria-label={`إنهاء تسجيل ${e.student.name}`} style={smallBtn('danger')}>إنهاء</button>}
             </div>
           ))}
-          {c.state !== 'archived' && <button onClick={() => setSub('enroll')} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>تسجيل طالب</button>}
+          {can('courses.manage') && c.state !== 'archived' && <button onClick={() => setSub('enroll')} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>تسجيل طالب</button>}
         </section>
       </>}
       <BulkBar resource="lessons" sel={lsel} total={lessonIds.length} filter={{}} onDone={after} actions={[
@@ -299,7 +299,7 @@ export function QuizzesLive() {
         <FilterControls fields={QUIZ_FIELDS} q={q} update={update} />
         <ExportButton resource="tests" sel={sel} total={L.data?.count ?? 0} filter={filter} sort={sort} />
         <SavedViews section="quizzes" q={q} update={update} />
-        <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> اختبار جديد</button>
+        {can('quizzes.manage') && <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}><Icon name="plus" size={18} /> اختبار جديد</button>}
       </div>
       <div role="group" aria-label="تصفية حسب الحالة" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
         {[['all', 'الكل'], ['draft', 'مسودة'], ['published', 'منشور'], ['closed', 'مغلق']].map(([k, l]) => <button key={k} aria-pressed={f === k} onClick={() => update({ state: k === 'all' ? '' : k })} style={chip(f === k)}>{l}</button>)}
@@ -370,10 +370,10 @@ function QuizPanel({ id, onClose, onChanged }: { id: number; onClose: () => void
       {t && <>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>{pill(t.state)}<span style={{ color: color.muted }}>{t.course ? `دورة: ${t.course.title} · ` : ''}{t.max_attempts} محاولة{t.duration_minutes ? ` · ${t.duration_minutes} دقيقة` : ''} · {t.attempts} محاولة مسلّمة</span></div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={() => setSub('edit')} style={smallBtn()}>تعديل البيانات</button>
-          {t.state !== 'published' && <button disabled={busy} onClick={() => act(() => A.setQuizState(t.id, 'published'), 'نُشر الاختبار')} style={smallBtn('primary')}>نشر</button>}
-          {t.state === 'published' && <button disabled={busy} onClick={() => act(() => A.setQuizState(t.id, 'closed'), 'أُغلق الاختبار')} style={smallBtn('danger')}>إغلاق الاختبار</button>}
-          {t.state === 'closed' && <button disabled={busy} onClick={() => act(() => A.setQuizState(t.id, 'draft'), 'أُعيد إلى مسودة')} style={smallBtn()}>إعادة إلى مسودة</button>}
+          {can('quizzes.manage') && <button onClick={() => setSub('edit')} style={smallBtn()}>تعديل البيانات</button>}
+          {can('quizzes.manage') && t.state !== 'published' && <button disabled={busy} onClick={() => act(() => A.setQuizState(t.id, 'published'), 'نُشر الاختبار')} style={smallBtn('primary')}>نشر</button>}
+          {can('quizzes.manage') && t.state === 'published' && <button disabled={busy} onClick={() => act(() => A.setQuizState(t.id, 'closed'), 'أُغلق الاختبار')} style={smallBtn('danger')}>إغلاق الاختبار</button>}
+          {can('quizzes.manage') && t.state === 'closed' && <button disabled={busy} onClick={() => act(() => A.setQuizState(t.id, 'draft'), 'أُعيد إلى مسودة')} style={smallBtn()}>إعادة إلى مسودة</button>}
         </div>
         {t.attempts > 0 && <p style={{ margin: 0, fontSize: 13, color: color.muted }}>تعديل سؤال أُجيب عنه ينشئ نسخة جديدة للمحاولات القادمة، وتبقى المحاولات السابقة بنصّها الأصلي.</p>}
         <section style={{ borderTop: `1px solid ${color.divider}`, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -388,11 +388,11 @@ function QuizPanel({ id, onClose, onChanged }: { id: number; onClose: () => void
                 <span style={{ display: 'block', fontWeight: 700 }}>{q.prompt}</span>
                 <span style={{ display: 'block', fontSize: 12, color: color.muted }}>{KIND_L[q.kind]} · {q.points} درجة · {keyText(q)}{q.version > 1 ? ` · نسخة ${q.version}` : ''}{q.used ? ` · أُجيب ${q.used} مرة` : ''}</span>
               </span>
-              {t.state !== 'closed' && <><button onClick={() => setSub({ q })} aria-label={`تعديل السؤال ${i + 1}`} style={smallBtn()}>تعديل</button>
+              {can('quizzes.manage') && t.state !== 'closed' && <><button onClick={() => setSub({ q })} aria-label={`تعديل السؤال ${i + 1}`} style={smallBtn()}>تعديل</button>
                 <button onClick={() => setDel(q)} aria-label={`حذف السؤال ${i + 1}`} style={smallBtn('danger')}>حذف</button></>}
             </div>
           ))}
-          {t.state !== 'closed' && <button onClick={() => setSub({ q: null })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>إضافة سؤال</button>}
+          {can('quizzes.manage') && t.state !== 'closed' && <button onClick={() => setSub({ q: null })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>إضافة سؤال</button>}
         </section>
       </>}
       <BulkBar resource="questions" sel={qsel} total={qIds.length} filter={{}} onDone={() => { void reload(); onChanged(); }} actions={[

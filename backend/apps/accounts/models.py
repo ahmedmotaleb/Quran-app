@@ -159,6 +159,7 @@ class Invitation(TimeStamped):
         TEACHER_ACCOUNT = "teacher_account", "حساب معلم"
         GUARDIAN_LINK = "guardian_link", "ربط ولي أمر"
         STUDENT_TEACHER = "student_teacher", "انضمام طالب لمعلم"
+        ADMIN_ACCOUNT = "admin_account", "حساب مسؤول"
 
     purpose = models.CharField(max_length=32, choices=Purpose.choices)
     code_hash = models.CharField(max_length=64, unique=True)
@@ -175,6 +176,10 @@ class Invitation(TimeStamped):
     email_status = models.CharField(max_length=8, blank=True)    # "", "sent", "failed"
     last_sent_at = models.DateTimeField(null=True, blank=True)
     send_count = models.PositiveSmallIntegerField(default=0)
+    # admin_account only: the access the new admin gets (validated by admin_access when the invitation is made).
+    admin_level = models.CharField(max_length=8, blank=True)
+    admin_preset = models.CharField(max_length=24, blank=True)
+    admin_permissions = models.JSONField(default=list, blank=True)
 
     @property
     def status(self) -> str:
@@ -248,3 +253,26 @@ class TrustedDevice(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["user", "revoked_at"])]
+
+
+class AdminProfile(models.Model):
+    """Access of an admin account (see admin_access.py). `permissions` is only ever written through
+    admin_access.validate(), so it holds known permission names only; owners need none (they hold all)."""
+
+    class Level(models.TextChoices):
+        OWNER = "owner", "المالك"
+        ADMIN = "admin", "مسؤول"
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="admin_profile")
+    access_level = models.CharField(max_length=8, choices=Level.choices, default=Level.ADMIN)
+    preset = models.CharField(max_length=24, default="custom")
+    permissions = models.JSONField(default=list, blank=True)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(default=dj_tz.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        from .admin_access import validate
+
+        self.permissions = sorted(validate(self.permissions or []))  # never an unknown name
+        super().save(*args, **kwargs)

@@ -36,6 +36,30 @@ from .serializers import (
 
 log = logging.getLogger(__name__)
 
+
+# ---- what each admin people endpoint needs (admin_access.py) ---------------------------------------
+def _people_perm(view, request):
+    """Listing people: students need users.view, teachers teachers.view, parents parents.view; creating needs
+    users.create (teachers are invited, see invitations.py)."""
+    from .admin_access import people_view_perm
+
+    if request.method == "POST":
+        return "users.create"
+    return people_view_perm(request.query_params.get("role"))
+
+
+def _person_perm(view, request):
+    from .admin_access import people_view_perm
+
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        return "users.edit"
+    u = User.objects.filter(pk=view.kwargs.get("pk")).only("role").first()
+    return people_view_perm(u.role if u else None)
+
+
+def _status_perm(view, request):
+    return "users.archive" if str(request.data.get("status", "")) == AccountStatus.ARCHIVED else "users.suspend"
+
 BAD_CREDENTIALS = ApiError("bad_credentials", "البريد الإلكتروني أو كلمة المرور غير صحيحة.", 400)
 LOCKED = ApiError("account_locked", "محاولات دخول كثيرة غير ناجحة. انتظر ربع ساعة ثم حاول مجددًا أو أعد تعيين كلمة المرور.", 429)
 
@@ -321,6 +345,7 @@ class MfaConfirmView(APIView):
         u.mfa_enabled = True
         u.save(update_fields=["mfa_enabled"])
         audit("auth.mfa_enabled", actor=u, target=u, request=request)
+        audit("admin.mfa_enabled", actor=u, target=u, request=request)
         return Response({"mfa_enabled": True})
 
 
@@ -364,6 +389,23 @@ class AcceptInvitationView(APIView):
                 user = User.objects.create_user(email, d["password"], full_name=d["full_name"], role=Role.TEACHER)
                 TeacherProfile.objects.create(user=user, approved_at=timezone.now())
                 result = {"user": MeSerializer(user).data}
+            elif inv.purpose == Invitation.Purpose.ADMIN_ACCOUNT:
+                # Email-bound: the account is created only for the invited address, with the inviter's chosen access.
+                if user is not None:
+                    raise ApiError("sign_out_first", "سجّل الخروج أولًا لإنشاء حساب المسؤول.", 400)
+                email = (d.get("email") or "").lower()
+                if not (inv.email and email == inv.email and d.get("password") and d.get("full_name")):
+                    raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"email": ["اكتب البريد الذي وصلته الدعوة."]})
+                if User.objects.filter(email=email).exists():
+                    raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"email": ["هذا البريد مسجّل بالفعل."]})
+                try:
+                    password_validation.validate_password(d["password"])
+                except Exception as e:
+                    raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"password": [arabic_password_error(e)]})
+                from .admin_management import ADMIN_URL, accept_admin_invitation
+
+                user = accept_admin_invitation(inv, email=email, full_name=d["full_name"], password=d["password"], request=request)
+                result = {"user": MeSerializer(user).data, "admin_url": ADMIN_URL()}
             elif inv.purpose == Invitation.Purpose.GUARDIAN_LINK:
                 if user is None or user.role != Role.PARENT:
                     raise ApiError("parent_required", "سجّل الدخول بحساب ولي الأمر أولًا.", 403)
@@ -393,6 +435,7 @@ def _admin_users():
 
 
 class AdminUserList(generics.ListCreateAPIView):
+    admin_perm = staticmethod(_people_perm)
     permission_classes = [IsAdminRole]
 
     def get_serializer_class(self):
@@ -430,6 +473,7 @@ def _setup_link(request, user) -> dict:
 
 class AdminUserDetail(APIView):
     """Edit a learner/teacher/parent profile (not email, role or password)."""
+    admin_perm = staticmethod(_person_perm)
 
     permission_classes = [IsAdminRole]
 
@@ -451,6 +495,7 @@ class AdminUserDetail(APIView):
 
 class AdminUserSetupLink(APIView):
     """New password-setup link for a user (e.g. a parent who never set one, or lost access)."""
+    admin_perm = "invitations.send"
 
     permission_classes = [IsAdminRole]
 
@@ -463,6 +508,7 @@ class AdminUserSetupLink(APIView):
 
 class AdminUserCounts(APIView):
     """Status counts per role, for the filter chips."""
+    admin_perm = staticmethod(_people_perm)
 
     permission_classes = [IsAdminRole]
 
@@ -483,6 +529,7 @@ class AdminUserCounts(APIView):
 
 class AdminTeacherApproval(APIView):
     """Approve a teacher so learners can find and book them; `{"approved": false, "reason": …}` withdraws it."""
+    admin_perm = "teachers.approve"
 
     permission_classes = [IsAdminRole]
 
@@ -503,6 +550,7 @@ class AdminTeacherApproval(APIView):
 
 
 class AdminUserStatus(APIView):
+    admin_perm = staticmethod(_status_perm)
     permission_classes = [IsAdminRole]
 
     def post(self, request, pk):
@@ -523,6 +571,7 @@ class AdminUserStatus(APIView):
 
 
 class AdminAssignmentCreate(generics.CreateAPIView):
+    admin_perm = "teachers.assign"
     permission_classes = [IsAdminRole]
     serializer_class = TeacherAssignmentSerializer
 
@@ -535,6 +584,7 @@ class AdminAssignmentCreate(generics.CreateAPIView):
 
 
 class AdminAssignmentEnd(APIView):
+    admin_perm = "teachers.assign"
     permission_classes = [IsAdminRole]
 
     def post(self, request, pk):
@@ -547,6 +597,7 @@ class AdminAssignmentEnd(APIView):
 
 class AdminGuardianLinkCreate(generics.CreateAPIView):
     """Admin process for verified guardian links (alternative to invitations)."""
+    admin_perm = "parents.link_child"
 
     permission_classes = [IsAdminRole]
     serializer_class = GuardianLinkSerializer
@@ -560,6 +611,7 @@ class AdminGuardianLinkCreate(generics.CreateAPIView):
 
 
 class AdminGuardianLinkRevoke(APIView):
+    admin_perm = "parents.link_child"
     permission_classes = [IsAdminRole]
 
     def post(self, request, pk):
@@ -620,6 +672,7 @@ __all__ = ["BearerTokenAuthentication"]
 
 class AdminUserPromoteTeacher(APIView):
     """Student → Teacher, one account at a time (same id, email, password and history). See promotion.py."""
+    admin_perm = "users.promote_teacher"
 
     permission_classes = [IsAdminRole]
 

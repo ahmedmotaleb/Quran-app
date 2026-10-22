@@ -38,11 +38,16 @@ EMAIL_TEXT = {
                       "افتح الرابط ثم سجّل الدخول بحساب ولي الأمر لإتمام الربط.", "قبول الدعوة"),
     P.STUDENT_TEACHER: ("دعوة للانضمام إلى حَلْقة", "دعاك معلمك للانضمام إلى حلقته في منصة حَلْقة لتحفيظ القرآن الكريم. "
                         "افتح الرابط ثم سجّل الدخول بحساب الطالب.", "الانضمام إلى المعلم"),
+    P.ADMIN_ACCOUNT: ("دعوة للانضمام إلى إدارة حَلْقة", "دعتك إدارة حَلْقة للانضمام إلى فريق الإدارة. أنشئ حسابك من الرابط التالي، "
+                      "وعند أول دخول إلى بوابة الإدارة ستفعّل التحقق بخطوتين.", "إنشاء حساب المسؤول"),
 }
+# Which admin permission manages each kind of invitation (admin_access.py).
+INVITE_PERM = {P.TEACHER_ACCOUNT: "invitations.send", P.GUARDIAN_LINK: "parents.link_child", P.ADMIN_ACCOUNT: "admins.manage"}
 
 
-def _link(raw: str) -> str:
-    return f"{settings.FRONTEND_URL}/#/invite?code={raw}"
+def _link(raw: str, purpose: str = "") -> str:
+    # `kind` only changes the page's wording; the server decides what the invitation creates.
+    return f"{settings.FRONTEND_URL}/#/invite?code={raw}" + ("&kind=admin" if purpose == P.ADMIN_ACCOUNT else "")
 
 
 def _domain(email: str) -> str:
@@ -51,7 +56,7 @@ def _domain(email: str) -> str:
 
 def _send(inv: Invitation, raw: str, by, request, event: str) -> bool:
     subject, intro, cta = EMAIL_TEXT[inv.purpose]
-    ok = bool(inv.email) and send_link_email(inv.email, subject=subject, intro=intro, cta=cta, link=_link(raw),
+    ok = bool(inv.email) and send_link_email(inv.email, subject=subject, intro=intro, cta=cta, link=_link(raw, inv.purpose),
                                               expires_at=inv.expires_at, one_time=inv.max_uses == 1)
     if inv.email:
         inv.email_status, inv.last_sent_at, inv.send_count = ("sent" if ok else "failed"), timezone.now(), inv.send_count + 1
@@ -70,7 +75,8 @@ def invitation_out(inv: Invitation) -> dict:
 
 
 class InvitationIn(serializers.Serializer):
-    purpose = serializers.ChoiceField(choices=P.choices)
+    # Admin invitations are made in «الإدارة والصلاحيات» (admin_management.py), never through this endpoint.
+    purpose = serializers.ChoiceField(choices=[c for c in P.choices if c[0] != P.ADMIN_ACCOUNT])
     email = serializers.EmailField(required=False, allow_blank=True, default="")
     student = serializers.PrimaryKeyRelatedField(queryset=User.objects.filter(role=Role.STUDENT), required=False, allow_null=True)
     days = serializers.IntegerField(min_value=1, max_value=30, default=7)
@@ -86,7 +92,11 @@ class InvitationIn(serializers.Serializer):
 
 
 def _may_manage(user, inv: Invitation) -> bool:
-    return user.role == Role.ADMIN or inv.created_by_id == user.pk
+    from .admin_access import has
+
+    if user.role == Role.ADMIN:
+        return has(user, INVITE_PERM.get(inv.purpose, "admins.manage"))
+    return inv.created_by_id == user.pk and inv.purpose != P.ADMIN_ACCOUNT
 
 
 class InvitationListCreate(APIView):
@@ -102,6 +112,11 @@ class InvitationListCreate(APIView):
         qs = Invitation.objects.select_related("created_by").exclude(revoke_reason="replaced").order_by("-created_at")
         if u.role == Role.TEACHER:
             qs = qs.filter(created_by=u)
+        else:
+            from .admin_access import perms_of
+
+            mine = perms_of(u)
+            qs = qs.filter(purpose__in=[p for p, need in INVITE_PERM.items() if need in mine])
         if request.query_params.get("purpose") in P.values:
             qs = qs.filter(purpose=request.query_params["purpose"])
         rows = [invitation_out(i) for i in qs[:200]]
@@ -118,6 +133,10 @@ class InvitationListCreate(APIView):
         u, purpose, email = request.user, d["purpose"], d["email"]
         if not (u.role == Role.ADMIN or (u.role == Role.TEACHER and purpose == P.STUDENT_TEACHER)):
             raise ApiError("permission_denied", "ليست لديك صلاحية لهذا الإجراء.", 403)
+        if u.role == Role.ADMIN:
+            from .admin_access import require
+
+            require(u, INVITE_PERM.get(purpose, "invitations.send"))
         if email:
             existing = User.objects.filter(email__iexact=email).first()
             if existing and purpose == P.TEACHER_ACCOUNT:
@@ -152,7 +171,7 @@ class InvitationListCreate(APIView):
         sent = _send(inv, raw, u, request, "create") if email else False
         out = {**invitation_out(inv), "email_sent": sent}
         if d["share_link"]:
-            out["link"] = _link(raw)  # asked for explicitly, to also send over WhatsApp; shown to the inviter once
+            out["link"] = _link(raw, inv.purpose)  # asked for explicitly, to also send over WhatsApp; shown to the inviter once
         return Response(out, status=201)
 
 
@@ -186,7 +205,7 @@ class InvitationResend(APIView):
         sent = _send(inv, raw, u, request, "resend") if inv.email else False
         out = {**invitation_out(inv), "email_sent": sent}
         if share:
-            out["link"] = _link(raw)
+            out["link"] = _link(raw, inv.purpose)
         return Response(out, status=201)
 
 

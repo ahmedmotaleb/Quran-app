@@ -78,6 +78,7 @@ def _occ_out(o: SessionOccurrence) -> dict:
 
 
 class AdminCircles(AdminView):
+    admin_perm = {"read": "circles.view", "write": "circles.manage"}
     def get(self, request):
         from .admin_bulk import CIRCLE_FILTERS
 
@@ -92,6 +93,7 @@ class AdminCircles(AdminView):
 
 
 class AdminCircleDetail(AdminView):
+    admin_perm = {"read": "circles.view", "write": "circles.manage"}
     def get(self, request, pk):
         c = get_object_or_404(_circles(), pk=pk)
         occ = (c.occurrences.filter(starts_at__gte=timezone.now() - timedelta(days=1)).select_related("teacher")
@@ -127,6 +129,7 @@ class AdminCircleDetail(AdminView):
 
 class AdminCircleState(AdminView):
     """draft → published (visible and bookable) → off (hidden; existing bookings stay until cancelled)."""
+    admin_perm = "circles.manage"
 
     def post(self, request, pk):
         c = get_object_or_404(Circle.objects.select_related("teacher__teacher_profile"), pk=pk)
@@ -165,6 +168,7 @@ class SessionsIn(serializers.Serializer):
 class AdminCircleSessions(AdminView):
     """Schedule weekly sessions for a circle. Times are local (DST-safe). `dry_run` previews without saving.
     Unbooked individual open slots of the teacher at those times are replaced; anything booked is a conflict."""
+    admin_perm = {"read": "circles.view", "write": "sessions.manage"}
 
     def post(self, request, pk):
         c = get_object_or_404(Circle, pk=pk)
@@ -207,6 +211,7 @@ class AdminCircleSessions(AdminView):
 
 
 class AdminOccurrenceCancel(AdminView):
+    admin_perm = "sessions.manage"
     def post(self, request, pk):
         reason = _reason(request)
         o, n = services.cancel_occurrence(occurrence_id=pk, by=request.user, reason=reason)
@@ -225,6 +230,7 @@ def _booking_out(b: Booking) -> dict:
 
 
 class AdminBookings(AdminView):
+    admin_perm = "bookings.view"
     def get(self, request):
         from .admin_bulk import BOOKING_FILTERS
 
@@ -236,6 +242,7 @@ class AdminBookings(AdminView):
 
 
 class AdminBookingCounts(AdminView):
+    admin_perm = "bookings.view"
     def get(self, request):
         now = timezone.now()
         up = Booking.objects.filter(occurrence__starts_at__gte=now)
@@ -246,6 +253,7 @@ class AdminBookingCounts(AdminView):
 
 
 class AdminBookingCancel(AdminView):
+    admin_perm = "bookings.manage"
     def post(self, request, pk):
         reason = _reason(request)
         get_object_or_404(Booking, pk=pk)
@@ -264,6 +272,7 @@ def _member_out(m: CircleMember) -> dict:
 
 class AdminCircleMembers(AdminView):
     """GET: members (active first, then past). POST {student}: join (auto-books upcoming sessions)."""
+    admin_perm = {"read": "circles.view", "write": "circles.manage"}
 
     def get(self, request, pk):
         c = get_object_or_404(Circle, pk=pk)
@@ -281,6 +290,7 @@ class AdminCircleMembers(AdminView):
 
 
 class AdminCircleMemberEnd(AdminView):
+    admin_perm = "circles.manage"
     def post(self, request, pk):
         m = get_object_or_404(CircleMember.objects.select_related("circle", "student"), pk=pk, active=True)
         n = membership.leave(m, request.user, _reason(request, required=False))
@@ -292,6 +302,7 @@ class AdminCircleMemberEnd(AdminView):
 # ---- Excuses and the absence rule (admin) ------------------------------------------------------
 class AdminExcuses(APIView):
     """GET ?status=pending (default) | approved | rejected | all, optional ?student= — every excuse."""
+    admin_perm = "excuses.review"
 
     permission_classes = [IsAdminRole]
 
@@ -310,6 +321,7 @@ class AdminExcuses(APIView):
 
 class AdminExcuseOverride(APIView):
     """«اعتماد العذر إداريًا»: an audited correction (reason required); the teacher's decision stays recorded."""
+    admin_perm = "attendance.manage"
 
     permission_classes = [IsAdminRole]
 
@@ -323,6 +335,7 @@ class AdminExcuseOverride(APIView):
 
 class AdminStudentDiscipline(APIView):
     """Attendance/discipline figures for one student, with the bookings that count and every excuse."""
+    admin_perm = "users.view"
 
     permission_classes = [IsAdminRole]
 

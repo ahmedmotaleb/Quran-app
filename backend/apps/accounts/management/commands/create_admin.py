@@ -27,5 +27,7 @@ class Command(BaseCommand):
             validate_password(password)
         except ValidationError as e:
             raise CommandError("ADMIN_PASSWORD rejected: " + " ".join(e.messages)) from None
-        User.objects.create_superuser(email, password, full_name=name)
+        from apps.accounts.admin_access import ensure_owner
+
+        ensure_owner(User.objects.create_superuser(email, password, full_name=name))  # the first admin is an owner
         self.stdout.write(self.style.SUCCESS(f"Admin {email} created. Sign in at /#/admin and turn on two-step verification."))

@@ -11,9 +11,9 @@ import { FieldError, inputStyle, labelStyle } from '@/components/ui';
 import { Icon } from '@/components/Icon';
 import { ApiError, type Page } from '@/api/client';
 import { card } from '../AdminTables';
-import { toast } from '../adminStore';
+import { can, canBulk, needsFreshOtp, toast } from '../adminStore';
 import * as A from './api';
-import { chip, errMsg, Modal, smallBtn } from './ui';
+import { chip, errMsg, Modal, OtpField, smallBtn } from './ui';
 
 export const PAGE_SIZE = 20;
 
@@ -266,6 +266,7 @@ export interface BulkDef {
   body: (n: number) => string;     // what will happen
   ok: (n: number) => string;       // confirm button
   params?: ParamField[];           // asked in the dialog, validated again by the server (teacher, course, message…)
+  freshMfa?: boolean;              // the server asks for a current authenticator code (permanent delete)
 }
 export type ParamField =
   | { key: string; label: string; type: 'remote'; load: () => Promise<[string, string][]> }
@@ -305,6 +306,7 @@ export function BulkBar({ resource, sel, total, actions, filter, onDone, exporta
 }) {
   const [run, setRun] = useState<BulkDef | null>(null); const [result, setResult] = useState<{ def: BulkDef; r: A.BulkResult } | null>(null);
   const n = sel.count(total);
+  actions = actions.filter((a) => canBulk(resource, a.key)); // only what this admin may do (the server checks again)
   if (n === 0 && !result) return null;
   return (
     <>
@@ -349,6 +351,7 @@ function BulkConfirm({ def, resource, sel, total, filter, onClose, onDone }: {
   const [reason, setReason] = useState(''); const [typed, setTyped] = useState('');
   const [pv, setPv] = useState<Record<string, unknown>>({});
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const [otp, setOtp] = useState(''); const withOtp = !!def.freshMfa && needsFreshOtp();
   const needType = !!def.confirmAlways || (!!def.destructive && n >= 10);
   const word = def.confirmWord ?? 'حذف';
   const submit = async (e: FormEvent) => {
@@ -358,16 +361,17 @@ function BulkConfirm({ def, resource, sel, total, filter, onClose, onDone }: {
     if (needType && typed.trim() !== word) return setErr(`اكتب «${word}» للتأكيد.`);
     const missing = def.params?.find((f) => f.type !== 'check' && !String(pv[f.key] ?? '').trim());
     if (missing) return setErr(`أكمل: ${missing.label}.`);
+    if (withOtp && !/^\d{6}$/.test(otp)) return setErr('أدخل رمز التحقق المكوّن من 6 أرقام من تطبيق المصادقة.');
     setBusy(true); setErr(null);
     const params = def.params ? Object.fromEntries(def.params.map((f) => [f.key, f.type === 'remote' ? Number(pv[f.key]) : f.type === 'check' ? !!pv[f.key] : String(pv[f.key] ?? '').trim()])) : undefined;
-    const body: A.BulkBody = { action: def.key, reason: reason.trim(), ...(needType ? { confirm: 'حذف' } : {}), ...(params ? { params } : {}) };
+    const body: A.BulkBody = { action: def.key, reason: reason.trim(), ...(needType ? { confirm: 'حذف' } : {}), ...(params ? { params } : {}), ...(withOtp ? { otp } : {}) };
     if (sel.sel.mode === 'all') Object.assign(body, { filter, expected: n, exclude_ids: [...sel.sel.excluded] });
     else body.ids = [...sel.sel.ids];
     try { onDone(await A.bulkAction(resource, body)); }
     catch (x) {
       const a = x as ApiError;
       if (a?.code === 'results_changed') { const now = Number(a.fields?.expected?.[0] ?? n); setN(now); setErr(`تغيّرت النتائج: أصبح العدد ${now}. راجع ثم أكّد من جديد.`); }
-      else setErr(a?.field?.('reason') ?? a?.field?.('confirm') ?? def.params?.map((f) => a?.field?.(f.key)).find(Boolean) ?? errMsg(x));
+      else setErr(a?.field?.('otp') ?? a?.field?.('reason') ?? a?.field?.('confirm') ?? def.params?.map((f) => a?.field?.(f.key)).find(Boolean) ?? errMsg(x));
       setBusy(false);
     }
   };
@@ -385,6 +389,7 @@ function BulkConfirm({ def, resource, sel, total, filter, onClose, onDone }: {
           <label htmlFor="bk-c" style={labelStyle}>اكتب {word} للتأكيد</label>
           <input id="bk-c" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" style={inputStyle(null)} />
         </>}
+        {withOtp && <OtpField id="bk-otp" value={otp} onChange={setOtp} />}
         <FieldError msg={err} />
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" onClick={onClose} disabled={busy} style={{ ...smallBtn(), minHeight: 48 }}>إلغاء</button>
@@ -422,6 +427,7 @@ export function ExportButton({ resource, sel, total, filter, sort, light = false
 }) {
   const [busy, setBusy] = useState(false);
   const n = sel.count(total);
+  if (!can('exports.create') || (resource === 'users' && !can('users.view_contact'))) return null; // the server refuses it too
   const go = async () => {
     setBusy(true);
     try {

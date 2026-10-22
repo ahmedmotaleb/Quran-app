@@ -101,7 +101,9 @@ class LessonIn(serializers.Serializer):
             raise serializers.ValidationError({"media": ["ارفع ملف الدرس."]})
         user = self.context["request"].user
         m = MediaObject.objects.filter(pk=mid, purpose=MediaObject.Purpose.LESSON_FILE, state=MediaObject.State.VALIDATED).first()
-        if m is None or (user.role != Role.ADMIN and m.owner_id != user.pk):
+        from apps.accounts.admin_access import has
+
+        if m is None or (not (user.role == Role.ADMIN and has(user, "lessons.manage")) and m.owner_id != user.pk):
             raise serializers.ValidationError({"media": ["الملف غير صالح. ارفعه مرة أخرى."]})
         is_pdf = m.content_type == "application/pdf"
         if (kind == Lesson.Kind.PDF) != is_pdf:
@@ -133,6 +135,7 @@ def _courses():
 
 
 class AdminCourses(AdminView):
+    admin_perm = {"read": "courses.view", "write": "courses.manage"}
     def get(self, request):
         from apps.core.bulk import list_with
 
@@ -149,6 +152,7 @@ class AdminCourses(AdminView):
 
 
 class AdminCourseDetail(AdminView):
+    admin_perm = {"read": "courses.view", "write": "courses.manage"}
     def get(self, request, pk):
         c = get_object_or_404(_courses(), pk=pk)
         lessons = [_lesson_out(l) for l in c.lessons.order_by("order", "id")]
@@ -167,6 +171,7 @@ class AdminCourseDetail(AdminView):
 
 class AdminCourseState(AdminView):
     """draft → published → archived (and back to draft). Archiving keeps enrollments, completions and grades."""
+    admin_perm = "courses.manage"
 
     def post(self, request, pk):
         c = get_object_or_404(Course, pk=pk)
@@ -184,6 +189,7 @@ class AdminCourseState(AdminView):
 
 
 class AdminLessons(AdminView):
+    admin_perm = {"read": "courses.view", "write": "lessons.manage"}
     def post(self, request, pk):
         c = get_object_or_404(Course, pk=pk)
         s = LessonIn(data=request.data, context={"request": request})
@@ -197,6 +203,7 @@ class AdminLessons(AdminView):
 
 
 class AdminLessonDetail(AdminView):
+    admin_perm = {"read": "courses.view", "write": "lessons.manage"}
     def patch(self, request, pk):
         l = get_object_or_404(Lesson, pk=pk)
         s = LessonIn(l, data=request.data, partial=True, context={"request": request})
@@ -209,6 +216,7 @@ class AdminLessonDetail(AdminView):
 
 
 class AdminLessonState(AdminView):
+    admin_perm = "lessons.manage"
     def post(self, request, pk):
         l = get_object_or_404(Lesson.objects.select_related("course"), pk=pk)
         new = request.data.get("state")
@@ -234,6 +242,7 @@ def _enrollment_out(e: Enrollment) -> dict:
 
 
 class AdminEnrollments(AdminView):
+    admin_perm = {"read": "courses.view", "write": "courses.manage"}
     def get(self, request, pk):
         from .admin_bulk import ENROLLMENT_FILTERS
 
@@ -257,6 +266,7 @@ class AdminEnrollments(AdminView):
 
 
 class AdminEnrollmentEnd(AdminView):
+    admin_perm = "courses.manage"
     def post(self, request, pk):
         e = get_object_or_404(Enrollment.objects.select_related("student"), pk=pk, status=Enrollment.Status.ACTIVE)
         new = request.data.get("status", Enrollment.Status.WITHDRAWN)

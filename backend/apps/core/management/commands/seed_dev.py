@@ -37,6 +37,10 @@ class Command(BaseCommand):
                 if user is None:
                     user = User.objects.create_user(email, password, full_name=name, role=role,
                                                     is_staff=role == Role.ADMIN, is_superuser=role == Role.ADMIN)
+                if role == Role.ADMIN:
+                    from apps.accounts.admin_access import ensure_owner
+
+                    ensure_owner(user)
                 u[email] = user
             teacher, khalid = u["teacher@halqa.app"], u["khalid@halqa.app"]
             yousef, sara, parent = u["yousef@halqa.app"], u["sara@halqa.app"], u["parent@halqa.app"]

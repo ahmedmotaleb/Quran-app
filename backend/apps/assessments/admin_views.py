@@ -121,6 +121,7 @@ def _page(view, request, qs, fn):
 
 
 class AdminTests(AdminView):
+    admin_perm = {"read": "courses.view", "write": "quizzes.manage"}
     def get(self, request):
         from apps.core.bulk import list_with
 
@@ -137,6 +138,7 @@ class AdminTests(AdminView):
 
 
 class AdminTestDetail(AdminView):
+    admin_perm = {"read": "courses.view", "write": "quizzes.manage"}
     def get(self, request, pk):
         t = get_object_or_404(_tests(), pk=pk)
         qs = t.questions.filter(retired=False)
@@ -164,6 +166,7 @@ class AdminTestDetail(AdminView):
 
 class AdminTestState(AdminView):
     """draft → published (students can attempt) → closed (no new attempts; results and history kept)."""
+    admin_perm = "quizzes.manage"
 
     def post(self, request, pk):
         t = get_object_or_404(Test, pk=pk)
@@ -183,6 +186,7 @@ class AdminTestState(AdminView):
 
 
 class AdminQuestions(AdminView):
+    admin_perm = {"read": "courses.view", "write": "quizzes.manage"}
     def post(self, request, pk):
         t = get_object_or_404(Test, pk=pk)
         if t.state == Test.State.CLOSED:
@@ -198,6 +202,7 @@ class AdminQuestions(AdminView):
 
 
 class AdminQuestionDetail(AdminView):
+    admin_perm = {"read": "courses.view", "write": "quizzes.manage"}
     def patch(self, request, pk):
         q = get_object_or_404(Question.objects.select_related("test"), pk=pk, retired=False)
         if q.test.state == Test.State.CLOSED:

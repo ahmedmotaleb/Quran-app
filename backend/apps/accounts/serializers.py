@@ -23,10 +23,12 @@ class MeSerializer(serializers.ModelSerializer):
     level = serializers.SerializerMethodField()
     daily_goal = serializers.SerializerMethodField()
     mfa_required = serializers.SerializerMethodField()
+    admin_access = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "mfa_enabled", "mfa_required", "level", "daily_goal", "date_joined"]
+        fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "mfa_enabled", "mfa_required", "level", "daily_goal",
+                  "date_joined", "admin_access"]
 
     def get_level(self, u) -> str:
         return _student_field(u, "level")
@@ -36,9 +38,14 @@ class MeSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "email", "role", "status", "mfa_enabled", "date_joined"]
 
     def get_mfa_required(self, u) -> bool:
-        from django.conf import settings
+        from .admin_access import mfa_required
 
-        return u.role == "admin" and settings.ADMIN_REQUIRE_MFA
+        return u.role == "admin" and mfa_required(u)
+
+    def get_admin_access(self, u):
+        from .admin_access import access_out
+
+        return access_out(u)
 
     def validate_timezone(self, v):
         return validate_tz(v)

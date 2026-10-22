@@ -5,7 +5,7 @@ import { FieldError, inputStyle, labelStyle } from '@/components/ui';
 import { Icon } from '@/components/Icon';
 import type { ApiError, Page } from '@/api/client';
 import { card } from '../AdminTables';
-import { toast } from '../adminStore';
+import { needsFreshOtp, toast } from '../adminStore';
 
 export const errMsg = (e: unknown) => (e as ApiError)?.message || 'تعذّر تنفيذ الطلب.';
 export const date = (iso: string | null) => (iso ? new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium', timeZone: 'Africa/Cairo' }).format(new Date(iso)) : '—');
@@ -59,19 +59,22 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
   );
 }
 
-/** Asks for a reason, then runs the action; shows the server's error if it fails. */
 /** Asks for a reason before a sensitive change. `typeWord`: the admin must also type this word (irreversible actions). */
-export function ReasonDialog({ title, body, ok, required = true, typeWord, onClose, run }: {
-  title: string; body: string; ok: string; required?: boolean; typeWord?: string; onClose: () => void; run: (reason: string) => Promise<void>;
+/** `otp`: the action needs a current authenticator code (permanent delete, admin changes); asked only when the admin
+ *  has two-step verification on, and checked again by the server. */
+export function ReasonDialog({ title, body, ok, required = true, typeWord, otp: askOtp = false, onClose, run }: {
+  title: string; body: string; ok: string; required?: boolean; typeWord?: string; otp?: boolean; onClose: () => void; run: (reason: string, otp: string) => Promise<void>;
 }) {
   const [r, setR] = useState(''); const [typed, setTyped] = useState(''); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const [code, setCode] = useState(''); const withOtp = askOtp && needsFreshOtp();
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (busy) return;
     if (required && r.trim().length < 3) return setErr('اكتب السبب (3 أحرف على الأقل).');
     if (typeWord && typed.trim() !== typeWord) return setErr(`اكتب «${typeWord}» للتأكيد.`);
+    if (withOtp && !/^\d{6}$/.test(code)) return setErr('أدخل رمز التحقق المكوّن من 6 أرقام من تطبيق المصادقة.');
     setBusy(true); setErr(null);
-    try { await run(r.trim()); onClose(); } catch (x) { setErr(errMsg(x)); setBusy(false); }
+    try { await run(r.trim(), code); onClose(); } catch (x) { setErr(errMsg(x)); setBusy(false); }
   };
   return (
     <Modal title={title} onClose={onClose}>
@@ -83,6 +86,7 @@ export function ReasonDialog({ title, body, ok, required = true, typeWord, onClo
           <label htmlFor="rs-c" style={labelStyle}>اكتب {typeWord} للتأكيد</label>
           <input id="rs-c" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" style={inputStyle(null)} />
         </>}
+        {withOtp && <OtpField value={code} onChange={setCode} />}
         <FieldError msg={err} />
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="submit" disabled={busy} style={{ ...smallBtn('danger'), minHeight: 48, flex: 1, background: color.danger, color: color.ivory }}>{busy ? 'جارٍ التنفيذ…' : ok}</button>
@@ -90,6 +94,18 @@ export function ReasonDialog({ title, body, ok, required = true, typeWord, onClo
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** Current authenticator code for a sensitive action. */
+export function OtpField({ value, onChange, id = 'fresh-otp' }: { value: string; onChange: (v: string) => void; id?: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <label htmlFor={id} style={labelStyle}>رمز التحقق من تطبيق المصادقة</label>
+      <input id={id} inputMode="numeric" autoComplete="one-time-code" dir="ltr" maxLength={6} value={value}
+        onChange={(e) => onChange(e.target.value.replace(/\D/g, ''))} style={inputStyle(null, true)} />
+      <span style={{ fontSize: 12, color: color.muted }}>إجراء حساس: يُطلب الرمز الحالي حتى أثناء الجلسة.</span>
+    </div>
   );
 }
 
