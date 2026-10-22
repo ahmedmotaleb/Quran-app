@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import invitations as inv
+from . import trusted
 from . import views as v
 
 urlpatterns = [
@@ -26,6 +27,8 @@ urlpatterns = [
     path("admin/auth/login", v.AdminLoginView.as_view()),
     path("admin/mfa/setup", v.MfaSetupView.as_view()),
     path("admin/mfa/confirm", v.MfaConfirmView.as_view()),
+    path("admin/trusted-devices", trusted.TrustedDeviceList.as_view()),
+    path("admin/trusted-devices/<int:pk>/revoke", trusted.TrustedDeviceRevoke.as_view()),
     path("admin/users", v.AdminUserList.as_view()),
     path("admin/users/counts", v.AdminUserCounts.as_view()),
     path("admin/users/<int:pk>", v.AdminUserDetail.as_view()),

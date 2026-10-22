@@ -76,6 +76,7 @@ class LoginSerializer(serializers.Serializer):
     client = serializers.ChoiceField(choices=["web", "native"], default="web")
     device = serializers.CharField(required=False, allow_blank=True, max_length=120, default="")
     otp = serializers.CharField(required=False, allow_blank=True, max_length=8, default="")
+    trust_device = serializers.BooleanField(required=False, default=False)  # admin portal: skip the code here for 30 days
 
 
 class OnboardingSerializer(serializers.ModelSerializer):

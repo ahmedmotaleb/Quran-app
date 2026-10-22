@@ -127,6 +127,10 @@ export type BulkResource = 'users' | 'circles' | 'bookings' | 'sessions' | 'cour
 export interface BulkBody { action: string; ids?: number[]; filter?: Record<string, string>; expected?: number; exclude_ids?: number[]; reason?: string; confirm?: string; params?: Record<string, unknown> }
 export interface BulkItem { id: number; label: string; outcome: 'skipped' | 'failed'; code: string; message: string }
 export interface BulkResult { requested: number; success: number; skipped: number; failed: number; results: BulkItem[]; errors: BulkItem[] }
+export interface TrustedDevice { id: number; label: string; created_at: string; expires_at: string; last_used_at: string | null; current: boolean }
+export const listTrustedDevices = () => api<{ results: TrustedDevice[]; days: number }>('GET', 'admin/trusted-devices');
+export const revokeTrustedDevice = (id: number) => api<{ removed: number }>('POST', `admin/trusted-devices/${id}/revoke`);
+export const revokeAllTrustedDevices = () => api<{ removed: number }>('DELETE', 'admin/trusted-devices');
 export const bulkAction = (resource: string, body: BulkBody) => api<BulkResult>('POST', `admin/${resource}/bulk-action`, body);
 export const exportCsv = (resource: string, body: Omit<BulkBody, 'action'> & { sort?: string }) => apiDownload(`admin/${resource}/export`, body);
 export interface SavedView { id: number; section: string; name: string; query: string }

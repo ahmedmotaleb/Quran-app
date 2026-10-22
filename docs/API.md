@@ -84,6 +84,8 @@ server logs.
 | `POST admin/teacher-assignments`, `POST admin/teacher-assignments/{id}/end` | admin | |
 | `POST admin/guardian-links`, `POST admin/guardian-links/{id}/revoke` | admin | |
 | `POST admin/mfa/setup`, `POST admin/mfa/confirm` | admin | TOTP (RFC 6238) |
+| `POST admin/auth/login` `trust_device: true` | admin (web) | with a correct code: sets the HttpOnly cookie `halqa_admin_trusted`; for 30 days that browser signs in with the password only (audit `auth.mfa_trusted_device`). Ends on expiry, removal, password change or authenticator change |
+| `GET/DELETE admin/trusted-devices`, `POST admin/trusted-devices/{id}/revoke` | admin (own devices only) | list (label from the User-Agent, last used, expiry, `current`) / remove all / remove one; audit `auth.device_trusted`, `auth.devices_untrusted` |
 
 ## Admin lists: search, filters, sort, bulk actions
 
