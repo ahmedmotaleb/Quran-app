@@ -84,6 +84,10 @@ await step(lp, 'live: sign in through the service worker; no API data in caches'
   const bad = urls.filter((u) => u.includes('/api/') || u.includes('/media/'));
   if (bad.length) throw new Error('cached: ' + bad.join(', '));
   if (!urls.some((u) => u.includes('/index.html'))) throw new Error('shell not precached');
+  // The admin portal always loads the current release from the network (a cached admin page once ran a version
+  // without «تذكّر هذا الجهاز», 23 Oct).
+  const adminCached = urls.filter((u) => /\/admin\//.test(u));
+  if (adminCached.length) throw new Error('admin page cached: ' + adminCached.join(', '));
 });
 await step(lp, 'live: offline shows the shell, not stale learner data', async () => {
   await lctx.setOffline(true);

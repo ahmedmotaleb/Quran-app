@@ -20,12 +20,15 @@ export default function PwaUpdate() {
   const recBusy = useApp((s) => BUSY.has(s.rec.phase));
   const [waiting, setWaiting] = useState(false);
   const busy = () => recBusy || recorderActive() || voiceNoteRecording() || !!voiceNote.blob; // a teacher's unsent voice note too
+  // The admin portal has no recordings to protect: a new version applies at once instead of waiting for a tap.
+  const admin = typeof window !== 'undefined' && window.location.pathname.startsWith('/admin');
+  useEffect(() => { if (admin && needRefresh) void updateServiceWorker(true); }, [admin, needRefresh, updateServiceWorker]);
   useEffect(() => {
     if (!waiting) return;
     const t = setInterval(() => { if (!busy()) { clearInterval(t); updateServiceWorker(true); } }, 1000);
     return () => clearInterval(t);
   }); // re-evaluated on every render so it sees the latest recording state
-  if (!needRefresh) return null;
+  if (!needRefresh || admin) return null;
   return (
     // While waiting, the notice moves to the top and lets taps through, so it never covers the recorder's own
     // buttons (the submit button sits at the bottom of the screen).

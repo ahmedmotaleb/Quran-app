@@ -52,6 +52,42 @@ the server default zone, Africa/Cairo). Lists are paginated:
 - `phone.code_sent`, `phone.verify_failed`, `phone.verified` (masked numbers).
 - `auth.login` / `auth.login_failed` carry `via`.
 
+### Teacher onboarding
+
+**Creating the account: `POST admin/teachers {full_name, email}`** («إنشاء الحساب وإرسال رابط الإعداد», `invitations.send`)
+- Creates the teacher account immediately: no usable password yet, and an unapproved `TeacherProfile`.
+- Sends «إعداد حساب المعلم في حَلْقة» with a `#/reset?uid=…&token=…` link (Django's one-use token).
+- Answers with `setup_email_sent` and `sent_to`.
+- Email addresses that already have an account are refused:
+  - a student account gets `existing_student`, which offers «ترقية إلى معلم»;
+  - an admin account gets `email_is_admin`;
+  - an existing teacher gets `teacher_exists`;
+  - any other account gets `email_taken`.
+
+**After setup**
+- The teacher sets a password, then signs in on the normal login and the role routes them.
+- `me.teacher_approved` stays false until an admin approves. Unapproved teachers are not listed or bookable.
+- «نسيت كلمة المرور؟» works from the start, because the account exists.
+
+**Delivery status and resend**
+- The admin record shows `has_password`, `setup_email_status` (sent / failed), `setup_email_last_at` and `setup_email_count`.
+- `POST admin/users/{id}/setup-link` resends. It refuses a second send within 30 s.
+- With `{share: true}`, only an owner, and only when the email failed, also receives the link to copy.
+
+**Legacy invitations**
+- Open `teacher_account` invitations from the previous flow are converted by `manage.py migrate_teacher_invitations [--apply]` (Ops task `migrate-teacher-invitations`). It creates the account, replaces the invitation and sends the setup email.
+- Addresses that belong to students are left for promotion. Nothing is created twice.
+- Accepting an old invitation no longer approves the teacher.
+
+### Trusted admin devices
+
+- A login that trusted the browser answers `trusted_device` with `expires_at` and `days`.
+- A password-only login on a trusted browser answers `used_trusted_device: true`.
+- `GET admin/trusted-devices` lists the admin's devices with `created_at`, `last_used_at`, `expires_at` and `current`.
+- `POST admin/trusted-devices/{id}/revoke` («إلغاء الثقة») and `DELETE admin/trusted-devices` («إلغاء الثقة من كل الأجهزة») remove trust.
+- The cookie is `halqa_admin_trusted`: HttpOnly, Secure, SameSite=Lax, same-origin on the admin service.
+- The admin page is never precached by the service worker. On 23 Oct a cached admin page predating the feature never sent `trust_device`, so the code was asked at every sign-in.
+
 ## Errors
 
 Every error looks like this:

@@ -3,6 +3,7 @@ from django.urls import path
 from . import invitations as inv
 from . import admin_management, trusted
 from . import views as v
+from .teacher_onboarding import AdminTeacherCreate
 
 urlpatterns = [
     # Learning app (students, teachers, parents)
@@ -40,6 +41,7 @@ urlpatterns = [
     path("admin/admins/<int:pk>", admin_management.AdminAccountDetail.as_view()),
     path("admin/admins/<int:pk>/status", admin_management.AdminAccountStatus.as_view()),
     path("admin/users/<int:pk>/setup-link", v.AdminUserSetupLink.as_view()),
+    path("admin/teachers", AdminTeacherCreate.as_view()),
     path("admin/teachers/<int:pk>/approval", v.AdminTeacherApproval.as_view()),
     path("admin/teacher-assignments", v.AdminAssignmentCreate.as_view()),
     path("admin/teacher-assignments/<int:pk>/end", v.AdminAssignmentEnd.as_view()),

@@ -32,7 +32,8 @@ def test_admin_creates_parent_links_children_and_parent_signs_in(world, settings
     admin = client_for(world.admin)
     r = admin.post(f"{A}/users", {"full_name": "ولي أمر جديد", "email": "dad@x.test", "role": "parent"}, format="json")
     assert r.status_code == 201
-    pid, link = r.json()["id"], r.json()["setup_link"]
+    pid = r.json()["id"]
+    link = admin.post(f"{A}/users/{pid}/setup-link", {"share": True}, format="json").json()["setup_link"]  # no email here
     for s in (world.s1, world.s2):  # a parent with two children
         assert admin.post(f"{A}/guardian-links", {"guardian": pid, "student": s.id}, format="json").status_code == 201
     q = _setup(link)

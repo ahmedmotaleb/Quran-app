@@ -7,11 +7,15 @@ import { api, newIdempotencyKey, type Page } from './client';
 export type ApiRole = 'student' | 'teacher' | 'parent' | 'admin';
 export interface Me {
   id: number; email: string; full_name: string; role: ApiRole; status: string; timezone: string; phone: string;
-  mfa_enabled: boolean; mfa_required?: boolean; level: string; daily_goal: string; phone_verified?: boolean;
+  mfa_enabled: boolean; mfa_required?: boolean; level: string; daily_goal: string; phone_verified?: boolean; teacher_approved?: boolean | null;
   /** Admins only: access level, preset and the permissions the server grants (null for everyone else). */
   admin_access?: { level: string; preset: string; permissions: string[] } | null;
 }
-export interface LoginResult { user: Me; token?: string }
+export interface LoginResult {
+  user: Me; token?: string;
+  /** Admin portal: this browser was just remembered («تذكّر هذا الجهاز»). */ trusted_device?: { expires_at: string; days: number };
+  /** Admin portal: the code was skipped because this browser is trusted. */ used_trusted_device?: boolean;
+}
 
 export interface ApiAssignment {
   id: number; student: number; student_name: string; teacher: number; teacher_name: string; kind: 'hifz' | 'review' | 'tajweed';

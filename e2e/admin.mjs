@@ -72,6 +72,11 @@ await step('sign-in now asks for the code, refuses a wrong one, accepts the righ
   await page.getByText('رمز التحقق غير صحيح.').waitFor();
   await page.locator('#ad-otp').fill(totp(secret)); await page.getByRole('button', { name: 'تحقق ودخول' }).click();
   await page.getByText(/مدير المنصة · بيانات حقيقية/).waitFor();
+  await page.getByText('تم تذكّر هذا الجهاز لمدة 30 يومًا').waitFor();
+  const c = (await page.context().cookies()).find((x) => x.name === 'halqa_admin_trusted');
+  if (!c || !c.httpOnly || c.sameSite !== 'Lax') throw new Error('trusted cookie missing or not HttpOnly/Lax');
+  const days = (c.expires * 1000 - Date.now()) / 86400000;
+  if (days < 29 || days > 31) throw new Error(`trusted cookie lasts ${days} days`);
 });
 await page.screenshot({ path: out + '/admin-mfa-signed-in.png' });
 await step('«تذكّر هذا الجهاز» (ticked by default): next sign-in asks only for the password', async () => {
@@ -82,8 +87,10 @@ await step('«تذكّر هذا الجهاز» (ticked by default): next sign-in
 });
 await step('Settings lists the trusted device; removing it brings the code back', async () => {
   await page.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: /^الإعدادات/ }).click();
-  await page.getByText('(هذا الجهاز)').waitFor();
-  await page.getByRole('button', { name: 'إزالة كل الأجهزة' }).click();
+  await page.getByText('هذا الجهاز', { exact: true }).waitFor();
+  await page.getByText(/أُضيف: .* · آخر استخدام: .* · تنتهي: /).first().waitFor();
+  await page.getByRole('button', { name: /^إلغاء الثقة: / }).first().waitFor();
+  await page.getByRole('button', { name: 'إلغاء الثقة من كل الأجهزة' }).click();
   await page.getByText('لا توجد أجهزة موثوقة.', { exact: false }).waitFor();
   await page.getByRole('button', { name: /تسجيل الخروج/ }).first().click(); await page.locator('#ad-email').waitFor();
   await signIn('admin@halqa.app', 'halqa123');

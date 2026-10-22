@@ -43,6 +43,10 @@ def test_create_student_gives_setup_link_without_email(world, settings):
     assert r.status_code == 201
     d = r.json()
     assert d["email"] == "new@x.test" and d["has_password"] is False
+    # Email failed: no link in the answer; the owner may copy one explicitly (emergency fallback).
+    assert d["setup_email_sent"] is False and d["setup_link"] is None
+    assert User.objects.get(pk=d["id"]).setup_email_status == "failed"
+    d = c.post(f"{A}/users/{d['id']}/setup-link", {"share": True}, format="json").json()
     assert d["setup_email_sent"] is False and "/#/reset?uid=" in d["setup_link"]
     assert AuditEvent.objects.filter(action="admin.setup_link_issued").exists()
     # The link works once: set a password, then sign in.
@@ -112,7 +116,7 @@ def test_assign_and_unassign_teacher_and_parent_links(world):
     assert GuardianLink.objects.get(pk=r.json()["id"]).status == "revoked"
 
 
-def test_teacher_invitation_link_creates_approved_teacher(world):
+def test_teacher_invitation_link_creates_an_unapproved_teacher(world):
     c = client_for(world.admin)
     r = c.post("/api/v1/invitations", {"purpose": "teacher_account", "email": "newt@x.test", "share_link": True}, format="json").json()
     r["code"] = r["link"].split("code=")[1]
@@ -121,7 +125,7 @@ def test_teacher_invitation_link_creates_approved_teacher(world):
     acc = anon.post("/api/v1/auth/invitations/accept", {"code": r["code"], "full_name": "معلم جديد", "email": "newt@x.test", "password": PW}, format="json")
     assert acc.status_code == 201
     t = User.objects.get(email="newt@x.test")
-    assert t.role == Role.TEACHER and t.status == AccountStatus.ACTIVE and t.teacher_profile.approved_at is not None
+    assert t.role == Role.TEACHER and t.status == AccountStatus.ACTIVE and t.teacher_profile.approved_at is None  # approval is separate (23 Oct)
     assert anon.post("/api/v1/auth/invitations/accept", {"code": r["code"], "full_name": "x y", "email": "o@x.test", "password": PW}, format="json").status_code == 400
 
 

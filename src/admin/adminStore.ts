@@ -124,9 +124,11 @@ async function adminLoginLive() {
   if (Object.keys(e).length) { set({ login: { ...L, errors: e } }); return; }
   set({ login: { ...L, errors: {}, loading: true } });
   try {
-    const r = await E.adminLogin(em, L.pw, L.otp.trim(), L.needOtp && L.trust);
+    const trust = L.needOtp && L.trust;
+    const r = await E.adminLogin(em, L.pw, L.otp.trim(), trust);
     resetCsrf(); // Django rotates the CSRF token on sign-in
     set({ authed: true, me: r.user, login: initial().login });
+    if (trust && r.trusted_device) toast('تم تذكّر هذا الجهاز لمدة 30 يومًا');
   } catch (err) {
     const x = err as ApiError; const cur = get().login;
     if (x.code === 'mfa_required') { set({ login: { ...cur, loading: false, needOtp: true, errors: {} } }); return; }

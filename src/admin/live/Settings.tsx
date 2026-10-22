@@ -200,13 +200,14 @@ function TrustedDevices() {
       {rows?.map((d) => (
         <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderTop: `1px solid ${color.divider}`, paddingTop: 10 }}>
           <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: 'block', fontWeight: 700 }}>{d.label}{d.current ? ' (هذا الجهاز)' : ''}</span>
-            <span style={{ display: 'block', fontSize: 13, color: color.muted }}>آخر استخدام: {d.last_used_at ? dateTime(d.last_used_at) : '—'} · تنتهي: {dateTime(d.expires_at)}</span>
+            <span style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 700 }}>{d.label}
+              {d.current && <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 999, background: color.primary, color: color.ivory }}>هذا الجهاز</span>}</span>
+            <span style={{ display: 'block', fontSize: 13, color: color.muted }}>أُضيف: {dateTime(d.created_at)} · آخر استخدام: {d.last_used_at ? dateTime(d.last_used_at) : '—'} · تنتهي: {dateTime(d.expires_at)}</span>
           </span>
-          <button disabled={busy} onClick={() => void run(() => A.revokeTrustedDevice(d.id), 'أُزيل الجهاز')} aria-label={`إزالة ${d.label}`} style={smallBtn('danger')}>إزالة</button>
+          <button disabled={busy} onClick={() => void run(() => A.revokeTrustedDevice(d.id), 'أُلغيت الثقة بهذا الجهاز؛ سيُطلب رمز التحقق عليه في الدخول القادم')} aria-label={`إلغاء الثقة: ${d.label}`} style={smallBtn('danger')}>إلغاء الثقة</button>
         </div>
       ))}
-      {!!rows?.length && <button disabled={busy} onClick={() => void run(A.revokeAllTrustedDevices, 'أُزيلت كل الأجهزة الموثوقة')} style={{ ...smallBtn('danger'), alignSelf: 'flex-start' }}>إزالة كل الأجهزة</button>}
+      {!!rows?.length && <button disabled={busy} onClick={() => void run(A.revokeAllTrustedDevices, 'أُلغيت الثقة من كل الأجهزة')} style={{ ...smallBtn('danger'), alignSelf: 'flex-start' }}>إلغاء الثقة من كل الأجهزة</button>}
     </Group>
   );
 }
