@@ -101,7 +101,9 @@ let invite = '';
 await step('invite a teacher; the link creates an approved teacher account', async () => {
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'دعوة معلم' }).click();
-  await dialog().locator('#ad-e').fill(`teach+${stamp}@example.com`); await dialog().getByRole('button', { name: 'إنشاء رابط الدعوة' }).click();
+  await dialog().locator('#ad-e').fill(`teach+${stamp}@example.com`); await dialog().locator('#ad-p').fill('01001234567'); await dialog().getByRole('button', { name: 'إرسال الدعوة' }).click();
+  const wa = await dialog().getByRole('link', { name: 'إرسال عبر واتساب' }).getAttribute('href');
+  if (!wa.startsWith('https://wa.me/201001234567?text=') || !decodeURIComponent(wa).includes('#/invite?code=')) throw new Error('whatsapp link ' + wa);
   invite = (await dialog().locator('code').innerText()).trim(); await dialog().getByRole('button', { name: 'تم' }).click();
   // The teacher opens it on their own device (a signed-in browser is asked to sign out first).
   const c3 = await b.newContext(); const p3 = await c3.newPage(); await p3.goto(invite.replace(/^https?:\/\/[^/]+\//, BASE));

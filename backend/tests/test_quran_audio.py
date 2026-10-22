@@ -161,3 +161,29 @@ def test_default_reciter_is_husary_muallim():
 
     if not __import__("os").environ.get("QF_RECITERS"):
         assert s.QF_RECITERS[0][0] == 12 and "المعلم" in s.QF_RECITERS[0][1]
+
+
+def test_mirror_host_allowed_unknown_hosts_logged_and_empty_reciter_falls_back(world, qf, monkeypatch, caplog):
+    import logging
+
+    real = qf_audio._http
+
+    def fake(req):
+        if "/recitations/12/by_chapter/4?" in req.full_url:  # Husary Muallim lives on the quranicaudio mirror
+            return {"audio_files": [{"verse_key": "4:1", "url": "//mirrors.quranicaudio.com/everyayah/Husary_Muallim_128kbps/004001.mp3"},
+                                    {"verse_key": "4:2", "url": "https://cdn.unknown.example/004002.mp3"}],
+                    "pagination": {"next_page": None}}
+        if "/recitations/12/by_chapter/5?" in req.full_url:
+            return {"audio_files": [], "pagination": {"next_page": None}}
+        if "/recitations/7/by_chapter/5?" in req.full_url:
+            return {"audio_files": [{"verse_key": "5:1", "url": "Alafasy/mp3/005001.mp3"}], "pagination": {"next_page": None}}
+        return real(req)
+    monkeypatch.setattr(qf_audio, "_http", fake)
+    c = client_for(world.s1)
+    with caplog.at_level(logging.WARNING):
+        d = c.get("/api/v1/quran/audio/4?reciter=12").json()
+    assert d["ayahs"] == {"1": "https://mirrors.quranicaudio.com/everyayah/Husary_Muallim_128kbps/004001.mp3"}
+    assert any(r.msg == "qf_audio_hosts_dropped" and "cdn.unknown.example" in r.hosts for r in caplog.records)
+    assert "mirrors.quranicaudio.com" in build_csp()
+    fb = c.get("/api/v1/quran/audio/5?reciter=12").json()
+    assert fb["requested"] == 12 and fb["reciter_id"] == 7 and fb["ayahs"]  # Afasy instead of silence

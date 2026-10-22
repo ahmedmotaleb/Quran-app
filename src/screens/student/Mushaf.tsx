@@ -1,11 +1,11 @@
-import { useEffect, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { LIVE } from '@/api/client';
 import { notePosition } from '@/store/live';
 import { color, font } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
 import { BackButton, Spinner, card, muted } from '@/components/ui';
 import { SUR } from '@/data/demo';
-import { currentReciter, loadSurahAudio } from '@/services/quran';
+import { currentReciter, fallbackReciter, loadSurahAudio } from '@/services/quran';
 import { jumpTo, loadSurah, loadSurahList, openSheet, playAyah, setMushafRate, setReciter, stopMushaf, up, useApp } from '@/store/store';
 
 const stepBtn = { width: 32, height: 44, border: 'none', background: 'transparent', color: color.primary, cursor: 'pointer', display: 'grid', placeItems: 'center' } as const;
@@ -21,10 +21,12 @@ export default function Mushaf() {
   // Licensed source (Quran Foundation): get this surah's ayah audio list as soon as it opens, so «تشغيل» starts at
   // once (phones only allow audio started directly from a tap).
   const reciter = LIVE ? currentReciter(pubAudio) : null;  // re-read when M.reciterV changes
-  useEffect(() => { if (LIVE && pubAudio?.provider === 'qf') loadSurahAudio(M.surah, reciter?.id).catch(() => { /* shown when playing */ }); },
+  const [, bump] = useState(0);
+  useEffect(() => { if (LIVE && pubAudio?.provider === 'qf') loadSurahAudio(M.surah, reciter?.id).then(() => bump((n) => n + 1)).catch(() => { /* shown when playing */ }); },
     [M.surah, pubAudio?.provider, reciter?.id, M.reciterV]);
+  const fallback = LIVE ? fallbackReciter(M.surah, reciter?.id) : null;
   // Live mode: only an approved source (server setting); the demo keeps its sample reciter.
-  const audioName = LIVE ? (pubAudio ? (reciter ? `${reciter.name} · Quran.com` : pubAudio.name || 'تلاوة مرجعية') : null) : 'مشاري العفاسي (everyayah.com)';
+  const audioName = LIVE ? (pubAudio ? (fallback ? `${fallback} · Quran.com (القارئ المختار غير متاح لهذه السورة)` : reciter ? `${reciter.name} · Quran.com` : pubAudio.name || 'تلاوة مرجعية') : null) : 'مشاري العفاسي (everyayah.com)';
   const marked = (n: number) => (LIVE ? !!M.marks?.some((x) => x.surah === M.surah && x.ayah === n) : M.bookmark === n);
   const nMarks = M.marks?.length ?? 0;
   // Live: remember where the reader is (the top-most ayah in view), so the Mushaf reopens there on any device.

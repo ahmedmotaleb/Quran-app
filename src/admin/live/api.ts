@@ -32,7 +32,7 @@ export const endAssignment = (id: number) => api<null>('POST', `admin/teacher-as
 export const linkGuardian = (guardian: number, student: number) => api<{ id: number }>('POST', 'admin/guardian-links', { guardian, student });
 export const revokeGuardian = (id: number, reason: string) => api<null>('POST', `admin/guardian-links/${id}/revoke`, { reason });
 export const inviteTeacher = (email: string) =>
-  api<{ id: number; link: string; expires_at: string }>('POST', 'invitations', { purpose: 'teacher_account', email, days: 7 });
+  api<{ id: number; link: string; expires_at: string; emailed: boolean }>('POST', 'invitations', { purpose: 'teacher_account', email, days: 7 });
 
 /* ---- Circles, sessions, bookings (prompt 06) ---- */
 export type CircleState = 'draft' | 'published' | 'off';

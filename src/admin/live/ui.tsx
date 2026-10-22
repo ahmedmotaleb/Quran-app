@@ -68,13 +68,28 @@ export function ReasonDialog({ title, body, ok, required = true, onClose, run }:
   );
 }
 
-export function LinkBox({ link, note }: { link: string; note: string }) {
+/** wa.me link that opens WhatsApp with the message ready to send (to `phone` if given, else the user picks a chat).
+ *  Egyptian local numbers (01…) are written with +20. */
+export function whatsappUrl(text: string, phone = '') {
+  let d = phone.replace(/\D/g, '');
+  if (d.startsWith('00')) d = d.slice(2);
+  else if (/^01\d{9}$/.test(d)) d = '20' + d.slice(1);
+  return `https://wa.me/${d}?text=${encodeURIComponent(text)}`;
+}
+
+export function LinkBox({ link, note, message, phone }: { link: string; note: string; message?: string; phone?: string }) {
   const copy = async () => { try { await navigator.clipboard.writeText(link); toast('نُسخ الرابط'); } catch { /* user can select it */ } };
+  const wa = whatsappUrl(`${message ?? 'السلام عليكم، هذا رابطك في منصة الحلقة:'}\n${link}`, phone);
   return (
     <div style={{ background: color.sand, borderRadius: 12, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
       <p style={{ margin: 0, fontSize: 14 }}>{note}</p>
       <code dir="ltr" style={{ fontSize: 12, wordBreak: 'break-all', userSelect: 'all', background: color.card, padding: 8, borderRadius: 8 }}>{link}</code>
-      <button onClick={copy} style={{ ...smallBtn('primary'), alignSelf: 'flex-start' }}>نسخ الرابط</button>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={copy} style={smallBtn('primary')}>نسخ الرابط</button>
+        <a href={wa} target="_blank" rel="noopener noreferrer" style={{ ...smallBtn(), display: 'inline-flex', alignItems: 'center', textDecoration: 'none', background: '#25D366', color: '#0B3B22', borderColor: '#25D366', fontWeight: 800 }}>
+          إرسال عبر واتساب
+        </a>
+      </div>
     </div>
   );
 }
