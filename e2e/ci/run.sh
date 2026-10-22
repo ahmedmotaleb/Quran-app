@@ -23,6 +23,12 @@ run() {  # suite [base-url]
   failed+=("$name")
   echo "::endgroup::"
   echo "::error title=e2e $name::$(grep -E '^FAIL' "$OUT/$name.log" | head -3 | tr '\n' ' ' | cut -c1-600) (screenshots in the e2e-shots artifact)"
+  # The API's own refusals during this suite (status and path only), so a CI-only failure shows its cause.
+  for f in /tmp/api.log /tmp/api-mfa.log; do
+    [ -f "$f" ] || continue
+    hits=$(tail -n 400 "$f" | grep -E '" (401|403|429|500) ' | tail -4 | sed -E 's/^\[[^]]*\] //' | tr '\n' ' ' | cut -c1-500)
+    [ -n "$hits" ] && echo "::warning title=api $name ($(basename "$f"))::$hits"
+  done
   echo "   ($((SECONDS - t0)) s)"
 }
 export PYTHON="$PY"
@@ -50,6 +56,7 @@ reseed; run circle-members
 reseed; run account-delete
 # Recording failure found on a real Android phone (22 Oct): no demo task ids, failed uploads kept on the device.
 reseed; run recording-flow
+reseed; run admin-dialogs
 # 5. PWA: manifest, installability, offline shell, no API data in caches (preview builds); an update published
 #    during a recording waits until the recording is submitted.
 reseed; run pwa http://localhost:4173/

@@ -126,12 +126,14 @@ class InvitationListCreate(APIView):
                 if existing.role == Role.ADMIN:
                     raise ApiError("email_is_admin", "هذا البريد لحساب إدارة، ولا يكون الحساب الواحد مديرًا ومعلمًا معًا. "
                                    "ادعُ المعلم ببريد آخر.", 409, {"email": ["بريد حساب إدارة."]})
-                if existing.role in (Role.STUDENT, Role.PARENT) and u.role == Role.ADMIN:
-                    # One account has one role: offer to convert the existing account instead (bulk action make_teacher).
-                    label = "طالب" if existing.role == Role.STUDENT else "ولي أمر"
-                    raise ApiError("existing_learner", f"هذا البريد مسجّل بالفعل كحساب {label} ({existing.full_name}). "
-                                   "يمكنك تحويل هذا الحساب إلى حساب معلم.", 409,
+                if existing.role == Role.STUDENT and u.role == Role.ADMIN:
+                    # Nothing is emailed: the admin may promote this student account instead (promote-teacher).
+                    raise ApiError("existing_student", f"هذا البريد مسجّل بالفعل كحساب طالب ({existing.full_name}). "
+                                   "لم تُرسل أي دعوة. يمكنك ترقية حساب الطالب نفسه إلى معلم.", 409,
                                    {"user": [str(existing.pk)], "role": [existing.role]})
+                if existing.role == Role.PARENT:
+                    raise ApiError("email_taken", "هذا البريد مسجّل بالفعل كحساب ولي أمر. استخدم بريدًا آخر لحساب المعلم.", 409,
+                                   {"email": ["بريد حساب ولي أمر."]})
                 raise ApiError("email_taken", "لهذا البريد حساب في حَلْقة بالفعل.", 409, {"email": ["هذا البريد مسجّل بالفعل."]})
             if existing and existing.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
                 raise ApiError("account_inactive", "الحساب المرتبط بهذا البريد موقوف أو مؤرشف.", 409)

@@ -12,7 +12,7 @@ import { card } from '../AdminTables';
 import * as A from './api';
 import { chip, date, errMsg, LinkBox, Modal, ReasonDialog, smallBtn, WhatsAppButton } from './ui';
 import {
-  BulkBar, type BulkDef, circleOptions, type Col, courseOptions, DataView, ExportButton, type FilterField, FilterControls, filterOf, items, listParams, Pager,
+  BulkBar, type BulkDef, circleOptions, type Col, courseOptions, DataView, ExportButton, type FilterField, FilterControls, filterOf, items, accounts, listParams, Pager,
   SavedViews, SelectionSummary, teacherOptions, useListUrl, useSelection, useServerList, useUrlSearch,
 } from './list';
 
@@ -80,8 +80,8 @@ function peopleActions(role: A.Role): BulkDef[] {
     { key: 'archive', label: 'أرشفة', tone: 'danger', reason: true, destructive: true, title: 'تأكيد الأرشفة',
       body: (n) => `أنت على وشك أرشفة ${items(n)}. لن يستطيع أصحابها الدخول أو استعادة كلمة المرور. تبقى مهامهم وتقييماتهم وحضورهم محفوظة، ويمكن إعادة التفعيل لاحقًا.`, ok: (n) => `أرشفة ${items(n)}` },
     { key: 'delete', label: 'حذف نهائي', tone: 'danger', reason: true, destructive: true, confirmAlways: true, title: 'حذف نهائي',
-      body: (n) => `سيُحذف ${items(n)} نهائيًا ولا يمكن التراجع: لا دخول بعد الآن، ويُمسح الاسم والبريد والهاتف والتسجيلات الصوتية. تبقى سجلات المعلمين باسم «حساب محذوف»، والحساب الذي لا نشاط له يُحذف بالكامل. المعلم الذي له جلسات قادمة لا يُحذف حتى تُلغى أو تُنقل.`,
-      ok: (n) => `حذف ${items(n)} نهائيًا` },
+      body: (n) => `أنت على وشك حذف ${accounts(n)} نهائيًا. لا يمكن التراجع عن هذا الإجراء. لا دخول بعد الآن، ويُمسح الاسم والبريد والهاتف والتسجيلات الصوتية. تبقى سجلات المعلمين باسم «حساب محذوف»، والحساب الذي لا نشاط له يُحذف بالكامل. المعلم الذي له جلسات قادمة لا يُحذف حتى تُلغى أو تُنقل. (للإيقاف القابل للتراجع استخدم «أرشفة».)`,
+      ok: (n) => `حذف ${accounts(n)} نهائيًا` },
   ];
   const approvedTeachers = async () => (await A.listPeople({ role: 'teacher', approved: '1', status: 'active', page_size: 100, sort: 'name' } as Parameters<typeof A.listPeople>[0]))
     .results.map((t) => [String(t.id), t.full_name] as [string, string]);
@@ -180,7 +180,8 @@ const TEACHER_INVITE_TEXT = 'السلام عليكم، دعتك إدارة حَ�
 function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => void; onDone: () => void }) {
   const [f, setF] = useState({ name: '', email: '', phone: '', wa: false });
   const [err, setErr] = useState<Record<string, string | null>>({}); const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; note: string; link?: string | null; text?: string; retry?: number; convert?: number } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; note: string; link?: string | null; text?: string; retry?: number; promote?: number } | null>(null);
+  const [promoting, setPromoting] = useState<number | null>(null);
   const email = f.email.trim().toLowerCase();
   const teacherResult = (r: Awaited<ReturnType<typeof A.inviteTeacher>>) => setResult(r.email_sent
     ? { ok: true, note: `تم إرسال دعوة المعلم إلى البريد الإلكتروني (${email}).`, link: r.link, text: TEACHER_INVITE_TEXT }
@@ -203,21 +204,11 @@ function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => voi
       onDone();
     } catch (y) {
       const a = y as ApiError;
-      if (a.code === 'existing_learner') setResult({ ok: false, note: a.message, convert: Number(a.fields?.user?.[0]) });
+      if (a.code === 'existing_student') setResult({ ok: false, note: a.message, promote: Number(a.fields?.user?.[0]) });
       else if (a.code === 'email_is_admin') setErr({ email: a.message });
       else if (a.code === 'already_invited') setResult({ ok: false, note: 'توجد دعوة مفتوحة لهذا البريد. أعد إرسالها بدل إنشاء دعوة جديدة.', retry: Number(a.fields?.invitation?.[0]) });
       else { const fe = { name: a.field?.('full_name') ?? null, email: a.field?.('email') ?? null }; setErr(fe.name || fe.email ? fe : { form: a.message }); }
     } finally { setBusy(false); }
-  };
-  /** One account has one role: turn the existing student/parent account into an approved teacher (same email and password). */
-  const convert = async (id: number) => {
-    setBusy(true);
-    try {
-      const r = await A.bulkAction('users', { action: 'make_teacher', ids: [id], reason: 'تحويل إلى معلم من نافذة دعوة معلم' });
-      if (r.success !== 1) throw new Error(r.errors[0]?.message ?? 'تعذّر التحويل.');
-      setResult({ ok: true, note: `أصبح الحساب (${email}) حساب معلم معتمد. يدخل بنفس البريد وكلمة المرور ويظهر للطلاب.` });
-      toast('تم التحويل إلى معلم'); onDone();
-    } catch (y) { setResult((x) => x && { ...x, note: errMsg(y) }); } finally { setBusy(false); }
   };
   const resend = async (id: number) => {
     setBusy(true);
@@ -230,10 +221,9 @@ function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => voi
         <p role={result.ok ? 'status' : 'alert'} style={{ margin: 0, fontSize: 15, fontWeight: 700, color: result.ok ? color.primary : color.dangerInk }}>{result.note}</p>
         {result.link && role === 'teacher' && <WhatsAppButton text={`${result.text}\n${result.link}`} phone={f.phone} />}
         {result.link && role !== 'teacher' && <LinkBox link={result.link} note="رابط إعداد الحساب (لمرة واحدة):" message={result.text} phone={f.phone} />}
-        {result.convert ? <>
-          <p style={{ margin: 0, fontSize: 14, color: color.muted }}>عند التحويل ينتهي ارتباطه بمعلميه وأولياء أمره وحلقاته، وتُلغى حجوزاته القادمة كطالب. تبقى سجلاته السابقة محفوظة، ويُطلب منه تسجيل الدخول من جديد.</p>
-          <button disabled={busy} onClick={() => void convert(result.convert!)} style={smallBtn('primary')}>{busy ? 'جارٍ التحويل…' : 'تحويل الحساب إلى معلم'}</button>
-        </> : null}
+        {result.promote ? <button onClick={() => setPromoting(result.promote!)} style={smallBtn('primary')}>ترقية إلى معلم</button> : null}
+        {promoting !== null && <PromoteDialog id={promoting} name={email} onClose={() => setPromoting(null)}
+          onDone={() => { setPromoting(null); setResult({ ok: true, note: 'تمت ترقية الحساب إلى معلم. سيُطلب من المستخدم تسجيل الدخول من جديد.' }); onDone(); }} />}
         {result.retry ? <button disabled={busy} onClick={() => void resend(result.retry!)} style={smallBtn('primary')}>{busy ? 'جارٍ الإرسال…' : 'إعادة إرسال الدعوة'}</button> : null}
         <button onClick={onClose} style={primaryBtn(48, 15)}>تم</button></>) : (
         <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -301,6 +291,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
   const [u, setU] = useState<A.Person | null>(null); const [err, setErr] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ full_name: string; phone: string } | null>(null); const [editErr, setEditErr] = useState<Record<string, string | null>>({});
   const [sub, setSub] = useState<Sub>(null); const [link, setLink] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const [promote, setPromote] = useState(false);
   const reload = useCallback(async () => { try { setU(await A.getPerson(id)); setErr(null); } catch (e) { setErr(errMsg(e)); } }, [id]);
   useEffect(() => { void reload(); }, [reload]);
 
@@ -370,12 +361,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
             {u.status === 'pending' && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'تم اعتماد الحساب')} style={smallBtn('primary')}>اعتماد الحساب</button>}
             {(u.status === 'suspended' || u.status === 'archived') && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'أُعيد تفعيل الحساب')} style={smallBtn('primary')}>إعادة التفعيل</button>}
             {u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('أرشفة الحساب', `لن يستطيع ${u.full_name} الدخول أو استعادة كلمة المرور. تبقى كل سجلاته محفوظة، ويمكن إعادة التفعيل لاحقًا.`, 'أرشفة الحساب', 'أُرشف الحساب', (r) => A.setPersonStatus(u.id, 'archived', r))} style={smallBtn('danger')}>أرشفة الحساب</button>}
-            {(u.role === 'student' || u.role === 'parent') && u.status !== 'suspended' && u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('تحويل إلى معلم',
-              `سيصبح ${u.full_name} معلمًا معتمدًا بنفس البريد وكلمة المرور. ينتهي ارتباطه بالمعلمين وأولياء الأمر والحلقات، وتُلغى حجوزاته القادمة. تبقى سجلاته السابقة.`,
-              'تحويل إلى معلم', 'تم التحويل إلى معلم', async (r) => {
-                const res = await A.bulkAction('users', { action: 'make_teacher', ids: [u.id], reason: r });
-                if (res.success !== 1) throw new Error(res.errors[0]?.message ?? 'تعذّر التحويل.');
-              })} style={smallBtn()}>تحويل إلى معلم</button>}
+            {u.role === 'student' && u.status !== 'archived' && <button disabled={busy} onClick={() => setPromote(true)} style={smallBtn()}>ترقية إلى معلم</button>}
             <button disabled={busy} onClick={() => setSub({ kind: 'reason', title: 'حذف الحساب نهائيًا', typeWord: 'حذف', ok: 'حذف نهائي',
               body: `سيُحذف حساب ${u.full_name} نهائيًا ولا يمكن التراجع: لن يستطيع الدخول أبدًا، ويُمسح الاسم والبريد والهاتف والتسجيلات الصوتية. تبقى سجلات المعلمين (المهام والتقييمات والحضور) باسم «حساب محذوف» حتى تبقى الإحصاءات صحيحة. إن لم يكن للحساب أي نشاط يُحذف بالكامل.`,
               run: async (r) => {
@@ -424,6 +410,8 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
         </>))}
       </>}
       {sub?.kind === 'reason' && <ReasonDialog title={sub.title} body={sub.body} ok={sub.ok} required={sub.required} typeWord={sub.typeWord} onClose={() => setSub(null)} run={async (r) => { await sub.run(r); }} />}
+      {promote && u && <PromoteDialog id={u.id} name={u.full_name} onClose={() => setPromote(false)}
+        onDone={() => { setPromote(false); toast('تمت ترقية الحساب إلى معلم. سيُطلب من المستخدم تسجيل الدخول من جديد.'); onChanged(); void reload(); }} />}
       {sub?.kind === 'pick' && u && (
         <PickDialog target={sub.target} exclude={sub.target === 'teacher' ? u.teachers.map((t) => t.id) : sub.target === 'parent' ? u.guardians.map((g) => g.id) : u.children.map((c) => c.id)}
           onClose={() => setSub(null)}
@@ -489,6 +477,40 @@ function PickDialog({ target, exclude, onClose, onPick }: { target: A.Role; excl
           </button>
         ))}
       </div>
+    </Modal>
+  );
+}
+
+/** Student → Teacher, one account: same email, password and history. Reason, typed «ترقية», approval off by default. */
+function PromoteDialog({ id, name, onClose, onDone }: { id: number; name: string; onClose: () => void; onDone: (r: A.PromoteResult) => void }) {
+  const [reason, setReason] = useState(''); const [typed, setTyped] = useState(''); const [approve, setApprove] = useState(false);
+  const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    if (reason.trim().length < 3) return setErr('اكتب سبب الترقية (3 أحرف على الأقل).');
+    if (typed.trim() !== 'ترقية') return setErr('اكتب «ترقية» للتأكيد.');
+    setBusy(true); setErr(null);
+    try { onDone(await A.promoteTeacher(id, reason.trim(), approve)); } catch (x) { setErr(errMsg(x)); setBusy(false); }
+  };
+  return (
+    <Modal title="ترقية الحساب إلى معلم" onClose={() => { if (!busy) onClose(); }}>
+      <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.8 }}>سيتم تحويل هذا الحساب ({name}) من طالب إلى معلم مع الاحتفاظ بنفس البريد الإلكتروني وكلمة المرور وسجل الحساب السابق.</p>
+        <p style={{ margin: 0, fontSize: 13, color: color.muted, lineHeight: 1.7 }}>ينتهي ارتباطه كطالب بالمعلمين والحلقات والدورات وأولياء الأمر، وتُلغى حجوزاته القادمة. تبقى تسليماته وتقييماته وحضوره كما هي. يُسجَّل خروجه من كل الأجهزة.</p>
+        <label htmlFor="pr-r" style={labelStyle}>سبب الترقية</label>
+        <textarea id="pr-r" rows={3} maxLength={200} value={reason} onChange={(e) => setReason(e.target.value)} style={{ ...inputStyle(null), minHeight: 80, paddingTop: 10 }} />
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, minHeight: 40 }}>
+          <input type="checkbox" checked={approve} onChange={(e) => setApprove(e.target.checked)} style={{ width: 20, height: 20 }} /> اعتماد المعلم مباشرة
+        </label>
+        <label htmlFor="pr-c" style={labelStyle}>اكتب ترقية للتأكيد</label>
+        <input id="pr-c" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" style={inputStyle(null)} />
+        <FieldError msg={err} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" onClick={onClose} disabled={busy} style={{ ...smallBtn(), minHeight: 48 }}>إلغاء</button>
+          <button type="submit" disabled={busy} style={{ ...smallBtn('primary'), minHeight: 48, flex: 1 }}>{busy ? 'جارٍ الترقية…' : 'ترقية إلى معلم'}</button>
+        </div>
+      </form>
     </Modal>
   );
 }

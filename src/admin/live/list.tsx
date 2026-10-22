@@ -19,6 +19,13 @@ export const PAGE_SIZE = 20;
 
 /* ---------------- numbers in Arabic ---------------- */
 /** «عنصر واحد»، «عنصرين»، «3 عناصر»، «12 عنصرًا». */
+/** «حسابًا واحدًا»، «حسابين»، «3 حسابات»، «20 حسابًا». */
+export function accounts(n: number) {
+  if (n === 1) return 'حسابًا واحدًا';
+  if (n === 2) return 'حسابين';
+  if (n >= 3 && n <= 10) return `${n} حسابات`;
+  return `${n} حسابًا`;
+}
 export function items(n: number) {
   if (n === 1) return 'عنصر واحد';
   if (n === 2) return 'عنصرين';
@@ -253,6 +260,8 @@ export interface BulkDef {
   reason?: boolean;                // the server requires a reason
   destructive?: boolean;           // delete / archive: «تأكيد الحذف», typed «حذف» at 10+ records
   confirmAlways?: boolean;         // irreversible (permanent delete): typed «حذف» even for one record
+  confirmWord?: string;            // the word to type (default «حذف»)
+  reasonLabel?: string;            // label of the reason field
   title?: string;                  // dialog title
   body: (n: number) => string;     // what will happen
   ok: (n: number) => string;       // confirm button
@@ -303,11 +312,20 @@ export function BulkBar({ resource, sel, total, actions, filter, onDone, exporta
         <div role="toolbar" aria-label="إجراءات على المحدد" style={{ position: 'sticky', bottom: 12, zIndex: 15, ...card, background: color.primary, color: color.ivory, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', boxShadow: '0 8px 24px rgba(20,33,31,.25)' }}>
           <span style={{ fontWeight: 800, fontSize: 15, marginInlineEnd: 6 }}><span style={{ fontFamily: font.latin }}>{n}</span> محدد</span>
           {exportable && <ExportButton resource={resource} sel={sel} total={total} filter={filter} light />}
-          {actions.map((a) => (
-            <button key={a.key} onClick={() => setRun(a)} style={{ ...smallBtn(a.tone === 'danger' ? 'danger' : 'plain'), ...(a.tone === 'danger' ? { background: color.danger, color: color.ivory, borderColor: color.danger } : {}), display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-              {a.tone === 'danger' && <Icon name="trash" size={16} />}{a.label}
-            </button>
+          {actions.filter((a) => a.tone !== 'danger').map((a) => (
+            <button key={a.key} onClick={() => setRun(a)} style={{ ...smallBtn('plain'), display: 'inline-flex', gap: 6, alignItems: 'center' }}>{a.label}</button>
           ))}
+          {/* Dangerous actions in their own clearly marked group (archive and permanent delete stay separate buttons). */}
+          {actions.some((a) => a.tone === 'danger') && (
+            <span role="group" aria-label="إجراءات خطرة" style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '4px 8px', borderRadius: 12, border: '1px dashed rgba(247,243,232,.55)' }}>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>إجراءات خطرة:</span>
+              {actions.filter((a) => a.tone === 'danger').map((a) => (
+                <button key={a.key} onClick={() => setRun(a)} style={{ ...smallBtn('danger'), background: color.danger, color: color.ivory, borderColor: color.danger, display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                  <Icon name={a.key === 'archive' ? 'layers' : 'trash'} size={16} />{a.label}
+                </button>
+              ))}
+            </span>
+          )}
           <button onClick={sel.clear} style={{ ...smallBtn(), marginInlineStart: 'auto', background: 'transparent', color: color.ivory, borderColor: 'rgba(247,243,232,.5)' }}>إلغاء التحديد</button>
         </div>
       )}
@@ -332,11 +350,12 @@ function BulkConfirm({ def, resource, sel, total, filter, onClose, onDone }: {
   const [pv, setPv] = useState<Record<string, unknown>>({});
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const needType = !!def.confirmAlways || (!!def.destructive && n >= 10);
+  const word = def.confirmWord ?? 'حذف';
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (busy) return; // no second submission
     if (def.reason && reason.trim().length < 3) return setErr('اكتب السبب (3 أحرف على الأقل).');
-    if (needType && typed.trim() !== 'حذف') return setErr('اكتب «حذف» للتأكيد.');
+    if (needType && typed.trim() !== word) return setErr(`اكتب «${word}» للتأكيد.`);
     const missing = def.params?.find((f) => f.type !== 'check' && !String(pv[f.key] ?? '').trim());
     if (missing) return setErr(`أكمل: ${missing.label}.`);
     setBusy(true); setErr(null);
@@ -359,11 +378,11 @@ function BulkConfirm({ def, resource, sel, total, filter, onClose, onDone }: {
         <p style={{ margin: 0, fontSize: 15, lineHeight: 1.8 }}>{def.body(n)}</p>
         {def.params && <ParamInputs fields={def.params} v={pv} set={(k, x) => setPv((p) => ({ ...p, [k]: x }))} />}
         {def.reason && <>
-          <label htmlFor="bk-r" style={labelStyle}>السبب (يُحفظ في سجل التدقيق)</label>
+          <label htmlFor="bk-r" style={labelStyle}>{def.reasonLabel ?? 'السبب (يُحفظ في سجل التدقيق)'}</label>
           <textarea id="bk-r" rows={3} maxLength={200} value={reason} onChange={(e) => setReason(e.target.value)} style={{ ...inputStyle(null), minHeight: 80, paddingTop: 10 }} />
         </>}
         {needType && <>
-          <label htmlFor="bk-c" style={labelStyle}>اكتب حذف للتأكيد</label>
+          <label htmlFor="bk-c" style={labelStyle}>اكتب {word} للتأكيد</label>
           <input id="bk-c" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" style={inputStyle(null)} />
         </>}
         <FieldError msg={err} />
@@ -546,13 +565,15 @@ function FilterDrawer({ fields, q, opts, onClose, onApply }: { fields: FilterFie
   const keys = fields.flatMap((f) => (f.type === 'dates' ? [f.from, f.to] : [f.key]));
   const [v, setV] = useState<Record<string, string>>(() => Object.fromEntries(keys.map((k) => [k, q[k] ?? ''])));
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => { // once, on open (a re-run on every change used to pull focus back to the first field)
     const prev = document.activeElement as HTMLElement | null;
-    ref.current?.querySelector<HTMLElement>('select,input,button')?.focus();
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    ref.current?.querySelector<HTMLElement>('select,input')?.focus();
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') close.current(); };
     window.addEventListener('keydown', esc);
-    return () => { window.removeEventListener('keydown', esc); prev?.focus(); };
-  }, [onClose]);
+    return () => { window.removeEventListener('keydown', esc); if (prev && document.contains(prev)) prev.focus(); };
+  }, []);
   const set = (k: string, x: string) => setV((p) => ({ ...p, [k]: x }));
   const sel = (id: string, k: string, o: [string, string][]) => (
     <select id={id} value={v[k]} onChange={(e) => set(k, e.target.value)} style={inputStyle(null)}>

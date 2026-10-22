@@ -19,21 +19,39 @@ export const smallBtn = (tone: 'primary' | 'danger' | 'plain' = 'plain'): CSSPro
 });
 
 /* ---------------- Modal shell ---------------- */
+/** Open dialogs, innermost last: Escape closes only the top one (a dialog opened from the person panel used to close
+ *  the panel with it). */
+const openModals: object[] = [];
 export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Callers pass a new onClose on every render; keep the latest in a ref so typing (which re-renders) never re-runs
+  // the focus effect below. That re-run used to move focus to the × button after every character.
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
-    ref.current?.querySelector<HTMLElement>('input,select,textarea,button')?.focus();
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const root = ref.current;
+    // Once, on open: an explicit [data-autofocus], else the first field, else the first action (never the × button).
+    const target = root?.querySelector<HTMLElement>('[data-autofocus]')
+      ?? root?.querySelector<HTMLElement>('textarea:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled])')
+      ?? root?.querySelector<HTMLElement>('button:not([data-modal-close]):not([disabled])');
+    target?.focus();
+    const me = {};
+    openModals.push(me);
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && openModals[openModals.length - 1] === me) close.current(); };
     window.addEventListener('keydown', esc);
-    return () => { window.removeEventListener('keydown', esc); prev?.focus(); };
-  }, [onClose]);
+    return () => {
+      window.removeEventListener('keydown', esc);
+      openModals.splice(openModals.indexOf(me), 1);
+      if (prev && document.contains(prev)) prev.focus();
+    };
+  }, []);
   return (
     <div onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }} style={{ position: 'fixed', inset: 0, background: 'rgba(20,33,31,.45)', zIndex: 50, display: 'grid', placeItems: 'center', padding: 16 }}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label={title} style={{ ...card, background: color.ivory, width: '100%', maxWidth: wide ? 640 : 440, maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800, flex: 1 }}>{title}</h2>
-          <button onClick={onClose} aria-label="إغلاق" style={{ width: 44, height: 44, border: 'none', background: 'transparent', cursor: 'pointer', color: color.muted }}><Icon name="x" /></button>
+          <button data-modal-close onClick={onClose} aria-label="إغلاق" style={{ width: 44, height: 44, border: 'none', background: 'transparent', cursor: 'pointer', color: color.muted }}><Icon name="x" /></button>
         </div>
         {children}
       </div>

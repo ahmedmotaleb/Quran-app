@@ -12,14 +12,27 @@ def validate_tz(value: str) -> str:
     return value
 
 
+def _student_field(u, name: str) -> str:
+    """Student profile details only for a student: a promoted teacher keeps the old profile as history only."""
+    if u.role != Role.STUDENT:
+        return ""
+    return getattr(getattr(u, "student_profile", None), name, "") or ""
+
+
 class MeSerializer(serializers.ModelSerializer):
-    level = serializers.CharField(source="student_profile.level", read_only=True, default="")
-    daily_goal = serializers.CharField(source="student_profile.daily_goal", read_only=True, default="")
+    level = serializers.SerializerMethodField()
+    daily_goal = serializers.SerializerMethodField()
     mfa_required = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "mfa_enabled", "mfa_required", "level", "daily_goal", "date_joined"]
+
+    def get_level(self, u) -> str:
+        return _student_field(u, "level")
+
+    def get_daily_goal(self, u) -> str:
+        return _student_field(u, "daily_goal")
         read_only_fields = ["id", "email", "role", "status", "mfa_enabled", "date_joined"]
 
     def get_mfa_required(self, u) -> bool:
@@ -89,7 +102,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
     teachers = serializers.SerializerMethodField()
     guardians = serializers.SerializerMethodField()
     children = serializers.SerializerMethodField()
-    level = serializers.CharField(source="student_profile.level", read_only=True, default="")
+    level = serializers.SerializerMethodField()
     approved = serializers.SerializerMethodField()
     has_password = serializers.SerializerMethodField()
 
@@ -109,6 +122,9 @@ class AdminUserSerializer(serializers.ModelSerializer):
     def get_children(self, u):
         return [{"id": g.student_id, "name": g.student.full_name, "status": g.status, "link_id": g.id}
                 for g in u.guardian_links.all() if g.status != "revoked"]
+
+    def get_level(self, u) -> str:
+        return _student_field(u, "level")
 
     def get_approved(self, u):
         if u.role != Role.TEACHER:
