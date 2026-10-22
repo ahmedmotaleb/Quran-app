@@ -46,6 +46,10 @@ ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "" if IS_DEPLOYED else "localho
 # APP_URL is the public address (e.g. https://halqa-123.europe-west1.run.app); its host is trusted automatically.
 APP_URL = env("APP_URL", "").rstrip("/")
 APP_HOST = urlparse(APP_URL).hostname or ""
+# The admin portal runs as its own Cloud Run service (same image, PORTAL=admin) at ADMIN_URL: a different origin, so
+# phones install it as a separate app (Chrome on Android will not install a second app inside the first one's scope).
+PORTAL = env("PORTAL", "")
+ADMIN_URL = env("ADMIN_URL", "").rstrip("/")
 if APP_HOST and APP_HOST not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(APP_HOST)
 if IS_DEPLOYED and not ALLOWED_HOSTS:
