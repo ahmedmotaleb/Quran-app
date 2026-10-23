@@ -636,6 +636,27 @@ function DisciplineSection({ id, onChanged }: { id: number; onChanged: () => voi
   );
 }
 
+/** «طلبات الاعتذار» section: every pending excuse, the teacher who decides it, and the reason. Admins correct a decided
+ *  absence from the student's record («اعتماد العذر إداريًا»). */
+export function ExcusesLive() {
+  const [rows, setRows] = useState<import('@/api/endpoints').ApiExcuseRow[] | null>(null); const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { A.adminExcuses().then((r) => setRows(r.results)).catch((e) => setErr(errMsg(e))); }, []);
+  if (err) return <p role="alert" style={{ color: color.danger }}>{err}</p>;
+  if (!rows) return <p role="status" style={{ color: color.muted }}>جارٍ التحميل…</p>;
+  if (!rows.length) return <p style={{ ...card, padding: 18, margin: 0, color: color.muted }}>لا توجد طلبات اعتذار بانتظار قرار المعلم.</p>;
+  return (
+    <section style={{ ...card, padding: '10px 14px', display: 'flex', flexDirection: 'column' }}>
+      <p style={{ margin: '4px 0 8px', fontSize: 14, color: color.muted }}>يقرر المعلم كل طلب. لتصحيح غياب بعد القرار افتح ملف الطالب ← الانضباط والحضور.</p>
+      {rows.map((r) => (
+        <div key={r.booking} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', minHeight: 48, alignItems: 'center', borderTop: `1px solid ${color.divider}`, fontSize: 14, padding: '6px 0' }}>
+          <strong>{r.student.name}</strong><span>مع {r.teacher.name}</span><span style={{ color: color.muted }}>{date(r.starts_at)}</span>
+          <span style={{ flex: '1 1 220px', color: color.body }}>{r.reason}</span>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 /** «طلبات اعتذار معلقة»: excuses waiting for a teacher's decision (admins see them all; teachers decide). */
 function PendingExcusesPanel() {
   const [rows, setRows] = useState<import('@/api/endpoints').ApiExcuseRow[] | null>(null);

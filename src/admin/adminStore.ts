@@ -9,7 +9,7 @@ import * as E from '@/api/endpoints';
 import { identifierError } from '@/store/store';
 
 /** Sidebar sections, in the order the brief lists them. */
-export type Section = 'overview' | 'students' | 'teachers' | 'parents' | 'circles' | 'bookings' | 'lectures' | 'quizzes' | 'subs' | 'settings' | 'admins';
+export type Section = 'overview' | 'students' | 'teachers' | 'parents' | 'circles' | 'bookings' | 'lectures' | 'quizzes' | 'subs' | 'settings' | 'admins' | 'excuses';
 export type Dialog =
   | { kind: 'link'; id: number; approve: boolean }
   | { kind: 'user'; id: number | null; role: UserRole }
@@ -20,12 +20,12 @@ export type Dialog =
   | { kind: 'confirm'; title: string; body: string; ok: string; onOk: () => void }
   | null;
 
-const SECTIONS: Section[] = ['overview', 'students', 'teachers', 'parents', 'circles', 'bookings', 'lectures', 'quizzes', 'subs', 'settings', 'admins'];
+const SECTIONS: Section[] = ['overview', 'students', 'teachers', 'parents', 'circles', 'bookings', 'lectures', 'quizzes', 'subs', 'settings', 'admins', 'excuses'];
 
 /** What each section needs (the server checks every request; this only hides what would be refused). */
 export const SECTION_PERM: Partial<Record<Section, string[]>> = {
   students: ['users.view'], teachers: ['teachers.view'], parents: ['parents.view'], circles: ['circles.view'], bookings: ['bookings.view'],
-  lectures: ['courses.view'], quizzes: ['courses.view'], settings: ['settings.view', 'audit.view'], admins: ['admins.manage'],
+  lectures: ['courses.view'], quizzes: ['courses.view'], settings: ['settings.view', 'audit.view'], admins: ['admins.manage'], excuses: ['excuses.review'],
 };
 /** The signed-in admin's permissions (owners hold every permission). Demo mode: everything. */
 export function can(perm: string): boolean {

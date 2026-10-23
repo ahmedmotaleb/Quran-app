@@ -1,9 +1,9 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { color, font } from '@/theme/tokens';
-import { Icon, type IconName } from '@/components/Icon';
+import { Icon } from '@/components/Icon';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import type { Status } from './adminData';
-import { adminLogin, adminLogout, adminRestore, can, canSection, goSection, sectionFromHash, mfaFinish, mfaStart, setAdmin, useAdmin, type AdminState, type Section } from './adminStore';
+import { adminLogin, adminRestore, can, canSection, goSection, sectionFromHash, mfaFinish, mfaStart, setAdmin, useAdmin, type AdminState, type Section } from './adminStore';
 import { LIVE, api, type ApiError } from '@/api/client';
 import * as LA from './live/api';
 const PeopleLive = lazy(() => import('./live/People'));
@@ -13,14 +13,15 @@ const BookingsLive = lazy(() => import('./live/Scheduling').then((m) => ({ defau
 const CoursesLive = lazy(() => import('./live/Content').then((m) => ({ default: m.CoursesLive })));
 const QuizzesLive = lazy(() => import('./live/Content').then((m) => ({ default: m.QuizzesLive })));
 const SettingsLive = lazy(() => import('./live/Settings'));
+const ExcusesLive = lazy(() => import('./live/People').then((m) => ({ default: m.ExcusesLive })));
 const AdminsLive = lazy(() => import('./live/Admins'));
 const LIVE_OTHER: Partial<Record<Section, () => JSX.Element>> = {
-  settings: () => <SettingsLive />, admins: () => <AdminsLive />, circles: () => <CirclesLive />, bookings: () => <BookingsLive />, lectures: () => <CoursesLive />, quizzes: () => <QuizzesLive />,
+  settings: () => <SettingsLive />, admins: () => <AdminsLive />, excuses: () => <ExcusesLive />, circles: () => <CirclesLive />, bookings: () => <BookingsLive />, lectures: () => <CoursesLive />, quizzes: () => <QuizzesLive />,
 };
 
 /** Sections that run on the real API in live mode; the rest still show demo data (labelled). */
 const LIVE_SECTIONS: Partial<Record<Section, LA.Role>> = { students: 'student', teachers: 'teacher', parents: 'parent' };
-type LiveCounts = Partial<Record<LA.Role, LA.Counts>> & { drafts?: LA.Drafts };
+type LiveCounts = Partial<Record<LA.Role, LA.Counts>> & { drafts?: LA.Drafts; excuses?: number };
 function useLiveCounts(sec: Section) {
   const [c, setC] = useState<LiveCounts>({});
   useEffect(() => {
@@ -31,6 +32,7 @@ function useLiveCounts(sec: Section) {
     Promise.all(roles.map((r) => LA.peopleCounts(r).then((x) => [r, x] as const)))
       .then((xs) => { if (on) setC((p) => ({ ...p, ...Object.fromEntries(xs) })); }).catch(() => { /* badges are optional */ });
     if (can('courses.view')) LA.contentDrafts().then((d) => { if (on) setC((p) => ({ ...p, drafts: d })); }).catch(() => {});
+    if (can('excuses.review')) LA.adminExcuses().then((r) => { if (on) setC((p) => ({ ...p, excuses: r.results.length })); }).catch(() => {});
     return () => { on = false; };
   }, [sec]);
   return c;
@@ -38,9 +40,10 @@ function useLiveCounts(sec: Section) {
 import { StatusPill, TableSection, card } from './AdminTables';
 import AdminDialogs from './AdminDialogs';
 import AdminSettings from './AdminSettings';
-import { BRAND, pageTitle } from '@/theme/brand';
+import { pageTitle } from '@/theme/brand';
 import { Logo } from '@/components/Logo';
 import { promptInstall, useInstall } from '@/pwa/install';
+import { AdminSidebar, AdminTopBar, NAV } from './AdminNav';
 
 /** Back to the learners' app. The portal may run on its own address (the admin service), so ask the server where. */
 const toApp = async () => {
@@ -138,13 +141,7 @@ function AdminLogin() {
 }
 
 /* ---------------- Portal shell ---------------- */
-const NAV: [Section, string, IconName][] = [
-  ['overview', 'نظرة عامة', 'home'], ['students', 'الطلاب', 'user'], ['teachers', 'المعلمون', 'award'], ['parents', 'أولياء الأمور', 'users'],
-  ['circles', 'الحلقات', 'target'], ['bookings', 'الحجوزات', 'cal'], ['lectures', 'المحاضرات', 'video'], ['quizzes', 'الاختبارات', 'plan'],
-  ['subs', 'الاشتراكات', 'file'], ['settings', 'الإعدادات', 'settings'], ['admins', 'الإدارة والصلاحيات', 'shield'],
-];
-// No payments yet (owner decision): the live portal has no Subscriptions section; the demo keeps its sample.
-const NAV_SHOWN = LIVE ? NAV.filter(([k]) => k !== 'subs') : NAV.filter(([k]) => k !== 'admins');
+// Navigation (grouped, vertical sidebar / drawer): AdminNav.tsx.
 const todayCairo = () => new Intl.DateTimeFormat('ar-EG', { timeZone: 'Africa/Cairo', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 const TITLES: Record<Section, string> = {
   overview: LIVE ? '' : 'الأحد 11 أكتوبر 2026',
@@ -158,6 +155,7 @@ const TITLES: Record<Section, string> = {
   subs: 'حالة الباقات ومواعيد التجديد',
   settings: 'إعدادات المنصة العامة',
   admins: 'من يدخل لوحة الإدارة وما يستطيع فعله',
+  excuses: 'طلبات الاعتذار بانتظار قرار المعلمين',
 };
 
 /** Items awaiting admin action, per section (shown as sidebar badges and on the overview). */
@@ -175,7 +173,8 @@ function Portal() {
   const narrow = useNarrow();
   const lc = useLiveCounts(s.sec);
   const counts: Partial<Record<Section, number>> = LIVE
-    ? { students: (lc.student?.pending ?? 0) + (lc.student?.unlinked ?? 0), teachers: (lc.teacher?.pending ?? 0) + (lc.teacher?.unapproved ?? 0), parents: lc.parent?.pending ?? 0 }
+    ? { students: (lc.student?.pending ?? 0) + (lc.student?.unlinked ?? 0), teachers: (lc.teacher?.pending ?? 0) + (lc.teacher?.unapproved ?? 0), parents: lc.parent?.pending ?? 0,
+        excuses: lc.excuses ?? 0 }
     : pendingCounts(s);
   const liveRole = LIVE ? LIVE_SECTIONS[s.sec] : undefined;
   const liveOther = LIVE ? LIVE_OTHER[s.sec] : undefined;
@@ -189,44 +188,16 @@ function Portal() {
   }, []);
   const label = NAV.find((n) => n[0] === s.sec)![1];
 
-  const nav = (
-    <nav aria-label="أقسام الإدارة" style={narrow
-      ? { display: 'flex', gap: 4, overflowX: 'auto', padding: '0 12px 10px', margin: '0 -0px' }
-      : { display: 'flex', flexDirection: 'column', gap: 4 }}>
-      {NAV_SHOWN.filter(([k]) => !LIVE || canSection(k)).map(([k, l, ic]) => {
-        const cur = s.sec === k; const c = counts[k] ?? 0;
-        return (
-          <button key={k} onClick={() => goSection(k)} aria-current={cur ? 'page' : undefined}
-            style={{ minHeight: 48, padding: '0 14px', border: 'none', borderRadius: 12, background: cur ? color.ivory : 'transparent', color: cur ? color.primary : color.ivory, fontSize: 15, fontWeight: 700, textAlign: 'right', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
-            <Icon name={ic} size={18} /><span style={{ flex: 1 }}>{l}</span>
-            {c > 0 && <span aria-label={`${c} بانتظار إجراء`} style={{ minWidth: 24, height: 24, borderRadius: 999, background: color.gold, color: color.ink, fontFamily: font.latin, fontSize: 12, display: 'grid', placeItems: 'center', padding: '0 6px' }}>{c}</span>}
-          </button>
-        );
-      })}
-    </nav>
-  );
-  const brand = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: narrow ? '12px 16px' : '0 6px 18px' }}>
-      <img src="/assets/halqa-mark-ivory.png" alt="" style={{ width: 40, height: 40, objectFit: 'contain' }} />
-      <div style={{ flex: 1 }}><p style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{BRAND.ar}</p><p style={{ margin: 0, fontSize: 12, color: color.liveSub }}>لوحة الإدارة</p></div>
-      {narrow && <button onClick={adminLogout} aria-label="تسجيل الخروج" style={{ width: 44, height: 44, border: 'none', background: 'transparent', color: color.sage, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Icon name="leave" /></button>}
-    </div>
+  const footer = (
+    <>
+      <AdminInstall dark />
+      <button onClick={toApp} style={{ minHeight: 32, border: 'none', background: 'transparent', color: color.sage, fontSize: 12, textAlign: 'right', padding: '0 8px', cursor: 'pointer', textDecoration: 'underline' }}>{LIVE ? '← تطبيق الحلقة' : '← العودة إلى نموذج الجوال'}</button>
+    </>
   );
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: narrow ? 'column' : 'row', overflowX: 'clip' }}>
-      {narrow ? (
-        <header style={{ background: color.primary, color: color.ivory, position: 'sticky', top: 0, zIndex: 20 }}>{brand}{nav}</header>
-      ) : (
-        <aside style={{ flex: '0 0 248px', background: color.primary, color: color.ivory, padding: '20px 14px', display: 'flex', flexDirection: 'column', gap: 6, position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' }}>
-          {brand}{nav}
-          <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 16 }}>
-            <AdminInstall dark />
-            <button onClick={toApp} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.sage, fontSize: 14, textAlign: 'right', padding: '0 14px', cursor: 'pointer', textDecoration: 'underline' }}>{LIVE ? '← تطبيق الحلقة' : '← العودة إلى نموذج الجوال'}</button>
-            <button onClick={adminLogout} style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.sage, fontSize: 14, textAlign: 'right', padding: '0 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="leave" size={18} /> تسجيل الخروج</button>
-          </div>
-        </aside>
-      )}
+    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: narrow ? 'column' : 'row', overflowX: 'clip' }}>
+      {narrow ? <AdminTopBar sec={s.sec} title={label} counts={counts} footer={footer} /> : <AdminSidebar sec={s.sec} counts={counts} footer={footer} />}
       <main style={{ flex: 1, minWidth: 0, padding: '28px clamp(16px,3vw,40px)', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div><h1 style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>{label}</h1><p style={{ margin: '4px 0 0', fontSize: 14, color: color.muted }}>{s.sec === 'overview' && LIVE ? todayCairo() : TITLES[s.sec]}</p></div>

@@ -26,7 +26,7 @@ await page.getByRole('button', { name: 'دخول' }).click();
 await page.getByText(/بيانات حقيقية/).waitFor();
 
 await step('1. open Students; search narrows on the server and goes in the URL', async () => {
-  await page.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: /^الطلاب/ }).click();
+  await page.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' }).getByRole('button', { name: /^الطلاب/ }).click();
   await page.getByRole('searchbox').fill('تجريبي');
   await page.getByText('عرض 1–20 من 30').waitFor();
   if (!page.url().includes('#/admin/students?') || !decodeURIComponent(page.url()).includes('q=تجريبي')) throw new Error('search not in URL: ' + page.url());
@@ -109,7 +109,7 @@ await step('partial result: nothing changed is reported with the reason', async 
   await dialog().getByRole('button', { name: 'تم' }).click();
 });
 await step('bulk delete never removes content with history: published courses are refused with reasons', async () => {
-  await page.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: /^المحاضرات/ }).click();
+  await page.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' }).getByRole('button', { name: /^المحاضرات/ }).click();
   await page.getByText('عرض 1–3 من 3').waitFor();
   await header().check();
   await bar().getByRole('button', { name: 'حذف المحدد' }).click();

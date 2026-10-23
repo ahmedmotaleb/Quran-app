@@ -9,7 +9,7 @@ const { settledReload } = trackWrites(page);
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 let fails = 0;
 const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await page.screenshot({ path: `${out}/content-fail-${name.replace(/\W+/g, '_')}.png` }); } };
-const nav = (name) => page.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: new RegExp(`^${name}`) }).click();
+const nav = (name) => page.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' }).getByRole('button', { name: new RegExp(`^${name}`) }).click();
 const dialog = () => page.getByRole('dialog').last();
 const api = async (method, path, token, data) => { const r = await page.request.fetch(BASE + 'api/v1/' + path, { method, data, headers: { Authorization: `Bearer ${token}` } }); return { status: r.status(), body: await r.json().catch(() => null) }; };
 const tokenFor = async (email) => (await (await page.request.post(BASE + 'api/v1/auth/login', { data: { email, password: 'halqa123', client: 'native' } })).json()).token;
