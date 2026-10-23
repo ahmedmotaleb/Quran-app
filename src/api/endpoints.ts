@@ -187,6 +187,12 @@ export const parentChildren = () => api<Page<Me>>('GET', 'parent/children?page_s
 export const createAssignment = (b: {
   student: number; kind: string; title: string; surah: number; ayah_from: number; ayah_to: number; instructions: string; due_at: string; requires_recording: boolean;
 }) => api<ApiAssignment>('POST', 'assignments', b);
+export type TaskBody = Omit<Parameters<typeof createAssignment>[0], 'student'>;
+/** The teacher's circles and how many members a circle task would reach (active and linked to the teacher). */
+export const teacherCircles = () => api<{ results: { id: number; name: string; state: string; members: number; reachable: number }[] }>('GET', 'teacher/circles');
+/** «إرسال مهمة لكل الحلقة»: one task per reachable member, one transaction, a result per member. */
+export const circleAssign = (id: number, b: TaskBody) => api<{ created: number; skipped: number;
+  results: { student: number; name: string; outcome: 'created' | 'skipped'; message?: string }[] }>('POST', `circles/${id}/assignments`, b);
 
 // ---- adapters ----
 const STATUS: Record<ApiAssignment['status'], TaskStatus> = {

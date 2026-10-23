@@ -16,7 +16,7 @@ import { SUR } from '@/data/demo';
 import { BRAND } from '@/theme/brand';
 import * as media from '@/services/media';
 import * as pending from '@/services/pendingRec';
-import { back, rememberedChild, reset, setState, toast, up, useApp, type AssignForm, type Mark, type ReviewDraft, type ReviewItem } from './store';
+import { back, openSheet, rememberedChild, reset, setState, toast, up, useApp, type AssignForm, type Mark, type ReviewDraft, type ReviewItem } from './store';
 import { discardVoiceNote, stopVoiceNote, voiceNote, voiceNoteRecording } from '@/services/voiceNote';
 
 // Lazy: store.ts and this module import each other.
@@ -407,18 +407,29 @@ export async function createAssignment(f: AssignForm) {
     .format(new Date(Date.now() + DUE_DAYS[f.due] * 86_400_000));
   const name = SUR[+f.s][0];
   const stu = get().students.find((x) => x.id === f.sid);
+  if (f.busy) return; // no second submission (a circle task is many tasks)
+  up('af', { busy: true });
+  const body: E.TaskBody = {
+    kind: f.type, title: f.title?.trim() || (f.type === 'tajweed' ? 'تجويد: سورة ' + name : `${typeL(f.type)} سورة ${name}`),
+    surah: +f.s, ayah_from: +f.from, ayah_to: +f.to, instructions: f.instr.trim(), due_at: zonedToIso(day, f.time || '21:00', tz),
+    requires_recording: f.needRec,
+  };
   try {
-    await E.createAssignment({
-      student: +f.sid, kind: f.type, title: f.type === 'tajweed' ? 'تجويد: سورة ' + name : `${typeL(f.type)} سورة ${name}`,
-      surah: +f.s, ayah_from: +f.from, ayah_to: +f.to, instructions: f.instr.trim(), due_at: zonedToIso(day, f.time || '21:00', tz),
-      requires_recording: f.needRec,
-    });
-    back();
-    toast(`أُرسل الواجب إلى ${stu?.name ?? 'الطالب'}`);
+    if (f.circle) {
+      const r = await E.circleAssign(f.circle.id, body);
+      back();
+      const skipped = r.results.filter((x) => x.outcome === 'skipped');
+      openSheet({ kind: 'info', title: `أُرسلت المهمة إلى ${r.created} من طلاب ${f.circle.name}`,
+        body: skipped.length ? `لم تُرسل إلى ${skipped.length}:\n` + skipped.map((x) => `• ${x.name}: ${x.message}`).join('\n') : 'وصلت المهمة إلى كل طلاب الحلقة النشطين.' });
+    } else {
+      await E.createAssignment({ ...body, student: +f.sid });
+      back();
+      toast(`أُرسل الواجب إلى ${stu?.name ?? 'الطالب'}`);
+    }
     await loadTeacherData();
   } catch (e) {
     const err = e as ApiError;
-    up('af', { errors: { from: err.field?.('ayah_from') ?? null, to: err.field?.('ayah_to') ?? null } });
+    up('af', { busy: false, errors: { from: err.field?.('ayah_from') ?? null, to: err.field?.('ayah_to') ?? null } });
     toast(msg(e), 'alert');
   }
 }

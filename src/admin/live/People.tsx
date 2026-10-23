@@ -8,6 +8,8 @@ import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui'
 import { Icon } from '@/components/Icon';
 import type { ApiError } from '@/api/client';
 import { can, toast, useAdmin } from '../adminStore';
+import { SUR } from '@/data/demo';
+import { zonedToIso } from '@/lib/time';
 import { card } from '../AdminTables';
 import * as A from './api';
 import { chip, date, errMsg, LinkBox, Modal, ReasonDialog, smallBtn } from './ui';
@@ -298,7 +300,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
   const [u, setU] = useState<A.Person | null>(null); const [err, setErr] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ full_name: string; phone: string } | null>(null); const [editErr, setEditErr] = useState<Record<string, string | null>>({});
   const [sub, setSub] = useState<Sub>(null); const [setup, setSetup] = useState<boolean | null>(null); const [busy, setBusy] = useState(false);
-  const [promote, setPromote] = useState(false);
+  const [promote, setPromote] = useState(false); const [task, setTask] = useState(false);
   const reload = useCallback(async () => { try { setU(await A.getPerson(id)); setErr(null); } catch (e) { setErr(errMsg(e)); } }, [id]);
   useEffect(() => { void reload(); }, [reload]);
 
@@ -381,6 +383,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
             {can('users.suspend') && u.status === 'pending' && <button disabled={busy} onClick={() => act(() => A.setPersonStatus(u.id, 'active'), 'تم اعتماد الحساب')} style={smallBtn('primary')}>اعتماد الحساب</button>}
             {can('users.suspend') && (u.status === 'suspended' || u.status === 'archived') && <button disabled={busy} onClick={() => reasonRun('إعادة تفعيل الحساب', `سيستطيع ${u.full_name} الدخول من جديد. سجل الغياب السابق يبقى كما هو.`, 'إعادة التفعيل', 'أُعيد تفعيل الحساب', (r) => A.setPersonStatus(u.id, 'active', r))} style={smallBtn('primary')}>إعادة التفعيل</button>}
             {can('users.archive') && u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('أرشفة الحساب', `لن يستطيع ${u.full_name} الدخول أو استعادة كلمة المرور. تبقى كل سجلاته محفوظة، ويمكن إعادة التفعيل لاحقًا.`, 'أرشفة الحساب', 'أُرشف الحساب', (r) => A.setPersonStatus(u.id, 'archived', r))} style={smallBtn('danger')}>أرشفة الحساب</button>}
+            {can('assignments.manage') && u.role === 'student' && u.status === 'active' && <button disabled={busy} onClick={() => setTask(true)} style={smallBtn('primary')}>إضافة مهمة</button>}
             {can('users.promote_teacher') && u.role === 'student' && u.status !== 'archived' && <button disabled={busy} onClick={() => setPromote(true)} style={smallBtn()}>ترقية إلى معلم</button>}
             {can('users.delete_permanent') && <button disabled={busy} onClick={() => setSub({ kind: 'reason', title: 'حذف الحساب نهائيًا', typeWord: 'حذف', otp: true, ok: 'حذف نهائي',
               body: `سيُحذف حساب ${u.full_name} نهائيًا ولا يمكن التراجع: لن يستطيع الدخول أبدًا، ويُمسح الاسم والبريد والهاتف والتسجيلات الصوتية. تبقى سجلات المعلمين (المهام والتقييمات والحضور) باسم «حساب محذوف» حتى تبقى الإحصاءات صحيحة. إن لم يكن للحساب أي نشاط يُحذف بالكامل.`,
@@ -430,6 +433,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
         </>))}
       </>}
       {sub?.kind === 'reason' && <ReasonDialog title={sub.title} body={sub.body} ok={sub.ok} required={sub.required} typeWord={sub.typeWord} otp={sub.otp} onClose={() => setSub(null)} run={async (r, otp) => { await sub.run(r, otp); }} />}
+      {task && u && <TaskDialog u={u} onClose={() => setTask(false)} />}
       {promote && u && <PromoteDialog id={u.id} name={u.full_name} onClose={() => setPromote(false)}
         onDone={() => { setPromote(false); toast('تمت ترقية الحساب إلى معلم. سيُطلب من المستخدم تسجيل الدخول من جديد.'); onChanged(); void reload(); }} />}
       {sub?.kind === 'pick' && u && (
@@ -502,6 +506,65 @@ function PickDialog({ target, exclude, onClose, onPick }: { target: A.Role; excl
 }
 
 /** Student → Teacher, one account: same email, password and history. Reason, typed «ترقية», approval off by default. */
+/** «إضافة مهمة» for a student (academic admins). The task belongs to one of the student's linked teachers, who reviews it. */
+function TaskDialog({ u, onClose }: { u: A.Person; onClose: () => void }) {
+  const tomorrow = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date(Date.now() + 86_400_000));
+  const [f, setF] = useState({ teacher: u.teachers.length === 1 ? String(u.teachers[0].id) : '', kind: 'hifz', surah: '67', from: '', to: '', title: '',
+    instructions: '', day: tomorrow, time: '21:00', rec: true });
+  const [err, setErr] = useState<Record<string, string | null>>({}); const [busy, setBusy] = useState(false);
+  const max = SUR[+f.surah][1];
+  const submit = async (e: FormEvent) => {
+    e.preventDefault(); if (busy) return;
+    const x: Record<string, string> = {}; const a = parseInt(f.from, 10), b = parseInt(f.to, 10);
+    if (!f.teacher) x.teacher = 'اختر المعلم المسؤول عن المهمة.';
+    if (!a || a < 1 || a > max) x.from = `من 1 إلى ${max}.`;
+    if (!b || b < 1 || b > max) x.to = `من 1 إلى ${max}.`; else if (a && b < a) x.to = 'يجب أن تكون النهاية بعد البداية.';
+    if (Object.keys(x).length) return setErr(x);
+    setBusy(true); setErr({});
+    const name = SUR[+f.surah][0];
+    try {
+      await A.adminCreateTask({ student: u.id, teacher: Number(f.teacher), kind: f.kind, surah: +f.surah, ayah_from: a, ayah_to: b,
+        title: f.title.trim() || `${{ hifz: 'حفظ', review: 'مراجعة', tajweed: 'تجويد:' }[f.kind]} سورة ${name}`,
+        instructions: f.instructions.trim(), due_at: zonedToIso(f.day, f.time, 'Africa/Cairo'), requires_recording: f.rec });
+      toast(`أُرسلت المهمة إلى ${u.full_name}`); onClose();
+    } catch (y) {
+      const a2 = y as ApiError;
+      setErr({ teacher: a2.field?.('teacher') ?? null, from: a2.field?.('ayah_from') ?? null, to: a2.field?.('ayah_to') ?? null,
+        form: a2.field?.('teacher') || a2.field?.('ayah_from') || a2.field?.('ayah_to') ? null : a2.message });
+      setBusy(false);
+    }
+  };
+  const field = (id: string, label: string, el: ReactNode, e?: string | null) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}><label htmlFor={id} style={labelStyle}>{label}</label>{el}<FieldError msg={e} /></div>);
+  return (
+    <Modal title={`إضافة مهمة: ${u.full_name}`} onClose={() => { if (!busy) onClose(); }} wide>
+      {u.teachers.length === 0 ? <><p role="alert" style={{ margin: 0, color: color.dangerInk, fontWeight: 700 }}>الطالب غير مرتبط بمعلم. اربطه بمعلم أولًا ليراجع تسليمه.</p>
+        <button onClick={onClose} style={primaryBtn(48, 15)}>تم</button></> : (
+      <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {field('tk-t', 'المعلم المسؤول (يراجع التسليم)', <select id="tk-t" value={f.teacher} onChange={(e) => setF({ ...f, teacher: e.target.value })} style={inputStyle(err.teacher)}>
+          <option value="">اختر…</option>{u.teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>, err.teacher)}
+        {field('tk-k', 'النوع', <select id="tk-k" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })} style={inputStyle(null)}>
+          <option value="hifz">حفظ</option><option value="review">مراجعة</option><option value="tajweed">تجويد</option></select>)}
+        {field('tk-s', 'السورة', <select id="tk-s" value={f.surah} onChange={(e) => setF({ ...f, surah: e.target.value })} style={inputStyle(null)}>
+          {Object.keys(SUR).map((k) => <option key={k} value={k}>{SUR[+k][0]} ({SUR[+k][1]} آية)</option>)}</select>)}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {field('tk-f', 'من الآية', <input id="tk-f" inputMode="numeric" dir="ltr" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} style={inputStyle(err.from, true)} />, err.from)}
+          {field('tk-to', 'إلى الآية', <input id="tk-to" inputMode="numeric" dir="ltr" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} style={inputStyle(err.to, true)} />, err.to)}
+        </div>
+        {field('tk-ti', 'العنوان (اختياري)', <input id="tk-ti" maxLength={160} value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} style={inputStyle(null)} />)}
+        {field('tk-i', 'التوجيهات', <textarea id="tk-i" rows={3} value={f.instructions} onChange={(e) => setF({ ...f, instructions: e.target.value })} style={{ ...inputStyle(null), minHeight: 80, paddingTop: 10 }} />)}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {field('tk-d', 'موعد التسليم (بتوقيت القاهرة)', <input id="tk-d" type="date" dir="ltr" value={f.day} onChange={(e) => setF({ ...f, day: e.target.value })} style={inputStyle(null, true)} />)}
+          {field('tk-h', 'الساعة', <input id="tk-h" type="time" dir="ltr" value={f.time} onChange={(e) => setF({ ...f, time: e.target.value })} style={inputStyle(null, true)} />)}
+        </div>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', minHeight: 40 }}><input type="checkbox" checked={f.rec} onChange={(e) => setF({ ...f, rec: e.target.checked })} style={{ width: 20, height: 20 }} /> يتطلب تسجيل تلاوة</label>
+        <FieldError msg={err.form} />
+        <button type="submit" disabled={busy} style={primaryBtn(48, 15)}>{busy ? 'جارٍ الإرسال…' : 'إرسال المهمة'}</button>
+      </form>)}
+    </Modal>
+  );
+}
+
 function PromoteDialog({ id, name, onClose, onDone }: { id: number; name: string; onClose: () => void; onDone: (r: A.PromoteResult) => void }) {
   const [reason, setReason] = useState(''); const [typed, setTyped] = useState(''); const [approve, setApprove] = useState(false);
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);

@@ -46,11 +46,11 @@ class AssignmentList(generics.ListCreateAPIView):
         student = serializer.validated_data["student"]
         if not assigned_student_ids(u).filter(student_id=student.pk).exists():
             raise ApiError("not_your_student", "هذا الطالب غير مرتبط بك.", 403)
-        a = serializer.save(teacher=u)
-        audit("assignment.created", actor=u, target=a, request=self.request)
-        from apps.notifications.services import after_commit
-        after_commit(a.student, "assignment_new", "واجب جديد من معلمك", f"{a.title} · {u.full_name}", link=f"/tasks/{a.pk}",
-                     dedupe=f"assignment:{a.pk}:new", data={"assignment": a.pk})
+        from .assigning import create_assignment
+
+        d = dict(serializer.validated_data)
+        d.pop("student")
+        serializer.instance = create_assignment(u, student, d, actor=u, request=self.request)
 
 
 class AssignmentDetail(generics.RetrieveAPIView):

@@ -30,6 +30,9 @@ export const createPerson = (full_name: string, email: string, role: 'student' |
 /** Emails a fresh setup link. `share` (owner only, and only when the email fails): also return the link to copy. */
 export const newSetupLink = (id: number, share = false) => api<SetupLink>('POST', `admin/users/${id}/setup-link`, share ? { share: true } : {});
 /** «إنشاء الحساب وإرسال رابط الإعداد»: the teacher account exists at once (unapproved); the setup email goes directly. */
+/** A task for a student by an academic admin (assignments.manage); `teacher`: one of the student's linked teachers. */
+export const adminCreateTask = (b: { student: number; teacher?: number; kind: string; title: string; surah: number; ayah_from: number; ayah_to: number;
+  instructions: string; due_at: string; requires_recording: boolean }) => api<{ id: number; title: string; teacher_name: string }>('POST', 'admin/assignments', b);
 export const createTeacher = (full_name: string, email: string) => api<Person & SetupLink>('POST', 'admin/teachers', { full_name, email });
 export const setTeacherApproval = (id: number, approved: boolean, reason = '') => api<Person>('POST', `admin/teachers/${id}/approval`, { approved, reason });
 export const assignTeacher = (teacher: number, student: number) => api<{ id: number }>('POST', 'admin/teacher-assignments', { teacher, student });

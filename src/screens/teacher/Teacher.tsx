@@ -7,7 +7,7 @@ import { DAYS, SUR, TODAY_LABEL } from '@/data/demo';
 import { fmt, scoreL, timeIn, typeIcon, tzLabel, tzOf } from '@/lib/format';
 import { dateKey, dayLabel, fmtDay, fmtTime, zonedToIso as zonedIso } from '@/lib/time';
 import { gradeRecitation, reviewExcuse, saveMeetingLink, setAttendance, teacherCancelBooking, toggleSlot as toggleLiveSlot } from '@/store/live';
-import { me as getMe, type ApiGradingItem } from '@/api/endpoints';
+import { me as getMe, teacherCircles, type ApiGradingItem } from '@/api/endpoints';
 import { useState } from 'react';
 import { weekDays } from '@/store/selectors';
 import { openSheet } from '@/store/store';
@@ -146,6 +146,26 @@ function PendingApproval() {
   );
 }
 
+/** The teacher's circles: «إرسال مهمة لكل الحلقة» (one task per active member linked to the teacher). */
+function MyCircles() {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof teacherCircles>>['results'] | null>(null);
+  useEffect(() => { let on = true; teacherCircles().then((r) => on && setRows(r.results)).catch(() => {}); return () => { on = false; }; }, []);
+  if (!rows?.length) return null;
+  return (
+    <section aria-labelledby="my-circles" style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <h2 id="my-circles" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>حلقاتي</h2>
+      {rows.map((c) => (
+        <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderTop: `1px solid ${color.divider}`, paddingTop: 8 }}>
+          <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontWeight: 700 }}>{c.name}</span>
+            <span style={muted(12)}>{c.reachable} من {c.members} طالبًا تصلهم المهمة</span></span>
+          <button disabled={!c.reachable} onClick={() => openAssign(undefined, { circle: { id: c.id, name: c.name, reachable: c.reachable } })}
+            style={{ minHeight: 44, padding: '0 12px', borderRadius: 12, border: `1px solid ${color.primary}`, background: color.card, color: color.primary, fontWeight: 700, cursor: c.reachable ? 'pointer' : 'default' }}>إرسال مهمة لكل الحلقة</button>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export function TeacherDash() {
   const tz = useApp((s) => s.tz); const live = useApp((s) => s.liveMode); const name = useApp((s) => s.user.name);
   const { pend, open } = useReviews();
@@ -165,6 +185,7 @@ export function TeacherDash() {
         {live && <InboxBell />}
       </header>
       {live && <PendingApproval />}
+      {live && <MyCircles />}
       <section style={{ background: color.primary, color: color.ivory, borderRadius: 20, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>تسجيلات تنتظر المراجعة</h2>
@@ -275,7 +296,7 @@ export function TeacherStudent() {
         {live && <StudentProgressLive key={u.id} id={Number(u.id)} />}
         {live && <ReviewSchedulesLive key={`r${u.id}`} id={Number(u.id)} />}
         {live && <TeacherCorrections key={`c${u.id}`} ctx={{ student: Number(u.id), source: 'review' }} title="الأخطاء ونقاط المراجعة" />}
-        <button onClick={() => openAssign(u.id)} style={primaryBtn(52, 16)}><Icon name="plus" /> أنشئ واجبًا لـ {u.name}</button>
+        <button onClick={() => openAssign(u.id, { fixed: true })} style={primaryBtn(52, 16)}><Icon name="plus" /> إضافة مهمة</button>
         <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>الخطة</h3>
           {tasks.length === 0 && <p style={muted(14)}>لا توجد مهام مفتوحة.</p>}
@@ -322,14 +343,22 @@ export function TeacherAssign() {
   const sel = { ...inputStyle(false), padding: '0 14px' };
   return (
     <div>
-      <BackHeader title="واجب جديد" sticky />
+      <BackHeader title={f.circle ? 'مهمة لكل الحلقة' : 'واجب جديد'} sticky />
       <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label htmlFor="af-stu" style={labelStyle}>الطالب</label>
-          <select id="af-stu" value={f.sid} onChange={(e) => up('af', { sid: e.target.value })} style={sel}>
-            {students.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
-        </div>
+        {f.circle ? (
+          <p style={{ margin: 0, padding: '12px 14px', borderRadius: 14, background: color.sand, fontSize: 15, lineHeight: 1.7 }}>
+            الحلقة: <strong>{f.circle.name}</strong> · تصل المهمة إلى <strong>{f.circle.reachable}</strong> طالبًا نشطًا مرتبطًا بك (مهمة لكل طالب).
+          </p>
+        ) : f.fixed ? (
+          <p style={{ margin: 0, padding: '12px 14px', borderRadius: 14, background: color.sand, fontSize: 15 }}>الطالب: <strong>{stu?.name ?? '—'}</strong></p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="af-stu" style={labelStyle}>الطالب</label>
+            <select id="af-stu" value={f.sid} onChange={(e) => up('af', { sid: e.target.value })} style={sel}>
+              {students.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span style={labelStyle}>نوع الواجب</span>
           <Segmented role="group" label="نوع الواجب" options={[['hifz', 'حفظ'], ['review', 'مراجعة'], ['tajweed', 'تجويد']] as const} value={f.type} onChange={(k) => up('af', { type: k })} />
@@ -361,6 +390,10 @@ export function TeacherAssign() {
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label htmlFor="af-title" style={labelStyle}>عنوان المهمة (اختياري)</label>
+          <input id="af-title" maxLength={160} value={f.title ?? ''} onChange={(e) => up('af', { title: e.target.value })} placeholder={`${f.type === 'tajweed' ? 'تجويد: سورة' : f.type === 'review' ? 'مراجعة سورة' : 'حفظ سورة'} ${SUR[+f.s][0]}`} style={inputStyle(false)} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label htmlFor="af-instr" style={labelStyle}>توجيهات للطالب</label>
           <textarea id="af-instr" rows={4} value={f.instr} onChange={(e) => up('af', { instr: e.target.value })} placeholder="مثال: استمع للتلاوة 3 مرات قبل الحفظ"
             style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15, color: color.ink, resize: 'vertical' }} />
@@ -369,7 +402,7 @@ export function TeacherAssign() {
           <span style={{ fontSize: 15 }}>يتطلب تسجيل تلاوة</span>
           <Switch on={f.needRec} label="يتطلب تسجيل تلاوة" onToggle={() => up('af', { needRec: !f.needRec })} />
         </div>
-        <button onClick={sendAssign} style={primaryBtn()}>إرسال الواجب إلى {stu?.name ?? 'الطالب'}</button>
+        <button onClick={sendAssign} disabled={!!f.busy} style={primaryBtn()}>{f.busy ? 'جارٍ الإرسال…' : f.circle ? `إرسال مهمة لكل الحلقة (${f.circle.reachable})` : `إرسال الواجب إلى ${stu?.name ?? 'الطالب'}`}</button>
       </div>
     </div>
   );
