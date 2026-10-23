@@ -55,6 +55,7 @@ reseed; run admin-ops
 reseed; run admin-admins
 reseed; run admin-nav
 reseed; run reports
+reseed; run support
 reseed; run phone-login
 reseed; run teacher-onboarding
 reseed; CIRCLE_CMD="bash e2e/ci/py.sh circle_for_teacher.py" run assigning

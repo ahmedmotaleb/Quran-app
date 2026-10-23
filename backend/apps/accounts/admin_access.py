@@ -50,6 +50,9 @@ PERMISSIONS: dict[str, str] = {
     # Communication
     "notifications.send": "إرسال رسائل داخل التطبيق",
     "invitations.send": "إرسال الدعوات وروابط الإعداد",
+    # Support
+    "support.view": "عرض طلبات الدعم",
+    "support.manage": "الرد على طلبات الدعم وإسنادها وتغيير حالتها",
     # Reports
     "analytics.view": "عرض التقارير",
     "exports.create": "تصدير القوائم",
@@ -74,10 +77,10 @@ PRESETS: dict[str, frozenset[str]] = {
         "bookings.view", "bookings.manage", "sessions.view", "sessions.manage", "circles.view", "circles.manage",
         "attendance.manage", "excuses.review", "assignments.view", "assignments.manage", "submissions.view",
         "feedback.view", "courses.view", "courses.manage", "lessons.manage", "quizzes.manage", "notifications.send",
-        "invitations.send", "analytics.view", "exports.create"}),
+        "invitations.send", "analytics.view", "exports.create", "support.view", "support.manage"}),
     "support": frozenset({
         "users.view", "users.view_contact", "users.suspend", "parents.view", "parents.link_child", "teachers.view",
-        "bookings.view", "invitations.send"}),
+        "bookings.view", "invitations.send", "support.view", "support.manage"}),
     "content": frozenset({"courses.view", "courses.manage", "lessons.manage", "quizzes.manage"}),
     "sessions": frozenset({
         "sessions.view", "sessions.manage", "bookings.view", "bookings.manage", "circles.view", "circles.manage",

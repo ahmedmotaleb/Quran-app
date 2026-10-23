@@ -72,7 +72,7 @@ export const SCREEN_NAMES = {
   circles: 'الجلسات', teacher: 'صفحة المعلم', bkreview: 'مراجعة الحجز', bkdone: 'تأكيد الحجز', session: 'تفاصيل الجلسة',
   live: 'الجلسة المباشرة', lesson: 'صفحة الدرس', quiz: 'الاختبار', progress: 'تقدمي', account: 'حسابي',
   tdash: 'لوحة اليوم (معلم)', tstudents: 'الطلاب (معلم)', tstudent: 'ملف الطالب', tassign: 'إنشاء واجب',
-  treviews: 'المراجعات (معلم)', treview: 'مراجعة تسجيل', tschedule: 'المواعيد (معلم)', tcontent: 'إنشاء محتوى', phome: 'متابعة ولي الأمر', inbox: 'الإشعارات', mistakes: 'أخطائي',
+  treviews: 'المراجعات (معلم)', treview: 'مراجعة تسجيل', tschedule: 'المواعيد (معلم)', tcontent: 'إنشاء محتوى', phome: 'متابعة ولي الأمر', inbox: 'الإشعارات', mistakes: 'أخطائي', support: 'الدعم',
 } as const;
 export type Screen = keyof typeof SCREEN_NAMES;
 

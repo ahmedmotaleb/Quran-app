@@ -16,13 +16,14 @@ const SettingsLive = lazy(() => import('./live/Settings'));
 const ExcusesLive = lazy(() => import('./live/People').then((m) => ({ default: m.ExcusesLive })));
 const AdminsLive = lazy(() => import('./live/Admins'));
 const ReportsLive = lazy(() => import('./live/Reports'));
+const SupportLive = lazy(() => import('./live/Support'));
 const LIVE_OTHER: Partial<Record<Section, () => JSX.Element>> = {
-  settings: () => <SettingsLive />, admins: () => <AdminsLive />, excuses: () => <ExcusesLive />, reports: () => <ReportsLive />, circles: () => <CirclesLive />, bookings: () => <BookingsLive />, lectures: () => <CoursesLive />, quizzes: () => <QuizzesLive />,
+  settings: () => <SettingsLive />, admins: () => <AdminsLive />, excuses: () => <ExcusesLive />, reports: () => <ReportsLive />, support: () => <SupportLive />, circles: () => <CirclesLive />, bookings: () => <BookingsLive />, lectures: () => <CoursesLive />, quizzes: () => <QuizzesLive />,
 };
 
 /** Sections that run on the real API in live mode; the rest still show demo data (labelled). */
 const LIVE_SECTIONS: Partial<Record<Section, LA.Role>> = { students: 'student', teachers: 'teacher', parents: 'parent' };
-type LiveCounts = Partial<Record<LA.Role, LA.Counts>> & { drafts?: LA.Drafts; excuses?: number };
+type LiveCounts = Partial<Record<LA.Role, LA.Counts>> & { drafts?: LA.Drafts; excuses?: number; support?: number };
 function useLiveCounts(sec: Section) {
   const [c, setC] = useState<LiveCounts>({});
   useEffect(() => {
@@ -33,6 +34,7 @@ function useLiveCounts(sec: Section) {
     Promise.all(roles.map((r) => LA.peopleCounts(r).then((x) => [r, x] as const)))
       .then((xs) => { if (on) setC((p) => ({ ...p, ...Object.fromEntries(xs) })); }).catch(() => { /* badges are optional */ });
     if (can('courses.view')) LA.contentDrafts().then((d) => { if (on) setC((p) => ({ ...p, drafts: d })); }).catch(() => {});
+    if (can('support.view')) import('@/api/support').then((S) => S.supportCounts()).then((r) => { if (on) setC((p) => ({ ...p, support: r.open + r.in_progress })); }).catch(() => {});
     if (can('excuses.review')) LA.adminExcuses().then((r) => { if (on) setC((p) => ({ ...p, excuses: r.results.length })); }).catch(() => {});
     return () => { on = false; };
   }, [sec]);
@@ -157,6 +159,7 @@ const TITLES: Record<Section, string> = {
   settings: 'إعدادات المنصة العامة',
   admins: 'من يدخل لوحة الإدارة وما يستطيع فعله',
   excuses: 'طلبات الاعتذار بانتظار قرار المعلمين',
+  support: 'طلبات الدعم من الطلاب والمعلمين وأولياء الأمور؛ الملاحظات الداخلية لا يراها صاحب الطلب',
   reports: 'مؤشرات الأكاديمية وعبء عمل المعلمين، بأرقام فعلية وتعريف كل رقم',
 };
 
@@ -176,7 +179,7 @@ function Portal() {
   const lc = useLiveCounts(s.sec);
   const counts: Partial<Record<Section, number>> = LIVE
     ? { students: (lc.student?.pending ?? 0) + (lc.student?.unlinked ?? 0), teachers: (lc.teacher?.pending ?? 0) + (lc.teacher?.unapproved ?? 0), parents: lc.parent?.pending ?? 0,
-        excuses: lc.excuses ?? 0 }
+        excuses: lc.excuses ?? 0, support: lc.support ?? 0 }
     : pendingCounts(s);
   const liveRole = LIVE ? LIVE_SECTIONS[s.sec] : undefined;
   const liveOther = LIVE ? LIVE_OTHER[s.sec] : undefined;

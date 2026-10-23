@@ -17,6 +17,7 @@ class MediaObject(TimeStamped):
         LESSON_FILE = "lesson_file", "ملف درس"
         RECITATION = "recitation", "تسجيل تلاوة"
         VOICE_FEEDBACK = "voice_feedback", "ملاحظة صوتية"
+        SUPPORT_IMAGE = "support_image", "صورة مرفقة بطلب دعم"
 
     class State(models.TextChoices):
         PENDING = "pending", "بانتظار الرفع"
@@ -25,7 +26,7 @@ class MediaObject(TimeStamped):
         REJECTED = "rejected", "مرفوض"
         DELETED = "deleted", "محذوف"
 
-    PRIVATE_PURPOSES = {Purpose.RECITATION, Purpose.VOICE_FEEDBACK}
+    PRIVATE_PURPOSES = {Purpose.RECITATION, Purpose.VOICE_FEEDBACK, Purpose.SUPPORT_IMAGE}
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="media")

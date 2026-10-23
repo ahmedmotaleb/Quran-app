@@ -25,6 +25,7 @@ import {
 import ParentHome from '@/screens/parent/ParentHome';
 import Inbox from '@/screens/common/Inbox';
 import { MyMistakes } from '@/screens/common/Corrections';
+import Support from '@/screens/common/Support';
 import TeacherContentLive from '@/screens/teacher/ContentLive';
 import { LIVE as LIVE_MODE } from '@/api/client';
 
@@ -34,7 +35,7 @@ const SCREENS: Record<Screen, ComponentType> = {
   circles: Circles, teacher: TeacherPage, bkreview: BookingReview, bkdone: BookingDone, session: SessionDetails,
   live: LIVE_MODE ? LiveJoin : Live, lesson: LessonPage, quiz: QuizPage, progress: Progress, account: Account,
   tdash: TeacherDash, tstudents: TeacherStudents, tstudent: TeacherStudent, tassign: TeacherAssign,
-  treviews: TeacherReviews, treview: TeacherReview, tschedule: TeacherSchedule, tcontent: LIVE_MODE ? TeacherContentLive : TeacherContent, phome: ParentHome, inbox: Inbox, mistakes: MyMistakes,
+  treviews: TeacherReviews, treview: TeacherReview, tschedule: TeacherSchedule, tcontent: LIVE_MODE ? TeacherContentLive : TeacherContent, phome: ParentHome, inbox: Inbox, mistakes: MyMistakes, support: Support,
 };
 
 const TABS_STUDENT: [Screen, string, IconName][] = [['home', 'الرئيسية', 'home'], ['plan', 'تعلمي', 'plan'], ['circles', 'الجلسات', 'users'], ['progress', 'تقدمي', 'chart'], ['account', 'حسابي', 'user']];

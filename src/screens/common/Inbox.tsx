@@ -41,6 +41,7 @@ export function InboxBell() {
 
 function open(n: Note, role: string | null) {
   const d = n.data || {};
+  if (n.kind.startsWith('support') && d.ticket) return go('support', { id: String(d.ticket) });
   if (n.kind === 'submission_new') return tab('treviews');
   if (n.kind === 'correction_new') return go('mistakes');
   if (n.kind === 'feedback_new' && d.assignment) return go('feedback', { id: String(d.assignment) });

@@ -101,6 +101,58 @@ def store_audio(*, owner, purpose: str, upload, duration_seconds, upload_key: st
     return m
 
 
+SUPPORT_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+SUPPORT_IMAGE_MAX_PIXELS = 4096 * 4096
+IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp"}
+INVALID_IMAGE = "أرفق صورة فقط (PNG أو JPEG أو WebP) بحجم 5 ميغابايت كحد أقصى."
+
+
+def store_support_image(*, owner, upload) -> MediaObject:
+    """A screenshot for a support ticket: images only. The picture is decoded and re-encoded as PNG/JPEG, which drops
+    EXIF (location, device) and anything hidden after the image data; audio, video, PDFs and recordings are refused."""
+    from io import BytesIO
+
+    from PIL import Image, UnidentifiedImageError
+
+    if settings.MEDIA_STORAGE == "none":
+        raise ApiError("storage_not_configured", "إرفاق الصور غير مفعّل على الخادم بعد.", 503)
+    declared = (upload.content_type or "").split(";")[0].strip().lower()
+    if declared not in IMAGE_TYPES or not 0 < upload.size <= SUPPORT_IMAGE_MAX_BYTES:
+        raise ApiError("invalid_file", INVALID_IMAGE, 413 if upload.size > SUPPORT_IMAGE_MAX_BYTES else 400, {"image": [INVALID_IMAGE]})
+    Image.MAX_IMAGE_PIXELS = SUPPORT_IMAGE_MAX_PIXELS
+    try:
+        with Image.open(upload.open("rb")) as im:
+            if im.format not in ("PNG", "JPEG", "WEBP"):
+                raise ApiError("invalid_file", INVALID_IMAGE, 400, {"image": [INVALID_IMAGE]})
+            im.load()
+            keep_alpha = im.mode in ("RGBA", "LA", "P")
+            clean = im.convert("RGBA" if keep_alpha else "RGB")
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError, ValueError):
+        raise ApiError("invalid_file", INVALID_IMAGE, 400, {"image": [INVALID_IMAGE]}) from None
+    out = BytesIO()
+    if keep_alpha:
+        clean.save(out, "PNG", optimize=True)
+        ctype, ext = "image/png", "png"
+    else:
+        clean.save(out, "JPEG", quality=85)
+        ctype, ext = "image/jpeg", "jpg"
+    data = out.getvalue()
+    mid = uuid.uuid4()
+    key = f"support_image/{owner.pk}/{mid}.{ext}"
+    m = MediaObject.objects.create(id=mid, owner=owner, purpose=MediaObject.Purpose.SUPPORT_IMAGE, key=key, content_type=ctype,
+                                   size_bytes=len(data), sha256=hashlib.sha256(data).hexdigest())
+    try:
+        get_storage().save(key, BytesIO(data), ctype)
+    except StorageError as e:
+        log.error("media_store_failed", extra={"purpose": "support_image", "error": type(e.__cause__ or e).__name__, "bytes": len(data)})
+        m.state, m.rejection_reason = MediaObject.State.REJECTED, "storage_error"
+        m.save(update_fields=["state", "rejection_reason", "updated_at"])
+        raise ApiError("storage_unavailable", "تعذّر حفظ الصورة الآن. حاول مرة أخرى بعد قليل.", 503) from None
+    m.state = MediaObject.State.VALIDATED
+    m.save(update_fields=["state", "updated_at"])
+    return m
+
+
 def can_read(user, m: MediaObject) -> bool:
     """Recordings are private: owner, the student's assigned teacher (once submitted, or in a submitted quiz), admins.
     Voice feedback: its teacher, and the student whose submission it answers. Parents: never."""
@@ -108,6 +160,10 @@ def can_read(user, m: MediaObject) -> bool:
         return False
     if m.owner_id == user.pk:
         return True
+    if m.purpose == MediaObject.Purpose.SUPPORT_IMAGE:  # the requester (owner, above) and support staff only
+        from apps.accounts.admin_access import has
+
+        return user.role == Role.ADMIN and has(user, "support.view")
     if user.role == Role.ADMIN:  # private recordings and voice notes: submissions.view; content files: courses.view
         from apps.accounts.admin_access import has
 

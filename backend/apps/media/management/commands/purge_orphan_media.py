@@ -22,7 +22,8 @@ class Command(BaseCommand):
         cutoff = timezone.now() - timedelta(hours=hours)
         from apps.learning.models import Lesson
 
-        purposes = {*MediaObject.PRIVATE_PURPOSES, MediaObject.Purpose.LESSON_FILE}
+        # Support screenshots are stored together with their message, so they are never orphans; not purged here.
+        purposes = {*MediaObject.PRIVATE_PURPOSES, MediaObject.Purpose.LESSON_FILE} - {MediaObject.Purpose.SUPPORT_IMAGE}
         qs = (MediaObject.objects.filter(created_at__lt=cutoff, purpose__in=purposes)
               .exclude(state=MediaObject.State.DELETED)
               .annotate(sub=Exists(Submission.objects.filter(media=OuterRef("pk"))), fb=Exists(Feedback.objects.filter(voice=OuterRef("pk"))),
