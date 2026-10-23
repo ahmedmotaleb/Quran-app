@@ -98,8 +98,29 @@ target `staging`, steps e.g. `50,100,200`**. Go higher only if the previous step
   on the 1-seat slot;
 - skips the upload worker when staging has no recordings bucket (the report says so).
 
-No staging run has been recorded yet: staging must first be set up by the owner (DEPLOY.md §6d). Results go here
-when measured. Nothing above the measured step is claimed.
+### Staging run 1: 23 October 2026, main at `ba31e1d`+ (run 40039533416)
+
+Real staging Cloud Run (1 vCPU / 512 MiB, max 2 instances, same settings as production) with its own Neon database
+(Frankfurt); k6 on a GitHub-hosted runner. Steps: **50 → 100 → 200 active students**, 3 min each, plus 5 teachers,
+5 parents and a 50-way booking race. Uploads skipped (staging has no recordings bucket).
+
+| Measure | Result (whole run) |
+| --- | --- |
+| Requests | 29,986 (39.5/s) |
+| Failed (5xx, timeouts, unexpected) | **0.00 %**; all checks passed |
+| Latency p50 / p95 / p99 | 263 / 1,517 / 2,500 ms |
+| Booking race (1 seat, 50 at once) | **1 won, 49 refused**; 1 confirmed booking in the database |
+| Cloud Run instances | 2 (the configured maximum was reached) |
+| CPU / memory (p99 per minute) | 80 % / 69 % |
+| Database connections (max) | 17 |
+
+Slowest endpoints at p95 (ms): book 2,083 · progress 1,700 · login 1,658 · lesson 1,608 · assignments 1,545 ·
+notifications 1,495; p99 up to ~3.2 s for booking. Teacher grading p95 1,009 ms, parent weekly summary 1,416 ms.
+
+Reading: up to 200 simultaneously active students on the free-tier-sized setup worked without errors and kept booking
+correct, but at the top step both instances were busy (CPU 80 %) and p95 rose to ~1.5 s. 200 is the measured
+ceiling for the current limits (max 2 instances); going further needs more instances (a cost decision) and a new
+run. Figures are for the whole run; per-step figures are not separated in this report.
 
 ## What can be claimed
 
