@@ -1,7 +1,7 @@
 from django.urls import path
 
 from . import invitations as inv
-from . import admin_management, trusted
+from . import admin_management, student_import, trusted
 from . import views as v
 from .teacher_onboarding import AdminTeacherCreate
 
@@ -44,6 +44,7 @@ urlpatterns = [
     path("admin/teachers", AdminTeacherCreate.as_view()),
     path("admin/teachers/<int:pk>/approval", v.AdminTeacherApproval.as_view()),
     path("admin/teacher-assignments", v.AdminAssignmentCreate.as_view()),
+    path("admin/import/students", student_import.StudentImport.as_view()),
     path("admin/teacher-assignments/<int:pk>/end", v.AdminAssignmentEnd.as_view()),
     path("admin/guardian-links", v.AdminGuardianLinkCreate.as_view()),
     path("admin/guardian-links/<int:pk>/revoke", v.AdminGuardianLinkRevoke.as_view()),
