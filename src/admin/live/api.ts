@@ -182,3 +182,24 @@ export const inviteAdmin = (d: AdminAccess & { full_name: string; email: string;
 export const updateAdmin = (id: number, d: AdminAccess & { otp: string }) => api<AdminRow>('PATCH', `admin/admins/${id}`, d);
 export const setAdminStatus = (id: number, status: 'active' | 'suspended', reason: string, otp: string) =>
   api<AdminRow>('POST', `admin/admins/${id}/status`, { status, reason, otp });
+
+/* ---------------- Reports (PROMPT 46): numbers aggregated on the server ---------------- */
+export type Ratio = { value: number | null; num: number; den: number };
+export type KpiFilter = { from?: string; to?: string; teacher?: number | ''; circle?: number | '' };
+export type KpiRange = { from: string; to: string; timezone: string; teacher: number | null; circle: number | null };
+export type Kpis = {
+  active_students: number; active_teachers: number; new_registrations: number; suspended_by_absence: number;
+  attendance: { present: number; late: number; absent: number; excused: number; unmarked: number; attendance_rate: Ratio; unexcused_absence_rate: Ratio };
+  booking_fill_rate: Ratio; circle_capacity_utilization: Ratio; assignment_completion: Ratio & { submitted_waiting: number };
+  review_turnaround_hours: { median: number | null; reviews: number }; pending_teacher_approvals: number; pending_excuses: number;
+  recording_review_backlog: { count: number; oldest_hours: number | null };
+};
+export type Workload = {
+  teacher: { id: number; name: string; approved: boolean }; active_students: number; circle_students: number; upcoming_sessions: number;
+  available_slots: number; utilization: Ratio; awaiting_review: number; overdue_feedback: number; pending_excuses: number;
+  unresolved_mistakes: number; attendance_rate: Ratio; no_show_rate: Ratio;
+};
+const kq = (f: KpiFilter) => qs({ from: f.from, to: f.to, teacher: f.teacher || undefined, circle: f.circle || undefined });
+export const getKpis = (f: KpiFilter) => api<{ range: KpiRange; kpis: Kpis; definitions: Record<string, string>; not_filtered: Record<string, string[]> }>('GET', `admin/kpis?${kq(f)}`);
+export const getWorkload = (f: KpiFilter) => api<{ range: KpiRange; results: Workload[]; definitions: Record<string, string> }>('GET', `admin/teacher-workload?${kq(f)}`);
+export const exportWorkload = (f: KpiFilter) => apiDownload('admin/teacher-workload/export', f);

@@ -15,8 +15,9 @@ const QuizzesLive = lazy(() => import('./live/Content').then((m) => ({ default: 
 const SettingsLive = lazy(() => import('./live/Settings'));
 const ExcusesLive = lazy(() => import('./live/People').then((m) => ({ default: m.ExcusesLive })));
 const AdminsLive = lazy(() => import('./live/Admins'));
+const ReportsLive = lazy(() => import('./live/Reports'));
 const LIVE_OTHER: Partial<Record<Section, () => JSX.Element>> = {
-  settings: () => <SettingsLive />, admins: () => <AdminsLive />, excuses: () => <ExcusesLive />, circles: () => <CirclesLive />, bookings: () => <BookingsLive />, lectures: () => <CoursesLive />, quizzes: () => <QuizzesLive />,
+  settings: () => <SettingsLive />, admins: () => <AdminsLive />, excuses: () => <ExcusesLive />, reports: () => <ReportsLive />, circles: () => <CirclesLive />, bookings: () => <BookingsLive />, lectures: () => <CoursesLive />, quizzes: () => <QuizzesLive />,
 };
 
 /** Sections that run on the real API in live mode; the rest still show demo data (labelled). */
@@ -156,6 +157,7 @@ const TITLES: Record<Section, string> = {
   settings: 'إعدادات المنصة العامة',
   admins: 'من يدخل لوحة الإدارة وما يستطيع فعله',
   excuses: 'طلبات الاعتذار بانتظار قرار المعلمين',
+  reports: 'مؤشرات الأكاديمية وعبء عمل المعلمين، بأرقام فعلية وتعريف كل رقم',
 };
 
 /** Items awaiting admin action, per section (shown as sidebar badges and on the overview). */
