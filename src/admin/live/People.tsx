@@ -12,6 +12,7 @@ import { SUR } from '@/data/demo';
 import { zonedToIso } from '@/lib/time';
 import { card } from '../AdminTables';
 import * as A from './api';
+import StudentImport from './StudentImport';
 import { chip, date, errMsg, LinkBox, Modal, ReasonDialog, smallBtn } from './ui';
 import {
   BulkBar, type BulkDef, circleOptions, type Col, courseOptions, DataView, ExportButton, type FilterField, FilterControls, filterOf, items, accounts, listParams, Pager,
@@ -123,7 +124,7 @@ export default function PeopleLive({ role }: { role: A.Role }) {
   useEffect(() => { reloadCounts(); }, [reloadCounts]);
   const filter = filterOf(params);
   const sel = useSelection(JSON.stringify(filter));
-  const [open, setOpen] = useState<number | null>(null); const [adding, setAdding] = useState(false);
+  const [open, setOpen] = useState<number | null>(null); const [adding, setAdding] = useState(false); const [importing, setImporting] = useState(false);
   const [invKey, setInvKey] = useState(0);
   const reload = () => { void R.reload(); reloadCounts(); };
 
@@ -156,6 +157,7 @@ export default function PeopleLive({ role }: { role: A.Role }) {
           style={{ flex: '1 1 240px', minHeight: 48, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15 }} />
         <FilterControls fields={FIELDS[role]} q={q} update={update} />
         <ExportButton resource="users" sel={sel} total={R.data?.count ?? 0} filter={filter} sort={sort} />
+        {role === 'student' && can('users.create') && <button onClick={() => setImporting(true)} style={smallBtn()}>استيراد CSV</button>}
         {can(role === 'teacher' ? 'invitations.send' : 'users.create') && <button onClick={() => setAdding(true)} style={primaryBtn(48, 15, { padding: '0 16px', borderRadius: 12, gap: 6, marginInlineStart: 'auto' })}>
           <Icon name="plus" size={18} /> {role === 'teacher' ? 'إضافة / دعوة معلم' : `إضافة ${L.one}`}
         </button>}
@@ -176,6 +178,7 @@ export default function PeopleLive({ role }: { role: A.Role }) {
       <Pager page={page} total={R.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
       <BulkBar resource="users" sel={sel} total={R.data?.count ?? 0} actions={peopleActions(role)} filter={filter} onDone={reload} exportable />
       {open !== null && <PersonPanel id={open} onClose={() => setOpen(null)} onChanged={reload} />}
+      {importing && <StudentImport onClose={() => setImporting(false)} onDone={reload} />}
       {adding && <AddDialog role={role} onClose={() => setAdding(false)} onDone={() => { reload(); setInvKey((k) => k + 1); }} />}
     </>
   );
