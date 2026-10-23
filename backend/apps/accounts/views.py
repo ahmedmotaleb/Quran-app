@@ -229,6 +229,12 @@ class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        # This device's phone notifications end with the session (a shared phone must not keep receiving them).
+        ep = str(request.data.get("push_endpoint", "") or "") if hasattr(request, "data") else ""
+        if ep:
+            from apps.notifications.models import PushSubscription
+
+            PushSubscription.objects.filter(user=request.user, endpoint=ep).delete()
         if isinstance(request.auth, AuthToken):
             AuthToken.objects.filter(pk=request.auth.pk).update(revoked_at=timezone.now())
         from .authentication import end_admin_session, is_admin_portal

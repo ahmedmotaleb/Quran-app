@@ -35,7 +35,27 @@ GENERIC = [
     ("weekly_report", ("الحلقة", "ملخص الأسبوع لأبنائك جاهز.")),
     ("lesson", ("الحلقة", "محتوى جديد في دورتك.")),
     ("quiz", ("الحلقة", "اختبار جديد في دورتك.")),
+    ("waitlist", ("الحلقة", "توفّر مقعد في جلسة تنتظرها.")),
+    ("makeup", ("الحلقة", "مُنحت لك جلسة تعويضية.")),
+    ("circle", ("الحلقة", "تحديث على حلقتك.")),
+    ("admin_message", ("الحلقة", "رسالة جديدة من إدارة الحلقة.")),
 ]
+
+# kind prefix → preference category («الإشعارات» in حسابي). Kinds not listed (attendance warnings, suspension, excuse
+# decisions, parents' child updates, admin alerts) concern the account itself and are always pushed.
+CATEGORY = [("assignment", "tasks"), ("review_due", "tasks"), ("correction", "tasks"), ("lesson", "tasks"), ("quiz", "tasks"),
+            ("submission", "tasks"), ("session_reminder", "sessions"), ("booking", "sessions"), ("waitlist", "sessions"),
+            ("makeup", "sessions"), ("circle", "sessions"), ("feedback", "feedback"), ("weekly_report", "news"), ("admin_message", "news")]
+PREF_KEYS = ("tasks", "sessions", "feedback", "news")
+
+
+def category(kind: str) -> str | None:
+    return next((c for k, c in CATEGORY if kind.startswith(k)), None)
+
+
+def wanted(user, kind: str) -> bool:
+    c = category(kind)
+    return c is None or (user.notify_prefs or {}).get(c, True) is not False
 FALLBACK = ("الحلقة", "لديك إشعار جديد.")
 
 
@@ -56,6 +76,11 @@ def deliver(notification) -> int:
 
     from .models import PushSubscription
 
+    from apps.accounts.models import User
+
+    u = User.objects.filter(pk=notification.recipient_id).only("notify_prefs").first()
+    if u is None or not wanted(u, notification.kind):
+        return 0  # the user turned this category off (the in-app notification is still there)
     sent = 0
     data = json.dumps(payload_for(notification.kind, notification.link), ensure_ascii=False)
     for sub in PushSubscription.objects.filter(user_id=notification.recipient_id):

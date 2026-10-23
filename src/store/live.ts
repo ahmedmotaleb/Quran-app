@@ -31,6 +31,7 @@ function applyUser(u: E.Me) {
   const name = u.full_name || u.email;
   setState((s) => ({
     me: u, tz: tzIdFor(u.timezone),
+    notif: { tasks: true, sessions: true, feedback: true, news: true, ...(u.notify_prefs ?? {}) },
     user: { ...s.user, name, first: name.split(' ')[0], email: u.email, level: u.level || '—', goal: u.daily_goal || '—' },
   }));
 }
@@ -187,7 +188,13 @@ export async function forgot(email: string) {
 }
 
 export async function logout() {
-  try { await E.logout(); } catch { /* signing out locally regardless */ }
+  // This device stops receiving the account's phone notifications (the browser subscription is dropped too).
+  let endpoint = '';
+  try {
+    const sub = 'serviceWorker' in navigator ? await (await navigator.serviceWorker.getRegistration())?.pushManager?.getSubscription() : null;
+    if (sub) { endpoint = sub.endpoint; await sub.unsubscribe().catch(() => {}); }
+  } catch { /* no push on this device */ }
+  try { await E.logout(endpoint); } catch { /* signing out locally regardless */ }
   resetCsrf();
   // Nothing from the previous account stays in memory.
   media.discardRecorder(); // the next account never sees this one's recording (device copies are per account)
