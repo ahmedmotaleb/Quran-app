@@ -60,11 +60,13 @@ export default function StudentImport({ onClose, onDone }: { onClose: () => void
       {rep && <>
         <p role="status" style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
           {rep.result
-            ? `أُنشئ ${rep.result.created} · لم يُنشأ ${rep.result.skipped + rep.result.failed} · البريد: أُرسل ${rep.result.emails.sent}، تعذّر ${rep.result.emails.failed}، لم يُرسل بعد ${rep.result.emails.pending}`
+            ? `أُنشئ ${rep.result.created} · لم يُنشأ ${rep.result.skipped + rep.result.failed} · البريد: أُرسل ${rep.result.emails.sent}، تعذّر ${rep.result.emails.failed}، في قائمة الإرسال ${rep.result.emails.pending}`
             : `${rep.summary.total} صف: صالح ${rep.summary.valid} · مكرر ${rep.summary.duplicate} · أخطاء ${rep.summary.error}`}
         </p>
-        {rep.result && (rep.result.emails.failed + rep.result.emails.pending > 0) && <p style={{ margin: 0, fontSize: 13, color: color.muted }}>
-          من لم يصله البريد: حدّدهم في قائمة الطلاب واختر «إعادة إرسال رابط الإعداد».</p>}
+        {rep.result && rep.result.emails.pending > 0 && <p style={{ margin: 0, fontSize: 13, color: color.muted }}>
+          البريد المتبقي يُرسل تلقائيًا خلال ساعة (المهمة الدورية).</p>}
+        {rep.result && rep.result.emails.failed > 0 && <p style={{ margin: 0, fontSize: 13, color: color.muted }}>
+          من تعذّر إرسال بريده: حدّده في قائمة الطلاب واختر «إعادة إرسال رابط الإعداد».</p>}
         <div style={{ maxHeight: 320, overflow: 'auto', border: `1px solid ${color.border}`, borderRadius: 12 }} tabIndex={0} role="region" aria-label="صفوف الملف">
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead><tr style={{ background: color.sand, textAlign: 'right' }}>{['السطر', 'الاسم', 'البريد', 'الحالة', 'الملاحظات'].map((h) => <th key={h} scope="col" style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
@@ -75,7 +77,7 @@ export default function StudentImport({ onClose, onDone }: { onClose: () => void
                   <td style={{ padding: '6px 10px' }}>{r.line}</td><td style={{ padding: '6px 10px' }}>{r.data.full_name}</td>
                   <td style={{ padding: '6px 10px' }}><bdi dir="ltr">{r.data.email}</bdi></td>
                   <td style={{ padding: '6px 10px', fontWeight: 700, color: tone, whiteSpace: 'nowrap' }}>{label}</td>
-                  <td style={{ padding: '6px 10px' }}>{r.errors.join('، ')}{r.email === 'failed' ? 'تعذّر إرسال البريد' : r.email === 'pending' ? 'لم يُرسل البريد بعد' : ''}</td>
+                  <td style={{ padding: '6px 10px' }}>{r.errors.join('، ')}{r.email === 'failed' ? 'تعذّر إرسال البريد' : r.email === 'pending' ? 'البريد في قائمة الإرسال (خلال ساعة)' : ''}</td>
                 </tr>
               );
             })}</tbody>

@@ -7,7 +7,7 @@ export interface Person {
   id: number; email: string; full_name: string; role: Role; status: AccountStatus; timezone: string; phone: string; phone_verified?: boolean;
   level: string; approved: boolean | null; has_password: boolean; date_joined: string; last_login: string | null;
   status_reason: string; status_changed_at: string | null;
-  setup_email_status: '' | 'sent' | 'failed'; setup_email_last_at: string | null; setup_email_count: number;
+  setup_email_status: '' | 'sent' | 'failed' | 'pending'; setup_email_last_at: string | null; setup_email_count: number;
   teachers: { id: number; name: string; assignment_id: number }[];
   guardians: { id: number; name: string; status: string; link_id: number }[];
   children: { id: number; name: string; status: string; link_id: number }[];
