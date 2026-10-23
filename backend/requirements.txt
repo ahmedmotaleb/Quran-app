@@ -9,4 +9,4 @@ whitenoise==6.12.0
 boto3==1.40.70  # S3-compatible private media (R2)
 pywebpush==2.0.3  # optional Web Push (off until VAPID keys are configured)
 phonenumbers==9.0.38  # phone numbers normalized to E.164 (login with a verified phone)
-pillow==11.3.0  # support screenshots are re-encoded (strips EXIF/location, rejects non-images)
+pillow==13.0.0  # support screenshots are re-encoded (strips EXIF/location, rejects non-images)
