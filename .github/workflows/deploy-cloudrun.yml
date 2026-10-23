@@ -64,9 +64,33 @@ jobs:
           DJANGO_ALLOWED_HOSTS: ops.invalid
           MEDIA_STORAGE: none
         run: |
+          # Explain a bad secret without ever printing it: only the shape, host suffix and database name.
+          python3 - <<'PY'
+          import os, sys, urllib.parse as u
+          raw = os.environ["DATABASE_URL"]; v = raw.strip()
+          def err(m): print(f"::error title=STAGING_DATABASE_URL::{m}"); sys.exit(1)
+          if v != raw: print("::warning title=STAGING_DATABASE_URL::has spaces or a line break at the start/end (ignored here, but fix the secret)")
+          if v.startswith("psql"): err("starts with 'psql' - paste only the postgresql://... part, without psql and quotes")
+          if v[:1] in "'\"": err("is wrapped in quotes - remove them")
+          p = u.urlparse(v)
+          if p.scheme not in ("postgres", "postgresql"): err(f"must start with postgresql:// (got scheme '{p.scheme[:12]}')")
+          if not p.hostname or not p.password: err("has no host or no password - copy the full connection string from Neon")
+          db = p.path.lstrip("/")
+          print(f"::notice title=Staging database::host ...{p.hostname[-24:]} database '{db}'")
+          if db != "halqa_staging": print(f"::warning title=STAGING_DATABASE_URL::database is '{db}', expected halqa_staging")
+          PY
+          export DATABASE_URL="$(printf '%s' "$DATABASE_URL" | tr -d '\r\n' | sed 's/^ *//; s/ *$//')"
+          set +e
           docker run --rm -e APP_ENV -e DATABASE_URL -e DJANGO_ALLOWED_HOSTS -e MEDIA_STORAGE \
             -e DJANGO_SECRET_KEY="$(python3 -c 'import secrets;print(secrets.token_urlsafe(64))')" \
-            "$IMAGE" sh -c 'python manage.py migrate --noinput && python manage.py createcachetable'
+            "$IMAGE" sh -c 'python manage.py migrate --noinput && python manage.py createcachetable' > migrate.log 2>&1
+          rc=$?; set -e
+          # Hide anything that looks like a connection string or password before showing the error.
+          sed -E 's#postgres(ql)?://[^ ]*#postgresql://***#g; s/password[^ ]*/password=***/Ig' migrate.log | tail -25
+          if [ $rc -ne 0 ]; then
+            echo "::error title=Staging migrations::$(sed -E 's#postgres(ql)?://[^ ]*#postgresql://***#g; s/password[^ ]*/password=***/Ig' migrate.log | grep -v '^\s*$' | tail -4 | tr '\n' ' ' | cut -c1-600)"
+            exit $rc
+          fi
 
       - name: Deploy the staging services (own runtime account and secrets; no email or push)
         env:
