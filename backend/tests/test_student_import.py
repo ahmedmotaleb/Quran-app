@@ -134,3 +134,26 @@ def test_a_row_failing_at_commit_does_not_block_the_others(world, circle, monkey
     assert [x["result"] for x in res["rows"]] == ["failed", "created"] and res["rows"][0]["errors"] == ["اكتملت الحلقة."]
     assert res["result"] == {"created": 1, "skipped": 0, "failed": 1, "emails": res["result"]["emails"]}
     assert not User.objects.filter(email="ab@x.test").exists() and User.objects.filter(email="cd@x.test").exists()
+
+
+def test_emails_over_the_time_budget_are_queued_for_the_hourly_job(world, mailbox, monkeypatch):
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from apps.accounts import student_import as si
+
+    monkeypatch.setattr(si, "EMAIL_BUDGET_SECONDS", -1)  # no time left: every email is queued
+    res = post(client_for(world.admin), "a b,ab@x.test,,,,,\nc d,cd@x.test,,,,,\n", dry=False).json()
+    assert res["result"]["emails"] == {"sent": 0, "failed": 0, "pending": 2} and len(mailbox) == 0
+    assert set(User.objects.filter(setup_email_status="pending").values_list("email", flat=True)) == {"ab@x.test", "cd@x.test"}
+    done = User.objects.get(email="cd@x.test")
+    done.set_password("a-strong-pass-123"); done.save()  # set a password meanwhile: no email needed any more
+    out = StringIO()
+    call_command("send_pending_setup_emails", stdout=out)
+    assert "sent 1" in out.getvalue() and "cleared 1" in out.getvalue() and "still queued 0" in out.getvalue()
+    assert [m.to[0] for m in mailbox] == ["ab@x.test"]
+    assert User.objects.get(email="ab@x.test").setup_email_status == "sent"
+    out = StringIO()
+    call_command("send_pending_setup_emails", stdout=out)
+    assert "sent 0" in out.getvalue() and len(mailbox) == 1  # never twice

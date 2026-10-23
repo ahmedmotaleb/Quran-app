@@ -144,7 +144,7 @@ export default function PeopleLive({ role }: { role: A.Role }) {
         : role === 'teacher' ? (u.approved ? 'معتمد' : <span style={{ color: color.danger }}>بانتظار الاعتماد</span>)
           : (u.children.map((c) => c.name).join('، ') || '—')) },
     { key: 'setup', label: 'إعداد الحساب', cell: (u) => (u.has_password ? 'تم إعداد الحساب'
-      : <span style={{ color: color.dangerInk }}>لم يعيّن كلمة مرور · {u.setup_email_status === 'sent' ? 'تم إرسال رابط الإعداد' : u.setup_email_status === 'failed' ? 'فشل الإرسال' : 'لم يُرسل رابط'}</span>) },
+      : <span style={{ color: color.dangerInk }}>لم يعيّن كلمة مرور · {u.setup_email_status === 'sent' ? 'تم إرسال رابط الإعداد' : u.setup_email_status === 'failed' ? 'فشل الإرسال' : u.setup_email_status === 'pending' ? 'رابط الإعداد في قائمة الإرسال' : 'لم يُرسل رابط'}</span>) },
     { key: 'joined', label: 'تاريخ الانضمام', sort: 'joined', cell: (u) => date(u.date_joined) },
     { key: 'last', label: 'آخر نشاط', sort: 'last_login', cell: (u) => date(u.last_login) },
     { key: 'status', label: 'الحالة', sort: 'status', cell: (u) => <Pill st={u.status} /> },
@@ -366,7 +366,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
             {row('آخر دخول', date(u.last_login))}
             {row('إعداد الحساب', u.has_password ? 'تم إعداد الحساب' : <span style={{ color: color.danger, fontWeight: 700 }}>لم يُكمل إعداد الحساب (لم يعيّن كلمة مرور)</span>)}
             {!u.has_password && row('بريد الإعداد', u.setup_email_status === 'sent' ? 'تم الإرسال' : u.setup_email_status === 'failed'
-              ? <span style={{ color: color.dangerInk, fontWeight: 700 }}>فشل الإرسال</span> : 'لم يُرسل بعد')}
+              ? <span style={{ color: color.dangerInk, fontWeight: 700 }}>فشل الإرسال</span> : u.setup_email_status === 'pending' ? 'في قائمة الإرسال (خلال ساعة)' : 'لم يُرسل بعد')}
             {!u.has_password && u.setup_email_count > 0 && row('آخر إرسال', <>{date(u.setup_email_last_at)} · عدد مرات الإرسال: <span style={{ fontFamily: font.latin }}>{u.setup_email_count}</span></>)}
             {u.role === 'teacher' && row('الاعتماد', u.approved ? 'معتمد' : <span style={{ color: color.dangerInk, fontWeight: 700 }}>بانتظار الاعتماد</span>)}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>

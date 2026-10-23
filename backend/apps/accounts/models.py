@@ -65,7 +65,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     phone_verified_at = models.DateTimeField(null=True, blank=True)
     # Password-setup email for accounts created by an admin (teacher, student, parent): last delivery result, when, how
     # many times. Shown in the admin record so a failed or ignored email is visible and can be resent.
-    setup_email_status = models.CharField(max_length=8, blank=True, default="")  # "" / sent / failed
+    setup_email_status = models.CharField(max_length=8, blank=True, default="")  # "" / sent / failed / pending (queued)
     setup_email_last_at = models.DateTimeField(null=True, blank=True)
     setup_email_count = models.PositiveSmallIntegerField(default=0)
     # «الإشعارات» switches (tasks / sessions / feedback / news): false = no phone push for that category (the in-app

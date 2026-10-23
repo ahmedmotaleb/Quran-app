@@ -43,7 +43,7 @@ COLUMNS = ["full_name", "email", "phone", "timezone", "level", "teacher_email", 
 REQUIRED = ["full_name", "email"]
 MAX_ROWS = 500
 MAX_BYTES = 1024 * 1024
-EMAIL_BUDGET_SECONDS = 45  # Cloud Run answers within 120 s; emails not sent in time are reported as «لم يُرسل بعد»
+EMAIL_BUDGET_SECONDS = 45  # Cloud Run answers within 120 s; the rest are queued for the hourly job
 TEMPLATE_NOTE = "full_name,email,phone,timezone,level,teacher_email,circle"
 
 
@@ -236,7 +236,9 @@ class StudentImport(APIView):
                 row["result"], row["status"], row["errors"] = "failed", "error", ["تعذّر إنشاء هذا الصف."]
         for row in created:
             if _time.monotonic() - started > EMAIL_BUDGET_SECONDS:
+                # Queued: the hourly job (send_pending_setup_emails) sends it; the admin can also resend now.
                 row["email"] = "pending"
+                User.objects.filter(pk=row["user"]).update(setup_email_status="pending")
                 continue
             row["email"] = "sent" if send_setup_email(User.objects.get(pk=row["user"]), request.user, request) else "failed"
         counts = {k: sum(1 for x in report["rows"] if x.get("result") == k) for k in ("created", "skipped", "failed")}
