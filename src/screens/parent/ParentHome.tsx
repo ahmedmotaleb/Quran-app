@@ -12,7 +12,7 @@ import { BRAND } from '@/theme/brand';
 import { useEffect, useState } from 'react';
 import { ProgressCards } from '@/components/ProgressCards';
 import { InboxBell } from '@/screens/common/Inbox';
-import { childProgress, type ApiProgress } from '@/api/endpoints';
+import { childProgress, parentWeekly, type ApiProgress } from '@/api/endpoints';
 
 /** Server Progress API for one linked child (404 for anyone else). No audio is ever included. */
 function ChildProgress({ id }: { id: number }) {
@@ -127,6 +127,40 @@ const ATT: Record<string, string> = { present: 'حضر', late: 'متأخر', abs
 const EXCUSE_L: Record<string, string> = { pending: 'الاعتذار قيد المراجعة', approved: 'تم قبول الاعتذار', rejected: 'تم رفض الاعتذار' };
 
 /** Live mode: everything below comes from the child's real records. Recordings are never shown to parents. */
+/** «ملخص الأسبوع» for the selected child (the same numbers as the weekly report; each one explained). */
+function WeeklyCard({ id, tz }: { id: number; tz: string }) {
+  const [d, setD] = useState<Awaited<ReturnType<typeof parentWeekly>> | null>(null);
+  useEffect(() => { let on = true; parentWeekly().then((r) => on && setD(r)).catch(() => {}); return () => { on = false; }; }, []);
+  const c = d?.children.find((x) => x.child.id === id);
+  if (!d || !c) return null;
+  const trend = c.mistakes.new_this_week - c.mistakes.new_previous_week;
+  const row = (label: string, value: React.ReactNode, hint?: string) => (
+    <div title={hint} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, minHeight: 32, alignItems: 'baseline', borderTop: `1px solid ${color.divider}`, paddingTop: 6 }}>
+      <span style={{ fontSize: 14, color: color.body }}>{label}</span><span style={{ fontSize: 15, fontWeight: 700, textAlign: 'left' }}>{value}</span>
+    </div>
+  );
+  return (
+    <section aria-labelledby="wk-h" style={{ ...card, borderRadius: 18, padding: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <h2 id="wk-h" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>ملخص الأسبوع</h2>
+      <p style={muted(12, { margin: 0 })}>من {fmtDay(d.week.from + 'T12:00:00Z', tz)} إلى {fmtDay(d.week.to + 'T12:00:00Z', tz)}</p>
+      {row('آيات حفظ مقبولة', c.accepted_ayahs_total, d.definitions.accepted_ayahs_total)}
+      {row('مراجعات مكتملة', c.reviews_completed, d.definitions.reviews_completed)}
+      {row('الحضور', c.attendance_rate === null ? '—' : `${Math.round(c.attendance_rate * 100)}٪ من ${c.sessions} جلسة`, d.definitions.attendance_rate)}
+      {row('الغياب', `${c.absences.excused_approved} بعذر · ${c.absences.unexcused} بدون عذر`, d.definitions.absences)}
+      {row('نقاط مراجعة جديدة', <>{c.mistakes.new_this_week}{c.mistakes.new_previous_week || c.mistakes.new_this_week ? <span style={{ fontSize: 12, fontWeight: 500, color: color.muted }}> ({trend > 0 ? `+${trend}` : trend} عن الأسبوع السابق)</span> : null}</>, d.definitions.mistakes)}
+      {c.mistakes.top_categories.length > 0 && <p style={muted(13, { margin: 0 })}>الأكثر تكرارًا: {c.mistakes.top_categories.map((t) => `${t.label} (${t.count})`).join('، ')}</p>}
+      {c.latest_feedback && row('آخر تقييم', `${c.latest_feedback.decision === 'accept' ? 'اعتُمد' : 'يحتاج إعادة'} · ${c.latest_feedback.assignment}`)}
+      {c.latest_feedback?.next_step && <p style={muted(13, { margin: 0 })}>الخطوة التالية: {c.latest_feedback.next_step}</p>}
+      {row('جلسات الأسبوع القادم', c.upcoming_sessions.length ? c.upcoming_sessions.map((x) => `${dayLabel(x.starts_at, tz)} ${fmtTime(x.starts_at, tz)}`).join('، ') : 'لا توجد', d.definitions.upcoming)}
+      {c.targets.length > 0 && <div style={{ borderTop: `1px solid ${color.divider}`, paddingTop: 6 }}>
+        <p style={{ margin: 0, fontSize: 14, color: color.body }}>أهداف الأسبوع القادم</p>
+        <ul style={{ margin: '4px 0 0', paddingInlineStart: 18, fontSize: 14 }}>{c.targets.map((t) => <li key={t.title + t.due_at}>{t.title} · الآيات {t.ayah_from}–{t.ayah_to} · {fmtDay(t.due_at, tz)}</li>)}</ul>
+      </div>}
+      <p style={muted(12, { margin: '4px 0 0' })}>أرقام فعلية فقط، بلا درجة مجمّعة. التسجيلات وملاحظات المعلم الداخلية لا تظهر هنا.</p>
+    </section>
+  );
+}
+
 function ParentLive() {
   const s = useApp(); const P = s.parent; const tz = tzOf(s.tz).iana; const tzL = tzLabel(s.tz);
   const header = (
@@ -198,6 +232,7 @@ function ParentLive() {
         ))}
       </section>
     </div>
+    <WeeklyCard key={`w${kid.id}`} id={Number(kid.id)} tz={tz} />
     <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>الواجبات الحالية</h2>
       {open.length === 0 && <p style={muted(14)}>لا توجد واجبات مفتوحة.</p>}

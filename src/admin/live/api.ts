@@ -125,6 +125,7 @@ export interface Settings {
   booking_lead_minutes: number; open_signup: boolean; session_reminders: boolean; parent_weekly_report: boolean;
   max_recording_seconds: number; max_upload_mb: number; review_intervals: number[]; updated_at: string; sensitive: string[];
   waitlist_offer_hours: number; makeup_enabled: boolean; makeup_expiry_days: number; makeup_granters: 'teachers_admins' | 'admins';
+  parent_report_weekday: number; parent_report_hour: number; parent_report_email: boolean;
 }
 export interface AuditRow { id: number; at: string; action: string; actor: string | null; target: string; data: Record<string, unknown> }
 export const getSettings = () => api<Settings>('GET', 'admin/settings');

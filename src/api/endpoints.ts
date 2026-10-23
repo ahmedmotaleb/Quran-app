@@ -62,6 +62,15 @@ export const me = () => api<Me>('GET', 'me');
 export const publicSettings = () => api<{ cancel_hours: number; open_signup: boolean; max_recording_seconds: number; join_minutes: number; org_name: string;
   ayah_audio: AyahAudioCfg | null; support_whatsapp: string; show_support_button: boolean; phone_verification?: boolean;
   makeup?: { enabled: boolean; teachers_grant: boolean; expiry_days: number } }>('GET', 'settings/public');
+/* ---- parent weekly report (PROMPT 45) ---- */
+export interface WeeklyChild {
+  child: { id: number; name: string }; accepted_ayahs_total: number; submissions: number; minutes: number; sessions: number; attendance_rate: number | null;
+  reviews_overdue: number; assignments_overdue: number; reviews_completed: number; absences: { excused_approved: number; unexcused: number };
+  mistakes: { new_this_week: number; new_previous_week: number; open: number; top_categories: { category: string; label: string; count: number }[] };
+  upcoming_sessions: { starts_at: string; teacher: string }[]; targets: { title: string; kind: string; surah: number; ayah_from: number; ayah_to: number; due_at: string }[];
+  latest_feedback: { date: string; assignment: string; decision: string; next_step: string } | null;
+}
+export const parentWeekly = () => api<{ week: { from: string; to: string }; children: WeeklyChild[]; definitions: Record<string, string> }>('GET', 'parent/weekly-summary');
 export const updateMe = (patch: Partial<Pick<Me, 'full_name' | 'timezone' | 'phone' | 'notify_prefs'>>) => api<Me>('PATCH', 'me', patch);
 export const saveOnboarding = (d: { level: string; daily_goal: string; preferred_days: string[]; preferred_period: string }) =>
   api<Me>('PUT', 'me/onboarding', d);
