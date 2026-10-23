@@ -18,11 +18,11 @@ export const NAV_GROUPS: [string | null, NavItem[]][] = [
   ['المستخدمون', [['students', 'الطلاب', 'user'], ['teachers', 'المعلمون', 'award'], ['parents', 'أولياء الأمور', 'users']]],
   ['التعليم', [['circles', 'الحلقات', 'target'], ['lectures', 'المحاضرات', 'video'], ['quizzes', 'الاختبارات', 'plan']]],
   ['التشغيل', [['bookings', 'الجلسات والحجوزات', 'cal'], ['excuses', 'طلبات الاعتذار', 'inbox']]],
-  ['الإدارة', [['subs', 'الاشتراكات', 'file'], ['admins', 'الإدارة والصلاحيات', 'shield'], ['settings', 'الإعدادات', 'settings']]],
+  ['الإدارة', [['reports', 'التقارير', 'chart'], ['subs', 'الاشتراكات', 'file'], ['admins', 'الإدارة والصلاحيات', 'shield'], ['settings', 'الإعدادات', 'settings']]],
 ];
 export const NAV: NavItem[] = NAV_GROUPS.flatMap(([, xs]) => xs);
-/** Live: no payments yet (no Subscriptions); demo: no admins or excuses screens. */
-const shown = (k: Section) => (LIVE ? k !== 'subs' && canSection(k) : k !== 'admins' && k !== 'excuses');
+/** Live: no payments yet (no Subscriptions); demo: no admins, excuses or reports screens. */
+const shown = (k: Section) => (LIVE ? k !== 'subs' && canSection(k) : k !== 'admins' && k !== 'excuses' && k !== 'reports');
 
 const LEVEL: Record<string, string> = {
   owner: 'المالك', academic_manager: 'مدير أكاديمي', support: 'خدمة العملاء', content: 'إدارة المحتوى', sessions: 'مسؤول الجلسات',
