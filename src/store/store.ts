@@ -41,6 +41,9 @@ export interface ReviewDraft {
 export interface AssignForm {
   sid: string; type: TaskType; s: string; from: string; to: string; due: 'today' | 'tomorrow' | 'in3' | 'week';
   time: string; instr: string; needRec: boolean; errors: Record<string, string | null>;
+  /** Opened from the student's file: the student is fixed (not chosen again). */ fixed?: boolean;
+  /** «إرسال مهمة لكل الحلقة»: one task per active linked member of this circle. */ circle?: { id: number; name: string; reachable: number };
+  title?: string; busy?: boolean;
 }
 export interface MushafState {
   surah: number; data: SurahData | null; loading: boolean; error: boolean; errMsg?: string | null; from: number; to: number; font: number;
@@ -662,8 +665,9 @@ export function simEval() {
 /* ------------------------------------------------------------------ */
 /* Assignment                                                           */
 /* ------------------------------------------------------------------ */
-export function openAssign(sid?: string) {
-  set({ af: { sid: sid || (LIVE ? get().students[0]?.id ?? '' : 'u1'), type: 'hifz', s: '67', from: '', to: '', due: 'tomorrow', time: '21:00', instr: '', needRec: true, errors: {} } });
+export function openAssign(sid?: string, opts: { fixed?: boolean; circle?: AssignForm['circle'] } = {}) {
+  set({ af: { sid: sid || (LIVE ? get().students[0]?.id ?? '' : 'u1'), type: 'hifz', s: '67', from: '', to: '', due: 'tomorrow', time: '21:00', instr: '', needRec: true, errors: {},
+    fixed: !!opts.fixed, circle: opts.circle, title: '' } });
   go('tassign');
 }
 export function sendAssign() {
@@ -672,7 +676,7 @@ export function sendAssign() {
   if (!a || a < 1) e.from = 'أدخل رقم آية البداية'; else if (a > max) e.from = `السورة تحتوي ${max} آية فقط`;
   if (!b || b < 1) e.to = 'أدخل رقم آية النهاية'; else if (b > max) e.to = `السورة تحتوي ${max} آية فقط`; else if (a && b < a) e.to = 'يجب أن تكون النهاية بعد البداية';
   if (Object.keys(e).length) { up('af', { errors: e }); return; }
-  if (LIVE) { if (f.sid) live.createAssignment(f); else toast('لا يوجد طلاب مرتبطون بك بعد', 'alert'); return; }
+  if (LIVE) { if (f.circle || f.sid) void live.createAssignment(f); else toast('لا يوجد طلاب مرتبطون بك بعد', 'alert'); return; }
   const stu = STUDENTS.find((x) => x.id === f.sid)!;
   const due = { today: 'اليوم، 9:00 م', tomorrow: 'غدًا، 9:00 م', in3: 'الأربعاء 14 أكتوبر', week: 'الأحد 18 أكتوبر' }[f.due];
   const name = SUR[+f.s][0];

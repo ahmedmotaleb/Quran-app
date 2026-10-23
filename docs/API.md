@@ -52,6 +52,20 @@ the server default zone, Africa/Cairo). Lists are paginated:
 - `phone.code_sent`, `phone.verify_failed`, `phone.verified` (masked numbers).
 - `auth.login` / `auth.login_failed` carry `via`.
 
+### Creating tasks (PROMPT 43)
+
+- `POST assignments` (teacher): a task for one of the teacher's linked students. In the app, «+ إضافة مهمة» on the student's file opens the form with that student fixed.
+- `GET teacher/circles`: the teacher's circles, with `members` and `reachable` counts.
+- `POST circles/{id}/assignments` («إرسال مهمة لكل الحلقة», circle teacher only):
+  - The body is the task without the student.
+  - It creates one task per active member who is linked to the teacher, in one transaction.
+  - Answers `{created, skipped, results[]}`.
+  - Ended memberships are not members. Suspended accounts and members not linked to this teacher are skipped with a reason; the teacher could not review their recordings.
+- `POST admin/assignments` (`assignments.manage`: مدير أكاديمي or owner; not خدمة العملاء or مشاهدة فقط):
+  - The responsible `teacher` must be one of the student's linked teachers; when there is exactly one, it may be omitted.
+  - A student without a linked teacher is refused with `no_teacher`.
+- All paths validate Hafs ranges, audit `assignment.created` and notify the student.
+
 ### Teacher onboarding
 
 **Creating the account: `POST admin/teachers {full_name, email}`** («إنشاء الحساب وإرسال رابط الإعداد», `invitations.send`)

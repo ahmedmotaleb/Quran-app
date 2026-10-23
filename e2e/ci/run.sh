@@ -55,6 +55,7 @@ reseed; run admin-ops
 reseed; run admin-admins
 reseed; run phone-login
 reseed; run teacher-onboarding
+reseed; CIRCLE_CMD="bash e2e/ci/py.sh circle_for_teacher.py" run assigning
 reseed; run circle-members
 reseed; run account-delete
 # Recording failure found on a real Android phone (22 Oct): no demo task ids, failed uploads kept on the device.

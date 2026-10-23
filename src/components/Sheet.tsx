@@ -43,7 +43,7 @@ export default function Sheet() {
   } else if (sh.kind === 'info') {
     body = (
       <>
-        <p style={{ margin: 0, fontSize: 15, color: color.body, lineHeight: 1.8 }}>{sh.body}</p>
+        <p style={{ margin: 0, fontSize: 15, color: color.body, lineHeight: 1.8, whiteSpace: 'pre-line' }}>{sh.body}</p>
         <button onClick={closeSheet} style={primaryBtn(52, 15)}>حسنًا</button>
       </>
     );
