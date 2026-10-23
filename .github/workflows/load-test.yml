@@ -1,4 +1,4 @@
-# Load test (pack prompt 25) in an isolated, throwaway environment — never against production.
+# Load test (pack prompt 25) in an isolated, throwaway environment, or (PROMPT 47) against STAGING — never production.
 # The production image runs with Cloud Run's limits (1 CPU, 512 MB, 2 workers x 4 threads) against a fresh
 # PostgreSQL 16 (pg_stat_statements on) and an S3 API stand-in (moto; R2 timing comes from the smoke test). Dataset: `seed_load` (500 students, 10
 # teachers, 250 parents) plus the verified Quran text. Results: job summary + artifact.
@@ -7,8 +7,16 @@ name: Load test
 on:
   workflow_dispatch:
     inputs:
+      target:
+        description: 'isolated = this runner (default); staging = the real staging Cloud Run + staging database (PROMPT 47)'
+        type: choice
+        options: [isolated, staging]
+        default: isolated
+      steps:
+        description: 'Active students per step, comma-separated (isolated default 25,50; staging e.g. 50,100,200)'
+        default: '25,50'
       hold:
-        description: 'How long to hold each step (25 then 50 active students), e.g. 3m'
+        description: 'How long to hold each step, e.g. 3m'
         default: '3m'
 
 permissions:
@@ -16,6 +24,7 @@ permissions:
 
 jobs:
   load:
+    if: inputs.target != 'staging'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -89,7 +98,7 @@ jobs:
           echo $! > sampler.pid
           RACE=$(grep -o 'race_occurrence=[0-9]*' seed.txt | cut -d= -f2)
           cd loadtest && ../k6-v0.54.0-linux-amd64/k6 run -q -e BASE=http://localhost:8090 -e PASSWORD="$LOAD_PASSWORD" \
-            -e RACE_OCC="$RACE" -e HOLD="${{ inputs.hold }}" halqa.js || echo "K6_EXIT=$?" >> "$GITHUB_ENV"
+            -e RACE_OCC="$RACE" -e HOLD="${{ inputs.hold }}" -e STEPS="${{ inputs.steps }}" halqa.js || echo "K6_EXIT=$?" >> "$GITHUB_ENV"
           kill $(cat ../sampler.pid) || true
 
       - name: Report
@@ -146,6 +155,147 @@ jobs:
             samples.csv
             seed.txt
             app.log
+            loadtest/loadtest-summary.md
+            loadtest/loadtest-summary.json
+          retention-days: 30
+
+  # ---- PROMPT 47: the same profile against the real staging Cloud Run service and its own Neon database ----------------
+  staging:
+    if: inputs.target == 'staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      REGION: europe-west1
+      STAGE: halqa-staging
+      SDB: ${{ secrets.STAGING_DATABASE_URL }}
+      LOAD_PASSWORD: load-test-only-1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Staging must be set up (deploy/gcp-staging.sh)
+        run: |
+          test "${{ vars.STAGING_ENABLED }}" = "1" && test -n "$SDB" || { echo "::error title=Load test::Staging is not set up: run deploy/gcp-staging.sh, then set STAGING_ENABLED=1 and STAGING_DATABASE_URL."; exit 1; }
+          PNUM=$(echo "${{ vars.GCP_WIF_PROVIDER }}" | cut -d/ -f2)
+          echo "STAGE_URL=https://$STAGE-$PNUM.$REGION.run.app" >> "$GITHUB_ENV"
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Synthetic dataset in the STAGING database (never production)
+        run: |
+          IMAGE=$(gcloud run services describe "$STAGE" --project "$PROJECT" --region "$REGION" --format 'value(spec.template.spec.containers[0].image)')
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet && docker pull -q "$IMAGE"
+          run() { docker run --rm -e APP_ENV=staging -e DATABASE_URL="$SDB" -e DJANGO_ALLOWED_HOSTS=ops.invalid -e MEDIA_STORAGE=none \
+            -e LOAD_TEST_DATASET=1 -e LOAD_TEST_PASSWORD="$LOAD_PASSWORD" -e DJANGO_SECRET_KEY="$(python3 -c 'import secrets;print(secrets.token_urlsafe(64))')" \
+            -v "$PWD:/w" "$IMAGE" "$@"; }
+          run python manage.py seed_load --refresh | tee seed.txt
+          grep -q race_occurrence seed.txt || { echo "::error title=Load test setup::seed_load failed"; exit 1; }
+          if ! curl -fs "$STAGE_URL/api/ready" | grep -q '"quran_text":"imported"'; then
+            curl -sSL -A "halqa-loadtest (+https://github.com/ahmedmotaleb/Quran-app)" -o quran.txt \
+              "https://tanzil.net/pub/download/index.php?marks=true&sajdah=true&rub=false&tatweel=true&quranType=uthmani&outType=txt-2&agree=true"
+            curl -sSL -o meta.xml https://tanzil.net/res/text/metadata/quran-data.xml
+            run python manage.py import_quran /w/quran.txt --metadata /w/meta.xml --source-version tanzil-staging --activate | tail -2
+          fi
+          curl -fs "$STAGE_URL/api/ready" | grep -q '"media_storage":"configured"' && echo "UPLOADS=15" >> "$GITHUB_ENV" || echo "UPLOADS=0" >> "$GITHUB_ENV"
+
+      - name: Raise the per-address rate limits on staging for the test (every virtual user comes from this runner)
+        run: |
+          gcloud run services update "$STAGE" --project "$PROJECT" --region "$REGION" --quiet \
+            --update-env-vars "THROTTLE_AUTH=100000/min,THROTTLE_UPLOAD=100000/hour,THROTTLE_BOOKING=100000/min"
+          for i in $(seq 1 30); do curl -fs --max-time 20 "$STAGE_URL/api/ready" | grep -q '"status":"ok"' && break; sleep 5; done
+
+      - name: Install k6
+        run: |
+          curl -sSL https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz | tar xz
+          python3 -c "import os;open('loadtest/sample.webm','wb').write(b'\x1a\x45\xdf\xa3'+os.urandom(200*1024))"
+          sudo apt-get install -y -qq postgresql-client >/dev/null
+
+      - name: Run the steps against staging (DB connections sampled every 10 s)
+        run: |
+          date -u +%Y-%m-%dT%H:%M:%SZ > t0.txt
+          ( while true; do
+              c=$(psql "$SDB" -tAc "select count(*) from pg_stat_activity where datname = current_database()" 2>/dev/null || echo -1)
+              echo "$(date +%s),$c"; sleep 10
+            done > dbconn.csv ) &
+          echo $! > sampler.pid
+          RACE=$(grep -o 'race_occurrence=[0-9]*' seed.txt | cut -d= -f2); echo "RACE=$RACE" >> "$GITHUB_ENV"
+          cd loadtest && ../k6-v0.54.0-linux-amd64/k6 run -q -e BASE="$STAGE_URL" -e PASSWORD="$LOAD_PASSWORD" -e RACE_OCC="$RACE" \
+            -e HOLD="${{ inputs.hold }}" -e STEPS="${{ inputs.steps }}" -e UPLOADS="$UPLOADS" halqa.js || echo "K6_EXIT=$?" >> "$GITHUB_ENV"
+          kill $(cat ../sampler.pid) || true
+          date -u +%Y-%m-%dT%H:%M:%SZ > ../t1.txt
+
+      - name: Restore the staging rate limits
+        if: always()
+        run: |
+          gcloud run services update "$STAGE" --project "$PROJECT" --region "$REGION" --quiet \
+            --remove-env-vars "THROTTLE_AUTH,THROTTLE_UPLOAD,THROTTLE_BOOKING" || echo "::error::Restore the staging rate limits by hand."
+
+      - name: Report (k6, Cloud Run metrics, database, booking race)
+        if: always()
+        run: |
+          sleep 120  # Cloud Monitoring lags a little
+          export TOKEN=$(gcloud auth print-access-token) T0=$(cat t0.txt) T1=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          python3 - > cloudrun.md <<'PY'
+          import json, os, urllib.parse, urllib.request
+          def series(metric, aligner, reducer=None):
+              q = {"filter": f'metric.type="run.googleapis.com/{metric}" AND resource.labels.service_name="{os.environ["STAGE"]}"',
+                   "interval.startTime": os.environ["T0"], "interval.endTime": os.environ["T1"],
+                   "aggregation.alignmentPeriod": "60s", "aggregation.perSeriesAligner": aligner}
+              if reducer: q["aggregation.crossSeriesReducer"] = reducer
+              url = f"https://monitoring.googleapis.com/v3/projects/{os.environ['PROJECT']}/timeSeries?" + urllib.parse.urlencode(q)
+              try:
+                  r = json.load(urllib.request.urlopen(urllib.request.Request(url, headers={"Authorization": "Bearer " + os.environ["TOKEN"]})))
+              except Exception as e:  # noqa: BLE001
+                  return f"unavailable ({e})"
+              vals = [p["value"].get("doubleValue", p["value"].get("int64Value")) for s in r.get("timeSeries", []) for p in s["points"]]
+              vals = [float(v) for v in vals if v is not None]
+              return vals
+          def fmt(v, pct=False):
+              if isinstance(v, str) or not v: return v or "no data"
+              return f"{max(v)*100:.0f}%" if pct else f"{max(v):.0f}"
+          inst = series("container/instance_count", "ALIGN_MAX", "REDUCE_SUM")
+          cpu = series("container/cpu/utilizations", "ALIGN_PERCENTILE_99")
+          mem = series("container/memory/utilizations", "ALIGN_PERCENTILE_99")
+          print("| Cloud Run (staging) | max over the run |\n| --- | --- |")
+          print(f"| instances (sum across revisions) | {fmt(inst)} |\n| CPU utilization p99 per minute | {fmt(cpu, True)} |\n| memory utilization p99 per minute | {fmt(mem, True)} |")
+          PY
+          n=$(psql "$SDB" -tAc "select count(*) from scheduling_booking where occurrence_id=${RACE:-0} and status='confirmed'" 2>/dev/null || echo "?")
+          {
+            echo "## Load test result — STAGING"
+            echo "Target: $STAGE_URL (Cloud Run 1 vCPU / 512 MiB, max 2 instances, like production) with the staging Neon database."
+            echo "Client: k6 on a GitHub-hosted runner. Steps (active students): ${{ inputs.steps }}, hold ${{ inputs.hold }} each. Uploads: ${UPLOADS:-0} (0 = no staging bucket)."
+            echo "Dataset: $(cat seed.txt 2>/dev/null)"
+            echo
+            cat loadtest/loadtest-summary.md 2>/dev/null || echo "k6 did not produce a summary"
+            echo
+            cat cloudrun.md
+            echo
+            python3 -c "import csv;v=[int(r[1]) for r in csv.reader(open('dbconn.csv')) if len(r)==2 and r[1].lstrip('-').isdigit() and int(r[1])>=0];print(f'Database connections (pg_stat_activity, 10-second samples): max {max(v)}, samples {len(v)}' if v else 'Database connections: no samples')"
+            echo "Booking race correctness: confirmed bookings on the 1-seat race slot = $n (must be 1)."
+          } | tee -a "$GITHUB_STEP_SUMMARY" > report.md
+          echo "::notice title=Staging load test::$(grep -m1 -i 'requests\|error' loadtest/loadtest-summary.md | head -c 400)"
+          echo "::notice title=Cloud Run::$(tail -3 cloudrun.md | tr '\n' ' ')"
+          echo "::notice title=Database::$(grep 'Database connections\|Booking race' report.md | tr '\n' ' ')"
+          grep '^| [a-z_]* | [0-9]' loadtest/loadtest-summary.md | sed 's/^| //; s/ |$//; s/ | /:/; s/ | /,/g' > rows.txt || true
+          split -l 8 rows.txt part. 2>/dev/null || true
+          for f in part.*; do [ -s "$f" ] && echo "::notice title=Endpoints (name:count,p50,p95,p99,max ms)::$(tr '\n' ';' < "$f")"; done
+          test "$n" = "1" || { echo "::error title=Booking race::$n confirmed bookings on a 1-seat slot"; exit 1; }
+          test -z "${K6_EXIT:-}" || { echo "::error title=Load test::k6 thresholds failed (exit ${K6_EXIT})"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: staging-load-test-${{ github.sha }}
+          path: |
+            report.md
+            dbconn.csv
+            seed.txt
             loadtest/loadtest-summary.md
             loadtest/loadtest-summary.json
           retention-days: 30

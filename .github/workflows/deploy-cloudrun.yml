@@ -2,6 +2,9 @@
 # Runs on every push to main and by hand. Needs the one-time setup in docs/DEPLOY.md (deploy/gcp-setup.sh):
 #   repository variables GCP_PROJECT_ID, GCP_WIF_PROVIDER, GCP_DEPLOY_SA and the secret PROD_DATABASE_URL.
 # Until the variables exist the job is skipped, so merges keep working before hosting is set up.
+# Staging (PROMPT 47, deploy/gcp-staging.sh): when the variable STAGING_ENABLED is 1 the same image is first deployed
+# to the staging services with the staging database and secrets, migrated and smoke-tested; production deploys only
+# after that passes. Manual promotion = required reviewers on the GitHub "production" environment.
 name: Deploy (Cloud Run)
 
 on:
@@ -18,8 +21,93 @@ env:
   SERVICE: halqa
 
 jobs:
+  staging:
+    if: vars.GCP_PROJECT_ID != '' && vars.STAGING_ENABLED == '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      STAGE: halqa-staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out the staging addresses
+        env:
+          HAS_DB: ${{ secrets.STAGING_DATABASE_URL != '' }}
+        run: |
+          PNUM=$(echo "${{ vars.GCP_WIF_PROVIDER }}" | cut -d/ -f2)
+          echo "STAGE_URL=https://$STAGE-$PNUM.$REGION.run.app" >> "$GITHUB_ENV"
+          echo "STAGE_ADMIN_URL=https://$STAGE-admin-$PNUM.$REGION.run.app" >> "$GITHUB_ENV"
+          echo "IMAGE=$REGION-docker.pkg.dev/$PROJECT/$SERVICE/$SERVICE:${GITHUB_SHA::12}" >> "$GITHUB_ENV"
+          test "$HAS_DB" = "true" || { echo "::error::Add the repository secret STAGING_DATABASE_URL (deploy/gcp-staging.sh)."; exit 1; }
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push the image (production reuses it)
+        run: |
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Apply database migrations (staging database)
+        env:
+          APP_ENV: staging
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          DJANGO_ALLOWED_HOSTS: ops.invalid
+          MEDIA_STORAGE: none
+        run: |
+          docker run --rm -e APP_ENV -e DATABASE_URL -e DJANGO_ALLOWED_HOSTS -e MEDIA_STORAGE \
+            -e DJANGO_SECRET_KEY="$(python3 -c 'import secrets;print(secrets.token_urlsafe(64))')" \
+            "$IMAGE" sh -c 'python manage.py migrate --noinput && python manage.py createcachetable'
+
+      - name: Deploy the staging services (own runtime account and secrets; no email or push)
+        env:
+          STORAGE_ENV: ${{ vars.STAGING_STORAGE_ENV }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          base = {"APP_ENV": "staging", "SKIP_MIGRATE": "1", "APP_URL": os.environ["STAGE_URL"], "ADMIN_URL": os.environ["STAGE_ADMIN_URL"]}
+          for pair in filter(None, os.environ.get("STORAGE_ENV", "").split(",")):
+              k, v = pair.split("=", 1)
+              assert k.startswith("STORAGE_"), k
+              base[k] = v
+          json.dump(base, open("/tmp/stage-env.yaml", "w"))
+          host = os.environ["STAGE_ADMIN_URL"].split("//", 1)[1]
+          json.dump({**base, "PORTAL": "admin", "DJANGO_ALLOWED_HOSTS": host, "CSRF_TRUSTED_ORIGINS": os.environ["STAGE_ADMIN_URL"]},
+                    open("/tmp/stage-admin-env.yaml", "w"))
+          PY
+          SECRETS="DATABASE_URL=$STAGE-database-url:latest,DJANGO_SECRET_KEY=$STAGE-secret-key:latest"
+          test -z "$STORAGE_ENV" || SECRETS="$SECRETS,STORAGE_SECRET_ACCESS_KEY=$STAGE-storage-secret:latest"
+          for svc in "$STAGE" "$STAGE-admin"; do
+            f=/tmp/stage-env.yaml; test "$svc" = "$STAGE" || f=/tmp/stage-admin-env.yaml
+            gcloud run deploy "$svc" --project "$PROJECT" --region "$REGION" --image "$IMAGE" \
+              --service-account "$STAGE-run@$PROJECT.iam.gserviceaccount.com" \
+              --allow-unauthenticated --port 8080 --memory 512Mi --cpu 1 --cpu-boost \
+              --min-instances 0 --max-instances 2 --concurrency 40 --timeout 120 \
+              --env-vars-file "$f" --set-secrets "$SECRETS" --quiet
+          done
+
+      - name: Check staging (ready, admin portal, smoke test)
+        run: |
+          for i in $(seq 1 30); do curl -fs --max-time 20 "$STAGE_URL/api/ready" | grep -q '"status":"ok"' && break; sleep 5; done
+          curl -fs "$STAGE_URL/api/ready" | grep -q '"status":"ok"' || { echo "::error::$STAGE_URL/api/ready: $(curl -s $STAGE_URL/api/ready)"; exit 1; }
+          curl -fs "$STAGE_ADMIN_URL/admin/" | grep -q '/admin/manifest.webmanifest' || { echo "::error::staging admin portal not served"; exit 1; }
+          npm i --no-save playwright@1.56.1 >/dev/null && npx playwright install --with-deps chromium >/dev/null
+          mkdir -p shots && node e2e/smoke.mjs shots "$STAGE_URL/"
+          echo "::notice title=Staging::$STAGE_URL/ · $STAGE_ADMIN_URL/admin/"
+
   deploy:
-    if: vars.GCP_PROJECT_ID != ''
+    needs: staging
+    # Production waits for staging when staging is enabled; without it (skipped) production deploys as before.
+    if: ${{ !cancelled() && vars.GCP_PROJECT_ID != '' && (needs.staging.result == 'success' || needs.staging.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
@@ -49,9 +137,10 @@ jobs:
           service_account: ${{ vars.GCP_DEPLOY_SA }}
       - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Build and push the image
+      - name: Build and push the image (unless staging already did)
         run: |
           gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          if gcloud artifacts docker images describe "$IMAGE" --project "$PROJECT" >/dev/null 2>&1; then echo "reusing the staged image $IMAGE"; exit 0; fi
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
 

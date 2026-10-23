@@ -30,11 +30,15 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--students", type=int, default=500)
         parser.add_argument("--teachers", type=int, default=10)
+        parser.add_argument("--refresh", action="store_true",
+                            help="Dataset already there (a staging re-run): add the next two weeks of slots and a new race slot.")
 
     def handle(self, *args, **o):
         if settings.APP_ENV == "production" or os.environ.get("LOAD_TEST_DATASET") != "1":
             raise CommandError("seed_load needs LOAD_TEST_DATASET=1 and a non-production APP_ENV.")
         if User.objects.filter(email__startswith="load-").exists():
+            if o["refresh"]:
+                return self.refresh()
             raise CommandError("The load-test dataset already exists in this database.")
         pw = make_password(os.environ.get("LOAD_TEST_PASSWORD", "load-test-only-1"))  # hashed once, shared
         now, today = timezone.now(), timezone.localdate()
@@ -77,11 +81,26 @@ class Command(BaseCommand):
                     AvailabilityRule.objects.create(teacher=t, weekday=wd, start_time=time(8), end_time=time(22), timezone="Africa/Cairo",
                                                     session_minutes=45, buffer_minutes=15, valid_from=today)
         slots = sum(generate_occurrences(t, start=today, days=14) for t in teachers)
-        # One extra 1-seat slot for the booking race: inside the booking window, at 23:00 Cairo time (after the regular
-        # 08:00–22:00 slots) so teacher and student overlap rules cannot interfere.
-        from zoneinfo import ZoneInfo
-
-        race_start = datetime.combine(today + timedelta(days=3), time(23), ZoneInfo("Africa/Cairo"))
-        race = SessionOccurrence.objects.create(teacher=teachers[-1], starts_at=race_start, ends_at=race_start + timedelta(minutes=45), capacity=1)
+        race = self.race_slot(teachers[-1], today)
         self.stdout.write(f"students={len(students)} teachers={len(teachers)} parents={len(parents)} tasks={len(tasks)} "
                           f"slots={slots} race_occurrence={race.pk} race_teacher={teachers[-1].pk} quiz={quiz.pk}")
+
+    @staticmethod
+    def race_slot(teacher, today):
+        """One extra 1-seat slot for the booking race: inside the booking window, at 23:00 Cairo time (after the regular
+        08:00–22:00 slots) so teacher and student overlap rules cannot interfere. A re-run takes the next free night."""
+        from zoneinfo import ZoneInfo
+
+        for d in range(3, 14):
+            start = datetime.combine(today + timedelta(days=d), time(23), ZoneInfo("Africa/Cairo"))
+            if not SessionOccurrence.objects.filter(teacher=teacher, starts_at=start).exists():
+                return SessionOccurrence.objects.create(teacher=teacher, starts_at=start, ends_at=start + timedelta(minutes=45), capacity=1)
+        raise CommandError("No free night for a race slot in the next two weeks.")
+
+    def refresh(self):
+        teachers = list(User.objects.filter(email__startswith="load-t", role=Role.TEACHER).order_by("email"))
+        today = timezone.localdate()
+        slots = sum(generate_occurrences(t, start=today, days=14) for t in teachers)
+        race = self.race_slot(teachers[-1], today)
+        self.stdout.write(f"refreshed: students={User.objects.filter(email__startswith='load-s').count()} teachers={len(teachers)} "
+                          f"new_slots={slots} race_occurrence={race.pk} race_teacher={teachers[-1].pk}")

@@ -148,6 +148,32 @@ al-Afasy) and `QF_RECITER_NAME`. The server caches each surah's URL list for one
 week); browsers stream the files from Quran Foundation's CDN, the only audio host the CSP allows. The Mushaf credits
 «Quran.com». To switch audio off, remove `QF_CLIENT_ID` and `QF_CLIENT_SECRET` from the service.
 
+## 6d. Staging (dev → staging → production)
+
+Staging is a second copy of the app for realistic checks before production. It shares nothing that holds data or
+secrets with production:
+
+| | Staging | Production |
+| --- | --- | --- |
+| Cloud Run | `halqa-staging`, `halqa-staging-admin` (0–2 instances) | `halqa`, `halqa-admin` |
+| Runtime account | `halqa-staging-run` (reads only `halqa-staging-*` secrets) | `halqa-run` |
+| Database | its own **empty** Neon database `halqa_staging` | Neon production database |
+| Recordings | optional own R2 bucket + own key (none = uploads off) | `halqa-recordings` |
+| Email / push | none (links are shown on screen) | as configured |
+| `APP_ENV` | `staging` | `production` |
+
+Setup, once: run `bash <(curl -fsSL https://raw.githubusercontent.com/ahmedmotaleb/Quran-app/main/deploy/gcp-staging.sh)`
+in Cloud Shell. It refuses the production database or bucket. Then add the GitHub secret `STAGING_DATABASE_URL` and
+the variable `STAGING_ENABLED=1` (plus `STAGING_STORAGE_ENV` if you connected a bucket), as it prints.
+
+From then on **Deploy (Cloud Run)** runs: build → staging migrations → staging deploy → staging checks (ready,
+admin portal, smoke test) → production. If staging fails, production is not touched. For a manual promotion step,
+add yourself as a required reviewer on the GitHub environment **production**. Without `STAGING_ENABLED` the
+workflow deploys production directly, as before.
+
+Staging data is synthetic only (`seed_load`, smoke-test accounts, what testers create). Never copy production data,
+recordings or a production database branch into staging.
+
 ## 7. Check the deployment
 
 From any machine with Node and Playwright:
