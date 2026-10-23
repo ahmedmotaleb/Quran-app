@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { color, font } from '@/theme/tokens';
 import type { Session, Slot } from '@/data/types';
 import { Icon } from '@/components/Icon';
@@ -6,12 +6,16 @@ import {
   Avatar, BackHeader, Badge, Chips, FieldError, KVCard, SearchInput, card, iconTile, inputStyle, labelStyle, listBtn, muted, outlineBtn, primaryBtn,
 } from '@/components/ui';
 import { LESSONS } from '@/data/demo';
-import { dayL, timeIn, tzLabel, type BadgeSpec } from '@/lib/format';
+import { dayL, timeIn, tzLabel, tzOf, type BadgeSpec } from '@/lib/format';
 import {
-  back, confirmBooking, requestExcuse, go, openTeacher, replace, rescheduleSession, reset, setState, startQuiz, toast, up, useApp,
+  back, confirmBooking, requestExcuse, go, openSheet, openTeacher, replace, rescheduleSession, reset, setState, startQuiz, toast, up, useApp,
 } from '@/store/store';
 import { decoSession, pastSessions, slotTime, teacherById, upcomingSessions, weekDays } from '@/store/selectors';
 import { loadStudentData } from '@/store/live';
+import * as E from '@/api/endpoints';
+import type { ApiError } from '@/api/client';
+import { fmtDay, fmtTime } from '@/lib/time';
+
 import { LessonsTabLive, QuizzesTabLive } from './LearnLive';
 
 type CircTab = 'teachers' | 'bookings' | 'lessons' | 'quizzes';
@@ -79,12 +83,70 @@ function TeachersTab() {
   );
 }
 
+/** Live: the student's waiting-list entries and make-up credits (PROMPT 44). */
+function WaitAndMakeup() {
+  const s = useApp();
+  const [w, setW] = useState<E.WaitlistRow[]>([]); const [m, setM] = useState<E.MakeupRow[]>([]); const [busy, setBusy] = useState<number | null>(null);
+  const load = () => { E.myWaitlist().then((r) => setW(r.results)).catch(() => {}); E.myMakeup().then((r) => setM(r.results)).catch(() => {}); };
+  useEffect(load, []);
+  const tz = tzOf(s.tz).iana;
+  const when = (iso: string) => `${fmtDay(iso, tz)} · ${fmtTime(iso, tz)}`;
+  const openW = w.filter((x) => x.status === 'waiting' || x.status === 'offered');
+  const credits = m.filter((x) => x.status === 'available');
+  if (!openW.length && !credits.length) return null;
+  const run = async (id: number, fn: () => Promise<unknown>, ok: string) => {
+    setBusy(id);
+    try { await fn(); toast(ok); load(); await loadStudentData(); } catch (e) { toast((e as ApiError).message, 'alert'); load(); } finally { setBusy(null); }
+  };
+  return (
+    <>
+      {openW.length > 0 && <section aria-labelledby="wl-h" style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <h2 id="wl-h" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>قائمة الانتظار</h2>
+        {openW.map((x) => (
+          <div key={x.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${color.divider}`, paddingTop: 8 }}>
+            <span style={{ fontWeight: 700 }}>{when(x.occurrence.starts_at)} · {x.occurrence.teacher_name}{x.occurrence.circle_name ? ` · ${x.occurrence.circle_name}` : ''}</span>
+            {x.status === 'offered'
+              ? <span style={{ color: color.primary, fontWeight: 700 }}>توفّر مقعد لك! احجزه قبل {when(x.offer_expires_at!)}، وإلا انتقل إلى التالي.</span>
+              : <span style={muted(13)}>ترتيبك في القائمة: {x.position}</span>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              {x.status === 'offered' && <button disabled={busy === x.id} onClick={() => void run(x.id, () => E.acceptOffer(x.id, E.newIdempotencyKey()), 'تم حجز المقعد')} style={primaryBtn(44, 14, { flex: 1 })}>احجز المقعد</button>}
+              <button disabled={busy === x.id} onClick={() => void run(x.id, () => E.leaveWaitlist(x.id), 'خرجت من قائمة الانتظار')} style={outlineBtn(44, 14)}>الخروج من القائمة</button>
+            </div>
+          </div>
+        ))}
+      </section>}
+      {credits.length > 0 && <section aria-labelledby="mk-h" style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <h2 id="mk-h" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>جلسات تعويضية</h2>
+        {credits.map((c) => {
+          const t = s.teachers.find((x) => x.id === String(c.teacher));
+          return (
+            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderTop: `1px solid ${color.divider}`, paddingTop: 8 }}>
+              <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontWeight: 700 }}>مع {c.teacher_name}</span>
+                <span style={muted(12)}>عن غياب {fmtDay(c.source_starts_at, tz)} · صالحة حتى {fmtDay(c.expires_at, tz)}</span></span>
+              <button onClick={() => openTeacher(String(c.teacher), t?.types ?? ['فردية'], 0, c.id)} style={primaryBtn(44, 14, { padding: '0 12px' })}>احجز موعدًا تعويضيًا</button>
+            </div>
+          );
+        })}
+      </section>}
+    </>
+  );
+}
+
+/** A full slot (live): offer «الانضمام إلى قائمة الانتظار». */
+function askWaitlist(occ: number, label: string) {
+  openSheet({ kind: 'confirm', title: 'الموعد مكتمل', ok: 'الانضمام إلى قائمة الانتظار',
+    body: `موعد ${label} محجوز بالكامل. انضم إلى قائمة الانتظار: إن توفّر مقعد يُعرض عليك أولًا حسب ترتيبك، وتصلك رسالة لتحجزه خلال مهلة محددة.`,
+    onOk: () => { setState({ sheet: null }); E.joinWaitlist(occ).then((r) => toast(r.status === 'offered' ? 'توفّر مقعد لك الآن؛ احجزه من «حجوزاتي»' : `أُضفت إلى قائمة الانتظار (ترتيبك ${r.position})`))
+      .catch((e) => toast((e as ApiError).message, 'alert')); } });
+}
+
 function BookingsTab() {
   const s = useApp();
   const upcoming = upcomingSessions(s); const past = pastSessions(s);
   return (
     <>
       {s.net.error && <NetError msg={s.net.error} />}
+      {s.liveMode && <WaitAndMakeup />}
       {upcoming.length === 0 && (
         <div style={{ textAlign: 'center', padding: 24, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
           <p style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>لا توجد حجوزات قادمة</p>
@@ -238,7 +300,8 @@ export function TeacherPage() {
                 {days[B.day].map((x) => {
                   const on = B.h === x.h; const label = slotTime(s, x);
                   return (
-                    <button key={x.h} onClick={() => { if (!x.taken) up('bk', { h: x.h, error: null }); }} disabled={x.taken} aria-pressed={on} aria-label={x.taken ? `${label} محجوز` : label}
+                    <button key={x.h} onClick={() => { if (!x.taken) up('bk', { h: x.h, error: null }); else if (s.liveMode && x.occ) askWaitlist(x.occ, label); }}
+                      disabled={x.taken && !(s.liveMode && x.occ)} aria-pressed={on} aria-label={x.taken ? `${label} محجوز${s.liveMode ? ' — الانضمام إلى قائمة الانتظار' : ''}` : label}
                       style={{ minHeight: 52, borderRadius: 12, border: `1.5px solid ${x.taken ? '#E0D9C8' : on ? color.primary : color.borderStrong}`, background: x.taken ? color.takenSlot : on ? color.primary : color.card, color: x.taken ? color.faint : on ? color.ivory : color.primary, fontSize: 15, fontWeight: 700, cursor: x.taken ? 'default' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1.2 }}>
                       <span style={{ textDecoration: x.taken ? 'line-through' : 'none' }}>{label}</span>
                       {x.taken && <span style={{ fontSize: 11, fontWeight: 500 }}>محجوز</span>}
@@ -273,6 +336,7 @@ export function BookingReview() {
             <button onClick={() => { up('bk', { error: null, h: null }); back(); }} style={{ alignSelf: 'flex-start', minHeight: 44, padding: '0 16px', border: 'none', borderRadius: 10, background: color.dangerDeep, color: color.card, fontWeight: 700, cursor: 'pointer' }}>اختر موعدًا آخر</button>
           </div>
         )}
+        {B.makeup && <p style={{ margin: 0, padding: '10px 14px', borderRadius: 12, background: color.sand, fontSize: 14, fontWeight: 700 }}>جلسة تعويضية: يُستخدم رصيدك التعويضي لهذا الحجز.</p>}
         <KVCard rows={[
           ['المعلم', t.name],
           ['نوع الجلسة', `${B.type} · ${B.type === 'جماعية' ? '60 دقيقة' : '45 دقيقة'}`],

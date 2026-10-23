@@ -245,7 +245,7 @@ export async function confirm(): Promise<string | null> {
   try {
     const res = b.resched
       ? await E.reschedule(+b.resched, slot.occ, key)
-      : await E.book(slot.occ, key, b.task ? +b.task : null, b.note);
+      : await E.book(slot.occ, key, b.task ? +b.task : null, b.note, b.makeup);
     up('bk', { busy: false, key: null });
     await loadStudentData();
     return String(res.id);
@@ -435,7 +435,7 @@ export async function createAssignment(f: AssignForm) {
 }
 
 /* ---------------- teacher schedule ---------------- */
-async function refreshSchedule() {
+export async function refreshSchedule() {
   try { setState({ tsched: await E.teacherOccurrences() }); } catch (e) { toast(msg(e), 'alert'); }
 }
 

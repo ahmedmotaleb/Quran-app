@@ -69,7 +69,8 @@ const initial = () => ({
   /** True when a backend is configured (VITE_API_BASE_URL); demo data otherwise. */
   liveMode: LIVE,
   /** Public platform settings from the server (live mode); safe defaults until loaded. */
-  pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, join_minutes: 10, ayah_audio: null as import('@/api/endpoints').AyahAudioCfg | null, org_name: '', support_email: '', support_whatsapp: '', show_support_button: false, phone_verification: false },
+  pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, join_minutes: 10, ayah_audio: null as import('@/api/endpoints').AyahAudioCfg | null, org_name: '', support_email: '', support_whatsapp: '', show_support_button: false, phone_verification: false,
+    makeup: null as null | { enabled: boolean; teachers_grant: boolean; expiry_days: number } },
   me: null as Me | null,
   /** Unsent recordings kept on this device for the signed-in student (task id, length, when). */
   pendingRecs: [] as { taskId: string; secs: number; createdAt: number }[],
@@ -122,6 +123,7 @@ const initial = () => ({
     t: 't1', type: 'فردية', day: 0, h: null as number | null, note: '', task: 'k1' as string | null, error: null as string | null, resched: null as string | null,
     /** Live mode: request state and the Idempotency-Key for the chosen slot. */
     loading: false, busy: false, key: null as null | { occ: number; key: string },
+    /** «جلسة تعويضية»: the credit this booking uses (same teacher). */ makeup: null as number | null,
   },
   rec: { phase: 'idle' as RecPhase, secs: 0, task: (LIVE ? '' : 'k1') as string, demo: false, prog: 0, ...REC_LIVE },
   player: { key: null as string | null, pos: 0, dur: 0, playing: false },
@@ -559,8 +561,8 @@ const markSlot = (avail: Availability, t: string, day: number, h: number, taken:
   ({ ...avail, [t]: avail[t].map((d, i) => (i === day ? d.map((x) => (x.h === h ? { ...x, taken } : x)) : d)) });
 
 const firstOpenTask = () => get().tasks.find((t) => t.status !== 'reviewed' && t.status !== 'submitted')?.id ?? null;
-export function openTeacher(teacherId: string, types: string[], firstDay: number) {
-  set({ bk: { t: teacherId, type: types[0], day: firstDay, h: null, note: '', task: LIVE ? firstOpenTask() : 'k1', error: null, resched: null, loading: false, busy: false, key: null } });
+export function openTeacher(teacherId: string, types: string[], firstDay: number, makeup: number | null = null) {
+  set({ bk: { t: teacherId, type: types[0], day: firstDay, h: null, note: '', task: LIVE ? firstOpenTask() : 'k1', error: null, resched: null, loading: false, busy: false, key: null, makeup } });
   go('teacher', { id: teacherId });
   if (LIVE) live.loadSlots(teacherId);
 }
@@ -597,7 +599,7 @@ export async function requestExcuse(x: Session, reason: string): Promise<string 
   return null;
 }
 export function rescheduleSession(x: Session) {
-  set({ bk: { t: x.t, type: x.type, day: x.day || 0, h: null, note: '', task: x.task, error: null, resched: x.id, loading: false, busy: false, key: null } });
+  set({ bk: { t: x.t, type: x.type, day: x.day || 0, h: null, note: '', task: x.task, error: null, resched: x.id, loading: false, busy: false, key: null, makeup: null } });
   go('teacher', { id: x.t });
   if (LIVE) live.loadSlots(x.t);
 }

@@ -353,8 +353,11 @@ class AdminStudentDiscipline(APIView):
                     .select_related("occurrence__teacher").order_by("-occurrence__starts_at")[:50])
         ex = {e.booking_id: e for e in BookingExcuse.objects.filter(student=s)}
         counted = set(Booking.objects.filter(excuses.unexcused_q(), student=s).values_list("pk", flat=True))
+        from .models import MakeupCredit
+
+        mk = dict(MakeupCredit.objects.filter(student=s).values_list("source_booking_id", "status"))
         return Response({**excuses.summary(s),
                          "absences": [{"booking": b.pk, "starts_at": b.occurrence.starts_at.isoformat(), "teacher": b.occurrence.teacher.full_name,
                                        "attendance": b.attendance, "counts": b.pk in counted,
-                                       "excuse": ex[b.pk].status if b.pk in ex else None} for b in absences],
+                                       "excuse": ex[b.pk].status if b.pk in ex else None, "makeup": mk.get(b.pk)} for b in absences],
                          "excuses": _excuse_rows(BookingExcuse.objects.filter(student=s))})

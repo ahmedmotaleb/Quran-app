@@ -34,7 +34,9 @@ class TeacherSlots(generics.ListAPIView):
             starts_at__gte=now + timedelta(minutes=cfg.booking_lead_minutes), starts_at__lte=now + timedelta(days=cfg.booking_horizon_days))
             .filter(Q(circle__isnull=True) | Q(circle__state="published"))
             .select_related("teacher", "circle")
-            .annotate(confirmed_count=Count("bookings", filter=Q(bookings__status=Booking.Status.CONFIRMED)))
+            .annotate(confirmed_count=Count("bookings", filter=Q(bookings__status=Booking.Status.CONFIRMED), distinct=True),
+                      # seats offered to waiting students are held for them (waitlist.py)
+                      held_count=Count("waitlist", filter=Q(waitlist__status="offered", waitlist__offer_expires_at__gt=now), distinct=True))
             .order_by("starts_at"))
         return qs
 
@@ -88,7 +90,8 @@ class BookingList(BookingScopeMixin, generics.ListCreateAPIView):
             if assignment is None:
                 raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"assignment": ["مهمة غير صالحة."]})
         key = request.headers.get("Idempotency-Key", "")
-        booking, created = services.book(student=request.user, occurrence_id=d["occurrence"], idempotency_key=key, assignment=assignment, note=d["note"])
+        booking, created = services.book(student=request.user, occurrence_id=d["occurrence"], idempotency_key=key, assignment=assignment, note=d["note"],
+                                         makeup_credit_id=d.get("makeup_credit"))
         if created:
             audit("booking.created", actor=request.user, target=booking, request=request)
         return Response(BookingSerializer(booking, context=self.get_serializer_context()).data, status=201 if created else 200)
