@@ -202,7 +202,7 @@ const ACTION_L: Record<string, string> = {
 };
 
 /** Browsers where this admin ticked «تذكّر هذا الجهاز»: the two-step code is not asked there until the trust ends. */
-function TrustedDevices() {
+export function TrustedDevices() {
   const [rows, setRows] = useState<A.TrustedDevice[] | null>(null); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const load = useCallback(async () => { try { setRows((await A.listTrustedDevices()).results); setErr(null); } catch (e) { setErr(errMsg(e)); } }, []);
   useEffect(() => { void load(); }, [load]);

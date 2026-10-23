@@ -43,7 +43,7 @@ async function createTeacher(name, email) {
 await admin.goto(BASE + '#/admin');
 await admin.locator('#ad-email').fill('admin@halqa.app'); await admin.locator('#ad-pw').fill('halqa123');
 await admin.getByRole('button', { name: 'دخول' }).click(); await admin.getByText(/بيانات حقيقية/).waitFor();
-await admin.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: /^المعلمون/ }).click();
+await admin.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' }).getByRole('button', { name: /^المعلمون/ }).click();
 
 const T1 = `abdulrahman${stamp}@example.com`;
 await step(admin, 'admin creates the teacher account and the setup email is sent', async () => {

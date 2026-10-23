@@ -96,7 +96,7 @@ await step(T.page, 'admin sees «3 — الحساب موقوف» and the reason;
   await ap.goto(BASE + '#/admin');
   await ap.locator('#ad-email').fill('admin@halqa.app'); await ap.locator('#ad-pw').fill('halqa123');
   await ap.getByRole('button', { name: 'دخول' }).click(); await ap.getByText(/بيانات حقيقية/).waitFor();
-  await ap.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: /^الطلاب/ }).click();
+  await ap.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' }).getByRole('button', { name: /^الطلاب/ }).click();
   await ap.getByRole('group', { name: 'تصفية حسب الحالة' }).getByRole('button', { name: /موقوف/ }).click();
   await ap.getByRole('button', { name: 'سارة أحمد', exact: true }).click();
   await ap.getByText('الغياب بدون عذر: 3 — الحساب موقوف').waitFor();

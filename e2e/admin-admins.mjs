@@ -13,7 +13,7 @@ const page = await ctx2.newPage(); page.setDefaultTimeout(10000);
 const errs = []; for (const p of [owner, page]) p.on('pageerror', (e) => errs.push(e.message));
 let fails = 0;
 const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0].replace(/\u001b\[[0-9;]*m/g, '').slice(0, 300)); await owner.screenshot({ path: `${out}/admins-fail-owner-${name.replace(/\W+/g, '_')}.png` }); await page.screenshot({ path: `${out}/admins-fail-new-${name.replace(/\W+/g, '_')}.png` }); } };
-const navOf = (p) => p.getByRole('navigation', { name: 'أقسام الإدارة' });
+const navOf = (p) => p.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' });
 const dialog = (p) => p.getByRole('dialog').last();
 function totp(secret, t = Date.now()) {
   const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; let bits = '';

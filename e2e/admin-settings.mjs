@@ -9,7 +9,7 @@ const { settledReload } = trackWrites(page);
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 let fails = 0;
 const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n').filter((l) => /Timeout|intercepts|not enabled|not visible|waiting for/.test(l)).join(' · ').replace(/\u001b\[[0-9;]*m/g, '').slice(0, 400)); await page.screenshot({ path: `${out}/settings-fail-${name.replace(/\W+/g, '_')}.png` }); } };
-const nav = (name) => page.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: new RegExp(`^${name}`) }).click();
+const nav = (name) => page.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' }).getByRole('button', { name: new RegExp(`^${name}`) }).click();
 const dialog = () => page.getByRole('dialog').last();
 
 await page.goto(BASE + '#/admin');

@@ -57,7 +57,7 @@ await step(ap, 'admin: «إضافة مهمة» in the student record goes to the
   await ap.goto(BASE + '#/admin');
   await ap.locator('#ad-email').fill('admin@halqa.app'); await ap.locator('#ad-pw').fill('halqa123');
   await ap.getByRole('button', { name: 'دخول' }).click(); await ap.getByText(/بيانات حقيقية/).waitFor();
-  await ap.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: /^الطلاب/ }).click();
+  await ap.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' }).getByRole('button', { name: /^الطلاب/ }).click();
   await ap.getByRole('button', { name: 'سارة أحمد', exact: true }).click();
   await ap.getByRole('button', { name: 'إضافة مهمة' }).click();
   const d = ap.getByRole('dialog').last();

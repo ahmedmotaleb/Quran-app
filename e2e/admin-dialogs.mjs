@@ -29,7 +29,7 @@ async function typeSteadily(sel, text) {
 await page.goto(BASE + '#/admin');
 await page.locator('#ad-email').fill('admin@halqa.app'); await page.locator('#ad-pw').fill('halqa123');
 await page.getByRole('button', { name: 'دخول' }).click(); await page.getByText(/بيانات حقيقية/).waitFor();
-await page.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: /^الطلاب/ }).click();
+await page.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' }).getByRole('button', { name: /^الطلاب/ }).click();
 await page.getByRole('button', { name: 'يوسف أحمد', exact: true }).waitFor();
 
 await step('selected users: «أرشفة» and «حذف نهائي» are separate red actions in a visible group', async () => {

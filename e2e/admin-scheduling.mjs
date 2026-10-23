@@ -11,7 +11,7 @@ const { settledReload } = trackWrites(page);
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 let fails = 0;
 const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await page.screenshot({ path: `${out}/sched-fail-${name.replace(/\W+/g, '_')}.png` }); } };
-const nav = (name) => page.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: new RegExp(`^${name}`) }).click();
+const nav = (name) => page.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' }).getByRole('button', { name: new RegExp(`^${name}`) }).click();
 const dialog = () => page.getByRole('dialog').last();
 const CN = `حلقة الاختبار ${Date.now() % 100000}`;
 const api = async (method, path, token, data, headers = {}) => {
@@ -62,11 +62,11 @@ await step('publish; the student sees and books a group seat', async () => {
   if (r.status !== 201) throw new Error(`book ${r.status} ${JSON.stringify(r.body)}`);
 });
 await step('the booking appears in admin Bookings; cancel with a reason', async () => {
-  await page.keyboard.press('Escape'); await nav('الحجوزات');
+  await page.keyboard.press('Escape'); await nav('الجلسات والحجوزات');
   await page.getByRole('searchbox').fill('يوسف');
   const btn = page.getByRole('button', { name: 'إلغاء حجز يوسف أحمد' }).first(); await btn.click();
   await dialog().locator('#rs').fill('اختبار إلغاء الإدارة'); await dialog().getByRole('button', { name: 'إلغاء الحجز' }).click();
-  await settledReload(); await nav('الحجوزات');
+  await settledReload(); await nav('الجلسات والحجوزات');
   await page.getByRole('button', { name: 'ملغاة', exact: true }).click(); await page.getByText('اختبار إلغاء الإدارة').first().waitFor();
 });
 await step('the student is notified and the seat is free again', async () => {

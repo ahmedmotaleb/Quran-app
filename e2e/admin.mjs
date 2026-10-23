@@ -86,7 +86,7 @@ await step('«تذكّر هذا الجهاز» (ticked by default): next sign-in
   if (await page.locator('#ad-otp').count()) throw new Error('code asked on a trusted device');
 });
 await step('Settings lists the trusted device; removing it brings the code back', async () => {
-  await page.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: /^الإعدادات/ }).click();
+  await page.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' }).getByRole('button', { name: /^الإعدادات/ }).click();
   await page.getByText('هذا الجهاز', { exact: true }).waitFor();
   await page.getByText(/أُضيف: .* · آخر استخدام: .* · تنتهي: /).first().waitFor();
   await page.getByRole('button', { name: /^إلغاء الثقة: / }).first().waitFor();

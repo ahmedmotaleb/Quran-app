@@ -12,7 +12,7 @@ const { settledReload } = trackWrites(page);
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 let fails = 0;
 const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await page.screenshot({ path: `${out}/people-fail-${name.replace(/\W+/g, '_')}.png` }); } };
-const nav = (name) => page.getByRole('navigation', { name: 'أقسام الإدارة' }).getByRole('button', { name: new RegExp(`^${name}`) }).click();
+const nav = (name) => page.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' }).getByRole('button', { name: new RegExp(`^${name}`) }).click();
 const dialog = () => page.getByRole('dialog').last();
 const openPerson = async (name) => { await page.getByRole('button', { name, exact: true }).click(); await dialog().getByText('حالة الحساب').waitFor(); };
 const reopen = async (section, name) => { await settledReload(); await nav(section); await openPerson(name); };
