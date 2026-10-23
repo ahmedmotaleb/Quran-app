@@ -84,6 +84,23 @@ the burst of 50 simultaneous sign-ins before the race. Everyday screens stay und
 2. **Teacher dashboard N+1.** The falling-scores rule ran one query per student (56 queries for 50 students).
    It is now one window query (7 queries), with a test that the count does not grow with class size.
 
+## Staging runs (PROMPT 47)
+
+The same profile runs against the real staging Cloud Run service and its own Neon database: **Actions → Load test →
+target `staging`, steps e.g. `50,100,200`**. Go higher only if the previous step stayed healthy. The workflow:
+
+- seeds the staging database with `seed_load` (later runs use `--refresh`, which adds slots and a new race slot) and
+  imports the verified Quran text if staging has none;
+- raises the per-address rate limits on staging for the run only, because every virtual user comes from one runner.
+  It restores them afterwards, even if the run fails;
+- reports k6 error rate and p50/p95/p99 per endpoint, Cloud Run instances, CPU and memory (Cloud Monitoring), database
+  connections (sampled every 10 s), and booking-race correctness. The run fails unless exactly 1 booking is confirmed
+  on the 1-seat slot;
+- skips the upload worker when staging has no recordings bucket (the report says so).
+
+No staging run has been recorded yet: staging must first be set up by the owner (DEPLOY.md §6d). Results go here
+when measured. Nothing above the measured step is claimed.
+
 ## What can be claimed
 
 - On one Cloud Run-sized instance, **50 simultaneously active students plus 10 staff/parents** were served with no

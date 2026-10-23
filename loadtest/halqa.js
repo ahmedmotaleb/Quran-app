@@ -1,7 +1,8 @@
-// Halqa load profile (pack prompt 25). Run only against an isolated environment seeded with `seed_load`:
+// Halqa load profile (pack prompt 25; staging steps PROMPT 47). Run only against an isolated runner or STAGING, seeded
+// with `seed_load` (never production):
 //   k6 run -e BASE=http://localhost:8090 -e PASSWORD=... -e RACE_OCC=<id> loadtest/halqa.js
 // Accounts: load-s0000..load-s0499 (students), load-t00..load-t09 (teachers), load-p0000.. (parents).
-// Profile: students ramp 0→25 (pilot), hold, then 25→50, hold; 5 teachers and 5 parents throughout; one upload
+// Profile: students ramp 0→25 (pilot), hold, then 25→50, hold (or the STEPS given); 5 teachers and 5 parents throughout; one upload
 // worker; and a 50-way race for one 1-seat slot. Think time 2–5 s between screens, like a person using the app.
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -27,19 +28,26 @@ for (const n of NAMES) thresholds[`http_req_duration{name:${n}}`] = ['p(95)<6000
 
 const minutes = (s) => (s.endsWith('m') ? +s.slice(0, -1) * 60 : +s.replace('s', ''));
 const holdS = minutes(HOLD);
+// Active-student steps: 25 → 50 by default (isolated runner); the staging run passes e.g. STEPS=50,100,200 (PROMPT 47).
+const STEPS = (__ENV.STEPS || '25,50').split(',').map(Number).filter((n) => n > 0);
+const SIDE = +(__ENV.SIDE_VUS || 5); // teachers and parents, each
+const totalS = STEPS.length * (60 + holdS) + 20;
+const raceAt = 60 + holdS + (STEPS.length > 1 ? 60 + Math.floor(holdS / 2) : 0); // during the second step's hold
 export const options = {
   summaryTrendStats: ['med', 'p(95)', 'p(99)', 'max', 'count'],
   thresholds,
   scenarios: {
     students: { executor: 'ramping-vus', exec: 'student', startVUs: 0, gracefulRampDown: '20s',
-      stages: [{ duration: '1m', target: 25 }, { duration: HOLD, target: 25 }, { duration: '1m', target: 50 }, { duration: HOLD, target: 50 },
-        { duration: '20s', target: 0 }] },
-    teachers: { executor: 'constant-vus', exec: 'teacher', vus: 5, duration: `${2 * holdS + 140}s` },
-    parents: { executor: 'constant-vus', exec: 'parent', vus: 5, duration: `${2 * holdS + 140}s` },
-    uploads: { executor: 'per-vu-iterations', exec: 'uploader', vus: 1, iterations: 15, startTime: '90s', maxDuration: `${2 * holdS}s` },
-    race: { executor: 'per-vu-iterations', exec: 'racer', vus: 50, iterations: 1, startTime: `${holdS + 120}s`, maxDuration: '2m' },
+      stages: [...STEPS.flatMap((n) => [{ duration: '1m', target: n }, { duration: HOLD, target: n }]), { duration: '20s', target: 0 }] },
+    teachers: { executor: 'constant-vus', exec: 'teacher', vus: SIDE, duration: `${totalS}s` },
+    parents: { executor: 'constant-vus', exec: 'parent', vus: SIDE, duration: `${totalS}s` },
+    uploads: { executor: 'per-vu-iterations', exec: 'uploader', vus: 1, iterations: +(__ENV.UPLOADS ?? 15), startTime: '90s', maxDuration: `${STEPS.length * holdS}s` },
+    race: { executor: 'per-vu-iterations', exec: 'racer', vus: 50, iterations: 1, startTime: `${raceAt}s`, maxDuration: '2m' },
   },
 };
+
+// UPLOADS=0 skips the upload worker (a staging without its own recordings bucket).
+if (+(__ENV.UPLOADS ?? 15) === 0) delete options.scenarios.uploads;
 
 const pick = (n) => Math.floor(Math.random() * n);
 const pad = (n, w) => String(n).padStart(w, '0');
