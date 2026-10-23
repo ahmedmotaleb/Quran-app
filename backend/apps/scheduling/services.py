@@ -29,7 +29,8 @@ def _lock_student(student_id: int) -> None:
         c.execute("SELECT pg_advisory_xact_lock(%s, %s)", [7301, student_id])  # 7301 = booking namespace
 
 
-def book(*, student, occurrence_id: int, idempotency_key: str, assignment=None, note: str = "", now: datetime | None = None) -> tuple[Booking, bool]:
+def book(*, student, occurrence_id: int, idempotency_key: str, assignment=None, note: str = "", now: datetime | None = None,
+         makeup_credit_id: int | None = None) -> tuple[Booking, bool]:
     if student.role != Role.STUDENT or student.status != AccountStatus.ACTIVE:
         raise ApiError("not_eligible", "هذا الحساب لا يمكنه حجز الجلسات.", 403)
     if not idempotency_key or len(idempotency_key) > 64:
@@ -55,7 +56,11 @@ def book(*, student, occurrence_id: int, idempotency_key: str, assignment=None, 
             raise ApiError("too_early", "هذا الموعد خارج فترة الحجز المتاحة حاليًا.", 409)
         if occ.bookings.filter(student=student, status=Booking.Status.CONFIRMED).exists():
             raise ApiError("already_booked", "لديك حجز مؤكد في هذا الموعد بالفعل.", 409)
-        if occ.bookings.filter(status=Booking.Status.CONFIRMED).count() >= occ.capacity:
+        from .waitlist import live_offers
+
+        # A seat offered to a waiting student is held for them until the offer expires (waitlist.py).
+        held = live_offers(occ.pk, now, exclude_student=student.pk).count()
+        if occ.bookings.filter(status=Booking.Status.CONFIRMED).count() + held >= occ.capacity:
             raise ApiError("slot_taken", "لم يعد هذا الموعد متاحًا؛ حجزه طالب آخر قبل قليل. اختر موعدًا آخر.", 409)
         overlap = Booking.objects.filter(
             student=student, status=Booking.Status.CONFIRMED, occurrence__status=SessionOccurrence.Status.SCHEDULED,
@@ -70,6 +75,10 @@ def book(*, student, occurrence_id: int, idempotency_key: str, assignment=None, 
                 b = Booking.objects.create(occurrence=occ, student=student, idempotency_key=idempotency_key, assignment=assignment, note=note[:500])
         except IntegrityError:
             raise ApiError("slot_taken", "لم يعد هذا الموعد متاحًا. اختر موعدًا آخر.", 409)
+        if makeup_credit_id is not None:
+            from .makeup import use as use_makeup
+
+            use_makeup(student, makeup_credit_id, b, now)
         transaction.on_commit(lambda: _notify_booked(b.pk))
         return b, True
 
@@ -96,6 +105,12 @@ def cancel(*, booking_id: int, by, reason: str = "", now: datetime | None = None
         b.save(update_fields=["status", "cancelled_at", "cancelled_by", "cancel_reason", "updated_at"])
         if not is_owner and reason != "rescheduled":
             transaction.on_commit(lambda: _notify_cancelled(b.pk))
+        from .makeup import booking_cancelled
+        from .waitlist import seat_freed
+
+        booking_cancelled(b, now)  # a cancelled make-up booking gives the credit back
+        occ_id = b.occurrence_id
+        transaction.on_commit(lambda: seat_freed(occ_id))  # the next person on the waiting list gets the seat
         return b
 
 

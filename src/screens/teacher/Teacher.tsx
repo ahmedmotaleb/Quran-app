@@ -6,7 +6,7 @@ import {
 import { DAYS, SUR, TODAY_LABEL } from '@/data/demo';
 import { fmt, scoreL, timeIn, typeIcon, tzLabel, tzOf } from '@/lib/format';
 import { dateKey, dayLabel, fmtDay, fmtTime, zonedToIso as zonedIso } from '@/lib/time';
-import { gradeRecitation, reviewExcuse, saveMeetingLink, setAttendance, teacherCancelBooking, toggleSlot as toggleLiveSlot } from '@/store/live';
+import { gradeRecitation, refreshSchedule, reviewExcuse, saveMeetingLink, setAttendance, teacherCancelBooking, toggleSlot as toggleLiveSlot } from '@/store/live';
 import { me as getMe, teacherCircles, type ApiGradingItem } from '@/api/endpoints';
 import { useState } from 'react';
 import { weekDays } from '@/store/selectors';
@@ -20,7 +20,7 @@ import { BRAND } from '@/theme/brand';
 import { useEffect } from 'react';
 import { ProgressCards } from '@/components/ProgressCards';
 import { InboxBell } from '@/screens/common/Inbox';
-import { api } from '@/api/client';
+import { api, type ApiError } from '@/api/client';
 import { discardVoiceNote, startVoiceNote, stopVoiceNote, voiceNote, voiceNoteRecording } from '@/services/voiceNote';
 import { studentProgress, type ApiProgress } from '@/api/endpoints';
 import * as E from '@/api/endpoints';
@@ -745,6 +745,16 @@ const EXCUSE_BADGE: Record<string, [string, string, string]> = {
   rejected: ['اعتذار مرفوض', color.dangerBg, color.dangerInk],
 };
 
+/** «جلسة تعويضية» for an approved excuse, when the settings let teachers grant it. */
+const makeupAllowed = () => { const m = useApp.getState().pub.makeup; return !!m?.enabled && m.teachers_grant; };
+function offerMakeup(bookingId: number) {
+  const m = useApp.getState().pub.makeup;
+  if (!m?.enabled || !m.teachers_grant) return;
+  openSheet({ kind: 'confirm', title: 'منح جلسة تعويضية؟', ok: 'منح جلسة تعويضية',
+    body: `يستطيع الطالب حجز موعد بديل معك خلال ${m.expiry_days} يومًا. تُمنح مرة واحدة لهذا الغياب.`,
+    onOk: () => { setState({ sheet: null }); E.grantMakeup(bookingId).then(() => { toast('مُنحت جلسة تعويضية'); void refreshSchedule(); }).catch((e) => toast((e as ApiError).message, 'alert')); } });
+}
+
 /** «طلبات الاعتذار»: pending excuses for the teacher's own sessions. Approve (response optional) or reject (required). */
 function ExcusesPanel() {
   const s = useApp(); const tz = tzOf(s.tz).iana;
@@ -761,6 +771,7 @@ function ExcusesPanel() {
     setBusy(null);
     if (fail) return setErr(fail);
     setRejecting(null); setText(''); load();
+    if (ok) offerMakeup(id);
   };
   return (
     <section aria-label="طلبات الاعتذار" style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10, border: `1.5px solid ${color.gold}` }}>
@@ -840,6 +851,9 @@ function ScheduleLive() {
                 <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${color.divider}`, paddingTop: 8 }}>
                   <span style={{ fontSize: 14 }}><strong>{b.student_name}</strong>{b.assignment_title ? ` · ${b.assignment_title}` : ''}</span>
                   {b.excuse && <span style={{ alignSelf: 'flex-start', fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: EXCUSE_BADGE[b.excuse.status][1], color: EXCUSE_BADGE[b.excuse.status][2] }}>{EXCUSE_BADGE[b.excuse.status][0]}</span>}
+                  {b.excuse?.status === 'approved' && (b.makeup
+                    ? <span style={muted(12)}>جلسة تعويضية: {b.makeup === 'available' ? 'مُنحت ولم تُحجز بعد' : b.makeup === 'used' ? 'حُجزت' : 'انتهت'}</span>
+                    : makeupAllowed() && <button onClick={() => offerMakeup(b.id)} style={{ alignSelf: 'flex-start', minHeight: 40, padding: '0 12px', borderRadius: 10, border: `1px solid ${color.primary}`, background: color.card, color: color.primary, fontWeight: 700, cursor: 'pointer' }}>منح جلسة تعويضية</button>)}
                   {b.note && <span style={muted(13)}>ملاحظة الطالب: {b.note}</span>}
                   {started ? (<>
                     <div role="radiogroup" aria-label={`حضور ${b.student_name}`} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

@@ -124,6 +124,7 @@ export interface Settings {
   cancel_hours: number; excuse_deadline_minutes: number; join_minutes: number; individual_minutes: number; group_minutes: number; booking_horizon_days: number;
   booking_lead_minutes: number; open_signup: boolean; session_reminders: boolean; parent_weekly_report: boolean;
   max_recording_seconds: number; max_upload_mb: number; review_intervals: number[]; updated_at: string; sensitive: string[];
+  waitlist_offer_hours: number; makeup_enabled: boolean; makeup_expiry_days: number; makeup_granters: 'teachers_admins' | 'admins';
 }
 export interface AuditRow { id: number; at: string; action: string; actor: string | null; target: string; data: Record<string, unknown> }
 export const getSettings = () => api<Settings>('GET', 'admin/settings');
@@ -148,9 +149,11 @@ export const promoteTeacher = (id: number, reason: string, approve: boolean) =>
 export interface Discipline {
   total_sessions: number; present: number; late: number; excused: number; approved_excuses: number; pending_excuses: number;
   rejected_excuses: number; unexcused_absences: number; limit: number; suspends_at: number; suspended: boolean; status_reason: string;
-  absences: { booking: number; starts_at: string; teacher: string; attendance: string; counts: boolean; excuse: string | null }[];
+  absences: { booking: number; starts_at: string; teacher: string; attendance: string; counts: boolean; excuse: string | null; makeup?: string | null }[];
   excuses: import('@/api/endpoints').ApiExcuseRow[];
 }
+/** «منح جلسة تعويضية» for an approved excuse (excuses.review). */
+export const grantMakeup = (bookingId: number) => api<{ id: number; status: string; expires_at: string }>('POST', `admin/bookings/${bookingId}/makeup`);
 export const discipline = (id: number) => api<Discipline>('GET', `admin/users/${id}/discipline`);
 export const excuseOverride = (bookingId: number, reason: string) => api<unknown>('POST', `admin/bookings/${bookingId}/excuse-override`, { reason });
 export const adminExcuses = (status = 'pending') => api<{ results: import('@/api/endpoints').ApiExcuseRow[] }>('GET', `admin/excuses?status=${status}`);

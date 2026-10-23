@@ -83,7 +83,8 @@ await step('same slot is now taken for this student', async () => {
   await app.getByText('جارٍ تحميل المواعيد…').waitFor({ state: 'detached' });
   await app.getByRole('option').nth(bookedDay).click();
   // individual slot capacity 1 → our booked one is now shown as taken
-  await app.locator('button[disabled]').filter({ hasText: picked.replace('محجوز', '') }).first().waitFor();
+  // (still tappable in live mode: it offers the waiting list)
+  await app.getByRole('button', { name: new RegExp(`${picked.replace('محجوز', '').trim()} محجوز`) }).first().waitFor();
   await page.getByRole('button', { name: /رجوع/ }).first().click();
 });
 await step('no student cancel: «طلب اعتذار» instead; the booking stays', async () => {

@@ -625,6 +625,9 @@ function DisciplineSection({ id, onChanged }: { id: number; onChanged: () => voi
           <span style={{ flex: '1 1 200px' }}>{date(a.starts_at)} · {a.teacher} · {ATT_L[a.attendance] ?? a.attendance}{a.excuse ? ` · العذر: ${EX_L[a.excuse]}` : ''}</span>
           {a.counts && <span style={{ fontSize: 12, fontWeight: 700, color: color.dangerInk }}>يُحتسب</span>}
           {can('excuses.review') && a.excuse !== 'approved' && <button onClick={() => setOver(a.booking)} style={smallBtn()}>اعتماد العذر إداريًا</button>}
+          {a.excuse === 'approved' && (a.makeup
+            ? <span style={{ fontSize: 12, color: color.muted }}>جلسة تعويضية: {{ available: 'مُنحت', used: 'حُجزت', expired: 'انتهت', revoked: 'أُلغيت' }[a.makeup] ?? a.makeup}</span>
+            : can('excuses.review') && <button onClick={() => void A.grantMakeup(a.booking).then(() => { toast('مُنحت جلسة تعويضية'); void load(); }).catch((e) => toast(errMsg(e)))} style={smallBtn('primary')}>منح جلسة تعويضية</button>)}
         </div>
       ))}
       {over !== null && <ReasonDialog title="اعتماد العذر إداريًا" body="تصحيح إداري مُسجَّل في سجل التدقيق: يُحتسب الغياب «بعذر»، ويبقى قرار المعلم الأصلي محفوظًا. إن أصبح الطالب الموقوف تلقائيًا دون الحد فراجع الحساب وأعد تفعيله يدويًا." ok="اعتماد العذر"

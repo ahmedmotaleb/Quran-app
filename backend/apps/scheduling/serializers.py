@@ -22,7 +22,7 @@ class SlotSerializer(serializers.ModelSerializer):
         fields = ["id", "teacher", "teacher_name", "kind", "starts_at", "ends_at", "capacity", "seats_left", "circle_name"]
 
     def get_seats_left(self, o):
-        return max(0, o.capacity - getattr(o, "confirmed_count", 0))
+        return max(0, o.capacity - getattr(o, "confirmed_count", 0) - getattr(o, "held_count", 0))
 
 
 class BookingSerializer(serializers.ModelSerializer):
@@ -79,6 +79,7 @@ class BookingCreateSerializer(serializers.Serializer):
     occurrence = serializers.IntegerField()
     assignment = serializers.IntegerField(required=False, allow_null=True)
     note = serializers.CharField(required=False, allow_blank=True, max_length=500, default="")
+    makeup_credit = serializers.IntegerField(required=False, allow_null=True)  # «جلسة تعويضية» (makeup.py)
 
 
 class AttendanceSerializer(serializers.Serializer):
@@ -99,7 +100,9 @@ class TeacherOccurrenceSerializer(serializers.ModelSerializer):
 
         return [{"id": b.id, "student": b.student_id, "student_name": b.student.full_name, "attendance": b.attendance,
                  "assignment_title": b.assignment.title if b.assignment else "", "note": b.note,
-                 "excuse": excuse_out(ex) if (ex := booking_excuse(b)) else None}
+                 "excuse": excuse_out(ex) if (ex := booking_excuse(b)) else None,
+                 # «جلسة تعويضية» granted for this absence (status), or null
+                 "makeup": getattr(getattr(b, "makeup_credit", None), "status", None) if hasattr(b, "makeup_credit") else None}
                 for b in o.bookings.all() if b.status == Booking.Status.CONFIRMED]
 
 

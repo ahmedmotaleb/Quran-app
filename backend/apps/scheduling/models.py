@@ -189,3 +189,57 @@ class BookingExcuse(TimeStamped):
 
     class Meta:
         indexes = [models.Index(fields=["status", "requested_at"]), models.Index(fields=["student", "status"])]
+
+
+class WaitlistEntry(models.Model):
+    """«الانضمام إلى قائمة الانتظار» for a full session (individual or circle). Order: joined_at, then id. When a seat
+    frees, the next waiting student is offered it for a limited time; the seat is held for them (booking counts live
+    offers as taken) until they accept or the offer expires and passes to the next person (apps.scheduling.waitlist)."""
+
+    class Status(models.TextChoices):
+        WAITING = "waiting", "في الانتظار"
+        OFFERED = "offered", "عُرض عليه مقعد"
+        BOOKED = "booked", "حُجز"
+        EXPIRED = "expired", "انتهى العرض"
+        CANCELLED = "cancelled", "أُلغي"
+        CLOSED = "closed", "أُغلق"  # the session started, was cancelled, or the student became ineligible
+
+    student = models.ForeignKey(User, on_delete=models.PROTECT, related_name="waitlist_entries")
+    occurrence = models.ForeignKey(SessionOccurrence, on_delete=models.PROTECT, related_name="waitlist")
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.WAITING)
+    joined_at = models.DateTimeField(default=timezone.now)
+    offered_at = models.DateTimeField(null=True, blank=True)
+    offer_expires_at = models.DateTimeField(null=True, blank=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    booking = models.ForeignKey(Booking, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        ordering = ["joined_at", "id"]
+        constraints = [models.UniqueConstraint(fields=["student", "occurrence"], condition=models.Q(status__in=["waiting", "offered"]),
+                                               name="one_open_waitlist_entry")]
+        indexes = [models.Index(fields=["occurrence", "status", "joined_at"]), models.Index(fields=["status", "offer_expires_at"])]
+
+
+class MakeupCredit(models.Model):
+    """«جلسة تعويضية»: granted for one excused booking (never twice: one-to-one with the source booking). It lets the
+    student book one replacement session with the same teacher before it expires."""
+
+    class Status(models.TextChoices):
+        AVAILABLE = "available", "متاحة"
+        USED = "used", "استُخدمت"
+        EXPIRED = "expired", "انتهت"
+        REVOKED = "revoked", "أُلغيت"
+
+    student = models.ForeignKey(User, on_delete=models.PROTECT, related_name="makeup_credits")
+    teacher = models.ForeignKey(User, on_delete=models.PROTECT, related_name="+")
+    source_booking = models.OneToOneField(Booking, on_delete=models.PROTECT, related_name="makeup_credit")
+    issued_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name="+")
+    issued_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.AVAILABLE)
+    used_at = models.DateTimeField(null=True, blank=True)
+    used_booking = models.OneToOneField(Booking, null=True, blank=True, on_delete=models.SET_NULL, related_name="makeup_used")
+
+    class Meta:
+        ordering = ["-issued_at"]
+        indexes = [models.Index(fields=["student", "status", "expires_at"])]

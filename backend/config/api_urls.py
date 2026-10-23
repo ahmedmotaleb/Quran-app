@@ -22,6 +22,7 @@ from apps.notifications import views as notifications
 from apps.quran import views as quran
 from apps.scheduling import admin_views as sched_admin
 from apps.scheduling import views as scheduling
+from apps.scheduling import waitlist_views
 
 urlpatterns = [
     path("", include("apps.accounts.urls")),
@@ -45,6 +46,12 @@ urlpatterns = [
     path("assignments/<int:pk>", learning.AssignmentDetail.as_view()),
     path("teacher/circles", assigning.TeacherCircles.as_view()),
     path("circles/<int:pk>/assignments", assigning.CircleAssignments.as_view()),
+    path("waitlist", waitlist_views.MyWaitlist.as_view()),
+    path("waitlist/<int:pk>/accept", waitlist_views.WaitlistAccept.as_view()),
+    path("waitlist/<int:pk>/leave", waitlist_views.WaitlistLeave.as_view()),
+    path("makeup", waitlist_views.MyMakeup.as_view()),
+    path("bookings/<int:pk>/makeup", waitlist_views.GrantMakeup.as_view()),
+    path("admin/bookings/<int:pk>/makeup", waitlist_views.AdminGrantMakeup.as_view()),
     path("admin/assignments", assigning.AdminAssignmentCreate.as_view()),
     path("assignments/<int:pk>/start", learning.AssignmentStart.as_view()),
     path("assignments/<int:pk>/submissions", learning.SubmissionCreate.as_view()),

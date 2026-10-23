@@ -46,6 +46,12 @@ class AppSettings(models.Model):
     group_minutes = models.PositiveSmallIntegerField(default=60)
     booking_horizon_days = models.PositiveSmallIntegerField(default=21)
     booking_lead_minutes = models.PositiveSmallIntegerField(default=60)
+    # Waiting list (PROMPT 44): how long an offered seat is held for the next student.
+    waitlist_offer_hours = models.PositiveSmallIntegerField(default=12)
+    # Make-up sessions for approved excuses: on/off, how long a credit lasts, who may grant one.
+    makeup_enabled = models.BooleanField(default=True)
+    makeup_expiry_days = models.PositiveSmallIntegerField(default=14)
+    makeup_granters = models.CharField(max_length=16, default="teachers_admins")  # teachers_admins / admins
     open_signup = models.BooleanField(default=True)
     session_reminders = models.BooleanField(default=True)
     parent_weekly_report = models.BooleanField(default=True)

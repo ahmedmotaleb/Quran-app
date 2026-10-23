@@ -52,6 +52,32 @@ the server default zone, Africa/Cairo). Lists are paginated:
 - `phone.code_sent`, `phone.verify_failed`, `phone.verified` (masked numbers).
 - `auth.login` / `auth.login_failed` carry `via`.
 
+### Waiting list and make-up sessions (PROMPT 44)
+
+**Waiting list**
+- `GET waitlist` returns the student's entries; reading also expires lapsed offers.
+- `POST waitlist {occurrence}` joins the list. It only works when the session is full; otherwise it answers `seat_available`. One open entry per student per session.
+- `POST waitlist/{id}/accept` (Idempotency-Key) books the held seat. `POST waitlist/{id}/leave` leaves the list, or declines an offer.
+- Free seats = capacity − confirmed bookings − live offers, computed under a row lock on the session.
+- A free seat goes to the next waiting student, in join order. It is held for `waitlist_offer_hours`, never past the booking cut-off.
+- While held, the seat counts as taken for everyone else, in `book()` and in `seats_left`.
+- An expired offer moves to the next person. Suspended students, or students booked at the same time, are skipped.
+- The queue is processed on cancellation, on read and hourly (`waitlist_tick` inside `run_scheduled`), so seats freed by bulk paths are not lost.
+
+**Make-up sessions**
+- Granted for an approved excuse:
+  - by the session's teacher, via `POST bookings/{id}/makeup`, when `makeup_granters` is `teachers_admins`;
+  - by an admin with `excuses.review`, via `POST admin/bookings/{id}/makeup`.
+- At most one per absence (one-to-one with the source booking).
+- Valid for `makeup_expiry_days`. `GET makeup` lists the student's credits.
+- `POST bookings` with `makeup_credit` books one replacement session with the same teacher.
+- If the teacher or an admin cancels that booking, the credit comes back.
+- Disabled by `makeup_enabled`.
+
+**Settings:** `waitlist_offer_hours`, `makeup_enabled`, `makeup_expiry_days`, `makeup_granters`.
+
+**Audit events:** `waitlist.joined`, `waitlist.offered`, `waitlist.offer_expired`, `waitlist.accepted`, `waitlist.left`, `waitlist.closed`; `makeup.granted`, `makeup.used`, `makeup.returned`, `makeup.expired`.
+
 ### Creating tasks (PROMPT 43)
 
 - `POST assignments` (teacher): a task for one of the teacher's linked students. In the app, «+ إضافة مهمة» on the student's file opens the form with that student fixed.

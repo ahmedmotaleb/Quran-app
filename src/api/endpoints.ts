@@ -58,7 +58,8 @@ export const mfaSetup = () => api<{ secret: string; otpauth_uri: string }>('POST
 export const mfaConfirm = (otp: string) => api<{ mfa_enabled: boolean }>('POST', 'admin/mfa/confirm', { otp });
 export const me = () => api<Me>('GET', 'me');
 export const publicSettings = () => api<{ cancel_hours: number; open_signup: boolean; max_recording_seconds: number; join_minutes: number; org_name: string;
-  ayah_audio: AyahAudioCfg | null; support_whatsapp: string; show_support_button: boolean; phone_verification?: boolean }>('GET', 'settings/public');
+  ayah_audio: AyahAudioCfg | null; support_whatsapp: string; show_support_button: boolean; phone_verification?: boolean;
+  makeup?: { enabled: boolean; teachers_grant: boolean; expiry_days: number } }>('GET', 'settings/public');
 export const updateMe = (patch: Partial<Pick<Me, 'full_name' | 'timezone' | 'phone'>>) => api<Me>('PATCH', 'me', patch);
 export const saveOnboarding = (d: { level: string; daily_goal: string; preferred_days: string[]; preferred_period: string }) =>
   api<Me>('PUT', 'me/onboarding', d);
@@ -72,8 +73,21 @@ export const startAssignment = (id: number) => api<ApiAssignment>('POST', `assig
 export const teachers = () => api<Page<ApiTeacher>>('GET', 'teachers?page_size=100');
 export const slots = (teacherId: number) => api<ApiSlot[]>('GET', `teachers/${teacherId}/slots`);
 export const bookings = () => api<Page<ApiBooking>>('GET', 'bookings?page_size=100');
-export const book = (occurrence: number, key: string, assignment: number | null, note: string) =>
-  api<ApiBooking>('POST', 'bookings', { occurrence, assignment, note }, { idempotencyKey: key });
+export const book = (occurrence: number, key: string, assignment: number | null, note: string, makeup_credit: number | null = null) =>
+  api<ApiBooking>('POST', 'bookings', { occurrence, assignment, note, ...(makeup_credit ? { makeup_credit } : {}) }, { idempotencyKey: key });
+/* ---- waiting list and make-up sessions (PROMPT 44) ---- */
+export interface WaitlistRow {
+  id: number; status: 'waiting' | 'offered' | 'booked' | 'expired' | 'cancelled' | 'closed'; joined_at: string; position: number | null;
+  offer_expires_at: string | null; occurrence: { id: number; starts_at: string; ends_at: string; teacher: number; teacher_name: string; kind: string; circle_name: string | null };
+}
+export interface MakeupRow { id: number; status: 'available' | 'used' | 'expired' | 'revoked'; teacher: number; teacher_name: string; expires_at: string; issued_at: string; source_starts_at: string; used_booking: number | null }
+export const myWaitlist = () => api<{ results: WaitlistRow[] }>('GET', 'waitlist');
+export const joinWaitlist = (occurrence: number) => api<WaitlistRow>('POST', 'waitlist', { occurrence });
+export const acceptOffer = (id: number, key: string) => api<ApiBooking>('POST', `waitlist/${id}/accept`, {}, { idempotencyKey: key });
+export const leaveWaitlist = (id: number) => api<{ id: number; status: string }>('POST', `waitlist/${id}/leave`);
+export const myMakeup = () => api<{ results: MakeupRow[] }>('GET', 'makeup');
+/** «منح جلسة تعويضية» for an approved excuse (the session's teacher, when the settings allow). */
+export const grantMakeup = (bookingId: number) => api<MakeupRow>('POST', `bookings/${bookingId}/makeup`);
 /** Teacher (own session) or admin. Students cannot cancel: they send an excuse. */
 export const cancelBooking = (id: number, reason = '') => api<ApiBooking>('POST', `bookings/${id}/cancel`, { reason });
 export const requestExcuse = (id: number, reason: string) => api<ApiExcuse>('POST', `bookings/${id}/excuse`, { reason });
@@ -142,7 +156,8 @@ export const teacherStudents = () => api<Page<ApiTeacherStudent>>('GET', 'teache
 export interface ApiTeacherOcc {
   id: number; kind: 'individual' | 'group'; starts_at: string; ends_at: string; capacity: number; status: string;
   meeting_provider: string; meeting_url: string;
-  bookings: { id: number; student: number; student_name: string; attendance: string; assignment_title: string; note: string; excuse: ApiExcuse | null }[];
+  bookings: { id: number; student: number; student_name: string; attendance: string; assignment_title: string; note: string; excuse: ApiExcuse | null;
+    makeup?: 'available' | 'used' | 'expired' | 'revoked' | null }[];
 }
 export const teacherOccurrences = (days = 8) => api<ApiTeacherOcc[]>('GET', `teacher/occurrences?days=${days}`);
 export const openSlot = (starts_at: string, minutes = 45) => api<ApiTeacherOcc>('POST', 'teacher/occurrences', { starts_at, minutes });

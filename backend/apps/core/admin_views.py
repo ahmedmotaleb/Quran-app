@@ -31,13 +31,19 @@ class SettingsSerializer(serializers.ModelSerializer):
         fields = ["org_name", "support_email", "support_whatsapp", "show_support_button", "default_timezone", "cancel_hours",
                   "excuse_deadline_minutes", "join_minutes", "individual_minutes", "group_minutes", "booking_horizon_days", "booking_lead_minutes",
                   "open_signup", "session_reminders", "parent_weekly_report", "max_recording_seconds", "max_upload_mb", "review_intervals",
-                  "updated_at"]
+                  "waitlist_offer_hours", "makeup_enabled", "makeup_expiry_days", "makeup_granters", "updated_at"]
         read_only_fields = ["updated_at"]
         extra_kwargs = {"cancel_hours": {"max_value": 168}, "booking_horizon_days": {"min_value": 1, "max_value": 90},
                         "booking_lead_minutes": {"max_value": 10080}, "max_recording_seconds": {"min_value": 30, "max_value": 3600},
                         "max_upload_mb": {"min_value": 1, "max_value": 100}, "individual_minutes": {"min_value": 10, "max_value": 240},
                         "group_minutes": {"min_value": 10, "max_value": 240}, "join_minutes": {"max_value": 60},
-                        "excuse_deadline_minutes": {"max_value": 10080}}
+                        "excuse_deadline_minutes": {"max_value": 10080}, "waitlist_offer_hours": {"min_value": 1, "max_value": 72},
+                        "makeup_expiry_days": {"min_value": 1, "max_value": 90}}
+
+    def validate_makeup_granters(self, v):
+        if v not in ("teachers_admins", "admins"):
+            raise serializers.ValidationError("اختر: المعلمون والإدارة، أو الإدارة فقط.")
+        return v
 
     def validate_review_intervals(self, v):
         if v in (None, []):
@@ -103,6 +109,9 @@ class PublicSettings(APIView):
                          "max_upload_mb": max_bytes // (1024 * 1024),
                          # «تأكيد رقم الهاتف» is offered only when an SMS provider is configured.
                          "phone_verification": sms_configured(),
+                         # «جلسة تعويضية»: offered after an approved excuse; teachers may grant it unless only admins can.
+                         "makeup": {"enabled": c.makeup_enabled, "teachers_grant": c.makeup_granters == "teachers_admins",
+                                    "expiry_days": c.makeup_expiry_days},
                          # null while no licensed recitation source is approved: the Mushaf then plays no audio.
                          "ayah_audio": _ayah_audio(),
                          "app_url": settings.APP_URL, "admin_url": settings.ADMIN_URL})

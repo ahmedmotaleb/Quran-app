@@ -17,9 +17,14 @@ const NUM: [keyof Draft, string, string, number, number][] = [
   ['individual_minutes', 'مدة الجلسة الفردية', 'دقيقة', 10, 240], ['group_minutes', 'مدة الحلقة الجماعية', 'دقيقة', 10, 240],
   ['max_recording_seconds', 'أقصى مدة للتسجيل', 'ثانية (الحد الأعلى للخادم 1200)', 30, 3600], ['max_upload_mb', 'أقصى حجم للتسجيل', 'ميغابايت (الحد الأعلى للخادم 25)', 1, 100],
 ];
-const LABEL: Record<string, string> = Object.fromEntries([...NUM.map(([k, l]) => [k, l]), ['org_name', 'اسم الجهة'], ['support_email', 'بريد الدعم'],
+/** Waiting list and make-up sessions (PROMPT 44). */
+const NUM_WAIT: [keyof Draft, string, string, number, number][] = [
+  ['waitlist_offer_hours', 'مهلة عرض المقعد من قائمة الانتظار', 'ساعة', 1, 72], ['makeup_expiry_days', 'صلاحية الجلسة التعويضية', 'يومًا', 1, 90],
+];
+const LABEL: Record<string, string> = Object.fromEntries([...NUM.map(([k, l]) => [k, l]), ...NUM_WAIT.map(([k, l]) => [k, l]), ['org_name', 'اسم الجهة'], ['support_email', 'بريد الدعم'],
   ['support_whatsapp', 'واتساب الدعم'], ['show_support_button', 'زر الدعم'], ['default_timezone', 'المنطقة الزمنية'], ['open_signup', 'التسجيل المفتوح'],
-  ['session_reminders', 'تذكير الجلسات'], ['parent_weekly_report', 'تقرير أولياء الأمور']]);
+  ['session_reminders', 'تذكير الجلسات'], ['parent_weekly_report', 'تقرير أولياء الأمور'], ['makeup_enabled', 'الجلسات التعويضية'],
+  ['makeup_granters', 'من يمنح الجلسة التعويضية']]);
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return <section style={{ ...card, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}><h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{title}</h2>{children}</section>;
@@ -55,7 +60,7 @@ function SettingsForm() {
     const e: Record<string, string> = {};
     if (v.org_name.trim().length < 2) e.org_name = 'أدخل اسم الجهة';
     if (!/^\S+@\S+\.\S+$/.test(v.support_email.trim())) e.support_email = 'صيغة البريد الإلكتروني غير صحيحة';
-    for (const [k, , , min, max] of NUM) { const n = v[k] as number; if (!Number.isInteger(n) || n < min || n > max) e[k] = `أدخل رقمًا بين ${min} و ${max}`; }
+    for (const [k, , , min, max] of [...NUM, ...NUM_WAIT]) { const n = v[k] as number; if (!Number.isInteger(n) || n < min || n > max) e[k] = `أدخل رقمًا بين ${min} و ${max}`; }
     if (Object.keys(e).length) { setErr(e); return; }
     if (sensitive.length && pw === undefined) { setAskPw(true); return; }
     setBusy(true);
@@ -78,7 +83,7 @@ function SettingsForm() {
       <FieldError msg={err[k]} />
     </div>
   );
-  const sw = (k: 'open_signup' | 'session_reminders' | 'parent_weekly_report' | 'show_support_button', hint: string) => (
+  const sw = (k: 'open_signup' | 'session_reminders' | 'parent_weekly_report' | 'show_support_button' | 'makeup_enabled', hint: string) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, minHeight: 52, borderTop: `1px solid ${color.divider}`, paddingTop: 12 }}>
       <span><span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>{LABEL[k]}{saved.sensitive.includes(k) ? ' (حساس)' : ''}</span><span style={{ display: 'block', fontSize: 13, color: color.muted, marginTop: 2 }}>{hint}</span></span>
       <Switch on={v[k]} label={LABEL[k]} onToggle={() => up({ [k]: !v[k] })} />
@@ -95,6 +100,19 @@ function SettingsForm() {
       <Group title="الحجز والجلسات">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 14 }}>
           {NUM.slice(0, 6).map(([k, l, unit]) => <Num key={k} k={k} label={l} unit={unit} v={v} up={up} err={err[k]} sensitive={saved.sensitive.includes(k)} />)}
+        </div>
+      </Group>
+      <Group title="قائمة الانتظار والجلسات التعويضية">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 14 }}>
+          {NUM_WAIT.map(([k, l, unit]) => <Num key={k} k={k} label={l} unit={unit} v={v} up={up} err={err[k]} sensitive={saved.sensitive.includes(k)} />)}
+        </div>
+        {sw('makeup_enabled', 'بعد قبول عذر الغياب يمكن منح الطالب جلسة بديلة واحدة مع المعلم نفسه')}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label htmlFor="st-makeup_granters" style={labelStyle}>{LABEL.makeup_granters}</label>
+          <select id="st-makeup_granters" value={v.makeup_granters} onChange={(e) => up({ makeup_granters: e.target.value as Draft['makeup_granters'] })} style={inputStyle(err.makeup_granters)}>
+            <option value="teachers_admins">المعلمون والإدارة</option><option value="admins">الإدارة فقط</option>
+          </select>
+          <FieldError msg={err.makeup_granters} />
         </div>
       </Group>
       <Group title="التسجيلات والحسابات">
