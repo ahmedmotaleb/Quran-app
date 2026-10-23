@@ -36,7 +36,7 @@ await step(d, 'the HALQA logo and brand sit at the top of a right-hand sidebar',
 await step(d, 'the menu is vertical, grouped, in the requested order', async () => {
   const items = nav.getByRole('button');
   const names = (await items.allInnerTexts()).map((t) => t.replace(/\d+/g, '').trim());
-  const want = ['نظرة عامة', 'الطلاب', 'المعلمون', 'أولياء الأمور', 'الحلقات', 'المحاضرات', 'الاختبارات', 'الجلسات والحجوزات', 'طلبات الاعتذار', 'التقارير', 'الإدارة والصلاحيات', 'الإعدادات'];
+  const want = ['نظرة عامة', 'الطلاب', 'المعلمون', 'أولياء الأمور', 'الحلقات', 'المحاضرات', 'الاختبارات', 'الجلسات والحجوزات', 'طلبات الاعتذار', 'طلبات الدعم', 'التقارير', 'الإدارة والصلاحيات', 'الإعدادات'];
   if (JSON.stringify(names) !== JSON.stringify(want)) throw new Error(names.join(' | '));
   const boxes = await Promise.all((await items.all()).map((x) => x.boundingBox()));
   for (let i = 1; i < boxes.length; i++) if (Math.abs(boxes[i].x - boxes[0].x) > 1 || boxes[i].y <= boxes[i - 1].y) throw new Error('not one item per row');

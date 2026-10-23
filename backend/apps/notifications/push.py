@@ -39,6 +39,7 @@ GENERIC = [
     ("makeup", ("الحلقة", "مُنحت لك جلسة تعويضية.")),
     ("circle", ("الحلقة", "تحديث على حلقتك.")),
     ("admin_message", ("الحلقة", "رسالة جديدة من إدارة الحلقة.")),
+    ("support", ("الحلقة", "تحديث على طلب الدعم.")),
 ]
 
 # kind prefix → preference category («الإشعارات» in حسابي). Kinds not listed (attendance warnings, suspension, excuse

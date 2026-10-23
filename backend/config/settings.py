@@ -96,6 +96,7 @@ INSTALLED_APPS = [
     "apps.scheduling",
     "apps.assessments",
     "apps.notifications",
+    "apps.support",
 ]
 
 MIDDLEWARE = [
@@ -214,6 +215,7 @@ REST_FRAMEWORK = {
         "booking": env("THROTTLE_BOOKING", "30/min"),
         "upload": env("THROTTLE_UPLOAD", "20/hour"),
         "quran_audio": env("THROTTLE_QURAN_AUDIO", "120/min"),
+        "support": env("THROTTLE_SUPPORT", "20/hour"),  # new tickets and replies, per user
     },
     "EXCEPTION_HANDLER": "apps.core.exceptions.api_exception_handler",
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],

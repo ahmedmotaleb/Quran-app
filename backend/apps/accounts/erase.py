@@ -110,6 +110,12 @@ def _anonymize(u: User, actor) -> int:
         status=Booking.Status.CANCELLED, cancelled_at=now, cancelled_by=actor, cancel_reason="حُذف الحساب", updated_at=now)
     Invitation.objects.filter(created_by=u, revoked_at__isnull=True, uses=0).update(
         revoked_at=now, revoke_reason="revoked", updated_at=now)
+    # Support tickets stay for the record, but what the person wrote is removed (their screenshots went above).
+    from apps.support.models import Ticket, TicketMessage
+
+    TicketMessage.objects.filter(author=u).update(body="(حُذف مع الحساب)")
+    Ticket.objects.filter(requester=u).update(subject="(حُذف مع الحساب)", updated_at=now)
+    Ticket.objects.filter(requester=u).exclude(status=Ticket.Status.CLOSED).update(status=Ticket.Status.CLOSED, closed_at=now)
     return media
 
 
