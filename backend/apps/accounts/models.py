@@ -68,6 +68,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     setup_email_status = models.CharField(max_length=8, blank=True, default="")  # "" / sent / failed
     setup_email_last_at = models.DateTimeField(null=True, blank=True)
     setup_email_count = models.PositiveSmallIntegerField(default=0)
+    # «الإشعارات» switches (tasks / sessions / feedback / news): false = no phone push for that category (the in-app
+    # notification is still kept). Account and attendance notices are always pushed (apps.notifications.push).
+    notify_prefs = models.JSONField(default=dict, blank=True)
     is_active = models.BooleanField(default=True)  # False only for closed accounts; suspension uses `status`.
     # Why the current status was set (shown to admins), e.g. the automatic absence suspension.
     status_reason = models.CharField(max_length=200, blank=True)

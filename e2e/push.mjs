@@ -44,6 +44,16 @@ await step('Account explains push honestly; nothing is requested on its own', as
   if (prompted) throw new Error('a prompt appeared without a tap');
 });
 await page.screenshot({ path: out + '/push-account.png' });
+await step('the «الإشعارات» switches are saved on the server (push follows them)', async () => {
+  const sw = app.getByRole('switch', { name: 'تذكير بالواجبات' });
+  const before = await sw.getAttribute('aria-checked');
+  await sw.click();
+  await page.waitForTimeout(800);
+  await page.reload(); await app.getByText('السلام عليكم، يوسف').waitFor();
+  await page.getByRole('navigation').getByRole('button', { exact: true, name: 'حسابي' }).click();
+  if (await app.getByRole('switch', { name: 'تذكير بالواجبات' }).getAttribute('aria-checked') === before) throw new Error('not persisted');
+  await app.getByRole('switch', { name: 'تذكير بالواجبات' }).click(); await page.waitForTimeout(500); // restore
+});
 await step('a push message shows a generic RTL notification that opens the app', async () => {
   await page.reload(); await page.waitForFunction(() => !!navigator.serviceWorker.controller);
   const cdp = await ctx.newCDPSession(page);

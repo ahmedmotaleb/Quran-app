@@ -54,10 +54,11 @@ export default function Account() {
       )}
       <section style={{ ...card, padding: '4px 16px' }}>
         <h2 style={{ margin: '12px 0 4px', fontSize: 14, color: color.muted, fontWeight: 700 }}>الإشعارات</h2>
+        {LIVE && <p style={{ margin: '0 0 4px', fontSize: 12, color: color.muted }}>تتحكم في إشعارات الجوال لكل نوع. تنبيهات الحساب والحضور تصل دائمًا، وتبقى كل الإشعارات داخل التطبيق.</p>}
         {NOTIFS.map(([k, l]) => (
           <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 52, borderBottom: `1px solid ${color.divider}` }}>
             <span style={{ fontSize: 15 }}>{l}</span>
-            <Switch on={s.notif[k]} label={l} onToggle={() => up('notif', { [k]: !s.notif[k] })} />
+            <Switch on={s.notif[k]} label={l} onToggle={() => setNotif(k, !s.notif[k])} />
           </div>
         ))}
       </section>
@@ -143,6 +144,13 @@ function PhoneRow() {
       </form>}
     </section>
   );
+}
+
+/** «الإشعارات»: saved on the server in live mode, where phone notifications follow it (account notices always arrive). */
+function setNotif(k: string, on: boolean) {
+  const prev = useApp.getState().notif;
+  up('notif', { [k]: on });
+  if (LIVE) E.updateMe({ notify_prefs: { [k]: on } }).catch(() => { up('notif', prev); toast('تعذّر حفظ إعداد الإشعارات', 'alert'); });
 }
 
 /** Offers to install the PWA on the home screen; hidden when already installed or unsupported. */

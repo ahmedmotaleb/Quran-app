@@ -71,3 +71,49 @@ def test_invalid_subscriptions_refused_and_shared_device_moves(world, keys):
     client_for(world.s2).post("/api/v1/push/subscriptions", SUB, format="json")  # same browser, another account signs in
     assert PushSubscription.objects.get(endpoint=SUB["endpoint"]).user_id == world.s2.id
     assert client_for(world.s1).delete("/api/v1/push/subscriptions", SUB, format="json").json() == {"removed": 0}
+
+
+def test_preferences_mute_a_category_but_never_account_notices(world, keys, monkeypatch):
+    fake = FakePush(monkeypatch)
+    c = client_for(world.s1)
+    c.post("/api/v1/push/subscriptions", SUB, format="json")
+    r = c.patch("/api/v1/me", {"notify_prefs": {"tasks": False}}, format="json")
+    assert r.status_code == 200 and r.json()["notify_prefs"] == {"tasks": False}
+    assert c.patch("/api/v1/me", {"notify_prefs": {"tasks": "no"}}, format="json").status_code == 400
+    assert c.patch("/api/v1/me", {"notify_prefs": {"grades": False}}, format="json").status_code == 400
+    c.patch("/api/v1/me", {"notify_prefs": {"news": False}}, format="json")  # merged, tasks stays off
+    world.s1.refresh_from_db()
+    assert world.s1.notify_prefs == {"tasks": False, "news": False}
+    from apps.notifications.models import Notification
+
+    notify(world.s1, "assignment_new", "x", dedupe="p1")  # muted: kept in the app, not pushed
+    assert fake.sent == [] and Notification.objects.filter(recipient=world.s1, kind="assignment_new").exists()
+    notify(world.s1, "session_reminder", "x", dedupe="p2")
+    notify(world.s1, "absence_warning", "x", dedupe="p3")  # account notice: always pushed
+    assert [p["body"] for _, p in fake.sent] == ["تذكير بجلسة قادمة.", "تنبيه بشأن الحضور."]
+
+
+def test_every_kind_in_use_has_generic_text_and_no_private_details(world, keys, monkeypatch):
+    import re
+    from pathlib import Path
+
+    from apps.notifications.push import FALLBACK, payload_for
+
+    root = Path(__file__).resolve().parents[1] / "apps"
+    kinds = set()
+    for f in root.rglob("*.py"):
+        kinds |= set(re.findall(r'(?:notify|after_commit)\([\w.]+,\s*"([a-z_]+)"', f.read_text(encoding="utf-8")))
+    assert {"waitlist_offer", "makeup_granted", "excuse_approved", "weekly_report"} <= kinds
+    for k in kinds:
+        p = payload_for(k, "/x")
+        assert set(p) == {"title", "body", "url", "tag"}, k
+        assert p["body"] != FALLBACK[1], f"{k} has no specific generic text"
+
+
+def test_logout_removes_this_devices_subscription(world, keys):
+    c = client_for(world.s1)
+    c.post("/api/v1/push/subscriptions", SUB, format="json")
+    other = {**SUB, "endpoint": "https://push.example.test/other"}
+    c.post("/api/v1/push/subscriptions", other, format="json")
+    assert c.post("/api/v1/auth/logout", {"push_endpoint": SUB["endpoint"]}, format="json").status_code == 204
+    assert list(PushSubscription.objects.values_list("endpoint", flat=True)) == [other["endpoint"]]

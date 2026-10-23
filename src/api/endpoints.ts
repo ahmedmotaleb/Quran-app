@@ -8,6 +8,7 @@ export type ApiRole = 'student' | 'teacher' | 'parent' | 'admin';
 export interface Me {
   id: number; email: string; full_name: string; role: ApiRole; status: string; timezone: string; phone: string;
   mfa_enabled: boolean; mfa_required?: boolean; level: string; daily_goal: string; phone_verified?: boolean; teacher_approved?: boolean | null;
+  /** «الإشعارات»: false = no phone push for that category (missing = on). */ notify_prefs?: Partial<Record<'tasks' | 'sessions' | 'feedback' | 'news', boolean>>;
   /** Admins only: access level, preset and the permissions the server grants (null for everyone else). */
   admin_access?: { level: string; preset: string; permissions: string[] } | null;
 }
@@ -47,7 +48,8 @@ export interface ApiExcuseRow extends ApiExcuse {
 export const login = (identifier: string, password: string) => api<LoginResult>('POST', 'auth/login', { identifier, password, client: 'web' });
 export const register = (full_name: string, email: string, password: string, timezone: string) =>
   api<LoginResult>('POST', 'auth/register', { full_name, email, password, client: 'web', timezone });
-export const logout = () => api<null>('POST', 'auth/logout');
+/** `push_endpoint`: this device's push subscription ends with the session (shared phones). */
+export const logout = (push_endpoint = '') => api<null>('POST', 'auth/logout', push_endpoint ? { push_endpoint } : undefined);
 // Admin portal (separate sign-in; the server rejects non-admin accounts).
 export const adminLogin = (identifier: string, password: string, otp: string, trust_device = false) =>
   api<LoginResult>('POST', 'admin/auth/login', { identifier, password, otp, client: 'web', trust_device });
@@ -60,7 +62,7 @@ export const me = () => api<Me>('GET', 'me');
 export const publicSettings = () => api<{ cancel_hours: number; open_signup: boolean; max_recording_seconds: number; join_minutes: number; org_name: string;
   ayah_audio: AyahAudioCfg | null; support_whatsapp: string; show_support_button: boolean; phone_verification?: boolean;
   makeup?: { enabled: boolean; teachers_grant: boolean; expiry_days: number } }>('GET', 'settings/public');
-export const updateMe = (patch: Partial<Pick<Me, 'full_name' | 'timezone' | 'phone'>>) => api<Me>('PATCH', 'me', patch);
+export const updateMe = (patch: Partial<Pick<Me, 'full_name' | 'timezone' | 'phone' | 'notify_prefs'>>) => api<Me>('PATCH', 'me', patch);
 export const saveOnboarding = (d: { level: string; daily_goal: string; preferred_days: string[]; preferred_period: string }) =>
   api<Me>('PUT', 'me/onboarding', d);
 export const forgot = (email: string) => api<{ message: string }>('POST', 'auth/password/forgot', { email });

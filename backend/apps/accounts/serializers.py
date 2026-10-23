@@ -30,7 +30,7 @@ class MeSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "phone_verified", "mfa_enabled", "mfa_required",
-                  "level", "daily_goal", "date_joined", "admin_access", "teacher_approved"]
+                  "level", "daily_goal", "date_joined", "admin_access", "teacher_approved", "notify_prefs"]
         # Only the name, time zone and contact phone change here. Role, status, email and two-step verification have
         # their own audited flows (a misplaced list let `PATCH me` change them on 22–23 Oct; test_me_protected_fields).
         read_only_fields = ["id", "email", "role", "status", "mfa_enabled", "date_joined"]
@@ -43,6 +43,13 @@ class MeSerializer(serializers.ModelSerializer):
 
     def get_phone_verified(self, u) -> bool:
         return bool(u.phone_verified_at and u.phone_e164)
+
+    def validate_notify_prefs(self, v):
+        from apps.notifications.push import PREF_KEYS
+
+        if not isinstance(v, dict) or any(k not in PREF_KEYS or not isinstance(x, bool) for k, x in v.items()):
+            raise serializers.ValidationError("إعدادات إشعارات غير صالحة.")
+        return {**(self.instance.notify_prefs if self.instance else {}), **v}
 
     def get_teacher_approved(self, u):
         """Teachers only: approved by an admin (visible to students). None for other roles."""
