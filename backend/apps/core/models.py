@@ -55,6 +55,10 @@ class AppSettings(models.Model):
     open_signup = models.BooleanField(default=True)
     session_reminders = models.BooleanField(default=True)
     parent_weekly_report = models.BooleanField(default=True)
+    # When the weekly parent report goes out (local time in default_timezone) and whether it is also emailed.
+    parent_report_weekday = models.PositiveSmallIntegerField(default=4)  # Monday = 0 … Friday = 4
+    parent_report_hour = models.PositiveSmallIntegerField(default=18)
+    parent_report_email = models.BooleanField(default=False)
     max_recording_seconds = models.PositiveSmallIntegerField(default=900)
     max_upload_mb = models.PositiveSmallIntegerField(default=25)
     # Spaced-repetition intervals in days (product defaults, not a pedagogical guarantee).

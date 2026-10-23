@@ -24,7 +24,9 @@ const NUM_WAIT: [keyof Draft, string, string, number, number][] = [
 const LABEL: Record<string, string> = Object.fromEntries([...NUM.map(([k, l]) => [k, l]), ...NUM_WAIT.map(([k, l]) => [k, l]), ['org_name', 'اسم الجهة'], ['support_email', 'بريد الدعم'],
   ['support_whatsapp', 'واتساب الدعم'], ['show_support_button', 'زر الدعم'], ['default_timezone', 'المنطقة الزمنية'], ['open_signup', 'التسجيل المفتوح'],
   ['session_reminders', 'تذكير الجلسات'], ['parent_weekly_report', 'تقرير أولياء الأمور'], ['makeup_enabled', 'الجلسات التعويضية'],
-  ['makeup_granters', 'من يمنح الجلسة التعويضية']]);
+  ['makeup_granters', 'من يمنح الجلسة التعويضية'], ['parent_report_weekday', 'يوم تقرير أولياء الأمور'], ['parent_report_hour', 'ساعة تقرير أولياء الأمور'],
+  ['parent_report_email', 'إرسال التقرير بالبريد أيضًا']]);
+const WEEKDAYS = ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return <section style={{ ...card, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}><h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{title}</h2>{children}</section>;
@@ -83,7 +85,7 @@ function SettingsForm() {
       <FieldError msg={err[k]} />
     </div>
   );
-  const sw = (k: 'open_signup' | 'session_reminders' | 'parent_weekly_report' | 'show_support_button' | 'makeup_enabled', hint: string) => (
+  const sw = (k: 'open_signup' | 'session_reminders' | 'parent_weekly_report' | 'show_support_button' | 'makeup_enabled' | 'parent_report_email', hint: string) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, minHeight: 52, borderTop: `1px solid ${color.divider}`, paddingTop: 12 }}>
       <span><span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>{LABEL[k]}{saved.sensitive.includes(k) ? ' (حساس)' : ''}</span><span style={{ display: 'block', fontSize: 13, color: color.muted, marginTop: 2 }}>{hint}</span></span>
       <Switch on={v[k]} label={LABEL[k]} onToggle={() => up({ [k]: !v[k] })} />
@@ -122,7 +124,24 @@ function SettingsForm() {
         <Intervals v={v.review_intervals} onChange={(x) => up({ review_intervals: x })} err={err.review_intervals} />
         {sw('open_signup', 'يسمح لأي شخص بإنشاء حساب طالب من التطبيق')}
         {sw('session_reminders', 'تذكير الطالب والمعلم قبل الجلسة (يُفعَّل عند ربط الإشعارات)')}
-        {sw('parent_weekly_report', 'ملخص أسبوعي داخل التطبيق لكل ولي أمر مساء الجمعة (بتوقيت القاهرة)')}
+        {sw('parent_weekly_report', 'ملخص أسبوعي داخل التطبيق لكل ولي أمر في اليوم والساعة المحددين (بالمنطقة الزمنية الافتراضية)')}
+        {v.parent_weekly_report && <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label htmlFor="st-parent_report_weekday" style={labelStyle}>{LABEL.parent_report_weekday}</label>
+              <select id="st-parent_report_weekday" value={v.parent_report_weekday} onChange={(e) => up({ parent_report_weekday: Number(e.target.value) })} style={inputStyle(err.parent_report_weekday)}>
+                {WEEKDAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label htmlFor="st-parent_report_hour" style={labelStyle}>{LABEL.parent_report_hour}</label>
+              <select id="st-parent_report_hour" value={v.parent_report_hour} onChange={(e) => up({ parent_report_hour: Number(e.target.value) })} style={inputStyle(err.parent_report_hour)}>
+                {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
+              </select>
+            </div>
+          </div>
+          {sw('parent_report_email', 'نسخة بالبريد بالأرقام نفسها (دون ملاحظات المعلم)')}
+        </>}
       </Group>
       {err.form && <FieldError msg={err.form} />}
       {can('settings.manage') && <div style={{ position: 'sticky', bottom: 0, background: color.ivory, padding: '12px 0', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', borderTop: `1px solid ${color.divider}` }}>

@@ -244,8 +244,57 @@ def weekly_summary(parent) -> dict:
                     "submissions": p["practice"]["submissions"], "minutes": p["practice"]["minutes"],
                     "sessions": p["attendance"]["sessions"], "attendance_rate": p["attendance"]["rate"],
                     "reviews_overdue": p["review"]["overdue"], "assignments_overdue": p["assignments"]["overdue"],
-                    "latest_feedback": p["latest_feedback"] and {k2: p["latest_feedback"][k2] for k2 in ("date", "assignment", "decision", "next_step")}})
-    return {"week": {"from": start.isoformat(), "to": end.isoformat()}, "children": out}
+                    # Teacher feedback: decision and the next step only (never the free-text comment or audio).
+                    "latest_feedback": p["latest_feedback"] and {k2: p["latest_feedback"][k2] for k2 in ("date", "assignment", "decision", "next_step")},
+                    **_week_extras(k, start, end, tz, p)})
+    return {"week": {"from": start.isoformat(), "to": end.isoformat()}, "children": out,
+            "definitions": WEEKLY_DEFINITIONS}
+
+
+# Shown with the report so every number is explained (no composite score).
+WEEKLY_DEFINITIONS = {
+    "accepted_ayahs_total": "آيات حفظ قبلها المعلم خلال الأيام السبعة.",
+    "reviews_completed": "مهام مراجعة قيّمها المعلم خلال الأيام السبعة.",
+    "attendance_rate": "(حضر + متأخر) ÷ (حضر + متأخر + غاب). الغياب بعذر لا يدخل في النسبة.",
+    "absences": "غياب بعذر مقبول، وغياب بدون عذر (يُحتسب في قاعدة الإيقاف).",
+    "mistakes": "نقاط المراجعة التي سجّلها المعلم هذا الأسبوع مقارنة بالأسبوع السابق، والمفتوح منها حتى الآن.",
+    "upcoming": "الجلسات المؤكدة في الأيام السبعة القادمة.",
+    "targets": "المهام المفتوحة المستحقة في الأيام السبعة القادمة.",
+}
+
+
+def _week_extras(k, start, end, tz, p) -> dict:
+    """The rest of the weekly report: reviews, excused/unexcused absences, mistake trend, next week's sessions and targets."""
+    from apps.scheduling import excuses
+    from apps.scheduling.models import Booking, BookingExcuse
+
+    from .models import Correction
+
+    t0 = datetime.combine(start, time.min, tz)
+    t1 = datetime.combine(end + timedelta(days=1), time.min, tz)
+    now = timezone.now()
+    week_bk = Booking.objects.filter(student=k, status=Booking.Status.CONFIRMED, occurrence__starts_at__gte=t0, occurrence__starts_at__lt=t1)
+    approved = BookingExcuse.objects.filter(booking__in=week_bk, status=BookingExcuse.Status.APPROVED).count()
+    unexcused = week_bk.filter(excuses.unexcused_q()).count()
+    new_now = Correction.objects.filter(student=k, created_at__gte=t0, created_at__lt=t1)
+    new_before = Correction.objects.filter(student=k, created_at__gte=t0 - timedelta(days=7), created_at__lt=t0).count()
+    top = list(new_now.values("category").annotate(n=Count("id")).order_by("-n", "category")[:2])
+    labels = dict(Correction.Category.choices)
+    upcoming = (Booking.objects.filter(student=k, status=Booking.Status.CONFIRMED, occurrence__status="scheduled",
+                                       occurrence__starts_at__gte=now, occurrence__starts_at__lt=now + timedelta(days=7))
+                .select_related("occurrence__teacher").order_by("occurrence__starts_at"))
+    targets = (Assignment.objects.filter(student=k, due_at__gte=now, due_at__lt=now + timedelta(days=7))
+               .exclude(status__in=[AssignmentStatus.ACCEPTED, AssignmentStatus.SUBMITTED]).order_by("due_at"))
+    return {
+        "reviews_completed": p["review"]["completed"],
+        "absences": {"excused_approved": approved, "unexcused": unexcused},
+        "mistakes": {"new_this_week": new_now.count(), "new_previous_week": new_before,
+                     "open": Correction.objects.filter(student=k).exclude(status=Correction.Status.CORRECTED).count(),
+                     "top_categories": [{"category": t["category"], "label": labels.get(t["category"], t["category"]), "count": t["n"]} for t in top]},
+        "upcoming_sessions": [{"starts_at": b.occurrence.starts_at.isoformat(), "teacher": b.occurrence.teacher.full_name} for b in upcoming[:5]],
+        "targets": [{"title": a.title, "kind": a.kind, "surah": a.surah, "ayah_from": a.ayah_from, "ayah_to": a.ayah_to,
+                     "due_at": a.due_at.isoformat()} for a in targets[:5]],
+    }
 
 
 class ParentWeeklySummary(APIView):

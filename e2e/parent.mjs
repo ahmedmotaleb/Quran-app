@@ -30,6 +30,11 @@ await step('Sara: her own task only', async () => {
   await app.getByText('حفظ سورة الطارق').waitFor();
   if (await app.getByText('تطبيق أحكام النون الساكنة والتنوين').count()) throw new Error("brother's task leaked into Sara's view");
 });
+await step('«ملخص الأسبوع» per child with explained numbers and no private details', async () => {
+  const wk = app.getByRole('region', { name: 'ملخص الأسبوع' });
+  await wk.getByText('مراجعات مكتملة').waitFor(); await wk.getByText('الغياب').waitFor(); await wk.getByText('جلسات الأسبوع القادم').waitFor();
+  await wk.getByText('أرقام فعلية فقط، بلا درجة مجمّعة.', { exact: false }).waitFor();
+});
 await step('no audio requested by parent app', async () => { if (audio.length) throw new Error(audio.join(',')); });
 if (process.env.REVOKE_CMD) {
   execSync(process.env.REVOKE_CMD, { stdio: 'ignore' });
