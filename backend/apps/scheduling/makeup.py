@@ -26,9 +26,9 @@ M = MakeupCredit.Status
 
 def can_grant(user, booking: Booking, cfg=None) -> bool:
     cfg = cfg or AppSettings.load()
-    if user.role == Role.ADMIN:
-        from apps.accounts.admin_access import has
+    from apps.accounts.admin_access import acts_as_admin, has
 
+    if acts_as_admin(user):
         return has(user, "excuses.review")
     return cfg.makeup_granters == "teachers_admins" and user.role == Role.TEACHER and booking.occurrence.teacher_id == user.pk
 
@@ -39,7 +39,9 @@ def grant(booking_id: int, by, request=None) -> MakeupCredit:
         raise ApiError("makeup_disabled", "الجلسات التعويضية غير مفعّلة في الإعدادات.", 409)
     with transaction.atomic():
         b = Booking.objects.select_for_update(of=("self",)).select_related("occurrence").filter(pk=booking_id).first()
-        if b is None or not (by.role == Role.ADMIN or b.occurrence.teacher_id == by.pk):
+        from apps.accounts.admin_access import acts_as_admin
+
+        if b is None or not (acts_as_admin(by) or b.occurrence.teacher_id == by.pk):
             raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
         if not can_grant(by, b, cfg):
             raise ApiError("permission_denied", "منح الجلسات التعويضية متاح للإدارة فقط حسب الإعدادات.", 403)

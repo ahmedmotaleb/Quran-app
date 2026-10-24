@@ -316,6 +316,13 @@ admin's next request.
 **`POST admin/admins/{id}/status`** `{status: suspended|active, reason, otp}` suspends or reactivates an admin.
 Suspending ends their sessions.
 
+**Teacher + admin on one account** (owner request, 24 Oct 2026). Admin access comes from `AdminProfile`, never from the role (`admin_access.has_admin_access`): an active account whose profile is active (`AdminProfile.is_active`), or a traditional `role=admin` account (no profile → no permissions). A teacher keeps `role=teacher` and is an admin **only** through the admin portal's own session (`X-Halqa-Portal: admin` cookie session from `POST admin/auth/login`, two-step verification always required for them); the teacher app's session/token never passes `IsAdminRole`, and the native admin login refuses them. In the portal context shared code uses `acts_as_admin(user)`; `me.admin_access` carries `active` and `teacher_admin`.
+- **`GET admin/admins/teacher-candidates?q=`** (`admins.manage`): active teachers without admin access, by name/email/phone.
+- **`POST admin/admins/grant-teacher-access`** `{teacher, level, preset, permissions?, otp}` (`admins.manage`, fresh MFA, owner level by owners only, never beyond the granter's own permissions): adds the profile; nothing of the teacher's changes. Audit `admin.access_granted_to_teacher`; the teacher is notified (`admin_access_granted`, no password link).
+- **`POST admin/admins/{id}/access`** `{action: suspend|reactivate|remove, reason, otp}` (teacher-admins only; reason ≥ 3 except reactivate; never oneself; owners by owners; never the last active owner): pauses (`is_active=false`), resumes or deletes the profile. The portal session is refused from the next request and trusted admin browsers are forgotten; the teacher app is untouched. Audit `admin.access_suspended / access_reactivated / access_removed_from_teacher`.
+- `GET admin/admins` lists teacher-admins too (`teacher_admin`, `access_active`). `POST admin/admins/{id}/status` refuses them (`teacher_admin` 409). Inviting an email that belongs to a teacher → `teacher_exists` 409 «هذا البريد يخص معلمًا موجودًا. يمكنك منحه صلاحيات الإدارة من حسابه الحالي.» (`fields.user`); nothing is emailed.
+- People pages: suspending/archiving a teacher-admin's account needs `admins.manage` (`admin_holder`), and permanent delete is refused until admin access is removed.
+
 Rules, enforced on the server:
 - Nobody changes their own access.
 - Only an owner creates, edits or suspends an owner.

@@ -68,7 +68,9 @@ class MeSerializer(serializers.ModelSerializer):
     def get_mfa_required(self, u) -> bool:
         from .admin_access import mfa_required
 
-        return u.role == "admin" and mfa_required(u)
+        from .admin_access import has_admin_access
+
+        return has_admin_access(u) and mfa_required(u)
 
     def get_admin_access(self, u):
         from .admin_access import access_out

@@ -102,5 +102,11 @@ class AdminPortalSessionAuthentication(SessionAuthentication):
         # A password change (or reset) ends the session, as for Django's own sessions.
         if user is None or not constant_time_compare(h, user.get_session_auth_hash()) or not user.can_sign_in:
             return None
+        from .admin_access import has_admin_access, is_teacher_admin
+
+        if is_teacher_admin(user) and not has_admin_access(user):
+            s.delete()  # admin access removed or paused: the portal session ends (the teacher app is not affected)
+            return None
         self.enforce_csrf(request)
+        user._admin_ctx = has_admin_access(user)  # requests made in the portal carry admin authority (acts_as_admin)
         return user, None

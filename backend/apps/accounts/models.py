@@ -285,6 +285,9 @@ class AdminProfile(models.Model):
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     created_at = models.DateTimeField(default=dj_tz.now)
     updated_at = models.DateTimeField(auto_now=True)
+    # «تعطيل صلاحيات الإدارة»: admin access paused; the account itself (e.g. a teacher's) stays active.
+    is_active = models.BooleanField(default=True)
+    status_reason = models.CharField(max_length=200, blank=True)
 
     def save(self, *args, **kwargs):
         from .admin_access import validate

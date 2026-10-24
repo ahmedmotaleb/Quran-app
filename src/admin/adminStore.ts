@@ -110,7 +110,8 @@ export async function adminRestore() {
   if (!LIVE) return;
   try {
     const u = await E.me();
-    if (u.role === 'admin') set({ authed: true, me: u, restoring: false });
+    // A teacher with admin access («معلم + إدارة») keeps role «teacher»; the portal session gives the admin access.
+    if (u.role === 'admin' || (u.admin_access?.teacher_admin && u.admin_access.active)) set({ authed: true, me: u, restoring: false });
     else set({ restoring: false, login: { ...get().login, errors: { email: 'أنت مسجّل الدخول بحساب ليس للإدارة. سجّل الدخول بحساب الإدارة للمتابعة.' } } });
   } catch {
     set({ restoring: false }); // 401/403: no session — show the sign-in form
@@ -147,7 +148,7 @@ export function adminLogin() {
   if (LIVE) { void adminLoginLive(); return; }
   const L = get().login; const e: Record<string, string> = {}; const em = L.email.trim().toLowerCase();
   if (!em) e.email = 'أدخل البريد الإلكتروني'; else if (!/^\S+@\S+\.\S+$/.test(em)) e.email = 'صيغة البريد الإلكتروني غير صحيحة';
-  else if (em !== ADMIN_EMAIL) e.email = 'هذا الحساب لا يملك صلاحيات الإدارة.';
+  else if (em !== ADMIN_EMAIL) e.email = 'هذا الحساب لا يملك صلاحية الدخول إلى لوحة الإدارة.';
   if (!L.pw) e.pw = 'أدخل كلمة المرور'; else if (!e.email && L.pw !== DEMO_PASSWORD) e.pw = 'كلمة المرور غير صحيحة';
   if (Object.keys(e).length) { set({ login: { ...L, errors: e } }); return; }
   set({ login: { ...L, errors: {}, loading: true } });

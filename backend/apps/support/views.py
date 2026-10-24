@@ -69,7 +69,7 @@ def person(u: User | None) -> dict | None:
 
 def msg_out(m: TicketMessage, *, staff: bool) -> dict:
     out = {"id": m.pk, "body": m.body, "created_at": m.created_at.isoformat(), "attachment": media_out(m.attachment),
-           "from_staff": m.author.role == Role.ADMIN}
+           "from_staff": m.author_id != m.ticket.requester_id}  # staff = anyone answering someone else's request
     # The requester sees «فريق الدعم», never which admin answered.
     out["author"] = person(m.author) if staff else (None if out["from_staff"] else person(m.author))
     if staff:
@@ -231,7 +231,9 @@ class AdminSupportStaff(APIView):
     admin_perm = "support.view"
 
     def get(self, request):
-        admins = User.objects.filter(role=Role.ADMIN, status="active").select_related("admin_profile").order_by("full_name")
+        from apps.accounts.admin_access import admin_users
+
+        admins = admin_users().select_related("admin_profile").order_by("full_name")
         return Response({"results": [{"id": u.pk, "name": u.full_name} for u in admins if has(u, "support.view")]})
 
 
@@ -263,7 +265,9 @@ class AdminTicketDetail(APIView):
                 a = request.data["assignee"]
                 new = None
                 if a not in (None, ""):
-                    new = User.objects.filter(pk=a, role=Role.ADMIN, status="active").first() if str(a).isdigit() else None
+                    from apps.accounts.admin_access import admin_users
+
+                    new = admin_users().filter(pk=a).first() if str(a).isdigit() else None
                     if new is None or not has(new, "support.view"):
                         raise invalid("assignee", "اختر مسؤولًا لديه صلاحية طلبات الدعم.")
                 if (new.pk if new else None) != t.assignee_id:

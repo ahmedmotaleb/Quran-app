@@ -163,8 +163,12 @@ def can_read(user, m: MediaObject) -> bool:
     if m.purpose == MediaObject.Purpose.SUPPORT_IMAGE:  # the requester (owner, above) and support staff only
         from apps.accounts.admin_access import has
 
-        return user.role == Role.ADMIN and has(user, "support.view")
-    if user.role == Role.ADMIN:  # private recordings and voice notes: submissions.view; content files: courses.view
+        from apps.accounts.admin_access import acts_as_admin
+
+        return acts_as_admin(user) and has(user, "support.view")
+    from apps.accounts.admin_access import acts_as_admin
+
+    if acts_as_admin(user):  # private recordings and voice notes: submissions.view; content files: courses.view
         from apps.accounts.admin_access import has
 
         return has(user, "courses.view" if m.purpose in (MediaObject.Purpose.LESSON_FILE, MediaObject.Purpose.COURSE_COVER)
