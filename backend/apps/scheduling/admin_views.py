@@ -326,6 +326,27 @@ class AdminExcuses(APIView):
         return Response({"results": _excuse_rows(qs)})
 
 
+class AdminExcuseReview(APIView):
+    """POST {approve: bool, response}: an admin with excuses.review decides a PENDING request (the same rules as the
+    session's teacher; first decision wins). Already-decided cases are corrected with «اعتماد العذر إداريًا» instead."""
+    admin_perm = "excuses.review"
+
+    permission_classes = [IsAdminRole]
+
+    def post(self, request, pk):
+        from . import excuses
+        from .views import _excuse_rows
+
+        approve = request.data.get("approve")
+        if not isinstance(approve, bool):
+            raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"approve": ["اختر القبول أو الرفض."]})
+        ex = excuses.review(booking_id=pk, actor=request.user, approve=approve, response=str(request.data.get("response", "")),
+                            as_admin=True, request=request)
+        from .models import BookingExcuse
+
+        return Response(_excuse_rows(BookingExcuse.objects.filter(pk=ex.pk))[0])
+
+
 class AdminExcuseOverride(APIView):
     """«اعتماد العذر إداريًا»: an audited correction (reason required); the teacher's decision stays recorded."""
     admin_perm = "attendance.manage"

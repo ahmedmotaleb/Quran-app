@@ -247,7 +247,7 @@ def test_concurrent_approve_and_reject_only_one_wins(world):
 
     def run(ok):
         try:
-            excuses.review(booking_id=b.pk, teacher=world.t1, approve=ok, response="" if ok else "سبب الرفض")
+            excuses.review(booking_id=b.pk, actor=world.t1, approve=ok, response="" if ok else "سبب الرفض")
             results.append("ok")
         except Exception as e:  # noqa: BLE001
             results.append(getattr(e, "code", type(e).__name__))
@@ -293,3 +293,108 @@ def test_people_filter_and_admin_excuse_list(world):
     assert [x["booking"] for x in pend] == [b.pk]
     assert client_for(world.t1).get("/api/v1/admin/excuses").status_code == 403
     assert User.objects.get(pk=world.s1.pk).status == AccountStatus.ACTIVE
+
+
+# ---- admin decisions on pending requests («طلبات الاعتذار» in the portal) ------------------------------------
+def admin_decide(u, b, approve, response=""):
+    return client_for(u).post(f"/api/v1/admin/bookings/{b.pk}/excuse/review", {"approve": approve, "response": response}, format="json")
+
+
+def test_admin_approves_pending_excuse(world, django_capture_on_commit_callbacks):
+    b = future_booking(world)
+    excuse(world.s1, b)
+    with django_capture_on_commit_callbacks(execute=True):
+        r = admin_decide(world.admin, b, True)
+    assert r.status_code == 200 and r.json()["status"] == "approved" and r.json()["decided_by"] == "admin"
+    b.refresh_from_db()
+    assert b.attendance == "excused"
+    ex = BookingExcuse.objects.get(booking=b)
+    assert ex.reviewed_by == world.admin and ex.teacher_status == "" and ex.decided_by_role == "admin"
+    ev = AuditEvent.objects.get(action="booking.excuse_admin_approved")
+    assert ev.data["decision"] == "approved" and ev.data["has_response"] is False and REASON not in str(ev.data)
+    assert not AuditEvent.objects.filter(action="booking.excuse_approved").exists()
+    assert "excuse_approved" in kinds(world.s1) and "excuse_child" in kinds(world.p1) and "excuse_decided" in kinds(world.t1)
+    # the teacher sees the final state; nothing is left pending for them
+    assert client_for(world.t1).get("/api/v1/teacher/excuses").json()["results"] == []
+    occ = next(x for x in client_for(world.t1).get("/api/v1/teacher/occurrences").json() if x["id"] == b.occurrence_id)
+    assert occ["bookings"][0]["excuse"]["status"] == "approved"
+    start(b)
+    assert mark(world.t1, b, "absent").json()["attendance"] == "excused" and excuses.unexcused_count(world.s1) == 0
+
+
+def test_admin_reject_requires_reason_and_does_not_mark_absent(world, django_capture_on_commit_callbacks):
+    b = future_booking(world)
+    excuse(world.s1, b)
+    r = admin_decide(world.admin, b, False, "ن")
+    assert r.status_code == 400 and r.json()["code"] == "invalid"
+    assert admin_decide(world.admin, b, "yes").status_code == 400  # approve must be a boolean
+    with django_capture_on_commit_callbacks(execute=True):
+        r = admin_decide(world.admin, b, False, "الموعد قريب جدًا")
+    assert r.status_code == 200 and r.json()["status"] == "rejected" and r.json()["admin_response"] == "الموعد قريب جدًا"
+    b.refresh_from_db()
+    assert b.attendance == "" and excuses.unexcused_count(world.s1) == 0   # not marked absent automatically
+    n = Notification.objects.get(recipient=world.s1, kind="excuse_rejected")
+    assert "رد الإدارة: الموعد قريب جدًا" in n.body
+    pn = Notification.objects.get(recipient=world.p1, kind="excuse_child")
+    assert "الموعد قريب جدًا" not in pn.title + pn.body   # the parent gets the outcome only
+    ev = AuditEvent.objects.get(action="booking.excuse_admin_rejected")
+    assert ev.data["has_response"] is True and "الموعد" not in str(ev.data)
+    # a later «غاب» now counts as unexcused
+    start(b)
+    assert mark(world.t1, b, "absent").json()["attendance"] == "absent"
+    assert excuses.unexcused_count(world.s1) == 1
+
+
+def test_admin_review_needs_permission(world):
+    from .test_admins import staff
+    b = future_booking(world)
+    excuse(world.s1, b)
+    support = staff("sup@x.test", preset="content")
+    assert admin_decide(support, b, True).status_code == 403
+    assert admin_decide(world.t1, b, True).status_code == 403
+    assert admin_decide(world.s1, b, True).status_code == 403
+    assert admin_decide(world.p1, b, True).status_code == 403
+    assert BookingExcuse.objects.get(booking=b).status == "pending"
+    assert admin_decide(staff("acad@x.test", preset="academic_manager"), b, True).status_code == 200
+
+
+def test_already_decided_and_badge_count(world):
+    b1, b2 = future_booking(world), future_booking(world, hours=72)
+    excuse(world.s1, b1)
+    excuse(world.s1, b2)
+    c = client_for(world.admin)
+    assert len(c.get("/api/v1/admin/excuses").json()["results"]) == 2
+    assert decide(world.t1, b1, True).status_code == 200            # the teacher decided first
+    r = admin_decide(world.admin, b1, False, "سبب الرفض")
+    assert r.status_code == 409 and r.json()["message"] == "تمت مراجعة هذا الاعتذار بالفعل."
+    assert admin_decide(world.admin, b2, True).status_code == 200
+    assert decide(world.t1, b2, False, "سبب").json()["code"] == "already_reviewed"
+    assert c.get("/api/v1/admin/excuses").json()["results"] == []   # the badge counts pending rows
+    done = {x["booking"]: x["decided_by"] for x in c.get("/api/v1/admin/excuses", {"status": "approved"}).json()["results"]}
+    assert done == {b1.pk: "teacher", b2.pk: "admin"}
+    assert BookingExcuse.objects.get(booking=b1).status == "approved"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_teacher_and_admin_race_only_one_wins(world):
+    b = future_booking(world)
+    excuses.request_excuse(booking_id=b.pk, student=world.s1, reason=REASON)
+    results = []
+
+    def run(kw):
+        try:
+            excuses.review(booking_id=b.pk, **kw)
+            results.append("ok")
+        except Exception as e:  # noqa: BLE001
+            results.append(getattr(e, "code", type(e).__name__))
+        finally:
+            connection.close()
+
+    ts = [threading.Thread(target=run, args=(kw,)) for kw in (
+        {"actor": world.t1, "approve": True}, {"actor": world.admin, "approve": False, "response": "سبب الرفض", "as_admin": True})]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert sorted(results) == ["already_reviewed", "ok"]
+    assert BookingExcuse.objects.get(booking=b).status in ("approved", "rejected")

@@ -142,6 +142,7 @@ urlpatterns = [
     path("admin/bookings/<int:pk>/cancel", sched_admin.AdminBookingCancel.as_view()),
     path("admin/excuses", sched_admin.AdminExcuses.as_view()),
     path("admin/bookings/<int:pk>/excuse-override", sched_admin.AdminExcuseOverride.as_view()),
+    path("admin/bookings/<int:pk>/excuse/review", sched_admin.AdminExcuseReview.as_view()),
     path("admin/users/<int:pk>/discipline", sched_admin.AdminStudentDiscipline.as_view()),
     # Admin: courses, lessons, enrollments, quizzes
     path("teacher/content", teacher_content.TeacherContent.as_view()),

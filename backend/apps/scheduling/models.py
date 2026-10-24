@@ -196,6 +196,10 @@ class BookingExcuse(TimeStamped):
     reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     teacher_status = models.CharField(max_length=10, choices=Status.choices, blank=True)  # the teacher's own decision
     teacher_response = models.CharField(max_length=500, blank=True)
+    # Who decided the pending request: "teacher" (the session's teacher) or "admin" (excuses.review). An admin's
+    # decision is kept apart from the teacher's own fields (teacher_status/teacher_response stay the teacher's).
+    decided_by_role = models.CharField(max_length=10, blank=True)
+    admin_response = models.CharField(max_length=500, blank=True)
     override_at = models.DateTimeField(null=True, blank=True)
     override_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     override_reason = models.CharField(max_length=200, blank=True)
