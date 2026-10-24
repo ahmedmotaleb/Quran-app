@@ -44,6 +44,19 @@ browser and run each row. Write ✅ or ❌, plus the device and OS version.
 
 ## Real-device findings
 
+### Android Chrome 155 — record → upload → submit PASSED (24 October 2026)
+
+Re-test on the same Android phone after the fix (Cloud Run request log, `upload-trace`, no personal data):
+
+| Time (UTC) | Status | Request | Size | Latency |
+| --- | --- | --- | --- | --- |
+| 08:38:09 | 201 | `media/recitations` | 209,472 B | 2.14 s |
+| 08:38:11 | 201 | `assignments/1/submissions` | 1,164 B | 1.13 s |
+
+One upload, one submission to a real task id, no retries or duplicate copies. Still to confirm: the teacher plays
+this recording back (owner check), and the same flow on an iPhone (installed app). The pilot blocker closes when both
+are confirmed.
+
 ### Android Chrome 155 — recitation submit FAILED (22 October 2026), fix pending device re-test
 
 What the student saw: «تعذّر رفع التسجيل. حاول مرة أخرى» / «حدث خطأ غير متوقع. حاول مرة أخرى».
