@@ -7,7 +7,7 @@ import { color, font } from '@/theme/tokens';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import { Icon } from '@/components/Icon';
 import type { ApiError } from '@/api/client';
-import { can, toast, useAdmin } from '../adminStore';
+import { can, refreshCounts, toast, useAdmin } from '../adminStore';
 import { SUR } from '@/data/demo';
 import { zonedToIso } from '@/lib/time';
 import { card } from '../AdminTables';
@@ -177,7 +177,8 @@ export default function PeopleLive({ role }: { role: A.Role }) {
         setSort={(s) => update({ sort: s })} loading={R.loading} err={R.err} retry={reload} />
       <Pager page={page} total={R.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
       <BulkBar resource="users" sel={sel} total={R.data?.count ?? 0} actions={peopleActions(role)} filter={filter} onDone={reload} exportable />
-      {open !== null && <PersonPanel id={open} onClose={() => setOpen(null)} onChanged={reload} />}
+      {open !== null && <PersonPanel id={open} onClose={() => setOpen(null)} onChanged={reload}
+        onDeleted={() => { sel.clear(); reload(); refreshCounts(); }} />}
       {importing && <StudentImport onClose={() => setImporting(false)} onDone={reload} />}
       {adding && <AddDialog role={role} onClose={() => setAdding(false)} onDone={() => { reload(); setInvKey((k) => k + 1); }} />}
     </>
@@ -299,7 +300,7 @@ function InvitationsPanel({ reloadKey }: { reloadKey: number }) {
 /* ---------------- Detail panel ---------------- */
 type Sub = { kind: 'reason'; title: string; body: string; ok: string; required?: boolean; typeWord?: string; otp?: boolean; run: (r: string, otp: string) => Promise<unknown> } | { kind: 'pick'; target: A.Role } | null;
 
-function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => void; onChanged: () => void }) {
+function PersonPanel({ id, onClose, onChanged, onDeleted }: { id: number; onClose: () => void; onChanged: () => void; onDeleted: (id: number) => void }) {
   const [u, setU] = useState<A.Person | null>(null); const [err, setErr] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ full_name: string; phone: string } | null>(null); const [editErr, setEditErr] = useState<Record<string, string | null>>({});
   const [sub, setSub] = useState<Sub>(null); const [setup, setSetup] = useState<boolean | null>(null); const [busy, setBusy] = useState(false);
@@ -324,6 +325,33 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
     finally { setBusy(false); }
   };
   const phoneEditable = !!u && can('users.view_contact') && !u.phone_verified;
+
+  /** «حذف نهائي»: first ask the server what it would do (a teacher's upcoming sessions, removed vs anonymized), then
+   *  reason + typed «حذف» + current authenticator code. A teacher with upcoming sessions gets an explicit choice. */
+  const [choice, setChoice] = useState<A.DeletePreflight | null>(null);
+  const startDelete = async () => {
+    if (!u) return;
+    setBusy(true);
+    let pre: A.DeletePreflight;
+    try { pre = await A.deletePreflight(u.id); } catch (e) { toast(errMsg(e)); setBusy(false); return; } finally { setBusy(false); }
+    if (pre.upcoming_sessions > 0) setChoice(pre); else openDelete(pre, false);
+  };
+  const openDelete = (pre: A.DeletePreflight, cancelSessions: boolean) => {
+    if (!u) return;
+    const what = pre.mode === 'removed'
+      ? 'لا نشاط لهذا الحساب، فسيُحذف بالكامل.'
+      : `تبقى سجلاته الأكاديمية (المهام والتقييمات والحضور) باسم «حساب محذوف» حتى تبقى الإحصاءات صحيحة${pre.recordings ? `، وتُحذف ${pre.recordings} تسجيلات صوتية` : ''}.`;
+    const sessions = cancelSessions ? ` ستُلغى أولًا ${pre.upcoming_sessions} جلسة قادمة ويُبلَّغ الطلاب المحجوزون.` : '';
+    setSub({ kind: 'reason', title: 'حذف الحساب نهائيًا', typeWord: 'حذف', otp: true, ok: 'حذف نهائي',
+      body: `سيُحذف حساب ${u.full_name} نهائيًا ولا يمكن التراجع: لن يستطيع الدخول أبدًا، ويُمسح الاسم والبريد والهاتف. ${what}${sessions}`,
+      run: async (r, otp) => {
+        const res = await A.bulkAction('users', { action: 'delete', ids: [u.id], reason: r, confirm: 'حذف', ...(otp ? { otp } : {}),
+          ...(cancelSessions ? { params: { cancel_sessions: true } } : {}) });
+        if (res.success !== 1) throw new Error(res.errors[0]?.message ?? 'تعذر إكمال الحذف.');
+        toast(res.mode === 'anonymized' ? 'تم حذف الحساب نهائيًا. تم حذف البيانات الشخصية مع الاحتفاظ بالسجل الأكاديمي مجهول الهوية.' : 'تم حذف الحساب نهائيًا');
+        onDeleted(u.id); onClose();
+      } });
+  };
   const reasonRun = (title: string, body: string, ok: string, done: string, run: (r: string) => Promise<unknown>, required = true) =>
     setSub({ kind: 'reason', title, body, ok, required, run: async (r) => { await run(r); toast(done); await reload(); onChanged(); } });
 
@@ -388,13 +416,7 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
             {can('users.archive') && u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('أرشفة الحساب', `لن يستطيع ${u.full_name} الدخول أو استعادة كلمة المرور. تبقى كل سجلاته محفوظة، ويمكن إعادة التفعيل لاحقًا.`, 'أرشفة الحساب', 'أُرشف الحساب', (r) => A.setPersonStatus(u.id, 'archived', r))} style={smallBtn('danger')}>أرشفة الحساب</button>}
             {can('assignments.manage') && u.role === 'student' && u.status === 'active' && <button disabled={busy} onClick={() => setTask(true)} style={smallBtn('primary')}>إضافة مهمة</button>}
             {can('users.promote_teacher') && u.role === 'student' && u.status !== 'archived' && <button disabled={busy} onClick={() => setPromote(true)} style={smallBtn()}>ترقية إلى معلم</button>}
-            {can('users.delete_permanent') && <button disabled={busy} onClick={() => setSub({ kind: 'reason', title: 'حذف الحساب نهائيًا', typeWord: 'حذف', otp: true, ok: 'حذف نهائي',
-              body: `سيُحذف حساب ${u.full_name} نهائيًا ولا يمكن التراجع: لن يستطيع الدخول أبدًا، ويُمسح الاسم والبريد والهاتف والتسجيلات الصوتية. تبقى سجلات المعلمين (المهام والتقييمات والحضور) باسم «حساب محذوف» حتى تبقى الإحصاءات صحيحة. إن لم يكن للحساب أي نشاط يُحذف بالكامل.`,
-              run: async (r, otp) => {
-                const res = await A.bulkAction('users', { action: 'delete', ids: [u.id], reason: r, confirm: 'حذف', ...(otp ? { otp } : {}) });
-                if (res.success !== 1) throw new Error(res.errors[0]?.message ?? 'تعذّر الحذف.');
-                toast('حُذف الحساب نهائيًا'); onChanged(); onClose();
-              } })} style={smallBtn('danger')}>حذف نهائي</button>}
+            {can('users.delete_permanent') && <button disabled={busy} onClick={() => void startDelete()} style={smallBtn('danger')}>حذف نهائي</button>}
             {can('users.suspend') && u.status !== 'suspended' && u.status !== 'archived' && <button disabled={busy} onClick={() => reasonRun('إيقاف الحساب', `سيُمنع ${u.full_name} من الدخول فورًا حتى تعيد تفعيله.`, 'إيقاف الحساب', 'تم إيقاف الحساب', (r) => A.setPersonStatus(u.id, 'suspended', r))} style={smallBtn('danger')}>إيقاف الحساب</button>}
           </div>
         ))}
@@ -435,6 +457,12 @@ function PersonPanel({ id, onClose, onChanged }: { id: number; onClose: () => vo
           {can('parents.link_child') && <button disabled={busy} onClick={() => setSub({ kind: 'pick', target: 'student' })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>ربط بابن</button>}
         </>))}
       </>}
+      {choice && <Modal title="حذف المعلم" onClose={() => setChoice(null)}>
+        <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>لدى هذا المعلم {choice.upcoming_sessions} جلسات قادمة.</p>
+        <p style={{ margin: 0, fontSize: 14, color: color.body }}>{choice.upcoming_bookings ? `فيها ${choice.upcoming_bookings} حجزًا لطلاب سيصلهم إشعار بالإلغاء. ` : ''}الجلسات السابقة وسجل الحضور تبقى كما هي.</p>
+        <button onClick={() => { const c = choice; setChoice(null); openDelete(c, true); }} style={{ ...smallBtn('danger'), minHeight: 48 }}>إلغاء الجلسات القادمة ثم حذف الحساب</button>
+        <button onClick={() => setChoice(null)} style={{ ...smallBtn(), minHeight: 48 }}>إلغاء العملية</button>
+      </Modal>}
       {sub?.kind === 'reason' && <ReasonDialog title={sub.title} body={sub.body} ok={sub.ok} required={sub.required} typeWord={sub.typeWord} otp={sub.otp} onClose={() => setSub(null)} run={async (r, otp) => { await sub.run(r, otp); }} />}
       {task && u && <TaskDialog u={u} onClose={() => setTask(false)} />}
       {promote && u && <PromoteDialog id={u.id} name={u.full_name} onClose={() => setPromote(false)}

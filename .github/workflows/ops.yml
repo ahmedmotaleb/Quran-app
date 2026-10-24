@@ -250,7 +250,7 @@ jobs:
           SINCE=$(date -u -d "$HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)
           gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.requestUrl:"bulk-action" AND timestamp>="'$SINCE'"' \
             --project "$P" --limit 100 --format json > /tmp/req.json || echo "::warning::request log read failed"
-          gcloud logging read 'resource.type="cloud_run_revision" AND severity>=WARNING AND (jsonPayload.request:"bulk-action" OR jsonPayload.msg:"bulk-action" OR jsonPayload.msg:"erase" OR jsonPayload.msg:"media_delete" OR jsonPayload.msg:"user_delete") AND timestamp>="'$SINCE'"' \
+          gcloud logging read 'resource.type="cloud_run_revision" AND severity>=WARNING AND (jsonPayload.request:"bulk-action" OR jsonPayload.msg:"bulk-action" OR jsonPayload.msg:"erase" OR jsonPayload.msg:"media_delete" OR jsonPayload.msg:"user_delete" OR jsonPayload.msg:"bulk_record") AND timestamp>="'$SINCE'"' \
             --project "$P" --limit 100 --format json > /tmp/app.json || echo "::warning::app log read failed"
           python3 - <<'PY'
           import json, re
@@ -263,7 +263,7 @@ jobs:
               print(f"::notice title=request::{r.get('timestamp','')[:19]} {svc} {h.get('requestMethod')} {path} -> {h.get('status')} lat={h.get('latency')} resp={h.get('responseSize')}B")
           for r in reversed(app):
               j = r.get("jsonPayload") or {}
-              keep = {k: j[k] for k in ("level", "msg", "status_code", "code", "error", "category", "request_id") if k in j}
+              keep = {k: j[k] for k in ("level", "msg", "status_code", "action", "record", "reason_code", "category", "files", "request_id") if k in j}
               exc = (j.get("exc") or "").strip().splitlines()
               tail = " | ".join(x.strip() for x in exc[-3:])[:600] if exc else ""
               print(f"::notice title=server::{r.get('timestamp','')[:19]} {json.dumps(keep, ensure_ascii=False)[:400]} {tail}")

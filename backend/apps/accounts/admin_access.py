@@ -211,9 +211,13 @@ def require_fresh_mfa(request) -> None:
     u = request.user
     if not u.mfa_enabled:
         return
-    if not totp.verify(u.mfa_secret, str(request.data.get("otp", "")).strip()):
-        raise ApiError("fresh_mfa_required", "أدخل رمز التحقق الحالي من تطبيق المصادقة لتأكيد هذا الإجراء.", 403,
-                       {"otp": ["رمز التحقق مطلوب أو غير صحيح."]})
+    code = str(request.data.get("otp", "") or "").strip()
+    if not code:
+        raise ApiError("fresh_mfa_required", "أدخل رمز التحقق الحالي من تطبيق المصادقة.", 403,
+                       {"otp": ["أدخل رمز التحقق الحالي من تطبيق المصادقة."]})
+    if not totp.verify(u.mfa_secret, code):
+        raise ApiError("fresh_mfa_invalid", "رمز التحقق غير صحيح. أدخل الرمز الحالي وحاول مرة أخرى.", 403,
+                       {"otp": ["رمز التحقق غير صحيح. أدخل الرمز الحالي وحاول مرة أخرى."]})
 
 
 ANY = "__any__"

@@ -24,7 +24,15 @@ SIGNING_SALT = "halqa.media.read"
 
 
 class StorageError(Exception):
-    pass
+    """`category` is safe to log and show to admins (an S3 error code or exception name, never a message or URL)."""
+
+    def __init__(self, msg: str = "", category: str = "storage_error"):
+        super().__init__(msg)
+        self.category = category
+
+
+def _category(e: Exception) -> str:
+    return str(getattr(e, "response", {}).get("Error", {}).get("Code", "")) or type(e).__name__
 
 
 class StorageNotConfigured(StorageError):
@@ -54,6 +62,10 @@ class LocalStorage:
 
     def delete(self, key: str) -> None:
         self._path(key).unlink(missing_ok=True)
+
+    def delete_many(self, keys: list[str]) -> None:
+        for k in keys:
+            self.delete(k)
 
     def read_url(self, key: str, *, media_id: str, request=None) -> tuple[str, datetime]:
         token = signing.dumps({"m": media_id}, salt=SIGNING_SALT)
@@ -93,7 +105,28 @@ class S3Storage:
         return self.client.get_object(Bucket=self.bucket, Key=key)["Body"]
 
     def delete(self, key: str) -> None:
-        self.client.delete_object(Bucket=self.bucket, Key=key)
+        try:
+            self.client.delete_object(Bucket=self.bucket, Key=key)
+        except Exception as e:  # noqa: BLE001
+            raise StorageError("delete failed", _category(e)) from e
+
+    def delete_many(self, keys: list[str]) -> None:
+        """One DeleteObjects request per 1,000 keys (a student with many recordings used to take one round trip each,
+        which made a permanent delete outlast the admin portal's wait). Deleting a missing key succeeds. If the batch
+        call itself is not accepted, falls back to one request per key. Any failure raises StorageError."""
+        for i in range(0, len(keys), 1000):
+            part = keys[i:i + 1000]
+            try:
+                resp = self.client.delete_objects(Bucket=self.bucket, Delete={"Objects": [{"Key": k} for k in part], "Quiet": True})
+            except Exception as e:  # noqa: BLE001
+                if _category(e) in ("NotImplemented", "MissingContentMD5", "InvalidRequest"):
+                    for k in part:
+                        self.delete(k)
+                    continue
+                raise StorageError("batch delete failed", _category(e)) from e
+            errors = resp.get("Errors") or []
+            if errors:
+                raise StorageError("some objects were not deleted", str(errors[0].get("Code") or "DeleteError"))
 
     def check(self) -> str:
         """Can we use the bucket with these credentials? Returns "ok" or a category with the S3 error code

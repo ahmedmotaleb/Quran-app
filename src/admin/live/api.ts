@@ -136,7 +136,8 @@ export const listAudit = (p: { action?: string; page?: number }) => api<Page<Aud
 export type BulkResource = 'users' | 'circles' | 'bookings' | 'sessions' | 'courses' | 'lessons' | 'enrollments' | 'tests' | 'questions';
 export interface BulkBody { action: string; ids?: number[]; filter?: Record<string, string>; expected?: number; exclude_ids?: number[]; reason?: string; confirm?: string; params?: Record<string, unknown>; otp?: string }
 export interface BulkItem { id: number; label: string; outcome: 'skipped' | 'failed'; code: string; message: string }
-export interface BulkResult { requested: number; success: number; skipped: number; failed: number; results: BulkItem[]; errors: BulkItem[] }
+export interface BulkResult { requested: number; success: number; skipped: number; failed: number; results: BulkItem[]; errors: BulkItem[];
+  done?: { id: number; label: string; result: { mode?: 'removed' | 'anonymized' } }[]; mode?: 'removed' | 'anonymized' }
 export interface TrustedDevice { id: number; label: string; created_at: string; expires_at: string; last_used_at: string | null; current: boolean }
 export const listTrustedDevices = () => api<{ results: TrustedDevice[]; days: number }>('GET', 'admin/trusted-devices');
 export const revokeTrustedDevice = (id: number) => api<{ removed: number }>('POST', `admin/trusted-devices/${id}/revoke`);
@@ -158,7 +159,11 @@ export const grantMakeup = (bookingId: number) => api<{ id: number; status: stri
 export const discipline = (id: number) => api<Discipline>('GET', `admin/users/${id}/discipline`);
 export const excuseOverride = (bookingId: number, reason: string) => api<unknown>('POST', `admin/bookings/${bookingId}/excuse-override`, { reason });
 export const adminExcuses = (status = 'pending') => api<{ results: import('@/api/endpoints').ApiExcuseRow[] }>('GET', `admin/excuses?status=${status}`);
-export const bulkAction = (resource: string, body: BulkBody) => api<BulkResult>('POST', `admin/${resource}/bulk-action`, body);
+// Bulk actions (permanent delete especially: database work plus removing private files) may take longer than an
+// ordinary request; the portal waits up to 2 minutes instead of giving up while the server is still working.
+export const bulkAction = (resource: string, body: BulkBody) => api<BulkResult>('POST', `admin/${resource}/bulk-action`, body, { timeoutMs: 120_000 });
+export type DeletePreflight = { id: number; role: string; deletable: boolean; upcoming_sessions: number; upcoming_bookings: number; mode: 'removed' | 'anonymized'; recordings: number };
+export const deletePreflight = (id: number) => api<DeletePreflight>('GET', `admin/users/${id}/delete-preflight`);
 export const exportCsv = (resource: string, body: Omit<BulkBody, 'action'> & { sort?: string }) => apiDownload(`admin/${resource}/export`, body);
 export interface SavedView { id: number; section: string; name: string; query: string }
 export const savedViews = (section: string) => api<SavedView[]>('GET', `admin/saved-views?section=${encodeURIComponent(section)}`);
