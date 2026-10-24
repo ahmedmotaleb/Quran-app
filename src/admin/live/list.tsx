@@ -11,7 +11,7 @@ import { FieldError, inputStyle, labelStyle } from '@/components/ui';
 import { Icon } from '@/components/Icon';
 import { ApiError, type Page } from '@/api/client';
 import { card } from '../AdminTables';
-import { can, canBulk, needsFreshOtp, toast } from '../adminStore';
+import { can, canBulk, needsFreshOtp, refreshCounts, toast } from '../adminStore';
 import * as A from './api';
 import { chip, errMsg, Modal, OtpField, smallBtn } from './ui';
 
@@ -337,9 +337,9 @@ export function BulkBar({ resource, sel, total, actions, filter, onDone, exporta
           const ok = r.success; const bad = r.failed + r.skipped;
           if (bad === 0) { toast(`تم تنفيذ الإجراء على ${items(ok)}`); sel.clear(); }
           else { setResult({ def: run, r }); sel.sel.mode === 'ids' ? sel.keepOnly(r.results.filter((x) => x.outcome === 'failed').map((x) => x.id)) : sel.clear(); }
-          onDone();
+          onDone(); refreshCounts();
         }} />}
-      {result && <ResultDialog def={result.def} r={result.r} onClose={() => setResult(null)} />}
+      {result && <ResultDialog def={result.def} r={result.r} accounts={resource === 'users'} onClose={() => setResult(null)} />}
     </>
   );
 }
@@ -403,11 +403,16 @@ function BulkConfirm({ def, resource, sel, total, filter, onClose, onDone }: {
   );
 }
 
-function ResultDialog({ def, r, onClose }: { def: BulkDef; r: A.BulkResult; onClose: () => void }) {
+function ResultDialog({ def, r, onClose, accounts = false }: { def: BulkDef; r: A.BulkResult; onClose: () => void; accounts?: boolean }) {
   return (
     <Modal title={`نتيجة: ${def.label}`} onClose={onClose}>
-      <p role="status" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>تم تنفيذ الإجراء على {r.success} من {items(r.requested)}</p>
-      {r.failed > 0 && <p style={{ margin: 0, color: color.dangerInk, fontWeight: 700 }}>تعذر تنفيذ الإجراء على {items(r.failed)}</p>}
+      {accounts && def.key === 'delete' ? <>
+        <p role="status" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>تم الحذف: {r.success}</p>
+        {r.failed > 0 && <p style={{ margin: 0, color: color.dangerInk, fontWeight: 700 }}>تعذر: {r.failed}</p>}
+      </> : <>
+        <p role="status" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>تم تنفيذ الإجراء على {r.success} من {items(r.requested)}</p>
+        {r.failed > 0 && <p style={{ margin: 0, color: color.dangerInk, fontWeight: 700 }}>تعذر تنفيذ الإجراء على {items(r.failed)}</p>}
+      </>}
       {r.skipped > 0 && <p style={{ margin: 0, color: color.muted }}>{items(r.skipped)} في الحالة المطلوبة بالفعل، فلم {r.skipped === 1 ? 'يتغيّر' : 'تتغيّر'}.</p>}
       <details open={r.results.length <= 6}>
         <summary style={{ cursor: 'pointer', fontWeight: 700, minHeight: 32 }}>الأسباب</summary>

@@ -769,3 +769,15 @@ class AdminUserPromoteTeacher(APIView):
             raise ApiError(e.code, e.message, 404 if e.code == "not_found" else 409) from None
         out = {k: v for k, v in r.items() if k != "user"}
         return Response({**out, "person": AdminUserSerializer(_admin_users().get(pk=pk), context={"request": request}).data})
+
+
+class AdminDeletePreflight(APIView):
+    """What «حذف نهائي» would do for this account (no change): upcoming sessions for a teacher, removed vs anonymized."""
+    admin_perm = "users.delete_permanent"
+    permission_classes = [IsAdminRole]
+
+    def get(self, request, pk):
+        from .erase import preflight
+
+        u = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN).exclude(status=AccountStatus.DELETED), pk=pk)
+        return Response(preflight(u))

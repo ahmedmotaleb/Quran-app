@@ -3,7 +3,7 @@ import { color, font } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import type { Status } from './adminData';
-import { adminLogin, adminRestore, can, canSection, goSection, sectionFromHash, mfaFinish, mfaStart, setAdmin, useAdmin, type AdminState, type Section } from './adminStore';
+import { COUNTS_EVENT, adminLogin, adminRestore, can, canSection, goSection, sectionFromHash, mfaFinish, mfaStart, setAdmin, useAdmin, type AdminState, type Section } from './adminStore';
 import { LIVE, api, type ApiError } from '@/api/client';
 import * as LA from './live/api';
 const PeopleLive = lazy(() => import('./live/People'));
@@ -26,6 +26,9 @@ const LIVE_SECTIONS: Partial<Record<Section, LA.Role>> = { students: 'student', 
 type LiveCounts = Partial<Record<LA.Role, LA.Counts>> & { drafts?: LA.Drafts; excuses?: number; support?: number };
 function useLiveCounts(sec: Section) {
   const [c, setC] = useState<LiveCounts>({});
+  const [tick, setTick] = useState(0);
+  // A change elsewhere (e.g. a permanent delete) asks for fresh badge counts without a page reload.
+  useEffect(() => { const f = () => setTick((n) => n + 1); window.addEventListener(COUNTS_EVENT, f); return () => window.removeEventListener(COUNTS_EVENT, f); }, []);
   useEffect(() => {
     if (!LIVE) return;
     let on = true;
@@ -37,7 +40,7 @@ function useLiveCounts(sec: Section) {
     if (can('support.view')) import('@/api/support').then((S) => S.supportCounts()).then((r) => { if (on) setC((p) => ({ ...p, support: r.open + r.in_progress })); }).catch(() => {});
     if (can('excuses.review')) LA.adminExcuses().then((r) => { if (on) setC((p) => ({ ...p, excuses: r.results.length })); }).catch(() => {});
     return () => { on = false; };
-  }, [sec]);
+  }, [sec, tick]);
   return c;
 }
 import { StatusPill, TableSection, card } from './AdminTables';

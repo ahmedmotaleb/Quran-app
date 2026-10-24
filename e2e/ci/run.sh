@@ -62,7 +62,7 @@ reseed; run teacher-onboarding
 reseed; CIRCLE_CMD="bash e2e/ci/py.sh circle_for_teacher.py" run assigning
 reseed; SETUP_CMD="cd backend && ${PYTHON:-python} manage.py shell < ../e2e/ci/waitlist_setup.py 2>/dev/null" run waitlist
 reseed; run circle-members
-reseed; run account-delete
+reseed; SETUP_CMD="bash e2e/ci/py.sh delete_setup.py" run account-delete http://localhost:5176/
 # Recording failure found on a real Android phone (22 Oct): no demo task ids, failed uploads kept on the device.
 reseed; run recording-flow
 reseed; run admin-dialogs

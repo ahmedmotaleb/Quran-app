@@ -8,7 +8,7 @@ on:
       task:
         description: What to run
         type: choice
-        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check, upload-trace, client-diagnostics, account-integrity, trusted-devices, migrate-teacher-invitations]
+        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check, upload-trace, client-diagnostics, delete-trace, account-integrity, trusted-devices, migrate-teacher-invitations]
       admin_email:
         description: create-admin / promote-admin — the admin's email (create-admin takes the password from the ADMIN_PASSWORD secret; promote-admin keeps the account's password)
         required: false
@@ -16,7 +16,7 @@ on:
         description: smoke-test only — the app address, e.g. https://halqa-<number>.europe-west1.run.app/
         required: false
       hours:
-        description: upload-trace / client-diagnostics / account-integrity — how many hours back to look (default 72)
+        description: upload-trace / client-diagnostics / delete-trace / account-integrity — how many hours back to look (default 72)
         required: false
       apply:
         description: migrate-teacher-invitations only — create the accounts and send the setup emails (unticked = dry run)
@@ -228,6 +228,47 @@ jobs:
   # Media uploads (recitations, voice notes) in the last N hours: what Cloud Run answered (status, size, latency,
   # response type, request id, browser/OS family) and the app's own warning/error lines for those requests. No
   # cookies, no bodies, no full user agent, no URLs with tokens.
+  delete-trace:
+    # Permanent-delete attempts: status of each bulk-action request (portal and app services) and the server's
+    # warning/error lines for them. No request bodies, names or emails.
+    if: inputs.task == 'delete-trace'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Read bulk-action requests and their server lines
+        env:
+          HOURS: ${{ inputs.hours || '168' }}
+        run: |
+          P="${{ vars.GCP_PROJECT_ID }}"
+          SINCE=$(date -u -d "$HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.requestUrl:"bulk-action" AND timestamp>="'$SINCE'"' \
+            --project "$P" --limit 100 --format json > /tmp/req.json || echo "::warning::request log read failed"
+          gcloud logging read 'resource.type="cloud_run_revision" AND severity>=WARNING AND (jsonPayload.request:"bulk-action" OR jsonPayload.msg:"bulk-action" OR jsonPayload.msg:"erase" OR jsonPayload.msg:"media_delete" OR jsonPayload.msg:"user_delete" OR jsonPayload.msg:"bulk_record") AND timestamp>="'$SINCE'"' \
+            --project "$P" --limit 100 --format json > /tmp/app.json || echo "::warning::app log read failed"
+          python3 - <<'PY'
+          import json, re
+          reqs = json.load(open("/tmp/req.json")); app = json.load(open("/tmp/app.json"))
+          print(f"::notice title=counts::{len(reqs)} bulk-action requests, {len(app)} related server lines")
+          for r in reversed(reqs):
+              h = r.get("httpRequest", {})
+              svc = (r.get("resource", {}).get("labels", {}) or {}).get("service_name", "?")
+              path = re.sub(r"\?.*", "", h.get("requestUrl", "")).split("/api/v1/")[-1]
+              print(f"::notice title=request::{r.get('timestamp','')[:19]} {svc} {h.get('requestMethod')} {path} -> {h.get('status')} lat={h.get('latency')} resp={h.get('responseSize')}B")
+          for r in reversed(app):
+              j = r.get("jsonPayload") or {}
+              keep = {k: j[k] for k in ("level", "msg", "status_code", "action", "record", "reason_code", "category", "files", "request_id") if k in j}
+              exc = (j.get("exc") or "").strip().splitlines()
+              tail = " | ".join(x.strip() for x in exc[-3:])[:600] if exc else ""
+              print(f"::notice title=server::{r.get('timestamp','')[:19]} {json.dumps(keep, ensure_ascii=False)[:400]} {tail}")
+          PY
+
   client-diagnostics:
     # Recording notes sent by phones (src/services/diag.ts): step, error name, supported formats, device family.
     if: inputs.task == 'client-diagnostics'

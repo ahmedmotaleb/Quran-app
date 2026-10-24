@@ -20,6 +20,8 @@ Safety rules:
 """
 from __future__ import annotations
 
+import logging
+
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Any, Callable
@@ -34,6 +36,8 @@ from apps.accounts.permissions import IsAdminRole
 
 from .audit import audit
 from .exceptions import ApiError
+
+log = logging.getLogger(__name__)
 
 MAX_IDS = 500            # explicit selection per request
 MAX_FILTERED = 5000      # "all filtered results" per request
@@ -59,6 +63,7 @@ class Refuse(Exception):
 
 
 # ---- Filters ---------------------------------------------------------------------------
+
 def bad(field_name: str, msg: str = "قيمة غير صالحة.") -> ApiError:
     return ApiError("invalid_filter", "تحقق من عوامل التصفية.", 400, {field_name: [msg]})
 
@@ -232,6 +237,8 @@ class AdminBulkAction(APIView):
         need = aa.bulk_perm(resource, name)
         if need is None:
             raise ApiError("admin_permission_denied", "ليست لديك صلاحية لهذا الإجراء.", 403)
+        if need == "users.delete_permanent" and not aa.has(request.user, need):
+            raise ApiError("admin_permission_denied", "ليس لديك صلاحية الحذف النهائي.", 403)
         aa.require(request.user, need)
         if (resource, name) in aa.FRESH_MFA_ACTIONS:
             aa.require_fresh_mfa(request)
@@ -246,7 +253,7 @@ class AdminBulkAction(APIView):
         if (act.confirm_always or (act.destructive and requested >= CONFIRM_FROM)) and d.get("confirm") != CONFIRM_WORD:
             raise ApiError("confirm_required", f"اكتب «{CONFIRM_WORD}» للتأكيد.", 400, {"confirm": [f"اكتب «{CONFIRM_WORD}» للتأكيد."]})
 
-        done, skipped, results = [], [], []
+        done, skipped, results, details = [], [], [], []
         for pk in missing:
             results.append({"id": pk, "label": "", "outcome": "failed", "code": "not_found", "message": "غير موجود أو غير مسموح."})
         failed = len(missing)
@@ -257,8 +264,10 @@ class AdminBulkAction(APIView):
                     qs = res.base().filter(pk=pk)
                     obj = (qs.select_for_update(of=("self",)) if res.lock else qs).get()
                     label = res.describe(obj)
-                    act.run(obj, request.user, reason, **params)
+                    out = act.run(obj, request.user, reason, **params)
                 done.append(pk)
+                if out is not None:
+                    details.append({"id": pk, "label": label, "result": out})
             except Skip as e:
                 skipped.append(pk)
                 results.append({"id": pk, "label": label, "outcome": "skipped", "code": e.code, "message": e.message})
@@ -267,12 +276,26 @@ class AdminBulkAction(APIView):
                 code = getattr(e, "code", "protected")
                 msg = getattr(e, "message", None) or (e.detail if isinstance(e, ApiError) else "مرتبط بسجلات محفوظة؛ لا يمكن حذفه.")
                 results.append({"id": pk, "label": label, "outcome": "failed", "code": str(code), "message": str(msg)})
+            except Exception:  # noqa: BLE001 — one record's unexpected failure must not stop the others or leak a trace
+                failed += 1
+                from .logging import request_id_var
+
+                rid = request_id_var.get()
+                log.exception("bulk_record_failed", extra={"resource": res.label, "action": name, "record": pk})
+                results.append({"id": pk, "label": label, "outcome": "failed", "code": "unexpected",
+                                "message": f"تعذر إكمال الإجراء. رقم الطلب: {rid}"})
 
         audit(f"admin.bulk_{name}", actor=request.user, request=request, resource=res.label, mode=mode, requested=requested,
               success=len(done), skipped=len(skipped), failed=failed, ids=done[:1000], filter=_jsonable(filt), reason=reason,
               params=_jsonable({k: _plain(params[k]) for k in act.audit_keys if k in params}) or None)
-        return Response({"requested": requested, "success": len(done), "skipped": len(skipped), "failed": failed,
-                         "results": results[:200], "errors": [r for r in results if r["outcome"] == "failed"][:200]})
+        for r in results:
+            if r["outcome"] == "failed":
+                log.warning("bulk_record_refused", extra={"resource": res.label, "action": name, "record": r["id"], "reason_code": r["code"]})
+        out = {"requested": requested, "success": len(done), "skipped": len(skipped), "failed": failed,
+               "results": results[:200], "errors": [r for r in results if r["outcome"] == "failed"][:200], "done": details[:200]}
+        if len(details) == 1 and isinstance(details[0]["result"], dict):
+            out.update(details[0]["result"])  # one record: e.g. {"mode": "removed"} at the top level too
+        return Response(out)
 
 
 def resolve_targets(res: Resource, d: dict, max_ids: int, max_filtered: int, *, check_expected: bool):

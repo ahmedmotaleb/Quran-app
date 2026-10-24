@@ -283,13 +283,18 @@ def _resend_setup(u: User, actor, reason: str):
     audit("admin.setup_link_issued", actor=actor, target=u, emailed=True, bulk=True)
 
 
-def _delete(u: User, actor, reason: str):
+def _delete(u: User, actor, reason: str, cancel_sessions: bool = False):
     from .erase import EraseRefused, erase_user
 
     try:
-        erase_user(u, actor)
+        return {"mode": erase_user(u, actor, cancel_sessions=cancel_sessions)}
     except EraseRefused as e:
         raise Refuse(e.code, e.message) from None
+
+
+def _delete_params(raw: dict, actor) -> dict:
+    # «إلغاء الجلسات القادمة ثم حذف الحساب»: the admin chose to cancel a teacher's upcoming sessions first.
+    return {"cancel_sessions": raw.get("cancel_sessions") is True}
 
 
 def _teachers_of(u: User) -> str:
@@ -303,7 +308,8 @@ register(Resource(
         "activate": Action(_set_status(AccountStatus.ACTIVE), reason_required=True),
         "suspend": Action(_set_status(AccountStatus.SUSPENDED), reason_required=True),
         "archive": Action(_set_status(AccountStatus.ARCHIVED), reason_required=True, destructive=True),
-        "delete": Action(_delete, reason_required=True, destructive=True, confirm_always=True),
+        "delete": Action(_delete, reason_required=True, destructive=True, confirm_always=True, params=_delete_params,
+                         audit_keys=("cancel_sessions",)),
         "approve": Action(_approve(True)),
         "unapprove": Action(_approve(False), reason_required=True),
         "assign_teacher": Action(_assign_teacher, params=_teacher_params, audit_keys=("teacher", "replace")),

@@ -45,6 +45,7 @@ urlpatterns = [
     path("admin/teachers/<int:pk>/approval", v.AdminTeacherApproval.as_view()),
     path("admin/teacher-assignments", v.AdminAssignmentCreate.as_view()),
     path("admin/import/students", student_import.StudentImport.as_view()),
+    path("admin/users/<int:pk>/delete-preflight", v.AdminDeletePreflight.as_view()),
     path("admin/teacher-assignments/<int:pk>/end", v.AdminAssignmentEnd.as_view()),
     path("admin/guardian-links", v.AdminGuardianLinkCreate.as_view()),
     path("admin/guardian-links/<int:pk>/revoke", v.AdminGuardianLinkRevoke.as_view()),

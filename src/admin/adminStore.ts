@@ -42,6 +42,9 @@ export function canBulk(resource: string, action: string): boolean {
   const p = resource === 'users' ? USER_ACTIONS[action] : BULK_WRITE[resource];
   return !!p && can(p);
 }
+/** Sidebar badges re-read their counts when this event fires (after a delete, without reloading the page). */
+export const COUNTS_EVENT = 'halqa:admin-counts';
+export const refreshCounts = () => { try { window.dispatchEvent(new Event(COUNTS_EVENT)); } catch { /* not in a browser */ } };
 /** Irreversible actions and admin changes ask for a current authenticator code (when two-step verification is on). */
 export const needsFreshOtp = () => !!get().me?.mfa_enabled;
 export function canSection(sec: Section): boolean {

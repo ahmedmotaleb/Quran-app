@@ -223,7 +223,7 @@ def test_admin_invitation_rules(world, mailbox):
     c = client_for(owner)
     assert invite(c, owner, email="s1@x.test").json()["code"] == "email_taken"
     assert c.post("/api/v1/invitations", {"purpose": "admin_account", "email": "z@x.test"}, format="json").status_code == 400
-    assert invite(c, owner, otp="000000").json()["code"] == "fresh_mfa_required"
+    assert invite(c, owner, otp="000000").json()["code"] == "fresh_mfa_invalid"
     first = invite(c, owner, email="dup@x.test").json()
     invite(c, owner, email="dup@x.test")  # a second invitation replaces the first
     assert Invitation.objects.get(pk=first["id"]).revoke_reason == "replaced"

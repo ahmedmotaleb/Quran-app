@@ -69,9 +69,9 @@ export function newIdempotencyKey(): string {
 const portalHeaders = (): Record<string, string> =>
   typeof window !== 'undefined' && window.location.pathname.startsWith('/admin') ? { 'X-Halqa-Portal': 'admin' } : {};
 
-async function raw(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<unknown> {
+async function raw(method: string, path: string, body?: unknown, headers: Record<string, string> = {}, timeoutMs?: number): Promise<unknown> {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), body instanceof FormData ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs ?? (body instanceof FormData ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS));
   const h: Record<string, string> = { Accept: 'application/json', ...portalHeaders(), ...headers };
   const form = typeof FormData !== 'undefined' && body instanceof FormData;
   if (body !== undefined && !form) h['Content-Type'] = 'application/json';
@@ -108,7 +108,7 @@ async function raw(method: string, path: string, body?: unknown, headers: Record
 
 /** Retries network failures/timeouts/5xx for safe requests: GET, or writes that carry an Idempotency-Key. */
 export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown,
-  opts: { idempotencyKey?: string; uploadId?: string } = {}): Promise<T> {
+  opts: { idempotencyKey?: string; uploadId?: string; timeoutMs?: number } = {}): Promise<T> {
   if (!LIVE) throw new ApiError(0, 'demo', 'وضع العرض التجريبي: لا يوجد خادم متصل.');
   if (method !== 'GET') await ensureCsrf();
   const headers: Record<string, string> = {};
@@ -117,7 +117,7 @@ export async function api<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   const retriable = method === 'GET' || !!opts.idempotencyKey || !!opts.uploadId;
   for (let attempt = 0; ; attempt++) {
     try {
-      return (await raw(method, `/api/v1/${path.replace(/^\//, '')}`, body, headers)) as T;
+      return (await raw(method, `/api/v1/${path.replace(/^\//, '')}`, body, headers, opts.timeoutMs)) as T;
     } catch (e) {
       const err = e as ApiError;
       // A CSRF failure after the session rotated (login/logout): refresh the token once.
