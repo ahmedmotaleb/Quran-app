@@ -196,7 +196,18 @@ def cancel_occurrence(*, occurrence_id: int, by, reason: str, now: datetime | No
         o.save(update_fields=["status", "updated_at"])
         for bid in ids:
             transaction.on_commit(lambda bid=bid: _notify_cancelled(bid))
+        # A Google-backed session: delete its Calendar event (attendees told) once the cancellation is committed.
+        transaction.on_commit(lambda pk=o.pk: _cancel_google(pk))
     return o, len(ids)
+
+
+def _cancel_google(occurrence_id: int) -> None:
+    from apps.integrations.models import GoogleEvent
+
+    if GoogleEvent.objects.filter(occurrence_id=occurrence_id).exists():
+        from apps.integrations.sync import cancel_event
+
+        cancel_event(occurrence_id)
 
 
 # ---- Occurrence generation (Prompt 10) -------------------------------------------------

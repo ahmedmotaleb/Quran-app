@@ -1,3 +1,4 @@
+import { CreateSessionButton, GoogleSessionActions } from './GoogleSessions';
 import { color, font } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
 import {
@@ -825,10 +826,13 @@ function TodayLive() {
   );
 }
 
+const TOPIC_LABEL: Record<string, string> = { hifz: 'حفظ', review: 'مراجعة', tajweed: 'تجويد', test: 'اختبار', other: 'أخرى' };
+
 function ScheduleLive() {
   const s = useApp(); const SD = s.sched; const tz = tzOf(s.tz).iana; const occ = s.tsched ?? [];
   const now = Date.now();
-  const booked = occ.filter((o) => o.bookings.length && new Date(o.ends_at).getTime() > now - 7 * 86_400_000);
+  // Booked sessions, and every Google-backed session the teacher created (also while its Meet is being prepared).
+  const booked = occ.filter((o) => (o.bookings.length || o.google) && new Date(o.ends_at).getTime() > now - 7 * 86_400_000);
   const days = weekDays(s);
   const dayIso = new Date(Date.now() + SD.day * 86_400_000).toISOString();
   const key = dateKey(dayIso, tz);
@@ -839,14 +843,16 @@ function ScheduleLive() {
       <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>المواعيد</h1>
       <Segmented role="tablist" options={[['sessions', 'الجلسات'], ['avail', 'الإتاحة']] as const} value={SD.tab} onChange={(k) => up('sched', { tab: k })} />
       {SD.tab === 'sessions' && <>
+        <CreateSessionButton />
         <ExcusesPanel />
         {booked.length === 0 && <p style={muted(15, { padding: 24, textAlign: 'center' })}>لا توجد جلسات محجوزة.</p>}
         {booked.map((o) => {
           const started = new Date(o.starts_at).getTime() <= now;
           return (
             <div key={o.id} style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <span style={{ fontSize: 15, fontWeight: 700 }}>{dayLabel(o.starts_at, tz)} · {fmtTime(o.starts_at, tz)} <span style={{ fontWeight: 500, color: color.muted, fontSize: 13 }}>· {o.kind === 'group' ? 'جماعية' : 'فردية'}</span></span>
-              {new Date(o.ends_at).getTime() > now && <MeetingLink occ={o.id} url={o.meeting_url} />}
+              <span style={{ fontSize: 15, fontWeight: 700 }}>{dayLabel(o.starts_at, tz)} · {fmtTime(o.starts_at, tz)} <span style={{ fontWeight: 500, color: color.muted, fontSize: 13 }}>· {o.kind === 'group' ? 'جماعية' : 'فردية'}{o.topic ? ` · جلسة ${TOPIC_LABEL[o.topic] ?? ''}` : ''}</span></span>
+              {o.google && <span style={{ fontSize: 14 }}>{o.circle_name ?? o.google.student_name}{o.title ? ` · ${o.title}` : ''}</span>}
+              {o.google ? <GoogleSessionActions o={o} /> : new Date(o.ends_at).getTime() > now && <MeetingLink occ={o.id} url={o.meeting_url} />}
               {o.bookings.map((b) => (
                 <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${color.divider}`, paddingTop: 8 }}>
                   <span style={{ fontSize: 14 }}><strong>{b.student_name}</strong>{b.assignment_title ? ` · ${b.assignment_title}` : ''}</span>
@@ -863,7 +869,7 @@ function ScheduleLive() {
                       })}
                     </div>
                     <CorrectionForm ctx={{ student: b.student, source: 'session', booking: b.id }} />
-                  </>) : (
+                  </>) : !o.google && (
                     <button onClick={() => openSheet({ kind: 'confirm', title: 'إلغاء الحجز؟', body: `سيُلغى موعد ${b.student_name} ويصله إشعار بذلك.`, ok: 'نعم، ألغِ الحجز', danger: true, onOk: () => { setState({ sheet: null }); teacherCancelBooking(b.id); } })}
                       style={{ alignSelf: 'flex-start', minHeight: 40, padding: '0 12px', borderRadius: 10, border: `1px solid ${color.dangerInk}`, background: 'transparent', color: color.dangerInk, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>إلغاء الحجز</button>
                   )}

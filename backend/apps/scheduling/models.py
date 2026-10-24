@@ -79,9 +79,19 @@ class SessionOccurrence(TimeStamped):
         GROUP = "group", "جماعية"
 
     class Status(models.TextChoices):
+        # PENDING: created by the teacher, waiting for its Google Calendar event and Meet link. Not offered, not shown
+        # to students and nobody notified until it becomes SCHEDULED (apps.integrations.sync).
+        PENDING = "pending", "قيد التجهيز"
         SCHEDULED = "scheduled", "مجدولة"
         CANCELLED = "cancelled", "ملغاة"
         COMPLETED = "completed", "مكتملة"
+
+    class Topic(models.TextChoices):
+        HIFZ = "hifz", "حفظ"
+        REVIEW = "review", "مراجعة"
+        TAJWEED = "tajweed", "تجويد"
+        TEST = "test", "اختبار"
+        OTHER = "other", "أخرى"
 
     teacher = models.ForeignKey(User, on_delete=models.PROTECT, related_name="occurrences")
     original_teacher = models.ForeignKey(User, null=True, blank=True, on_delete=models.PROTECT, related_name="+")  # set on substitution
@@ -95,6 +105,9 @@ class SessionOccurrence(TimeStamped):
     meeting_provider = models.CharField(max_length=32, blank=True)
     meeting_url = models.URLField(max_length=500, blank=True)  # participant link; only via the join endpoint and to its teacher
     summary = models.TextField(blank=True)
+    topic = models.CharField(max_length=10, choices=Topic.choices, blank=True)  # set on teacher-created sessions
+    title = models.CharField(max_length=120, blank=True)
+    prep_note = models.CharField(max_length=500, blank=True)  # shown to the booked students in HALQA, never sent to Google
 
     class Meta:
         ordering = ["starts_at"]

@@ -97,6 +97,7 @@ INSTALLED_APPS = [
     "apps.assessments",
     "apps.notifications",
     "apps.support",
+    "apps.integrations",
 ]
 
 MIDDLEWARE = [
@@ -339,3 +340,14 @@ LOGGING = {
     "root": {"handlers": ["console"], "level": env("LOG_LEVEL", "INFO")},
     "loggers": {"django.db.backends": {"level": "WARNING"}},
 }
+
+
+# ---- Google Calendar + Meet (owner request 24 Oct; docs/DEPLOY.md «Google Calendar») -----------------------------
+# The OAuth client of the academy's Google Cloud project. The secret and the token key live in Secret Manager.
+GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_REDIRECT_URI = env("GOOGLE_REDIRECT_URI", "") or (f"{APP_URL}/api/v1/integrations/google/callback" if APP_URL else "")
+# Fernet key (urlsafe base64, 32 bytes) for teachers' refresh tokens; derived from DJANGO_SECRET_KEY when unset.
+GOOGLE_TOKEN_KEY = env("GOOGLE_TOKEN_KEY", "")
+# Development and CI only: an in-process stand-in for Google (no network), for the browser tests.
+GOOGLE_FAKE = env_bool("GOOGLE_FAKE", False) and APP_ENV in ("development", "test")

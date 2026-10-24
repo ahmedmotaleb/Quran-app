@@ -8,6 +8,7 @@ import { LIVE, type ApiError } from '@/api/client';
 import * as E from '@/api/endpoints';
 import { useEffect, useState, type FormEvent } from 'react';
 import { disablePush, enablePush, pushState, type PushState } from '@/pwa/push';
+import { GoogleCalendarCard } from '@/screens/teacher/GoogleSessions';
 
 const NOTIFS = [['tasks', 'تذكير بالواجبات'], ['sessions', 'تذكير قبل الجلسات'], ['feedback', 'تقييمات المعلم'], ['news', 'أخبار الحلقة']] as const;
 const rowBtn = { width: '100%', minHeight: 52, border: 'none', background: 'transparent', display: 'flex', alignItems: 'center', gap: 8, padding: 0, cursor: 'pointer', color: color.ink, fontSize: 15 } as const;
@@ -71,6 +72,7 @@ export default function Account() {
           <span style={{ fontSize: 14, fontWeight: 700 }}>{tz.label} ({tz.gmt})</span><span style={{ color: color.primary }}><Icon name="chevL" size={18} /></span>
         </button>
       </section>
+      {LIVE && role === 'teacher' && <GoogleCalendarCard />}
       {LIVE && <PhoneRow />}
       <InstallRow />
       {LIVE && <PushRow />}

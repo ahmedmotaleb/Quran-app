@@ -17,7 +17,7 @@ import { SUR } from '@/data/demo';
 import { BRAND } from '@/theme/brand';
 import * as media from '@/services/media';
 import * as pending from '@/services/pendingRec';
-import { back, openSheet, rememberedChild, reset, setState, toast, up, useApp, type AssignForm, type Mark, type ReviewDraft, type ReviewItem } from './store';
+import { back, go, openSheet, rememberedChild, reset, setState, toast, up, useApp, type AssignForm, type Mark, type ReviewDraft, type ReviewItem } from './store';
 import { discardVoiceNote, stopVoiceNote, voiceNote, voiceNoteRecording } from '@/services/voiceNote';
 
 // Lazy: store.ts and this module import each other.
@@ -128,6 +128,8 @@ async function restoreSession(): Promise<boolean> {
     if (u.role === 'admin') return false;
     applyUser(u);
     reset(homeFor(u.role), u.role);
+    // Back from Google's consent page: open «حسابي», where the Google Calendar card shows the outcome.
+    if (useApp.getState().googleResult && u.role === 'teacher') go('account');
     await loadData();
     return true;
   } catch {

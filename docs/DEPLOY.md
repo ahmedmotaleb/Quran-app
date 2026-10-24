@@ -174,6 +174,38 @@ workflow deploys production directly, as before.
 Staging data is synthetic only (`seed_load`, smoke-test accounts, what testers create). Never copy production data,
 recordings or a production database branch into staging.
 
+## 6e. Google Calendar + Google Meet for sessions (optional)
+
+Teachers connect their own Google Calendar once; every session they create in HALQA (المواعيد → «إنشاء جلسة») then
+gets a Calendar event on their calendar with a **Google Meet created by Google**, the student (or the circle's active
+members) invited by Google, and the Meet link stored privately in HALQA. Students join from HALQA inside the join
+window; they never need to connect Google. HALQA keeps scheduling, attendance and evaluation; nothing academic is
+written to Google (title, type and time only).
+
+1. **Google Cloud console → APIs & Services → Library → Google Calendar API → Enable** (the script below also does it).
+2. **OAuth consent screen** (Google Auth Platform → Branding / Audience / Data access):
+   - App name «الحلقة», support email, developer contact.
+   - Audience: **External** (or **Internal** if every teacher has an account in the academy's Google Workspace — no
+     verification, no 7-day limit).
+   - Data access → add scopes `openid`, `.../auth/userinfo.email` and `.../auth/calendar.events` only.
+   - While in **Testing**: add each teacher's Google email under *Test users*. Google ends Testing authorizations
+     after **7 days**, so teachers reconnect weekly until the app is published.
+3. **Clients → Create client → Web application**, Authorized redirect URI exactly:
+   `https://halqa-<project-number>.europe-west1.run.app/api/v1/integrations/google/callback`
+   (the script prints the exact value). Copy the Client ID and secret — never put them in Git.
+4. Cloud Shell: `bash <(curl -fsSL https://raw.githubusercontent.com/ahmedmotaleb/Quran-app/main/deploy/gcp-google-calendar.sh)`
+   — stores the secret and a generated token-encryption key in Secret Manager and updates the app, the admin portal
+   and the hourly job (`GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI`, secrets `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_KEY`).
+
+**Publishing beyond Testing:** `calendar.events` is a *sensitive* scope. Publishing an External app «In production»
+needs Google's verification: a home page and privacy policy on a domain you own and have verified (the default
+`run.app` address cannot be verified), a short video of the flow, and a justification. Until then use Testing (with
+the weekly reconnect) or Internal (Google Workspace).
+
+**Security:** refresh tokens are encrypted (Fernet) with `GOOGLE_TOKEN_KEY`; access tokens are never stored; no
+token, authorization code or Meet link is written to logs or the audit trail; the OAuth `state` is signed,
+single-use, 10 minutes, and accepted only for the teacher who started it.
+
 ## 7. Check the deployment
 
 From any machine with Node and Playwright:

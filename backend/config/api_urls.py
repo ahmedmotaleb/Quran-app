@@ -3,6 +3,7 @@ from django.urls import include, path
 from apps.assessments import admin_views as assess_admin
 from apps.core import admin_views as core_admin
 from apps.core import diagnostics, kpi
+from apps.integrations import views as gcal
 from apps.support import views as support
 from apps.core.bulk import AdminBulkAction, AdminBulkExport, AdminSavedViewDetail, AdminSavedViews
 # Bulk-action resources register themselves on import (users, circles, bookings, sessions, courses, lessons,
@@ -107,6 +108,17 @@ urlpatterns = [
     path("teacher/occurrences", scheduling.TeacherOccurrences.as_view()),
     path("teacher/occurrences/<int:pk>/close", scheduling.TeacherOccurrenceClose.as_view()),
     path("teacher/occurrences/<int:pk>/meeting", scheduling.TeacherOccurrenceMeeting.as_view()),
+    # Google Calendar + Meet (teacher-created sessions)
+    path("teacher/integrations/google/status", gcal.GoogleStatus.as_view()),
+    path("teacher/integrations/google/connect", gcal.GoogleConnect.as_view()),
+    path("teacher/integrations/google/disconnect", gcal.GoogleDisconnect.as_view()),
+    path("integrations/google/callback", gcal.GoogleCallback.as_view()),
+    path("integrations/google/fake-consent", gcal.GoogleFakeConsent.as_view()),
+    path("teacher/sessions", gcal.TeacherSessions.as_view()),
+    path("teacher/sessions/<int:pk>", gcal.TeacherSessionDetail.as_view()),
+    path("teacher/sessions/<int:pk>/cancel", gcal.TeacherSessionCancel.as_view()),
+    path("teacher/sessions/<int:pk>/retry", gcal.TeacherSessionRetry.as_view()),
+    path("admin/sessions/<int:pk>/google", gcal.AdminSessionGoogle.as_view()),
     path("bookings", scheduling.BookingList.as_view()),
     path("bookings/<int:pk>", scheduling.BookingDetail.as_view()),
     path("bookings/<int:pk>/cancel", scheduling.BookingCancel.as_view()),

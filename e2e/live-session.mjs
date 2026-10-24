@@ -47,7 +47,7 @@ await step(S.page, 'student joins: the meeting opens in a new tab', async () => 
   await S.page.reload(); await S.app.getByText('السلام عليكم، يوسف').waitFor();
   await S.app.getByRole('button', { name: 'الدخول للجلسة' }).click();
   const popup = S.ctx.waitForEvent('page');
-  await S.app.getByRole('button', { name: 'ادخل الجلسة' }).click();
+  await S.app.getByRole('button', { name: 'دخول الجلسة' }).click();
   const p = await popup; await p.waitForLoadState();
   if (p.url() !== MEET) throw new Error('opened ' + p.url());
   await S.app.getByRole('link', { name: 'افتح Google Meet' }).waitFor();  // fallback when a browser blocks the tab
