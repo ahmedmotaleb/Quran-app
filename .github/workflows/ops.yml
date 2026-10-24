@@ -8,7 +8,7 @@ on:
       task:
         description: What to run
         type: choice
-        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check, upload-trace, account-integrity, trusted-devices, migrate-teacher-invitations]
+        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check, upload-trace, client-diagnostics, account-integrity, trusted-devices, migrate-teacher-invitations]
       admin_email:
         description: create-admin / promote-admin — the admin's email (create-admin takes the password from the ADMIN_PASSWORD secret; promote-admin keeps the account's password)
         required: false
@@ -16,7 +16,7 @@ on:
         description: smoke-test only — the app address, e.g. https://halqa-<number>.europe-west1.run.app/
         required: false
       hours:
-        description: upload-trace / account-integrity — how many hours back to look (default 72)
+        description: upload-trace / client-diagnostics / account-integrity — how many hours back to look (default 72)
         required: false
       apply:
         description: migrate-teacher-invitations only — create the accounts and send the setup emails (unticked = dry run)
@@ -228,6 +228,38 @@ jobs:
   # Media uploads (recitations, voice notes) in the last N hours: what Cloud Run answered (status, size, latency,
   # response type, request id, browser/OS family) and the app's own warning/error lines for those requests. No
   # cookies, no bodies, no full user agent, no URLs with tokens.
+  client-diagnostics:
+    # Recording notes sent by phones (src/services/diag.ts): step, error name, supported formats, device family.
+    if: inputs.task == 'client-diagnostics'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Read recording diagnostics
+        env:
+          HOURS: ${{ inputs.hours || '72' }}
+        run: |
+          SINCE=$(date -u -d "$HOURS hours ago" +%Y-%m-%dT%H:%M:%SZ)
+          gcloud logging read 'resource.type="cloud_run_revision" AND jsonPayload.msg="client_diagnostic" AND timestamp>="'$SINCE'"' \
+            --project "${{ vars.GCP_PROJECT_ID }}" --limit 200 --format json > /tmp/diag.json
+          python3 - <<'PY'
+          import json
+          rows = json.load(open("/tmp/diag.json"))
+          print(f"::notice title=count::{len(rows)} recording notes")
+          for r in reversed(rows):
+              p = r.get("jsonPayload", {})
+              line = (f"{r.get('timestamp','')[:19]} {p.get('event')} [{p.get('device')}{' app' if p.get('standalone') else ' browser'}] "
+                      f"user={p.get('user')} step={p.get('step')} status={p.get('status')} code={p.get('err_code')} err={p.get('error')} "
+                      f"mime={p.get('mime')} secs={p.get('secs')} kb={p.get('size_kb')} online={p.get('online')} supports={','.join(p.get('supported') or [])}")
+              print(line); print(f"::notice title=diag::{line[:900]}")
+          PY
+
   upload-trace:
     if: inputs.task == 'upload-trace'
     runs-on: ubuntu-latest

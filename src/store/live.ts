@@ -6,6 +6,7 @@
  * lessons, quizzes and progress.
  * Not wired (screens keep demo content, labelled): teacher content authoring, live video.
  */
+import { diag } from '@/services/diag';
 import * as E from '@/api/endpoints';
 import { ApiError, api, resetCsrf } from '@/api/client';
 import { TZS } from '@/data/demo';
@@ -373,8 +374,11 @@ export async function submitRecording() {
       recs: { ...s.recs, [r.task]: { dur: sub.duration_seconds, url: sub.audio?.url ?? media.recording.url } },
     }));
     void refreshPendingRecordings();
+    diag('submit_ok', { step: 'submitted', secs: r.secs, mime: media.recording.mime });
   } catch (e) {
     const err = e as ApiError;
+    diag(useApp.getState().rec.mediaId ? 'submit_failed' : 'upload_failed',
+      { step: useApp.getState().rec.stage ?? 'send', status: err?.status, code: err?.code, error: e, secs: r.secs, size: blob?.size, mime: media.recording.mime });
     // A file the server refused needs a new upload id (it was not stored); anything else retries with the same ids.
     if (err.status >= 400 && err.status < 500 && ['invalid_file', 'empty_file', 'file_too_large', 'http_413'].includes(err.code)) {
       up('rec', { mediaId: null, uploadId: E.newIdempotencyKey() });

@@ -44,6 +44,15 @@ browser and run each row. Write ✅ or ❌, plus the device and OS version.
 
 ## Real-device findings
 
+### Testing on a phone you do not have (recording diagnostics)
+
+The app sends a short note to the server log at each recording step: `recording_ok` / `recording_empty`,
+`mic_denied`, `recorder_unsupported`, `recorder_error`, `upload_failed`, `submit_failed`, `submit_ok`. Each note has
+the step, the browser's error name or the app's error text, the device family (e.g. «Safari iPhone 17.4»), whether it
+ran as the installed app, and the audio formats the browser supports. It never contains audio, names or task text.
+Ask the tester to try once, then run **Actions → Ops → task `client-diagnostics`** (hours back, default 72). The
+tester's notes show exactly where the flow stopped, even when nothing was uploaded.
+
 ### Android Chrome 155 — record → upload → submit PASSED (24 October 2026)
 
 Re-test on the same Android phone after the fix (Cloud Run request log, `upload-trace`, no personal data):

@@ -1,3 +1,4 @@
+import { diag } from '@/services/diag';
 import { create } from 'zustand';
 import {
   ACCOUNTS, QUIZ, SUR, STUDENTS, TEACHERS, generateAvailability, initialFeedback, initialOthers, initialRecordings, initialSessions, initialTasks,
@@ -358,7 +359,10 @@ export async function startRec() {
   try {
     await media.startRecorder(finishRec);
     up('rec', { phase: 'recording', secs: 0 });
-  } catch {
+  } catch (e) {
+    const name = (e as { name?: string })?.name ?? '';
+    diag((e as Error)?.message === 'unsupported' ? 'recorder_unsupported' : ['NotAllowedError', 'SecurityError'].includes(name) ? 'mic_denied' : 'recorder_error',
+      { step: 'start', error: e });
     up('rec', { phase: 'denied' });
   }
 }
@@ -368,6 +372,8 @@ export function resumeRec() { media.resumeRecorder(); up('rec', { phase: 'record
 export function stopRec() { if (!media.stopRecorder()) finishRec(); }
 function finishRec() {
   const secs = get().rec.secs;
+  const b = media.recording.blob;
+  diag(secs < 3 || !b ? 'recording_empty' : 'recording_ok', { step: 'stop', secs, size: b?.size ?? 0, mime: media.recording.mime });
   if (secs < 3) up('rec', { phase: 'empty' });
   else {
     up('rec', { phase: 'review' }); set({ player: { key: 'rec', dur: secs, pos: 0, playing: false } });
