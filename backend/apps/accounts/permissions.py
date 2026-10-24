@@ -29,16 +29,19 @@ class IsParent(HasRole):
     roles = (Role.PARENT,)
 
 
-class IsAdminRole(HasRole):
-    """Admin APIs. With ADMIN_REQUIRE_MFA (on when deployed) an admin must first turn on two-step verification;
-    only views marked `mfa_setup_view = True` (MFA setup/confirm) are reachable before that."""
-
-    roles = (Role.ADMIN,)
+class IsAdminRole(BasePermission):
+    """Admin APIs: an account with admin access (admin_access.has_admin_access — the AdminProfile, not the role).
+    A teacher with admin access is an admin only through the admin portal's own session (signed in at the admin login,
+    with two-step verification); the teacher app's session or token never reaches admin APIs. With ADMIN_REQUIRE_MFA
+    (on when deployed) an admin must first turn on two-step verification; only views marked `mfa_setup_view = True`
+    (MFA setup/confirm) are reachable before that."""
 
     def has_permission(self, request, view):
-        if not super().has_permission(request, view):
+        from .admin_access import acts_as_admin, has_admin_access, mfa_required
+
+        u = request.user
+        if not (u and u.is_authenticated and has_admin_access(u) and acts_as_admin(u)):
             return False
-        from .admin_access import mfa_required
 
         if mfa_required(request.user) and not request.user.mfa_enabled and not getattr(view, "mfa_setup_view", False):
             from apps.core.exceptions import ApiError
@@ -66,9 +69,9 @@ class IsContentAuthor(HasRole):
     def has_permission(self, request, view):
         if not super().has_permission(request, view):
             return False
-        if request.user.role == Role.ADMIN:
-            from .admin_access import has
+        from .admin_access import acts_as_admin, has
 
+        if acts_as_admin(request.user):
             return has(request.user, "lessons.manage")
         return True
 
@@ -89,7 +92,9 @@ def linked_child_ids(parent: User) -> QuerySet:
 
 def visible_student_ids(user: User):
     """Students whose learning records this user may read. None = all (admin)."""
-    if user.role == Role.ADMIN:
+    from .admin_access import acts_as_admin
+
+    if acts_as_admin(user):
         return None
     if user.role == Role.STUDENT:
         return [user.pk]

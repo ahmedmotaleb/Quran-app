@@ -10,7 +10,8 @@ export interface Me {
   mfa_enabled: boolean; mfa_required?: boolean; level: string; daily_goal: string; phone_verified?: boolean; teacher_approved?: boolean | null;
   /** «الإشعارات»: false = no phone push for that category (missing = on). */ notify_prefs?: Partial<Record<'tasks' | 'sessions' | 'feedback' | 'news', boolean>>;
   /** Admins only: access level, preset and the permissions the server grants (null for everyone else). */
-  admin_access?: { level: string; preset: string; permissions: string[] } | null;
+  /** Admin access (AdminProfile). A teacher keeps role «teacher» and gets `teacher_admin: true` («معلم + إدارة»). */
+  admin_access?: { level: string; preset: string; permissions: string[]; active?: boolean; teacher_admin?: boolean } | null;
 }
 export interface LoginResult {
   user: Me; token?: string;
@@ -65,7 +66,7 @@ export const mfaConfirm = (otp: string) => api<{ mfa_enabled: boolean }>('POST',
 export const me = () => api<Me>('GET', 'me');
 export const publicSettings = () => api<{ cancel_hours: number; open_signup: boolean; max_recording_seconds: number; join_minutes: number; org_name: string;
   ayah_audio: AyahAudioCfg | null; support_whatsapp: string; show_support_button: boolean; phone_verification?: boolean;
-  makeup?: { enabled: boolean; teachers_grant: boolean; expiry_days: number } }>('GET', 'settings/public');
+  makeup?: { enabled: boolean; teachers_grant: boolean; expiry_days: number }; app_url?: string; admin_url?: string }>('GET', 'settings/public');
 /* ---- parent weekly report (PROMPT 45) ---- */
 export interface WeeklyChild {
   child: { id: number; name: string }; accepted_ayahs_total: number; submissions: number; minutes: number; sessions: number; attendance_rate: number | null;

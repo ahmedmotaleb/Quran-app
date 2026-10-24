@@ -199,7 +199,8 @@ function Portal() {
   const footer = (
     <>
       <AdminInstall dark />
-      <button onClick={toApp} style={{ minHeight: 32, border: 'none', background: 'transparent', color: color.sage, fontSize: 12, textAlign: 'right', padding: '0 8px', cursor: 'pointer', textDecoration: 'underline' }}>{LIVE ? '← تطبيق الحلقة' : '← العودة إلى نموذج الجوال'}</button>
+      <button onClick={toApp} style={{ minHeight: 32, border: 'none', background: 'transparent', color: color.sage, fontSize: 12, textAlign: 'right', padding: '0 8px', cursor: 'pointer', textDecoration: 'underline' }}>
+        {!LIVE ? '← العودة إلى نموذج الجوال' : s.me?.admin_access?.teacher_admin ? '← العودة إلى حساب المعلم' : '← تطبيق الحلقة'}</button>
     </>
   );
 

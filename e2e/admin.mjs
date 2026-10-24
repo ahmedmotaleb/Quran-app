@@ -38,7 +38,7 @@ await step('wrong password is refused', async () => {
 });
 await step('a student account is refused', async () => {
   await signIn('yousef@halqa.app', 'halqa123');
-  await page.getByText('هذا الحساب لا يملك صلاحيات الإدارة.').waitFor();
+  await page.getByText('هذا الحساب لا يملك صلاحية الدخول إلى لوحة الإدارة.').waitFor();
 });
 await step('admin signs in and sees their name', async () => {
   await signIn('admin@halqa.app', 'halqa123');

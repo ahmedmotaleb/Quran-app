@@ -101,9 +101,9 @@ class LessonIn(serializers.Serializer):
             raise serializers.ValidationError({"media": ["ارفع ملف الدرس."]})
         user = self.context["request"].user
         m = MediaObject.objects.filter(pk=mid, purpose=MediaObject.Purpose.LESSON_FILE, state=MediaObject.State.VALIDATED).first()
-        from apps.accounts.admin_access import has
+        from apps.accounts.admin_access import acts_as_admin, has
 
-        if m is None or (not (user.role == Role.ADMIN and has(user, "lessons.manage")) and m.owner_id != user.pk):
+        if m is None or (not (acts_as_admin(user) and has(user, "lessons.manage")) and m.owner_id != user.pk):
             raise serializers.ValidationError({"media": ["الملف غير صالح. ارفعه مرة أخرى."]})
         is_pdf = m.content_type == "application/pdf"
         if (kind == Lesson.Kind.PDF) != is_pdf:

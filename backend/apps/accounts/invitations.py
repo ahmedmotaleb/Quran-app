@@ -92,9 +92,9 @@ class InvitationIn(serializers.Serializer):
 
 
 def _may_manage(user, inv: Invitation) -> bool:
-    from .admin_access import has
+    from .admin_access import acts_as_admin, has
 
-    if user.role == Role.ADMIN:
+    if acts_as_admin(user):
         return has(user, INVITE_PERM.get(inv.purpose, "admins.manage"))
     return inv.created_by_id == user.pk and inv.purpose != P.ADMIN_ACCOUNT
 
@@ -106,11 +106,13 @@ class InvitationListCreate(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from .admin_access import acts_as_admin
+
         u = request.user
-        if u.role not in (Role.ADMIN, Role.TEACHER):
+        if not (acts_as_admin(u) or u.role == Role.TEACHER):
             raise ApiError("permission_denied", "ليست لديك صلاحية لهذا الإجراء.", 403)
         qs = Invitation.objects.select_related("created_by").exclude(revoke_reason="replaced").order_by("-created_at")
-        if u.role == Role.TEACHER:
+        if not acts_as_admin(u):
             qs = qs.filter(created_by=u)
         else:
             from .admin_access import perms_of
@@ -125,15 +127,18 @@ class InvitationListCreate(APIView):
         return Response({"results": rows})
 
     def post(self, request):
-        if request.user.role not in (Role.ADMIN, Role.TEACHER):
+        from .admin_access import acts_as_admin
+
+        if not (acts_as_admin(request.user) or request.user.role == Role.TEACHER):
             raise ApiError("permission_denied", "ليست لديك صلاحية لهذا الإجراء.", 403)
         s = InvitationIn(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
         u, purpose, email = request.user, d["purpose"], d["email"]
-        if not (u.role == Role.ADMIN or (u.role == Role.TEACHER and purpose == P.STUDENT_TEACHER)):
+        admin = acts_as_admin(u)
+        if not (admin or (u.role == Role.TEACHER and purpose == P.STUDENT_TEACHER)):
             raise ApiError("permission_denied", "ليست لديك صلاحية لهذا الإجراء.", 403)
-        if u.role == Role.ADMIN:
+        if admin:
             from .admin_access import require
 
             require(u, INVITE_PERM.get(purpose, "invitations.send"))
@@ -143,9 +148,9 @@ class InvitationListCreate(APIView):
                 if existing.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
                     raise ApiError("account_inactive", "لهذا البريد حساب موقوف أو مؤرشف. أعد تفعيله من صفحة الحساب.", 409)
                 if existing.role == Role.ADMIN:
-                    raise ApiError("email_is_admin", "هذا البريد لحساب إدارة، ولا يكون الحساب الواحد مديرًا ومعلمًا معًا. "
-                                   "ادعُ المعلم ببريد آخر.", 409, {"email": ["بريد حساب إدارة."]})
-                if existing.role == Role.STUDENT and u.role == Role.ADMIN:
+                    raise ApiError("email_is_admin", "هذا البريد لحساب إدارة فقط. ادعُ المعلم ببريد آخر، أو امنح معلمًا موجودًا "
+                                   "صلاحيات الإدارة من «الإدارة والصلاحيات».", 409, {"email": ["بريد حساب إدارة."]})
+                if existing.role == Role.STUDENT and admin:
                     # Nothing is emailed: the admin may promote this student account instead (promote-teacher).
                     raise ApiError("existing_student", f"هذا البريد مسجّل بالفعل كحساب طالب ({existing.full_name}). "
                                    "لم تُرسل أي دعوة. يمكنك ترقية حساب الطالب نفسه إلى معلم.", 409,

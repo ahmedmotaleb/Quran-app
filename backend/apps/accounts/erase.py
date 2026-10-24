@@ -62,6 +62,8 @@ def _upcoming(u: User):
 def _check(u: User) -> None:
     if u.role == Role.ADMIN:
         raise EraseRefused("admin", "لا يمكن حذف حساب مدير.")
+    if getattr(u, "admin_profile", None) is not None:
+        raise EraseRefused("admin_holder", "لهذا المعلم صلاحيات إدارة. أزل صلاحيات الإدارة أولًا ثم احذف الحساب.")
     if is_deleted(u):
         raise EraseRefused("already_deleted", "محذوف بالفعل.")
     n = _upcoming(u).count()
@@ -86,7 +88,7 @@ def preflight(u: User) -> dict:
     from apps.scheduling.models import Booking
 
     up = _upcoming(u)
-    return {"id": u.pk, "role": u.role, "deletable": u.role != Role.ADMIN and not is_deleted(u),
+    return {"id": u.pk, "role": u.role, "deletable": u.role != Role.ADMIN and getattr(u, "admin_profile", None) is None and not is_deleted(u),
             "upcoming_sessions": up.count(),
             "upcoming_bookings": Booking.objects.filter(occurrence__in=up, status=Booking.Status.CONFIRMED).count(),
             "mode": "anonymized" if _has_history(u) else "removed",

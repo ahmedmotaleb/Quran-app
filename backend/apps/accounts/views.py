@@ -205,8 +205,13 @@ class AdminLoginView(_BaseLogin):
     portal = "admin"
 
     def check_portal(self, user, d):
-        if user.role != Role.ADMIN:
-            raise ApiError("not_admin", "هذا الحساب لا يملك صلاحيات الإدارة.", 403)
+        from .admin_access import has_admin_access, is_teacher_admin
+
+        if not has_admin_access(user):
+            raise ApiError("not_admin", "هذا الحساب لا يملك صلاحية الدخول إلى لوحة الإدارة.", 403)
+        if is_teacher_admin(user) and d["client"] == "native":
+            # A teacher's admin access lives only in the portal's own web session (never in an app token).
+            raise ApiError("not_admin", "ادخل لوحة الإدارة من المتصفح.", 403)
         if user.mfa_enabled and not d["otp"] and d["client"] != "native":
             from . import trusted
 
@@ -635,6 +640,11 @@ class AdminUserStatus(APIView):
         user = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN).exclude(status=AccountStatus.DELETED), pk=pk)
         s = StatusChangeSerializer(data=request.data)
         s.is_valid(raise_exception=True)
+        from .admin_access import holder_guard
+
+        refused = holder_guard(request.user, user, new_status=s.validated_data["status"])
+        if refused:
+            raise ApiError("admin_holder", refused, 403)
         old = user.status
         if old == AccountStatus.SUSPENDED and s.validated_data["status"] == AccountStatus.ACTIVE and len(s.validated_data["reason"].strip()) < 3:
             raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"reason": ["اذكر سبب إعادة التفعيل."]})

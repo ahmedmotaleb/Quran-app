@@ -8,6 +8,13 @@ it (`IsAdminRole` reads the view's `admin_perm`); the portal only hides what the
 - Admin: exactly the permissions granted. An admin can never edit themselves, edit an owner, create an owner, or
   grant a permission they do not hold.
 - An admin account without a profile has no permissions (deny by default).
+
+Teacher + admin on one account (owner request, 24 October 2026): a teacher keeps `role = teacher` and gets an
+AdminProfile. Admin access always comes from the profile (`has_admin_access`), never from the role:
+- the admin portal's own session (signed in at the admin login, with two-step verification) is the admin context;
+  the same person in the teacher app is a teacher and nothing more (`acts_as_admin`);
+- `AdminProfile.is_active = False` («تعطيل صلاحيات الإدارة») stops admin access without touching the account;
+- removing the profile («إزالة صلاحيات الإدارة») leaves the teacher account exactly as it was.
 """
 from __future__ import annotations
 
@@ -103,40 +110,103 @@ def validate(perms) -> frozenset[str]:
     return frozenset(perms)
 
 
-def perms_of(user) -> frozenset[str]:
+def profile_of(user):
+    return getattr(user, "admin_profile", None) if getattr(user, "is_authenticated", False) else None
+
+
+def has_admin_access(user) -> bool:
+    """May this account use the admin portal at all? An active account with an active AdminProfile (any role — a
+    teacher keeps `role = teacher`), or a traditional admin account (`role = admin`) without a profile, which gets in
+    with no permissions (deny by default), as before. Students and parents never have a profile."""
     from .models import Role
 
-    if not getattr(user, "is_authenticated", False) or user.role != Role.ADMIN:
-        return frozenset()
-    prof = getattr(user, "admin_profile", None)
-    if prof is None:
+    if not getattr(user, "is_authenticated", False) or not user.is_active or not user.can_sign_in:
+        return False
+    prof = profile_of(user)
+    if prof is not None:
+        return bool(prof.is_active) and user.role in (Role.ADMIN, Role.TEACHER)
+    return user.role == Role.ADMIN
+
+
+def is_teacher_admin(user) -> bool:
+    from .models import Role
+
+    return getattr(user, "role", None) == Role.TEACHER and profile_of(user) is not None
+
+
+def acts_as_admin(user) -> bool:
+    """This request is made with admin authority: a traditional admin account, or a teacher + admin account signed in
+    to the admin portal (its own session; set by AdminPortalSessionAuthentication). In the teacher app the same
+    account is only a teacher."""
+    from .models import Role
+
+    return getattr(user, "role", None) == Role.ADMIN or bool(getattr(user, "_admin_ctx", False))
+
+
+def admin_users():
+    """Accounts that receive admin notices: traditional admins and teachers with active admin access."""
+    from django.db.models import Q
+
+    from .models import AccountStatus, Role, User
+
+    return (User.objects.filter(status=AccountStatus.ACTIVE, is_active=True)
+            .filter(Q(role=Role.ADMIN) & (Q(admin_profile__isnull=True) | Q(admin_profile__is_active=True))
+                    | Q(role=Role.TEACHER, admin_profile__is_active=True)).distinct())
+
+
+def perms_of(user) -> frozenset[str]:
+    prof = profile_of(user)
+    if prof is None or not prof.is_active:
         return frozenset()
     return ALL if prof.access_level == "owner" else frozenset(prof.permissions or ())
 
 
 def mfa_required(user) -> bool:
-    """Two-step verification before any admin page: where the deployment requires it (production), and always for
-    admins invited through the portal."""
+    """Two-step verification before any admin page: where the deployment requires it (production), always for admins
+    invited through the portal, and always for a teacher given admin access."""
     from django.conf import settings
 
-    prof = getattr(user, "admin_profile", None)
-    return bool(settings.ADMIN_REQUIRE_MFA or (prof is not None and prof.created_by_id is not None))
+    prof = profile_of(user)
+    return bool(settings.ADMIN_REQUIRE_MFA or (prof is not None and prof.created_by_id is not None) or is_teacher_admin(user))
 
 
 def access_out(user) -> dict | None:
-    """What the portal needs to show only allowed modules (the server still checks every request)."""
+    """What the portal needs to show only allowed modules (the server still checks every request). For a teacher
+    with admin access the teacher app uses it to show «لوحة الإدارة»."""
     from .models import Role
 
-    if user.role != Role.ADMIN:
+    prof = profile_of(user)
+    if user.role != Role.ADMIN and prof is None:
         return None
-    prof = getattr(user, "admin_profile", None)
     return {"level": prof.access_level if prof else "", "preset": prof.preset if prof else "",
-            "permissions": sorted(perms_of(user))}
+            "permissions": sorted(perms_of(user)), "active": bool(prof.is_active) if prof else True,
+            "teacher_admin": is_teacher_admin(user)}
+
+
+def holder_guard(actor, target, *, new_status: str | None = None) -> str | None:
+    """Changes to the ACCOUNT of a teacher who also has admin access (suspend, archive, delete from the people pages):
+    only someone who manages admins (and, for an owner, only another owner), never oneself, and never the last active
+    owner. Returns the refusal message, or None."""
+    if profile_of(target) is None:
+        return None
+    if target.pk == getattr(actor, "pk", None):
+        return "لا يمكنك تغيير حالة حسابك بنفسك."
+    if not has(actor, "admins.manage"):
+        return "لهذا الحساب صلاحيات إدارة؛ يغيّر حالته من يملك صلاحية إدارة المسؤولين."
+    if is_owner(target):
+        if not is_owner(actor):
+            return "إدارة حسابات المالكين متاحة للمالك فقط."
+        from .models import AccountStatus, AdminProfile
+
+        if new_status != AccountStatus.ACTIVE and not AdminProfile.objects.filter(
+                access_level="owner", is_active=True, user__status=AccountStatus.ACTIVE, user__is_active=True).exclude(user=target).exists():
+            return "يجب أن يبقى مالك نشط واحد على الأقل."
+    return None
 
 
 def is_owner(user) -> bool:
-    prof = getattr(user, "admin_profile", None)
-    return bool(prof and prof.access_level == "owner")
+    prof = profile_of(user)
+    return bool(prof and prof.is_active and prof.access_level == "owner")
 
 
 def has(user, perm: str) -> bool:

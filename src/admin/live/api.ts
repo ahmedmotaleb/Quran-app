@@ -182,6 +182,8 @@ export const deleteView = (id: number) => api<null>('DELETE', `admin/saved-views
 export interface AdminRow {
   id: number; full_name: string; email: string; phone: string; status: AccountStatus; mfa_enabled: boolean; last_login: string | null;
   level: 'owner' | 'admin' | ''; preset: string; preset_label: string; permissions: string[]; is_self: boolean;
+  /** «معلم + إدارة»: a teacher account with admin access (role stays teacher). */
+  teacher_admin: boolean; access_active: boolean; access_reason: string;
 }
 export interface AdminInvite extends Omit<Invitation, 'purpose'> { purpose: 'admin_account'; level: string; preset: string }
 export interface AdminsPage {
@@ -193,6 +195,11 @@ export const listAdmins = () => api<AdminsPage>('GET', 'admin/admins');
 export const inviteAdmin = (d: AdminAccess & { full_name: string; email: string; otp: string }) =>
   api<{ id: number; email_sent: boolean; expires_at: string }>('POST', 'admin/admins', d);
 export const updateAdmin = (id: number, d: AdminAccess & { otp: string }) => api<AdminRow>('PATCH', `admin/admins/${id}`, d);
+export type TeacherCandidate = { id: number; full_name: string; email: string; phone: string; status: string; mfa_enabled: boolean };
+export const teacherCandidates = (q: string) => api<{ results: TeacherCandidate[] }>('GET', `admin/admins/teacher-candidates?q=${encodeURIComponent(q)}`);
+export const grantTeacherAccess = (d: AdminAccess & { teacher: number; otp: string }) => api<AdminRow>('POST', 'admin/admins/grant-teacher-access', d);
+export const teacherAccess = (id: number, action: 'suspend' | 'reactivate' | 'remove', reason: string, otp: string) =>
+  api<AdminRow & { removed: boolean }>('POST', `admin/admins/${id}/access`, { action, reason, otp });
 export const setAdminStatus = (id: number, status: 'active' | 'suspended', reason: string, otp: string) =>
   api<AdminRow>('POST', `admin/admins/${id}/status`, { status, reason, otp });
 

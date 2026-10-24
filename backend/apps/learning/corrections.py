@@ -87,9 +87,9 @@ class CorrectionPatch(serializers.Serializer):
 
 
 def _can_teach(user, student_id: int) -> bool:
-    if user.role == Role.ADMIN:
-        from apps.accounts.admin_access import has
+    from apps.accounts.admin_access import acts_as_admin, has
 
+    if acts_as_admin(user):
         return has(user, "feedback.view")
     return user.role == Role.TEACHER and assigned_student_ids(user).filter(student_id=student_id).exists()
 

@@ -10,6 +10,13 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { disablePush, enablePush, pushState, type PushState } from '@/pwa/push';
 import { GoogleCalendarCard } from '@/screens/teacher/GoogleSessions';
 
+/** The admin portal may run on its own address (the admin service); ask the server where. */
+async function openAdmin() {
+  let base = '';
+  try { base = (await E.publicSettings()).admin_url ?? ''; } catch { /* same origin */ }
+  window.location.href = `${base}/admin/`;
+}
+
 const NOTIFS = [['tasks', 'تذكير بالواجبات'], ['sessions', 'تذكير قبل الجلسات'], ['feedback', 'تقييمات المعلم'], ['news', 'أخبار الحلقة']] as const;
 const rowBtn = { width: '100%', minHeight: 52, border: 'none', background: 'transparent', display: 'flex', alignItems: 'center', gap: 8, padding: 0, cursor: 'pointer', color: color.ink, fontSize: 15 } as const;
 
@@ -72,6 +79,15 @@ export default function Account() {
           <span style={{ fontSize: 14, fontWeight: 700 }}>{tz.label} ({tz.gmt})</span><span style={{ color: color.primary }}><Icon name="chevL" size={18} /></span>
         </button>
       </section>
+      {LIVE && role === 'teacher' && s.me?.admin_access?.active && (
+        // «معلم + إدارة»: the same account opens the admin portal (its own sign-in with two-step verification).
+        <button onClick={openAdmin} style={{ minHeight: 60, padding: '0 16px', borderRadius: 16, border: `1px solid ${color.border}`, background: color.card, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', cursor: 'pointer', color: color.ink }}>
+          <span style={{ color: color.primary }}><Icon name="shield" /></span>
+          <span style={{ flex: 1 }}><span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>لوحة الإدارة</span>
+            <span style={{ display: 'block', fontSize: 12, color: color.muted }}>لديك صلاحيات إدارة على هذا الحساب</span></span>
+          <span style={{ color: color.primary }}><Icon name="chevL" /></span>
+        </button>
+      )}
       {LIVE && role === 'teacher' && <GoogleCalendarCard />}
       {LIVE && <PhoneRow />}
       <InstallRow />

@@ -119,8 +119,13 @@ def _base():
 
 def _set_status(new: str):
     def run(u: User, actor, reason: str):
+        from .admin_access import holder_guard
+
         if u.status == new:
             raise Skip("unchanged", "في هذه الحالة بالفعل.")
+        refused = holder_guard(actor, u, new_status=new)
+        if refused:
+            raise Refuse("admin_holder", refused)
         if new == AccountStatus.SUSPENDED and u.status == AccountStatus.ARCHIVED:
             raise Refuse("archived", "الحساب مؤرشف؛ أعد تفعيله أولًا.")
         u.status, u.status_reason, u.status_changed_at = new, reason[:200], timezone.now()

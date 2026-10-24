@@ -285,7 +285,9 @@ def _notify_suspended(student_id: int, booking_id: int | None) -> None:
         notify(g.guardian, "account_suspended_child", f"تم إيقاف حساب {first}",
                f"تم إيقاف حساب {first} بسبب تجاوز الحد المسموح للغياب بدون عذر.", link="/parent",
                dedupe=f"absence:{booking_id}:suspended:g{g.guardian_id}", data={"child": s.pk})
-    for a in User.objects.filter(role=Role.ADMIN, status=AccountStatus.ACTIVE):
+    from apps.accounts.admin_access import admin_users
+
+    for a in admin_users():
         notify(a, "admin_absence_suspension", "إيقاف تلقائي بسبب الغياب", f"{s.full_name}: 3 غيابات بدون عذر.", link="/admin",
                dedupe=f"absence:{booking_id}:suspended:a{a.pk}", data={"student": s.pk})
 
@@ -294,7 +296,9 @@ def _notify_admins_review(student_id: int, n: int, booking_id: int | None) -> No
     from apps.notifications.services import notify
 
     s = User.objects.get(pk=student_id)
-    for a in User.objects.filter(role=Role.ADMIN, status=AccountStatus.ACTIVE):
+    from apps.accounts.admin_access import admin_users
+
+    for a in admin_users():
         notify(a, "admin_absence_review", "مراجعة إيقاف بسبب الغياب",
                f"{s.full_name}: صُحّح الحضور وأصبح الغياب بدون عذر {n}. راجع الحساب وأعد تفعيله إن كان مناسبًا.", link="/admin",
                dedupe=f"absence-review:{s.pk}:{booking_id}:{n}", data={"student": s.pk})

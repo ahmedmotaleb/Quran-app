@@ -90,7 +90,9 @@ def cancel(*, booking_id: int, by, reason: str = "", now: datetime | None = None
         b = Booking.objects.select_for_update().select_related("occurrence").get(pk=booking_id)
         is_owner = b.student_id == by.pk
         is_teacher = b.occurrence.teacher_id == by.pk
-        if not (is_owner or is_teacher or by.role == Role.ADMIN):
+        from apps.accounts.admin_access import acts_as_admin
+
+        if not (is_owner or is_teacher or acts_as_admin(by)):
             raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
         if is_owner and by.role == Role.STUDENT and reason != "rescheduled":
             # Owner decision (23 Oct 2026): students never cancel; they send «طلب اعتذار» (apps/scheduling/excuses.py).
