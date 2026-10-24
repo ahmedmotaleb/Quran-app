@@ -7,7 +7,8 @@ import { isStandalone } from './pwa/install';
 import { LIVE } from './api/client';
 
 const AdminApp = lazy(() => import('./admin/AdminApp'));
-import { parentLoginEntry } from '@/store/store';
+import { parentLoginEntry, setState } from '@/store/store';
+import { googleReturnResult } from '@/screens/teacher/GoogleSessions';
 const DesignSystem = lazy(() => import('./designsystem/DesignSystem'));
 const SetPasswordPage = lazy(() => import('./screens/auth/LinkPages').then((m) => ({ default: m.SetPasswordPage })));
 const AcceptInvitePage = lazy(() => import('./screens/auth/LinkPages').then((m) => ({ default: m.AcceptInvitePage })));
@@ -43,7 +44,18 @@ function Routes() {
   if (h.startsWith('#/reset')) return <Suspense fallback={null}><SetPasswordPage /></Suspense>;
   if (h.startsWith('#/invite')) return <Suspense fallback={null}><AcceptInvitePage /></Suspense>;
   if (h.startsWith('#/parent')) return <ParentEntry />;
+  if (h.startsWith('#/google')) return <GoogleReturn />;
   return <MobileApp />;
+}
+
+/** `#/google?result=…`: back from Google's consent page (teacher «ربط Google Calendar»). */
+function GoogleReturn() {
+  useEffect(() => {
+    const r = googleReturnResult();
+    if (r) setState({ googleResult: r }); // shown on «حسابي» once the session is restored (live.ts)
+    setTimeout(() => window.dispatchEvent(new HashChangeEvent('hashchange')), 0);
+  }, []);
+  return null;
 }
 
 /** `#/parent` (or `#/parent/login`): the app opened on the parent sign-in. The hash is cleared so in-app back works. */

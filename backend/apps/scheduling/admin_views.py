@@ -226,7 +226,14 @@ def _booking_out(b: Booking) -> dict:
             "kind": o.kind, "circle": o.circle.name if o.circle_id else None, "session_status": o.status,
             "teacher": {"id": o.teacher_id, "name": o.teacher.full_name}, "student": {"id": b.student_id, "name": b.student.full_name},
             "cancel_reason": b.cancel_reason, "cancelled_at": b.cancelled_at.isoformat() if b.cancelled_at else None,
-            "cancelled_by": b.cancelled_by.full_name if b.cancelled_by_id else None, "created_at": b.created_at.isoformat()}
+            "cancelled_by": b.cancelled_by.full_name if b.cancelled_by_id else None, "created_at": b.created_at.isoformat(),
+            "occurrence": o.pk, "google": _google_brief(o)}
+
+
+def _google_brief(o) -> dict | None:
+    """Google Calendar state of a teacher-created session (no ids, no links, no tokens)."""
+    ev = getattr(o, "google_event", None)
+    return {"sync_status": ev.sync_status, "meet_ready": bool(ev.meet_url)} if ev is not None else None
 
 
 class AdminBookings(AdminView):
@@ -237,7 +244,7 @@ class AdminBookings(AdminView):
         p = request.query_params
         # Past bookings default to newest first; upcoming ones to soonest first.
         sort = p.get("sort") or ("-starts" if p.get("when") == "past" else "starts")
-        qs = BOOKING_FILTERS.run(Booking.objects.select_related("occurrence__teacher", "occurrence__circle", "student", "cancelled_by"), p, sort=sort)
+        qs = BOOKING_FILTERS.run(Booking.objects.select_related("occurrence__teacher", "occurrence__circle", "occurrence__google_event", "student", "cancelled_by"), p, sort=sort)
         return _page(self, request, qs, _booking_out)
 
 

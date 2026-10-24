@@ -175,6 +175,7 @@ class TeacherOccurrences(APIView):
         today = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
         qs = (SessionOccurrence.objects.filter(teacher=request.user, starts_at__gte=today - timedelta(days=7), starts_at__lt=today + timedelta(days=days + 1))
               .exclude(status=SessionOccurrence.Status.CANCELLED)
+              .select_related("circle", "google_event", "google_event__student")
               .prefetch_related(Prefetch("bookings", queryset=Booking.objects.select_related("student", "assignment", "excuse")))
               .order_by("starts_at"))
         return Response(TeacherOccurrenceSerializer(qs, many=True).data)
@@ -237,6 +238,8 @@ class TeacherOccurrenceMeeting(APIView):
                 raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
             if o.status == SessionOccurrence.Status.CANCELLED or o.ends_at <= timezone.now():
                 raise ApiError("closed", "انتهت هذه الجلسة أو أُلغيت.", 409)
+            if hasattr(o, "google_event"):
+                raise ApiError("google_managed", "رابط Google Meet لهذه الجلسة يُنشأ تلقائيًا ولا يُعدَّل يدويًا.", 409)
             o.meeting_url, o.meeting_provider = url, provider
             o.save(update_fields=["meeting_url", "meeting_provider", "updated_at"])
         audit("occurrence.meeting_link_set" if url else "occurrence.meeting_link_cleared", actor=request.user, target=o, request=request,

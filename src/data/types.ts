@@ -50,6 +50,8 @@ export interface Session {
   /** The student's excuse for this session (students never cancel; they ask to be excused). */
   excuse?: { status: 'pending' | 'approved' | 'rejected'; reason?: string; teacher_response?: string } | null;
   canExcuse?: boolean; excuseDeadline?: string;
+  /** Teacher-created session: «حفظ» / «مراجعة» … and an optional title and preparation note. */
+  topic?: string; title?: string; prepNote?: string;
 }
 
 /** Live mode adds the occurrence id, its instant and kind; `h` is then local hour + minutes/60. */

@@ -10,3 +10,5 @@ boto3==1.40.70  # S3-compatible private media (R2)
 pywebpush==2.0.3  # optional Web Push (off until VAPID keys are configured)
 phonenumbers==9.0.38  # phone numbers normalized to E.164 (login with a verified phone)
 pillow==13.0.0  # support screenshots are re-encoded (strips EXIF/location, rejects non-images)
+requests==2.34.2  # Google Calendar + Meet client (apps/integrations/google.py)
+cryptography==50.0.2  # Fernet encryption of teachers' Google refresh tokens

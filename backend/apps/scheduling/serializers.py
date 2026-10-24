@@ -19,7 +19,8 @@ class SlotSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SessionOccurrence
-        fields = ["id", "teacher", "teacher_name", "kind", "starts_at", "ends_at", "capacity", "seats_left", "circle_name"]
+        fields = ["id", "teacher", "teacher_name", "kind", "starts_at", "ends_at", "capacity", "seats_left", "circle_name",
+                  "topic", "title", "prep_note"]
 
     def get_seats_left(self, o):
         return max(0, o.capacity - getattr(o, "confirmed_count", 0) - getattr(o, "held_count", 0))
@@ -93,7 +94,20 @@ class TeacherOccurrenceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SessionOccurrence
-        fields = ["id", "kind", "starts_at", "ends_at", "capacity", "status", "bookings", "meeting_provider", "meeting_url"]
+        fields = ["id", "kind", "starts_at", "ends_at", "capacity", "status", "bookings", "meeting_provider", "meeting_url",
+                  "topic", "title", "prep_note", "circle_name", "google"]
+
+    circle_name = serializers.CharField(source="circle.name", default=None)
+    google = serializers.SerializerMethodField()
+
+    def get_google(self, o):
+        """Google Calendar state of a teacher-created session (null for other sessions). No tokens, ever."""
+        ev = getattr(o, "google_event", None) if hasattr(o, "google_event") else None
+        if ev is None:
+            return None
+        from apps.integrations.views import google_out
+
+        return {**google_out(ev, teacher_view=True), "student": ev.student_id, "student_name": ev.student.full_name if ev.student else ""}
 
     def get_bookings(self, o):
         from .views import excuse_out

@@ -23,7 +23,7 @@ class Command(BaseCommand):
 
     def handle(self, **_):
         steps = ["session_reminders", "generate_reviews", "sync_circle_members", "waitlist_tick", "archive_smoke_accounts", "parent_weekly_reports",
-                 "send_pending_setup_emails"]
+                 "send_pending_setup_emails", "google_calendar_sync"]
         if settings.MEDIA_STORAGE != "none":
             steps += ["purge_orphan_media", "purge_reviewed_recordings"]
         failed = []

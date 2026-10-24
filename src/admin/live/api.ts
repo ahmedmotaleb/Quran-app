@@ -65,7 +65,12 @@ export interface Booking {
   id: number; status: 'confirmed' | 'cancelled'; attendance: string; starts_at: string; ends_at: string; kind: 'individual' | 'group';
   circle: string | null; session_status: string; teacher: { id: number; name: string }; student: { id: number; name: string };
   cancel_reason: string; cancelled_at: string | null; cancelled_by: string | null;
+  occurrence: number; google: { sync_status: string; meet_ready: boolean } | null;
 }
+export interface SessionGoogle { sync_status: string; meet_ready: boolean; error: string; error_message: string; last_synced_at: string | null;
+  cancel_pending: boolean; event_id: string; calendar_url: string }
+export const sessionGoogle = (occ: number) => api<SessionGoogle>('GET', `admin/sessions/${occ}/google`);
+export const resyncSessionGoogle = (occ: number) => api<SessionGoogle>('POST', `admin/sessions/${occ}/google`, undefined, { timeoutMs: 60_000 });
 export const listCircles = (p: P) => api<Page<Circle>>('GET', `admin/circles?${qs(p)}`);
 export const getCircle = (id: number) => api<Circle & { sessions: SessionRow[] }>('GET', `admin/circles/${id}`);
 export const createCircle = (d: { name: string; teacher: number; capacity: number; level: string; schedule_note: string }) => api<Circle>('POST', 'admin/circles', d);

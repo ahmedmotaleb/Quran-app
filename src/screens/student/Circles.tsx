@@ -1,3 +1,4 @@
+import { TOPIC, addToCalendar } from './LiveJoin';
 import { useEffect, useState, type FormEvent } from 'react';
 import { color, font } from '@/theme/tokens';
 import type { Session, Slot } from '@/data/types';
@@ -399,12 +400,14 @@ export function SessionDetails() {
         <KVCard rows={[
           ['المعلم', x.teacherName],
           ['التاريخ والوقت', <span style={{ textAlign: 'left' }}><span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>{x.dateFull} · {x.timeL}</span><span style={{ display: 'block', fontSize: 12, color: color.muted }}>{x.tzL}</span></span>],
+          ...(x0.topic ? [['نوع الجلسة', `جلسة ${TOPIC[x0.topic] ?? ''}${x0.title ? ` — ${x0.title}` : ''}`] as [string, string]] : []),
           ['النوع والمدة', `${x.type} · ${x.dur} دقيقة`],
           ['مهمة الجلسة', x.taskL],
           ...(att ? [['الحضور', att] as [string, string]] : []),
         ]} />
         {ex && <ExcuseStatus ex={ex} />}
         {x.note && <p style={{ margin: 0, fontSize: 14, color: color.body, background: color.sand, padding: 12, borderRadius: 12 }}>ملاحظتك: {x.note}</p>}
+        {x0.prepNote && <p style={{ margin: 0, fontSize: 14, color: color.body, background: color.sand, padding: 12, borderRadius: 12 }}>للتحضير: {x0.prepNote}</p>}
         {x.summary && (
           <div style={{ background: color.sageTint, borderRadius: 16, padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
             <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: color.primary }}>ملخص المعلم بعد الجلسة</p>
@@ -415,9 +418,11 @@ export function SessionDetails() {
         {x.active && (
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
             {x.isToday && <button onClick={() => go('live', { id: x.id })} style={primaryBtn()}><Icon name="video" /> {s.liveMode ? 'الدخول للجلسة' : 'ادخل غرفة الانتظار'}</button>}
-            {x.notToday && <p style={muted(13, { textAlign: 'center' })}>يُفتح دخول الجلسة قبل الموعد بـ 10 دقائق.</p>}
+            {x.notToday && <p style={muted(13, { textAlign: 'center' })}>سيظهر زر الدخول قبل الموعد بـ {s.pub.join_minutes} دقيقة.</p>}
+            {s.liveMode && x0.startsAt && <button onClick={() => addToCalendar(x0)} style={outlineBtn(46, 14)}><Icon name="cal" size={18} /> إضافة إلى التقويم</button>}
             <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={() => rescheduleSession(x0)} style={outlineBtn(52, 15, { flex: 1 })}>إعادة الجدولة</button>
+              {/* A session the teacher created (with its Google invite) is moved by the teacher, not rebooked by the student. */}
+              {!x0.topic && <button onClick={() => rescheduleSession(x0)} style={outlineBtn(52, 15, { flex: 1 })}>إعادة الجدولة</button>}
               {/* Students never cancel: they ask to be excused and the teacher decides. */}
               {!ex && (s.liveMode ? x0.canExcuse : true) && <button onClick={() => setAsking(true)} style={outlineBtn(52, 15, { flex: 1 })}>طلب اعتذار</button>}
             </div>

@@ -27,7 +27,8 @@ export interface ApiTeacher {
   id: number; full_name: string; timezone: string; specialization: string; bio: string; audience: string; levels: string; tags: string[];
   offers_individual: boolean; offers_group: boolean;
 }
-export interface ApiSlot { id: number; teacher: number; teacher_name: string; kind: 'individual' | 'group'; starts_at: string; ends_at: string; capacity: number; seats_left: number }
+export interface ApiSlot { id: number; teacher: number; teacher_name: string; kind: 'individual' | 'group'; starts_at: string; ends_at: string; capacity: number; seats_left: number;
+  topic?: string; title?: string; prep_note?: string }
 export interface ApiBooking {
   id: number; occurrence: ApiSlot; student: number; student_name: string; status: 'confirmed' | 'cancelled'; assignment: number | null;
   note: string; attendance: string; cancelled_at: string | null; cancel_reason: string; created_at: string; can_join: boolean;
@@ -166,10 +167,29 @@ export const giveFeedback = (id: number, body: {
 export const teacherStudents = () => api<Page<ApiTeacherStudent>>('GET', 'teacher/students?page_size=100');
 export interface ApiTeacherOcc {
   id: number; kind: 'individual' | 'group'; starts_at: string; ends_at: string; capacity: number; status: string;
-  meeting_provider: string; meeting_url: string;
+  meeting_provider: string; meeting_url: string; topic?: string; title?: string; prep_note?: string; circle_name?: string | null;
+  /** Teacher-created session with its Google Calendar event (null for other sessions). */
+  google?: ApiGoogleEvent | null;
   bookings: { id: number; student: number; student_name: string; attendance: string; assignment_title: string; note: string; excuse: ApiExcuse | null;
     makeup?: 'available' | 'used' | 'expired' | 'revoked' | null }[];
 }
+export interface ApiGoogleEvent { sync_status: 'pending' | 'ready' | 'failed' | 'reconnect_required' | 'cancelled'; meet_ready: boolean; error: string;
+  error_message: string; last_synced_at: string | null; cancel_pending: boolean; calendar_url?: string; student?: number | null; student_name?: string }
+export interface ApiGoogleStatus { configured: boolean; status: 'not_connected' | 'active' | 'reconnect_required'; email: string; connected_at: string | null }
+export const googleStatus = () => api<ApiGoogleStatus>('GET', 'teacher/integrations/google/status');
+export const googleConnect = () => api<{ auth_url: string }>('POST', 'teacher/integrations/google/connect');
+export const googleDisconnect = () => api<ApiGoogleStatus>('POST', 'teacher/integrations/google/disconnect');
+export type SessionTopic = 'hifz' | 'review' | 'tajweed' | 'test' | 'other';
+export interface ApiTeacherSession { id: number; status: string; topic: SessionTopic; topic_label: string; title: string; prep_note: string; starts_at: string;
+  ends_at: string; minutes: number; with: { kind: 'student' | 'circle'; id: number; name: string } | null; meeting_url: string; google: ApiGoogleEvent | null }
+/** «إنشاء الجلسة»: the same request id on a retry returns the same session (never a second Google event). Google may
+ *  take a little longer: the server waits up to ~1 minute, so this call does too. */
+export const createTeacherSession = (body: { student?: number; circle?: number; topic: SessionTopic; date: string; time: string; minutes: number; title: string; prep_note: string }, key: string) =>
+  api<ApiTeacherSession>('POST', 'teacher/sessions', body, { idempotencyKey: key, timeoutMs: 60_000 });
+export const rescheduleTeacherSession = (id: number, body: { date?: string; time?: string; minutes?: number; title?: string }) =>
+  api<ApiTeacherSession>('PATCH', `teacher/sessions/${id}`, body, { timeoutMs: 45_000 });
+export const cancelTeacherSession = (id: number, reason: string) => api<ApiTeacherSession>('POST', `teacher/sessions/${id}/cancel`, { reason }, { timeoutMs: 45_000 });
+export const retryTeacherSession = (id: number) => api<ApiTeacherSession>('POST', `teacher/sessions/${id}/retry`, undefined, { timeoutMs: 60_000 });
 export const teacherOccurrences = (days = 8) => api<ApiTeacherOcc[]>('GET', `teacher/occurrences?days=${days}`);
 export const openSlot = (starts_at: string, minutes = 45) => api<ApiTeacherOcc>('POST', 'teacher/occurrences', { starts_at, minutes });
 export const closeSlot = (id: number) => api<null>('POST', `teacher/occurrences/${id}/close`);
@@ -250,6 +270,7 @@ export function toSession(b: ApiBooking): Session {
     id: String(b.id), t: String(o.teacher), teacherName: o.teacher_name, h: 0, type: o.kind === 'group' ? 'جماعية' : 'فردية', dur: minutes,
     status: b.status === 'cancelled' ? 'cancelled' : past ? 'completed' : 'confirmed',
     task: b.assignment ? String(b.assignment) : null, note: b.note, startsAt: o.starts_at, endsAt: o.ends_at, canJoin: b.can_join, hasLink: b.has_meeting_link, attendance: b.attendance,
+    topic: o.topic || '', title: o.title || '', prepNote: o.prep_note || '',
     excuse: b.excuse, canExcuse: b.can_excuse, excuseDeadline: b.excuse_deadline,
   };
 }

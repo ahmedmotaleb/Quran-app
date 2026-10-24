@@ -70,6 +70,8 @@ const initial = () => ({
   /** True when a backend is configured (VITE_API_BASE_URL); demo data otherwise. */
   liveMode: LIVE,
   /** Public platform settings from the server (live mode); safe defaults until loaded. */
+  /** Back from Google's consent page (`#/google?result=…`): shown once on the Google Calendar card. */
+  googleResult: '' as string,
   pub: { cancel_hours: 12, open_signup: true, max_recording_seconds: 900, join_minutes: 10, ayah_audio: null as import('@/api/endpoints').AyahAudioCfg | null, org_name: '', support_email: '', support_whatsapp: '', show_support_button: false, phone_verification: false,
     makeup: null as null | { enabled: boolean; teachers_grant: boolean; expiry_days: number } },
   me: null as Me | null,

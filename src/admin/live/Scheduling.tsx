@@ -296,7 +296,7 @@ export function BookingsLive() {
   const params = { ...listParams(q), when, sort, page: String(page) };
   const L = useServerList((p) => A.listBookings(p), params);
   const filter = filterOf(params); const sel = useSelection(JSON.stringify(filter));
-  const [cancel, setCancel] = useState<A.Booking | null>(null);
+  const [cancel, setCancel] = useState<A.Booking | null>(null); const [google, setGoogle] = useState<A.Booking | null>(null);
   // Bookings change while the page is open (students book and cancel): refresh every minute.
   useEffect(() => { const t = setInterval(() => void L.reload(), 60000); return () => clearInterval(t); }, [L.reload]); // eslint-disable-line react-hooks/exhaustive-deps
   const st = q.status ?? 'all';
@@ -306,6 +306,9 @@ export function BookingsLive() {
     { key: 't', label: 'المعلم', sort: 'teacher', cell: (b) => b.teacher.name },
     { key: 'k', label: 'النوع', cell: (b) => (b.circle ? `حلقة: ${b.circle}` : b.kind === 'group' ? 'جماعية' : 'فردية') },
     { key: 'a', label: 'الحضور', cell: (b) => ATT[b.attendance] ?? '—' },
+    { key: 'g', label: 'Google', cell: (b) => (b.google
+      ? <button onClick={() => setGoogle(b)} aria-label={`Google: ${b.student.name}`} style={{ ...smallBtn(), color: b.google.meet_ready ? color.primary : color.dangerInk }}>{b.google.meet_ready ? 'Meet ✓' : GSTATUS[b.google.sync_status] ?? b.google.sync_status}</button>
+      : <span style={{ color: color.faint }}>—</span>) },
     { key: 'st', label: 'الحالة', sort: 'status', cell: (b) => <>{pill(BOOK_ST[b.status])}{b.status === 'cancelled' && b.cancel_reason && <span style={{ display: 'block', fontSize: 12, color: color.muted, marginTop: 4 }}>{b.cancelled_by ? `${b.cancelled_by}: ` : ''}{b.cancel_reason}</span>}</> },
     { key: 'x', label: 'إجراء', cell: (b) => (b.status === 'confirmed' && new Date(b.starts_at) > new Date()
       && can('bookings.manage') ? <button onClick={() => setCancel(b)} aria-label={`إلغاء حجز ${b.student.name}`} style={smallBtn('danger')}>إلغاء</button> : <span style={{ color: color.faint }}>—</span>) },
@@ -329,10 +332,48 @@ export function BookingsLive() {
         setSort={(x) => update({ sort: x })} loading={L.loading} err={L.err} retry={() => void L.reload()} />
       <Pager page={page} total={L.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
       <BulkBar resource="bookings" sel={sel} total={L.data?.count ?? 0} actions={BOOKING_ACTIONS} filter={filter} onDone={() => void L.reload()} exportable />
+      {google && <GooglePanel b={google} onClose={() => setGoogle(null)} onChanged={() => void L.reload()} />}
       {cancel && (
         <ReasonDialog title="إلغاء الحجز" body={`سيُلغى حجز ${cancel.student.name} مع ${cancel.teacher.name} (${dateTime(cancel.starts_at)}) ويُبلَّغ الطالب. يبقى السجل محفوظًا.`} ok="إلغاء الحجز"
           onClose={() => setCancel(null)} run={async (r) => { await A.cancelBooking(cancel.id, r); toast('أُلغي الحجز وأُبلغ الطالب'); await L.reload(); }} />
       )}
     </>
+  );
+}
+
+const GSTATUS: Record<string, string> = { pending: 'قيد الإنشاء', ready: 'جاهز', failed: 'تعذّر الإنشاء', reconnect_required: 'يحتاج إعادة ربط', cancelled: 'ملغى' };
+
+/** Google Calendar + Meet of a teacher-created session: status, shortened event id, last sync; «إعادة المزامنة»
+ *  finishes creation or refreshes the event (a new Meet only if the event has none). No tokens or full ids. */
+function GooglePanel({ b, onClose, onChanged }: { b: A.Booking; onClose: () => void; onChanged: () => void }) {
+  const [g, setG] = useState<A.SessionGoogle | null>(null); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  useEffect(() => { A.sessionGoogle(b.occurrence).then(setG).catch((e) => setErr(errMsg(e))); }, [b.occurrence]);
+  const resync = async () => {
+    setBusy(true); setErr(null);
+    try { setG(await A.resyncSessionGoogle(b.occurrence)); toast('تمت المزامنة مع Google'); onChanged(); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  const row = (k: string, v: ReactNode) => <div style={{ display: 'flex', gap: 10 }}><span style={{ minWidth: 110, color: color.muted, fontSize: 14 }}>{k}</span><span style={{ fontSize: 15 }}>{v}</span></div>;
+  return (
+    <Modal title={`Google — ${b.student.name} · ${dateTime(b.starts_at)}`} onClose={onClose}>
+      {err && <p role="alert" style={{ margin: 0, color: color.danger }}>{err}</p>}
+      {!g && !err && <p role="status" style={{ margin: 0, color: color.muted }}>جارٍ التحميل…</p>}
+      {g && <>
+        {row('حالة التقويم', GSTATUS[g.sync_status] ?? g.sync_status)}
+        {row('Google Meet', g.meet_ready ? 'أُنشئ ✓' : '—')}
+        {row('معرّف الحدث', <bdi dir="ltr" style={{ fontFamily: font.latin }}>{g.event_id}</bdi>)}
+        {row('آخر مزامنة', g.last_synced_at ? dateTime(g.last_synced_at) : '—')}
+        {g.error_message && row('الملاحظة', g.error_message)}
+        {g.cancel_pending && row('الإلغاء', 'بانتظار تأكيد Google (يُعاد تلقائيًا)')}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {can('sessions.manage') && <button disabled={busy} aria-busy={busy} onClick={resync} style={smallBtn('primary')}>إعادة المزامنة</button>}
+          {g.calendar_url && <a href={g.calendar_url} target="_blank" rel="noopener noreferrer" style={{ ...smallBtn(), display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}>فتح التقويم</a>}
+          {can('sessions.manage') && b.session_status === 'scheduled' && new Date(b.starts_at) > new Date() && <button disabled={busy} onClick={() => setCancelling(true)} style={smallBtn('danger')}>إلغاء الجلسة</button>}
+        </div>
+        <p style={{ margin: 0, fontSize: 12, color: color.muted }}>«إعادة المزامنة» تُكمل إنشاء الحدث أو تحدّثه، ولا تُنشئ رابط Meet جديدًا إلا إذا لم يكن للحدث رابط.</p>
+      </>}
+      {cancelling && <ReasonDialog title="إلغاء الجلسة" body="تُلغى الجلسة وكل حجوزاتها ويُبلَّغ الطلاب، ويُحذف حدث Google Calendar مع إبلاغ المدعوين. يبقى السجل محفوظًا." ok="إلغاء الجلسة"
+        onClose={() => setCancelling(false)} run={async (r) => { const x = await A.cancelSession(b.occurrence, r); toast(`أُلغيت الجلسة (${x.bookings_cancelled} حجز)`); onChanged(); onClose(); }} />}
+    </Modal>
   );
 }
