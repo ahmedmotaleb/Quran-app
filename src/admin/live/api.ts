@@ -163,6 +163,9 @@ export interface Discipline {
 export const grantMakeup = (bookingId: number) => api<{ id: number; status: string; expires_at: string }>('POST', `admin/bookings/${bookingId}/makeup`);
 export const discipline = (id: number) => api<Discipline>('GET', `admin/users/${id}/discipline`);
 export const excuseOverride = (bookingId: number, reason: string) => api<unknown>('POST', `admin/bookings/${bookingId}/excuse-override`, { reason });
+/** An admin's decision on a pending excuse (excuses.review); 409 already_reviewed when someone decided first. */
+export const adminReviewExcuse = (bookingId: number, approve: boolean, response: string) =>
+  api<import('@/api/endpoints').ApiExcuseRow>('POST', `admin/bookings/${bookingId}/excuse/review`, { approve, response });
 export const adminExcuses = (status = 'pending') => api<{ results: import('@/api/endpoints').ApiExcuseRow[] }>('GET', `admin/excuses?status=${status}`);
 // Bulk actions (permanent delete especially: database work plus removing private files) may take longer than an
 // ordinary request; the portal waits up to 2 minutes instead of giving up while the server is still working.

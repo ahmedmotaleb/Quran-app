@@ -13,7 +13,7 @@ import { zonedToIso } from '@/lib/time';
 import { card } from '../AdminTables';
 import * as A from './api';
 import StudentImport from './StudentImport';
-import { chip, date, errMsg, LinkBox, Modal, ReasonDialog, smallBtn } from './ui';
+import { chip, date, dateTime, errMsg, LinkBox, Modal, ReasonDialog, smallBtn } from './ui';
 import {
   BulkBar, type BulkDef, circleOptions, type Col, courseOptions, DataView, ExportButton, type FilterField, FilterControls, filterOf, items, accounts, listParams, Pager,
   SavedViews, SelectionSummary, teacherOptions, useListUrl, useSelection, useServerList, useUrlSearch,
@@ -669,22 +669,97 @@ function DisciplineSection({ id, onChanged }: { id: number; onChanged: () => voi
 
 /** «طلبات الاعتذار» section: every pending excuse, the teacher who decides it, and the reason. Admins correct a decided
  *  absence from the student's record («اعتماد العذر إداريًا»). */
+const EX_TABS = [['pending', 'معلقة'], ['approved', 'مقبولة'], ['rejected', 'مرفوضة']] as const;
+const KIND: Record<string, string> = { individual: 'فردية', group: 'جماعية' };
+const TOPIC: Record<string, string> = { hifz: 'حفظ', review: 'مراجعة', tajweed: 'تجويد', test: 'اختبار', other: 'أخرى' };
+const sessionType = (r: import('@/api/endpoints').ApiExcuseRow) =>
+  [KIND[r.kind] ?? r.kind, r.topic ? TOPIC[r.topic] : '', r.circle ?? ''].filter(Boolean).join(' · ');
+
+/** «طلبات الاعتذار»: pending requests can be decided here by an admin with excuses.review (the same rules as the
+ *  session's teacher; the first decision wins). Decided requests are listed read-only under «مقبولة» / «مرفوضة»;
+ *  later corrections stay in the student's file («اعتماد العذر إداريًا»). */
 export function ExcusesLive() {
-  const [rows, setRows] = useState<import('@/api/endpoints').ApiExcuseRow[] | null>(null); const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { A.adminExcuses().then((r) => setRows(r.results)).catch((e) => setErr(errMsg(e))); }, []);
-  if (err) return <p role="alert" style={{ color: color.danger }}>{err}</p>;
-  if (!rows) return <p role="status" style={{ color: color.muted }}>جارٍ التحميل…</p>;
-  if (!rows.length) return <p style={{ ...card, padding: 18, margin: 0, color: color.muted }}>لا توجد طلبات اعتذار بانتظار قرار المعلم.</p>;
+  type Row = import('@/api/endpoints').ApiExcuseRow;
+  const [tab, setTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [rows, setRows] = useState<Row[] | null>(null); const [err, setErr] = useState<string | null>(null);
+  const [act, setAct] = useState<{ row: Row; approve: boolean } | null>(null);
+  const load = useCallback(() => {
+    setErr(null);
+    A.adminExcuses(tab).then((r) => setRows(r.results)).catch((e) => setErr(errMsg(e)));
+  }, [tab]);
+  useEffect(() => { setRows(null); load(); }, [load]);
+  const decide = can('excuses.review');
+  const done = (msg: string) => { toast(msg); setAct(null); load(); refreshCounts(); };
+  const by = (r: Row) => (r.decided_by === 'admin' ? 'الإدارة' : r.decided_by === 'override' ? 'الإدارة (اعتماد إداري)' : 'المعلم');
   return (
-    <section style={{ ...card, padding: '10px 14px', display: 'flex', flexDirection: 'column' }}>
-      <p style={{ margin: '4px 0 8px', fontSize: 14, color: color.muted }}>يقرر المعلم كل طلب. لتصحيح غياب بعد القرار افتح ملف الطالب ← الانضباط والحضور.</p>
-      {rows.map((r) => (
-        <div key={r.booking} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', minHeight: 48, alignItems: 'center', borderTop: `1px solid ${color.divider}`, fontSize: 14, padding: '6px 0' }}>
-          <strong>{r.student.name}</strong><span>مع {r.teacher.name}</span><span style={{ color: color.muted }}>{date(r.starts_at)}</span>
-          <span style={{ flex: '1 1 220px', color: color.body }}>{r.reason}</span>
-        </div>
-      ))}
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div role="tablist" aria-label="حالة الطلب" style={{ display: 'flex', gap: 8 }}>
+        {EX_TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+          style={{ ...chip(tab === k), minHeight: 44 }}>{l}</button>)}
+      </div>
+      {err ? <p role="alert" style={{ color: color.danger, margin: 0 }}>{err}</p>
+        : !rows ? <p role="status" style={{ color: color.muted, margin: 0 }}>جارٍ التحميل…</p>
+        : !rows.length ? <p style={{ ...card, padding: 18, margin: 0, color: color.muted }}>{tab === 'pending' ? 'لا توجد طلبات اعتذار معلقة.' : 'لا توجد طلبات في هذا التبويب.'}</p>
+        : <div style={{ ...card, padding: '10px 14px', display: 'flex', flexDirection: 'column' }}>
+          {tab === 'pending' && <p style={{ margin: '4px 0 8px', fontSize: 14, color: color.muted }}>يمكن للمعلم أو للإدارة اتخاذ القرار، ويُعتمد أول قرار. لتصحيح قرار سابق افتح ملف الطالب ← الانضباط والحضور.</p>}
+          {rows.map((r) => (
+            <div key={r.booking} data-excuse={r.booking} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', minHeight: 48, alignItems: 'center', borderTop: `1px solid ${color.divider}`, fontSize: 14, padding: '8px 0' }}>
+              <strong>{r.student.name}</strong><span>مع {r.teacher.name}</span>
+              <span style={{ color: color.muted }}>{dateTime(r.starts_at)}</span>
+              {sessionType(r) && <span style={{ color: color.muted }}>{sessionType(r)}</span>}
+              <span style={{ flex: '1 1 220px', color: color.body }}>{r.reason}</span>
+              <span style={{ color: color.muted, fontSize: 13 }}>أُرسل {dateTime(r.requested_at)}</span>
+              {r.status === 'pending' ? decide && <span style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => setAct({ row: r, approve: true })} style={{ ...smallBtn('primary'), minHeight: 44 }}>قبول العذر</button>
+                <button onClick={() => setAct({ row: r, approve: false })} style={{ ...smallBtn('danger'), minHeight: 44 }}>رفض العذر</button>
+              </span> : <span style={{ fontSize: 13, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <strong style={{ color: r.status === 'approved' ? color.primary : color.danger }}>{r.status === 'approved' ? 'مقبول' : 'مرفوض'}</strong>
+                <span>بقرار {by(r)}</span>{r.reviewed_at && <span style={{ color: color.muted }}>{dateTime(r.reviewed_at)}</span>}
+                {(r.decided_by === 'admin' ? r.admin_response : r.teacher_response) && <span>الرد: {r.decided_by === 'admin' ? r.admin_response : r.teacher_response}</span>}
+                {r.override_reason && <span>اعتماد إداري: {r.override_reason}</span>}
+              </span>}
+            </div>
+          ))}
+        </div>}
+      {act && <ExcuseDecision row={act.row} approve={act.approve} onClose={() => setAct(null)}
+        onDone={() => done(act.approve ? 'تم قبول الاعتذار' : 'تم رفض الاعتذار')}
+        onStale={(m) => { toast(m); setAct(null); load(); refreshCounts(); }} />}
     </section>
+  );
+}
+
+function ExcuseDecision({ row, approve, onClose, onDone, onStale }: {
+  row: import('@/api/endpoints').ApiExcuseRow; approve: boolean; onClose: () => void; onDone: () => void; onStale: (msg: string) => void;
+}) {
+  const [resp, setResp] = useState(''); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    if (!approve && resp.trim().length < 3) return setErr('اكتب سبب رفض الاعتذار (3 أحرف على الأقل).');
+    setBusy(true); setErr(null);
+    try { await A.adminReviewExcuse(row.booking, approve, resp.trim()); onDone(); } catch (x) {
+      if ((x as ApiError)?.code === 'already_reviewed') return onStale(errMsg(x));  // someone decided first: reload
+      setErr(errMsg(x)); setBusy(false);
+    }
+  };
+  return (
+    <Modal title={approve ? 'قبول اعتذار الطالب؟' : 'رفض اعتذار الطالب'} onClose={onClose}>
+      <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <p style={{ margin: 0, fontSize: 15 }}><strong>{row.student.name}</strong> — جلسة مع {row.teacher.name}، {dateTime(row.starts_at)}</p>
+        <p style={{ margin: 0, fontSize: 14, background: color.sand, borderRadius: 10, padding: '8px 10px' }}>سبب الاعتذار: {row.reason}</p>
+        {approve ? <p style={{ margin: 0, fontSize: 14, color: color.muted }}>سيُسجَّل الغياب «بعذر» ولن يُحتسب ضمن الغياب بدون عذر، ويُبلَّغ الطالب وولي الأمر.</p> : <>
+          <label htmlFor="ex-resp" style={labelStyle}>سبب رفض الاعتذار</label>
+          <textarea id="ex-resp" rows={3} value={resp} onChange={(e) => setResp(e.target.value)} maxLength={500} style={{ ...inputStyle(err), minHeight: 88, paddingTop: 10 }} />
+          <p style={{ margin: 0, fontSize: 13, color: color.muted }}>لن يُسجَّل الطالب غائبًا تلقائيًا؛ يسجّل المعلم الحضور بعد الجلسة.</p>
+        </>}
+        <FieldError msg={err} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="submit" disabled={busy} style={{ ...smallBtn(approve ? 'primary' : 'danger'), minHeight: 48, flex: 1, background: approve ? color.primary : color.danger, color: color.ivory }}>
+            {busy ? 'جارٍ التنفيذ…' : approve ? 'تأكيد القبول' : 'تأكيد الرفض'}</button>
+          <button type="button" onClick={onClose} style={{ ...smallBtn(), minHeight: 48 }}>إلغاء</button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

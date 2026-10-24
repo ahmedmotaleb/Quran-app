@@ -305,7 +305,7 @@ class TeacherExcuseReview(APIView):
     def post(self, request, pk):
         from . import excuses
 
-        ex = excuses.review(booking_id=pk, teacher=request.user, approve=self.approve, response=str(request.data.get("response", "")), request=request)
+        ex = excuses.review(booking_id=pk, actor=request.user, approve=self.approve, response=str(request.data.get("response", "")), request=request)
         return Response(excuse_out(ex))
 
 
@@ -318,11 +318,16 @@ class TeacherExcuseReject(TeacherExcuseReview):
 
 
 def _excuse_rows(qs):
+    def by(ex):
+        return "override" if ex.override_at else ex.decided_by_role or ("teacher" if ex.teacher_status else "")
+
     return [{**excuse_out(ex), "student": {"id": ex.student_id, "name": ex.student.full_name},
              "teacher": {"id": ex.booking.occurrence.teacher_id, "name": ex.booking.occurrence.teacher.full_name},
              "starts_at": ex.booking.occurrence.starts_at.isoformat(), "kind": ex.booking.occurrence.kind,
-             "attendance": ex.booking.attendance, "teacher_status": ex.teacher_status, "override_reason": ex.override_reason}
-            for ex in qs.select_related("student", "booking__occurrence__teacher").order_by("requested_at")[:200]]
+             "topic": ex.booking.occurrence.topic, "circle": ex.booking.occurrence.circle.name if ex.booking.occurrence.circle_id else None,
+             "attendance": ex.booking.attendance, "teacher_status": ex.teacher_status, "override_reason": ex.override_reason,
+             "decided_by": by(ex), "admin_response": ex.admin_response}
+            for ex in qs.select_related("student", "booking__occurrence__teacher", "booking__occurrence__circle").order_by("requested_at")[:200]]
 
 
 class TeacherExcuses(APIView):

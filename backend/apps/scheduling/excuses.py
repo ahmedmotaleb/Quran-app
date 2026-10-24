@@ -97,28 +97,42 @@ def request_excuse(*, booking_id: int, student, reason: str, request=None) -> tu
     return ex, True
 
 
-# ---- the teacher's decision -----------------------------------------------------------------
-def review(*, booking_id: int, teacher, approve: bool, response: str = "", request=None) -> BookingExcuse:
+# ---- the decision on a pending request (session teacher, or an admin with excuses.review) -----------
+def review(*, booking_id: int, actor, approve: bool, response: str = "", as_admin: bool = False, request=None) -> BookingExcuse:
+    """One decision per request. The teacher may decide only excuses for their own sessions; an admin (the caller has
+    checked excuses.review) may decide any pending one. The row is locked: the first decision wins and any later one
+    — the other person, another tab, a double click — gets «تمت مراجعة هذا الاعتذار بالفعل.» (nothing overwritten).
+    A rejection only records the decision: attendance is not touched (a later «غاب» counts as unexcused)."""
     response = (response or "").strip()[:500]
     if not approve and len(response) < 3:
         raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"response": ["اكتب سبب رفض الاعتذار."]})
     with transaction.atomic():
-        ex = (BookingExcuse.objects.select_for_update().select_related("booking__occurrence")
-              .filter(booking_id=booking_id, booking__occurrence__teacher=teacher).first())
+        qs = BookingExcuse.objects.select_for_update(of=("self",)).select_related("booking__occurrence").filter(booking_id=booking_id)
+        if not as_admin:
+            qs = qs.filter(booking__occurrence__teacher=actor)
+        ex = qs.first()
         if ex is None:
             raise NOT_FOUND
-        if ex.status != E.PENDING:  # the other click (or another tab) already decided
+        if ex.status != E.PENDING:  # the other click (or another tab, or the teacher/admin) already decided
             raise ApiError("already_reviewed", "تمت مراجعة هذا الاعتذار بالفعل.", 409)
         now = timezone.now()
-        ex.status = ex.teacher_status = E.APPROVED if approve else E.REJECTED
-        ex.reviewed_at, ex.reviewed_by, ex.teacher_response = now, teacher, response
-        ex.save(update_fields=["status", "teacher_status", "reviewed_at", "reviewed_by", "teacher_response", "updated_at"])
+        ex.status = E.APPROVED if approve else E.REJECTED
+        ex.reviewed_at, ex.reviewed_by = now, actor
+        if as_admin:
+            ex.decided_by_role, ex.admin_response = "admin", response
+            fields = ["status", "reviewed_at", "reviewed_by", "decided_by_role", "admin_response", "updated_at"]
+        else:
+            ex.teacher_status, ex.teacher_response, ex.decided_by_role = ex.status, response, "teacher"
+            fields = ["status", "teacher_status", "reviewed_at", "reviewed_by", "teacher_response", "decided_by_role", "updated_at"]
+        ex.save(update_fields=fields)
         b = Booking.objects.select_for_update().get(pk=ex.booking_id)
         if approve:
-            _record_excused(b, teacher)
-        audit("booking.excuse_approved" if approve else "booking.excuse_rejected", actor=teacher, target=b, request=request,
-              has_response=bool(response))
-        evaluate(b.student_id, trigger_booking_id=b.pk, actor=teacher)
+            _record_excused(b, actor)
+        action = ("booking.excuse_admin_approved" if approve else "booking.excuse_admin_rejected") if as_admin else \
+            ("booking.excuse_approved" if approve else "booking.excuse_rejected")
+        audit(action, actor=actor, target=b, request=request, decision="approved" if approve else "rejected",
+              has_response=bool(response))  # the student's reason and the response text stay out of the audit
+        evaluate(b.student_id, trigger_booking_id=b.pk, actor=actor)
         transaction.on_commit(lambda: _notify_decision(ex.pk))
     return ex
 
@@ -220,7 +234,9 @@ def _notify_decision(excuse_id: int) -> None:
     ok = ex.status == E.APPROVED
     when = _when(b, s.timezone)
     body = f"مع {b.occurrence.teacher.full_name} · {when}"
-    if not ok and ex.teacher_response:
+    if not ok and ex.decided_by_role == "admin" and ex.admin_response:
+        body += f"\nرد الإدارة: {ex.admin_response}"
+    elif not ok and ex.teacher_response:
         body += f"\nرد المعلم: {ex.teacher_response}"
     notify(s, "excuse_approved" if ok else "excuse_rejected",
            "تم قبول اعتذارك عن الجلسة." if ok else "لم يتم قبول الاعتذار عن الجلسة.", body,
@@ -230,6 +246,10 @@ def _notify_decision(excuse_id: int) -> None:
         notify(g.guardian, "excuse_child", f"تم قبول اعتذار {first} عن جلسة {when}" if ok else f"لم يتم قبول اعتذار {first} عن الجلسة.",
                f"مع {b.occurrence.teacher.full_name} · {when}", link="/parent",
                dedupe=f"excuse:{b.pk}:{ex.status}:g{g.guardian_id}:{ex.override_at or ex.reviewed_at}", data={"booking": b.pk, "child": s.pk})
+    if ex.decided_by_role == "admin":  # the teacher did not decide it: tell them the final state
+        t = b.occurrence.teacher
+        notify(t, "excuse_decided", f"{'قبلت' if ok else 'رفضت'} الإدارة اعتذار {s.full_name}", _when(b, t.timezone),
+               link="/teacher/schedule", dedupe=f"excuse:{b.pk}:{ex.status}:t:{ex.reviewed_at}", data={"booking": b.pk})
 
 
 def _notify_warning(student_id: int, n: int, booking_id: int | None) -> None:

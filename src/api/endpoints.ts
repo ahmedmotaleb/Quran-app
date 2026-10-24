@@ -42,6 +42,9 @@ export interface ApiExcuse {
 export interface ApiExcuseRow extends ApiExcuse {
   student: { id: number; name: string }; teacher: { id: number; name: string }; starts_at: string; kind: string; attendance: string;
   teacher_status: string; override_reason: string;
+  topic?: string; circle?: string | null; admin_response?: string;
+  /** Who decided: the session's teacher, an admin (excuses.review), or an admin override after the decision. */
+  decided_by?: 'teacher' | 'admin' | 'override' | '';
 }
 
 // ---- auth ----

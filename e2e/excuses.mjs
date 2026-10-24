@@ -78,6 +78,57 @@ await step(S.page, 'student sees «تم قبول الاعتذار» and «غاب
 });
 await S.page.screenshot({ path: out + '/excuse-accepted.png' });
 
+// ---- C. the admin decides pending requests in «طلبات الاعتذار» ---------------------------------------------
+await step(S.page, 'admin accepts one excuse and rejects another; rows disappear and the badge updates', async () => {
+  const me = await native(S.page, 'yousef@halqa.app'); const H = { Authorization: `Bearer ${me.token}` };
+  const t = (await (await S.page.request.get(BASE + 'api/v1/teachers', { headers: H })).json()).results.find((x) => x.full_name === 'الشيخ عبدالرحمن السالم');
+  const slots = await (await S.page.request.get(BASE + `api/v1/teachers/${t.id}/slots`, { headers: H })).json();
+  const free = (slots.results ?? slots).filter((x) => new Date(x.starts_at).getTime() > Date.now() + 26 * 3600_000 && x.seats_left > 0);
+  for (const [i, reason] of [['a', 'سفر مع الأسرة'], ['b', 'موعد طبي مهم']].entries()) {
+    const r = await S.page.request.post(BASE + 'api/v1/bookings', { headers: { ...H, 'Idempotency-Key': `e2e-adm-ex-${reason[0]}-${Date.now()}` }, data: { occurrence: free[i + 1].id } });
+    const id = (await r.json()).id; if (!id) throw new Error('booking ' + r.status());
+    const e = await S.page.request.post(BASE + `api/v1/bookings/${id}/excuse`, { headers: H, data: { reason: reason[1] } });
+    if (e.status() !== 201) throw new Error('excuse ' + e.status());
+  }
+  const A = await b.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: 'Africa/Cairo' }); const ap = await A.newPage(); ap.setDefaultTimeout(12000);
+  ap.on('pageerror', (e) => errs.push('admin: ' + e.message));
+  await ap.goto(BASE + '#/admin');
+  await ap.locator('#ad-email').fill('admin@halqa.app'); await ap.locator('#ad-pw').fill('halqa123');
+  await ap.getByRole('button', { name: 'دخول' }).click(); await ap.getByText(/بيانات حقيقية/).waitFor();
+  try { await adminDecides(ap); } catch (e) { await ap.screenshot({ path: out + '/excuses-fail-admin-portal.png' }); throw e; }
+  await A.close();
+  const inbox = JSON.stringify(await apiGet(S.page, me.token, 'notifications'));
+  if (!inbox.includes('رد الإدارة: يرجى الالتزام بالموعد')) throw new Error('student not told of the rejection');
+});
+async function adminDecides(ap) {
+  const nav = ap.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' });
+  await nav.getByRole('button', { name: /^طلبات الاعتذار\s*2 بانتظار إجراء$/ }).click();
+  const row = (txt) => ap.locator('[data-excuse]').filter({ hasText: txt });
+  await row('سفر مع الأسرة').getByRole('button', { name: 'قبول العذر' }).click();
+  let d = ap.getByRole('dialog', { name: 'قبول اعتذار الطالب؟' });
+  await d.getByText('سبب الاعتذار: سفر مع الأسرة').waitFor();
+  await d.getByRole('button', { name: 'تأكيد القبول' }).click();
+  await ap.getByRole('status').filter({ hasText: 'تم قبول الاعتذار' }).waitFor();
+  await row('سفر مع الأسرة').waitFor({ state: 'detached' });
+  await nav.getByRole('button', { name: /^طلبات الاعتذار\s*1 بانتظار إجراء$/ }).waitFor();
+  await row('موعد طبي مهم').getByRole('button', { name: 'رفض العذر' }).click();
+  d = ap.getByRole('dialog', { name: 'رفض اعتذار الطالب' });
+  await d.getByRole('button', { name: 'تأكيد الرفض' }).click();
+  await d.getByText('اكتب سبب رفض الاعتذار (3 أحرف على الأقل).').waitFor();
+  await d.locator('#ex-resp').fill('يرجى الالتزام بالموعد');
+  await d.getByRole('button', { name: 'تأكيد الرفض' }).click();
+  await ap.getByRole('status').filter({ hasText: 'تم رفض الاعتذار' }).waitFor();
+  await ap.getByText('لا توجد طلبات اعتذار معلقة.').waitFor();
+  await nav.getByRole('button', { name: 'طلبات الاعتذار', exact: true }).waitFor();   // no badge left
+  await ap.getByRole('tab', { name: 'مرفوضة' }).click();
+  await row('موعد طبي مهم').getByText('بقرار الإدارة').waitFor();
+  await row('موعد طبي مهم').getByText('الرد: يرجى الالتزام بالموعد').waitFor();
+  if (await row('موعد طبي مهم').getByRole('button').count()) throw new Error('buttons on a decided row');
+  await ap.getByRole('tab', { name: 'مقبولة' }).click();
+  await row('سفر مع الأسرة').getByText('بقرار الإدارة').waitFor();
+  await ap.screenshot({ path: out + '/excuse-admin-decided.png' });
+}
+
 // ---- B. third unexcused absence ---------------------------------------------------------------
 if (process.env.ABS_CMD) execSync(process.env.ABS_CMD, { stdio: 'inherit' });
 await step(T.page, 'teacher marks the third session «غائب» → the student is suspended', async () => {
