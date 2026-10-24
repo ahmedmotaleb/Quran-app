@@ -2,7 +2,7 @@ from django.urls import include, path
 
 from apps.assessments import admin_views as assess_admin
 from apps.core import admin_views as core_admin
-from apps.core import kpi
+from apps.core import diagnostics, kpi
 from apps.support import views as support
 from apps.core.bulk import AdminBulkAction, AdminBulkExport, AdminSavedViewDetail, AdminSavedViews
 # Bulk-action resources register themselves on import (users, circles, bookings, sessions, courses, lessons,
@@ -56,6 +56,7 @@ urlpatterns = [
     path("admin/bookings/<int:pk>/makeup", waitlist_views.AdminGrantMakeup.as_view()),
     path("admin/assignments", assigning.AdminAssignmentCreate.as_view()),
     path("admin/kpis", kpi.AdminKpis.as_view()),
+    path("client-diagnostics", diagnostics.ClientDiagnostic.as_view()),
     path("support/tickets", support.MyTickets.as_view()),
     path("support/tickets/<int:pk>", support.MyTicketDetail.as_view()),
     path("support/tickets/<int:pk>/messages", support.MyTicketReply.as_view()),
