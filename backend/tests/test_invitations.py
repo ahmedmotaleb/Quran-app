@@ -47,7 +47,7 @@ def test_admin_invites_teacher_by_email_without_exposing_the_code(world, mailbox
     assert url.startswith(settings.FRONTEND_URL) and "صالح حتى" in m.body and "مرة واحدة" in m.body
     code = url.split("code=")[1]
     anon = APIClient()
-    body = {"code": code, "full_name": "معلم جديد", "email": "new.t@x.test", "password": PW}
+    body = {"code": code, "full_name": "معلم جديد", "email": "new.t@x.test", "password": PW, "gender": "female"}
     assert anon.post("/api/v1/auth/invitations/accept", body, format="json").status_code == 201
     assert anon.post("/api/v1/auth/invitations/accept", {**body, "email": "x@x.test"}, format="json").status_code == 400  # one-time
     assert Invitation.objects.get(pk=d["id"]).status == "accepted"
@@ -101,7 +101,7 @@ def test_resend_replaces_the_code_and_is_throttled(world, mailbox):
     assert r.status_code == 201 and r.json()["id"] != d["id"] and r.json()["send_count"] == 2 and "link" not in r.json()
     new_code = link_in(mailbox[1]).split("code=")[1]
     anon = APIClient()
-    body = {"full_name": "معلم", "email": "re@x.test", "password": PW}
+    body = {"full_name": "معلم", "email": "re@x.test", "password": PW, "gender": "male"}
     assert anon.post("/api/v1/auth/invitations/accept", {**body, "code": old_code}, format="json").status_code == 400
     assert anon.post("/api/v1/auth/invitations/accept", {**body, "code": new_code}, format="json").status_code == 201
     listed = c.get(URL).json()["results"]
@@ -113,7 +113,7 @@ def test_expired_and_revoked_invitations(world, mailbox):
     d = invite(world.admin, email="ex@x.test").json()
     code = link_in(mailbox[0]).split("code=")[1]
     Invitation.objects.filter(pk=d["id"]).update(expires_at=timezone.now() - timedelta(minutes=1))
-    body = {"code": code, "full_name": "معلم", "email": "ex@x.test", "password": PW}
+    body = {"code": code, "full_name": "معلم", "email": "ex@x.test", "password": PW, "gender": "male"}
     assert APIClient().post("/api/v1/auth/invitations/accept", body, format="json").status_code == 400
     assert client_for(world.admin).get(f"{URL}?open=1").json()["results"][0]["status"] == "expired"
     Invitation.objects.filter(pk=d["id"]).update(last_sent_at=timezone.now() - timedelta(minutes=2))

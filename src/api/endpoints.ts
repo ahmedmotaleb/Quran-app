@@ -52,8 +52,8 @@ export interface ApiExcuseRow extends ApiExcuse {
 // ---- auth ----
 /** `identifier`: an email or a verified phone number (the server decides which; same error either way). */
 export const login = (identifier: string, password: string) => api<LoginResult>('POST', 'auth/login', { identifier, password, client: 'web' });
-export const register = (full_name: string, email: string, password: string, timezone: string) =>
-  api<LoginResult>('POST', 'auth/register', { full_name, email, password, client: 'web', timezone });
+export const register = (full_name: string, email: string, password: string, timezone: string, gender: 'male' | 'female') =>
+  api<LoginResult>('POST', 'auth/register', { full_name, email, password, client: 'web', timezone, gender });
 /** `push_endpoint`: this device's push subscription ends with the session (shared phones). */
 export const logout = (push_endpoint = '') => api<null>('POST', 'auth/logout', push_endpoint ? { push_endpoint } : undefined);
 // Admin portal (separate sign-in; the server rejects non-admin accounts).

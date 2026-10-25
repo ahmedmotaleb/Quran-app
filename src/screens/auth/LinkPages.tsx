@@ -82,7 +82,7 @@ export function AcceptInvitePage() {
   const code = params().get('code') ?? '';
   const admin = params().get('kind') === 'admin';
   const [portal, setPortal] = useState<string | null>(null);
-  const [f, setF] = useState({ name: '', email: '', pw: '' });
+  const [f, setF] = useState<{ name: string; email: string; pw: string; gender: '' | 'male' | 'female' }>({ name: '', email: '', pw: '', gender: '' });
   const [err, setErr] = useState<Record<string, string | null>>({}); const [busy, setBusy] = useState(false); const [done, setDone] = useState(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -90,16 +90,17 @@ export function AcceptInvitePage() {
     if (f.name.trim().length < 2) x.name = 'اكتب اسمك الكامل.';
     if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) x.email = 'اكتب البريد الإلكتروني الذي وصلته الدعوة.';
     if (f.pw.length < 10) x.pw = 'كلمة المرور 10 أحرف على الأقل.';
+    if (!admin && !f.gender) x.gender = 'اختر اللقب: الشيخ أو الأستاذة.';
     if (Object.keys(x).length) return setErr(x);
     setBusy(true); setErr({});
     try {
-      const r = await api<{ admin_url?: string }>('POST', 'auth/invitations/accept', { code, full_name: f.name.trim(), email: f.email.trim().toLowerCase(), password: f.pw });
+      const r = await api<{ admin_url?: string }>('POST', 'auth/invitations/accept', { code, full_name: f.name.trim(), email: f.email.trim().toLowerCase(), password: f.pw, ...(admin ? {} : { gender: f.gender }) });
       if (r?.admin_url) setPortal(r.admin_url);
       setDone(true);
     } catch (y) {
       const a = y as ApiError;
-      const fe = { name: a.field?.('full_name') ?? null, email: a.field?.('email') ?? null, pw: a.field?.('password') ?? null };
-      setErr(fe.name || fe.email || fe.pw ? fe : { form: a.message });
+      const fe = { name: a.field?.('full_name') ?? null, email: a.field?.('email') ?? null, pw: a.field?.('password') ?? null, gender: a.field?.('gender') ?? null };
+      setErr(fe.name || fe.email || fe.pw || fe.gender ? fe : { form: a.message });
     } finally { setBusy(false); }
   };
   return (
@@ -110,6 +111,15 @@ export function AcceptInvitePage() {
       </> : done ? <Done text="تم إنشاء حساب المعلم. سجّل الدخول من التطبيق." /> : (
         <form noValidate onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Field id="iv-name" label="الاسم الكامل" auto="name" value={f.name} onChange={(v) => setF({ ...f, name: v })} err={err.name} />
+          {!admin && <>
+            <label htmlFor="iv-g" style={{ fontSize: 15, fontWeight: 700 }}>اللقب</label>
+            <select id="iv-g" value={f.gender} onChange={(e) => setF({ ...f, gender: e.target.value as '' | 'male' | 'female' })} aria-invalid={!!err.gender}
+              style={{ minHeight: 52, borderRadius: 12, border: `1.5px solid ${err.gender ? color.dangerInk : color.borderStrong}`, padding: '0 10px', fontSize: 16, background: color.card }}>
+              <option value="">— اختر —</option><option value="male">الشيخ</option><option value="female">الأستاذة</option>
+            </select>
+            <span style={{ fontSize: 12, color: color.muted }}>اكتب اسمك دون لقب؛ يظهر للطلاب «الشيخ …» أو «الأستاذة …».</span>
+            {err.gender && <FieldError msg={err.gender} />}
+          </>}
           {admin && <p style={{ margin: 0, fontSize: 14, color: color.muted }}>اكتب البريد نفسه الذي وصلته الدعوة؛ الرابط صالح لمرة واحدة.</p>}
           <Field id="iv-email" label="البريد الإلكتروني" type="email" auto="email" ltr value={f.email} onChange={(v) => setF({ ...f, email: v })} err={err.email} />
           <Field id="iv-pw" label="كلمة المرور" type="password" auto="new-password" ltr value={f.pw} onChange={(v) => setF({ ...f, pw: v })} err={err.pw} />

@@ -100,3 +100,33 @@ def test_student_named_like_a_teacher_is_untitled(world):
     assert display_name(s) == "أحمد محمد"
     row = client_for(world.admin).get(f"/api/v1/admin/users/{s.pk}").json()
     assert row["display_name"] == "أحمد محمد"
+
+
+def test_signup_asks_for_gender():
+    from rest_framework.test import APIClient
+
+    from .conftest import PW
+
+    body = {"full_name": "يوسف", "email": "new@x.test", "password": PW}
+    r = APIClient().post("/api/v1/auth/register", body, format="json")
+    assert r.status_code == 400 and r.json()["fields"]["gender"] == ["اختر: ذكر أو أنثى."]
+    assert APIClient().post("/api/v1/auth/register", {**body, "gender": "x"}, format="json").status_code == 400
+    r = APIClient().post("/api/v1/auth/register", {**body, "gender": "female"}, format="json")
+    assert r.status_code == 201 and User.objects.get(email="new@x.test").gender == "female"
+    assert r.json()["user"]["display_name"] == "يوسف"                       # a student: never a title
+
+
+def test_teacher_invitation_asks_for_title(world):
+    from rest_framework.test import APIClient
+
+    from apps.accounts.models import Invitation
+
+    from .conftest import PW
+
+    _, code = Invitation.issue(purpose=Invitation.Purpose.TEACHER_ACCOUNT, created_by=world.admin)
+    body = {"code": code, "full_name": "الأستاذة هدى", "email": "huda2@x.test", "password": PW}
+    r = APIClient().post("/api/v1/auth/invitations/accept", body, format="json")
+    assert r.status_code == 400 and r.json()["fields"]["gender"]
+    assert APIClient().post("/api/v1/auth/invitations/accept", {**body, "gender": "female"}, format="json").status_code == 201
+    u = User.objects.get(email="huda2@x.test")
+    assert u.full_name == "هدى" and u.gender == "female" and u.display_name == "الأستاذة هدى"

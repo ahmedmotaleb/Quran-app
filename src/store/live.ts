@@ -158,16 +158,16 @@ export async function login(email: string, password: string) {
   }
 }
 
-export async function register(name: string, email: string, password: string) {
+export async function register(name: string, email: string, password: string, gender: 'male' | 'female') {
   try {
-    const r = await E.register(name, email, password, Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Cairo');
+    const r = await E.register(name, email, password, Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Cairo', gender);
     resetCsrf();
     applyUser(r.user);
     setState((s) => ({ signup: { ...s.signup, errors: {}, pw: '' }, ob: { ...s.ob, step: 0 } }));
     reset('onboard', 'student');
   } catch (e) {
     const err = e as ApiError;
-    up('signup', { errors: { name: err.field?.('full_name') ?? null, email: err.field?.('email') ?? null, pw: err.field?.('password') ?? null } });
+    up('signup', { errors: { name: err.field?.('full_name') ?? null, email: err.field?.('email') ?? null, pw: err.field?.('password') ?? null, gender: err.field?.('gender') ?? null } });
     if (!err.fields || !Object.keys(err.fields).length) toast(msg(e), 'alert');
   }
 }

@@ -120,6 +120,8 @@ await step('signup enforces 10-char password, then creates student', async () =>
   await app.getByRole('button', { name: 'أنشئ حساب طالب' }).click();
   await app.locator('#su-name').fill('طالب اختبار'); await app.locator('#su-email').fill(`e2e${Date.now()}@example.com`);
   await app.locator('#su-pw').fill('short123'); await app.getByRole('button', { exact: true, name: 'إنشاء الحساب' }).click();
+  await app.getByText('اختر: ذكر أو أنثى.').waitFor();                       // gender is asked at sign-up
+  await app.getByRole('radio', { name: 'ذكر', exact: true }).click();
   await app.getByText('استخدم 10 أحرف على الأقل').waitFor();
   await app.locator('#su-pw').fill('Correct-Horse-9'); await app.getByRole('button', { exact: true, name: 'إنشاء الحساب' }).click();
   await app.getByText(/مستواك|المستوى/).first().waitFor();

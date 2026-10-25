@@ -141,7 +141,8 @@ class RegisterView(APIView):
         s.is_valid(raise_exception=True)
         d = s.validated_data
         with transaction.atomic():
-            user = User.objects.create_user(d["email"], d["password"], full_name=d["full_name"], role=Role.STUDENT, timezone=d["timezone"])
+            user = User.objects.create_user(d["email"], d["password"], full_name=d["full_name"], role=Role.STUDENT, timezone=d["timezone"],
+                                            gender=d["gender"])
             StudentProfile.objects.create(user=user)
             audit("user.registered", actor=user, target=user, request=request)
         client = request.data.get("client", "web")
@@ -437,13 +438,17 @@ class AcceptInvitationView(APIView):
                     raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"email": ["مطلوب"], "full_name": ["مطلوب"], "password": ["مطلوب"]})
                 if inv.email and email != inv.email:
                     raise invalid
+                if not d.get("gender"):  # the teacher's title: «الشيخ» / «الأستاذة» (display.py)
+                    raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"gender": ["اختر اللقب: الشيخ أو الأستاذة."]})
                 if User.objects.filter(email=email).exists():
                     raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"email": ["هذا البريد مسجّل بالفعل."]})
                 try:
                     password_validation.validate_password(d["password"])
                 except Exception as e:
                     raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"password": [arabic_password_error(e)]})
-                user = User.objects.create_user(email, d["password"], full_name=d["full_name"], role=Role.TEACHER)
+                from .display import strip_title
+
+                user = User.objects.create_user(email, d["password"], full_name=strip_title(d["full_name"]), role=Role.TEACHER, gender=d["gender"])
                 TeacherProfile.objects.create(user=user)  # account setup ≠ approval: the admin approves separately
                 result = {"user": MeSerializer(user).data}
             elif inv.purpose == Invitation.Purpose.ADMIN_ACCOUNT:

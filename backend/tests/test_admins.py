@@ -230,7 +230,7 @@ def test_admin_invitation_rules(world, mailbox):
     inv = Invitation.objects.filter(email="dup@x.test").latest("id")
     Invitation.objects.filter(pk=inv.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
     raw_any = "x"
-    assert APIClient().post("/api/v1/auth/invitations/accept", {"code": raw_any, "full_name": "x y", "email": "dup@x.test", "password": PW},
+    assert APIClient().post("/api/v1/auth/invitations/accept", {"code": raw_any, "gender": "male", "full_name": "x y", "email": "dup@x.test", "password": PW},
                             format="json").status_code == 400
     listed = c.get("/api/v1/admin/admins").json()
     assert {a["email"] for a in listed["results"]} == {"admin@x.test"} and "users.view" in listed["permissions"]

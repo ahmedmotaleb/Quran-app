@@ -35,6 +35,8 @@ await step('sign up a student and finish onboarding', async () => {
   await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
   await app.getByRole('button', { name: 'أنشئ حساب طالب' }).click();
   await app.locator('#su-name').fill('اختبار النشر'); await app.locator('#su-email').fill(`smoke+${Date.now()}@example.com`);
+  // Gender is asked at sign-up (the radio exists from 25 Oct 2026; older builds have none).
+  if (await app.getByRole('radio', { name: 'ذكر', exact: true }).count()) await app.getByRole('radio', { name: 'ذكر', exact: true }).click();
   await app.locator('#su-pw').fill('Smoke-Test-2026!'); await app.getByRole('button', { exact: true, name: 'إنشاء الحساب' }).click();
   for (const pick of ['مبتدئ', '3 أسطر يوميًا']) {
     await app.getByRole('radio', { name: new RegExp(pick) }).first().click();

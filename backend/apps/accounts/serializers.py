@@ -95,6 +95,8 @@ class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField(error_messages={"invalid": "صيغة البريد الإلكتروني غير صحيحة.", "blank": "أدخل بريدك الإلكتروني."})
     password = serializers.CharField(write_only=True, trim_whitespace=False)
     timezone = serializers.CharField(required=False, default="Africa/Cairo")
+    gender = serializers.ChoiceField(choices=["male", "female"], error_messages={
+        "required": "اختر: ذكر أو أنثى.", "invalid_choice": "اختر: ذكر أو أنثى.", "null": "اختر: ذكر أو أنثى."})
 
     def validate_email(self, v):
         v = v.strip().lower()
@@ -286,6 +288,7 @@ class AcceptInvitationSerializer(serializers.Serializer):
     full_name = serializers.CharField(required=False, min_length=2, max_length=120)
     email = serializers.EmailField(required=False)
     password = serializers.CharField(required=False, trim_whitespace=False)
+    gender = serializers.ChoiceField(choices=["male", "female"], required=False)  # a new teacher's title (required there)
 
 
 class TeacherPublicSerializer(serializers.ModelSerializer):

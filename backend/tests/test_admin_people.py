@@ -122,11 +122,11 @@ def test_teacher_invitation_link_creates_an_unapproved_teacher(world):
     r["code"] = r["link"].split("code=")[1]
     assert "/#/invite?code=" in r["link"]
     anon = APIClient()
-    acc = anon.post("/api/v1/auth/invitations/accept", {"code": r["code"], "full_name": "معلم جديد", "email": "newt@x.test", "password": PW}, format="json")
+    acc = anon.post("/api/v1/auth/invitations/accept", {"code": r["code"], "gender": "male", "full_name": "معلم جديد", "email": "newt@x.test", "password": PW}, format="json")
     assert acc.status_code == 201
     t = User.objects.get(email="newt@x.test")
     assert t.role == Role.TEACHER and t.status == AccountStatus.ACTIVE and t.teacher_profile.approved_at is None  # approval is separate (23 Oct)
-    assert anon.post("/api/v1/auth/invitations/accept", {"code": r["code"], "full_name": "x y", "email": "o@x.test", "password": PW}, format="json").status_code == 400
+    assert anon.post("/api/v1/auth/invitations/accept", {"code": r["code"], "gender": "male", "full_name": "x y", "email": "o@x.test", "password": PW}, format="json").status_code == 400
 
 
 def test_parent_children_not_leaked_to_other_parent(world):
