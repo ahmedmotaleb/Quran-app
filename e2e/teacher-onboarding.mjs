@@ -35,6 +35,7 @@ async function signIn(p, email) {
 async function createTeacher(name, email) {
   await admin.getByRole('button', { name: 'إضافة / دعوة معلم' }).click();
   await dialog().locator('#ad-n').fill(name); await dialog().locator('#ad-e').fill(email);
+  await dialog().locator('#ad-g').selectOption('male');
   await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال رابط الإعداد' }).click();
   await dialog().getByText(`تم إرسال رابط الإعداد إلى`).waitFor();
   await dialog().getByRole('button', { name: 'تم' }).click();
@@ -57,7 +58,7 @@ await step(admin, 'the email link sets the password; the teacher signs in from t
   const m = await linkFor(T1);
   if (m.subject !== 'إعداد حساب المعلم في حَلْقة' || !m.text.includes('تم إنشاء حساب معلم لك في منصة حَلْقة.') || !/#\/reset\?uid=/.test(m.link)) throw new Error('email');
   t1 = await phone(); await setPassword(t1, m.link); await signIn(t1, T1);
-  await t1.getByText('مرحبًا، عبدالرحمن').waitFor();
+  await t1.getByText('مرحبًا، الشيخ عبدالرحمن').waitFor();
   await t1.getByText(/بانتظار الاعتماد:/).waitFor();
 });
 await step(admin, 'the admin record shows setup done; approval removes the notice', async () => {
@@ -67,7 +68,7 @@ await step(admin, 'the admin record shows setup done; approval removes the notic
   await dialog().getByRole('button', { name: 'اعتماد المعلم' }).click();
   await dialog().getByText('معتمد', { exact: true }).first().waitFor();
   await dialog().getByRole('button', { name: 'إغلاق' }).click();
-  await t1.reload(); await t1.getByText('مرحبًا، عبدالرحمن').waitFor(); await t1.waitForTimeout(800);
+  await t1.reload(); await t1.getByText('مرحبًا، الشيخ عبدالرحمن').waitFor(); await t1.waitForTimeout(800);
   if (await t1.getByText(/بانتظار الاعتماد:/).count()) throw new Error('still pending after approval');
 });
 const T2 = `lost${stamp}@example.com`;
@@ -82,7 +83,7 @@ await step(admin, 'a teacher who ignored the email uses «نسيت كلمة ال
   let fresh = first;
   for (let i = 0; i < 40 && fresh === first; i++) { await p.waitForTimeout(250); fresh = (await linkFor(T2)).link; }
   if (fresh === first) throw new Error('no fresh email');
-  await setPassword(p, fresh); await signIn(p, T2); await p.getByText('مرحبًا، معلم ناسٍ').waitFor();
+  await setPassword(p, fresh); await signIn(p, T2); await p.getByText('مرحبًا، الشيخ معلم ناسٍ').waitFor();
 });
 const T3 = `resend${stamp}@example.com`;
 await step(admin, 'the admin resends the setup email from the record; the fresh link works', async () => {
@@ -97,7 +98,7 @@ await step(admin, 'the admin resends the setup email from the record; the fresh 
   await dialog().getByText(/عدد مرات الإرسال: 2/).waitFor();
   const fresh = (await linkFor(T3)).link;
   if (fresh === first) throw new Error('no fresh link');
-  const p = await phone(); await setPassword(p, fresh); await signIn(p, T3); await p.getByText('مرحبًا، معلم ثالث').waitFor();
+  const p = await phone(); await setPassword(p, fresh); await signIn(p, T3); await p.getByText('مرحبًا، الشيخ معلم ثالث').waitFor();
 });
 await admin.screenshot({ path: out + '/teacher-onboarding.png', fullPage: true });
 if (errs.length) { fails++; console.log('page errors:', errs); }

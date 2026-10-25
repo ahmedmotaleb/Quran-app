@@ -154,5 +154,5 @@ class AdminAudit(AdminView):
         if p.get("target_type"):
             qs = qs.filter(target_type=p["target_type"], target_id=p.get("target_id", ""))
         return _page(self, request, qs, lambda e: {
-            "id": e.id, "at": e.created_at.isoformat(), "action": e.action, "actor": e.actor.full_name if e.actor else None,
+            "id": e.id, "at": e.created_at.isoformat(), "action": e.action, "actor": e.actor.display_name if e.actor else None,
             "target": f"{e.target_type}:{e.target_id}", "data": e.data})

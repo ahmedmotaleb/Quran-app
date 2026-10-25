@@ -52,7 +52,7 @@ def test_sensitive_settings_need_password(world):
     assert AuditEvent.objects.filter(action="admin.settings_reauth_failed").count() == 2
     assert c.patch(f"{A}/settings", {"open_signup": False, "current_password": PW}, format="json").status_code == 200
     # Behaviour: sign-up is now closed for the public.
-    r = APIClient().post("/api/v1/auth/register", {"full_name": "طالب", "email": "n@x.test", "password": PW, "client": "web"}, format="json")
+    r = APIClient().post("/api/v1/auth/register", {"gender": "male", "full_name": "طالب", "email": "n@x.test", "password": PW, "client": "web"}, format="json")
     assert r.status_code == 403
     assert APIClient().get("/api/v1/settings/public").json()["open_signup"] is False
 

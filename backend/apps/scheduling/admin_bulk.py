@@ -70,7 +70,7 @@ register(Resource(
         "draft": Action(_circle_state(Circle.State.DRAFT)),
         "delete": Action(_circle_delete, destructive=True),
     },
-    export=[("الرقم", lambda c: c.pk), ("الحلقة", lambda c: c.name), ("المعلم", lambda c: c.teacher.full_name), ("المستوى", lambda c: c.level),
+    export=[("الرقم", lambda c: c.pk), ("الحلقة", lambda c: c.name), ("المعلم", lambda c: c.teacher.display_name), ("المستوى", lambda c: c.level),
             ("السعة", lambda c: c.capacity), ("المواعيد", lambda c: c.schedule_note), ("الحالة", lambda c: Circle.State(c.state).label)],
 ))
 
@@ -128,7 +128,7 @@ register(Resource(
     filters=BOOKING_FILTERS, describe=lambda b: f"{b.student.full_name} · {timezone.localtime(b.occurrence.starts_at):%Y-%m-%d %H:%M}",
     actions={"cancel": Action(_booking_cancel, reason_required=True)},
     # The student's free-text note is not exported.
-    export=[("الرقم", lambda b: b.pk), ("الطالب", lambda b: b.student.full_name), ("المعلم", lambda b: b.occurrence.teacher.full_name),
+    export=[("الرقم", lambda b: b.pk), ("الطالب", lambda b: b.student.full_name), ("المعلم", lambda b: b.occurrence.teacher.display_name),
             ("الموعد", lambda b: b.occurrence.starts_at), ("النوع", lambda b: SessionOccurrence.Kind(b.occurrence.kind).label),
             ("الحالة", lambda b: Booking.Status(b.status).label),
             ("الحضور", lambda b: Booking.Attendance(b.attendance).label if b.attendance else ""), ("أُلغي في", lambda b: b.cancelled_at),
@@ -160,7 +160,7 @@ register(Resource(
     name="sessions", label="scheduling.sessionoccurrence", base=lambda: SessionOccurrence.objects.all(), lock=False,
     filters=SESSION_FILTERS, describe=lambda o: f"{timezone.localtime(o.starts_at):%Y-%m-%d %H:%M}",
     actions={"cancel": Action(_session_cancel, reason_required=True)},
-    export=[("الرقم", lambda o: o.pk), ("المعلم", lambda o: o.teacher.full_name), ("البداية", lambda o: o.starts_at), ("النهاية", lambda o: o.ends_at),
+    export=[("الرقم", lambda o: o.pk), ("المعلم", lambda o: o.teacher.display_name), ("البداية", lambda o: o.starts_at), ("النهاية", lambda o: o.ends_at),
             ("النوع", lambda o: SessionOccurrence.Kind(o.kind).label), ("السعة", lambda o: o.capacity),
             ("المحجوز", lambda o: o.bookings.filter(status=Booking.Status.CONFIRMED).count()),
             ("الحالة", lambda o: SessionOccurrence.Status(o.status).label)],

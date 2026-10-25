@@ -77,7 +77,7 @@ def join(circle: Circle, student, by) -> tuple[CircleMember, dict]:
     result = sync_member(m)
     from apps.notifications.services import after_commit
 
-    after_commit(student, "circle_joined", f"انضممت إلى {c.name}", f"مع {c.teacher.full_name} · حُجزت {result['booked']} جلسة قادمة",
+    after_commit(student, "circle_joined", f"انضممت إلى {c.name}", f"مع {c.teacher.display_name} · حُجزت {result['booked']} جلسة قادمة",
                  link="/sessions", dedupe=f"circle_member:{m.pk}:joined", data={"circle": c.pk})
     after_commit(c.teacher, "circle_member_new", "طالب جديد في حلقتك", f"{student.full_name} · {c.name}",
                  link="/teacher/schedule", dedupe=f"circle_member:{m.pk}:teacher", data={"circle": c.pk})

@@ -144,7 +144,7 @@ def teacher_workload(f) -> list[dict]:
         att = _attendance({**f, "teacher": t.pk}, now)
         waiting = Submission.objects.filter(assignment__teacher=t, feedback__isnull=True)
         rows.append({
-            "teacher": {"id": t.pk, "name": t.full_name, "approved": bool(getattr(t, "teacher_profile", None) and t.teacher_profile.approved_at)},
+            "teacher": {"id": t.pk, "name": t.display_name, "approved": bool(getattr(t, "teacher_profile", None) and t.teacher_profile.approved_at)},
             "active_students": TeacherAssignment.objects.filter(teacher=t, active=True).count(),
             "circle_students": CircleMember.objects.filter(circle__teacher=t, active=True).values("student").distinct().count(),
             "upcoming_sessions": upcoming.filter(n__gt=0).count(),

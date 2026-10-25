@@ -134,7 +134,7 @@ def schedule_out(sch: ReviewSchedule, history: bool = False) -> dict:
            "open_task": sch.tasks.exclude(status=AssignmentStatus.ACCEPTED).values_list("pk", flat=True).first()}
     if history:
         out["history"] = [{"at": e.created_at.isoformat(), "kind": e.kind, "kind_label": e.get_kind_display(), "due_on": e.due_on and e.due_on.isoformat(),
-                           "step": e.step, "outcome": e.outcome, "reason": e.reason, "actor": e.actor.full_name if e.actor_id else None,
+                           "step": e.step, "outcome": e.outcome, "reason": e.reason, "actor": e.actor.display_name if e.actor_id else None,
                            "assignment": e.assignment_id} for e in sch.events.select_related("actor")]
     return out
 

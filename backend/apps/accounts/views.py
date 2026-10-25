@@ -141,7 +141,8 @@ class RegisterView(APIView):
         s.is_valid(raise_exception=True)
         d = s.validated_data
         with transaction.atomic():
-            user = User.objects.create_user(d["email"], d["password"], full_name=d["full_name"], role=Role.STUDENT, timezone=d["timezone"])
+            user = User.objects.create_user(d["email"], d["password"], full_name=d["full_name"], role=Role.STUDENT, timezone=d["timezone"],
+                                            gender=d["gender"])
             StudentProfile.objects.create(user=user)
             audit("user.registered", actor=user, target=user, request=request)
         client = request.data.get("client", "web")
@@ -437,13 +438,17 @@ class AcceptInvitationView(APIView):
                     raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"email": ["مطلوب"], "full_name": ["مطلوب"], "password": ["مطلوب"]})
                 if inv.email and email != inv.email:
                     raise invalid
+                if not d.get("gender"):  # the teacher's title: «الشيخ» / «الأستاذة» (display.py)
+                    raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"gender": ["اختر اللقب: الشيخ أو الأستاذة."]})
                 if User.objects.filter(email=email).exists():
                     raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"email": ["هذا البريد مسجّل بالفعل."]})
                 try:
                     password_validation.validate_password(d["password"])
                 except Exception as e:
                     raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"password": [arabic_password_error(e)]})
-                user = User.objects.create_user(email, d["password"], full_name=d["full_name"], role=Role.TEACHER)
+                from .display import strip_title
+
+                user = User.objects.create_user(email, d["password"], full_name=strip_title(d["full_name"]), role=Role.TEACHER, gender=d["gender"])
                 TeacherProfile.objects.create(user=user)  # account setup ≠ approval: the admin approves separately
                 result = {"user": MeSerializer(user).data}
             elif inv.purpose == Invitation.Purpose.ADMIN_ACCOUNT:
@@ -475,7 +480,7 @@ class AcceptInvitationView(APIView):
                 if user is None or user.role != Role.STUDENT:
                     raise ApiError("student_required", "سجّل الدخول بحساب الطالب أولًا.", 403)
                 TeacherAssignment.objects.get_or_create(teacher=inv.teacher, student=user, active=True, defaults={"created_by": inv.teacher})
-                result = {"teacher": {"id": inv.teacher_id, "name": inv.teacher.full_name}}
+                result = {"teacher": {"id": inv.teacher_id, "name": inv.teacher.display_name}}
             inv.uses += 1
             inv.save(update_fields=["uses"])
             audit("invitation.accepted", actor=user, target=inv, request=request, purpose=inv.purpose)
@@ -558,6 +563,10 @@ class AdminUserDetail(APIView):
         user = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN).exclude(status=AccountStatus.DELETED), pk=pk)
         s = AdminUserUpdateSerializer(data=request.data, partial=True)
         s.is_valid(raise_exception=True)
+        if user.role == Role.TEACHER and "full_name" in s.validated_data:
+            from .display import strip_title
+
+            s.validated_data["full_name"] = strip_title(s.validated_data["full_name"])  # the title is shown, never stored
         changed = sorted(k for k, v in s.validated_data.items() if getattr(user, k) != v)
         if "phone" in changed:
             from .admin_access import require

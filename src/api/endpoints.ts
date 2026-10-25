@@ -1,4 +1,5 @@
 /** Typed API calls and adapters from server records to the screens' data shapes. */
+import { initialOf } from '@/lib/names';
 import type { Feedback, Session, Student, Task, TaskStatus, Teacher } from '@/data/types';
 import { fmtRelative } from '@/lib/time';
 import { baseType, fileNameFor } from '@/services/media';
@@ -6,7 +7,7 @@ import { api, newIdempotencyKey, type Page } from './client';
 
 export type ApiRole = 'student' | 'teacher' | 'parent' | 'admin';
 export interface Me {
-  id: number; email: string; full_name: string; role: ApiRole; status: string; timezone: string; phone: string;
+  id: number; email: string; full_name: string; display_name?: string; gender?: 'male' | 'female' | ''; role: ApiRole; status: string; timezone: string; phone: string;
   mfa_enabled: boolean; mfa_required?: boolean; level: string; daily_goal: string; phone_verified?: boolean; teacher_approved?: boolean | null;
   /** «الإشعارات»: false = no phone push for that category (missing = on). */ notify_prefs?: Partial<Record<'tasks' | 'sessions' | 'feedback' | 'news', boolean>>;
   /** Admins only: access level, preset and the permissions the server grants (null for everyone else). */
@@ -25,7 +26,7 @@ export interface ApiAssignment {
   status: 'not_started' | 'in_progress' | 'submitted' | 'accepted' | 'needs_repeat'; next_review_on: string | null; created_at: string;
 }
 export interface ApiTeacher {
-  id: number; full_name: string; timezone: string; specialization: string; bio: string; audience: string; levels: string; tags: string[];
+  id: number; full_name: string; display_name?: string; gender?: 'male' | 'female' | ''; timezone: string; specialization: string; bio: string; audience: string; levels: string; tags: string[];
   offers_individual: boolean; offers_group: boolean;
 }
 export interface ApiSlot { id: number | string; minutes?: number; teacher: number; teacher_name: string; kind: 'individual' | 'group'; starts_at: string; ends_at: string; capacity: number; seats_left: number;
@@ -51,8 +52,8 @@ export interface ApiExcuseRow extends ApiExcuse {
 // ---- auth ----
 /** `identifier`: an email or a verified phone number (the server decides which; same error either way). */
 export const login = (identifier: string, password: string) => api<LoginResult>('POST', 'auth/login', { identifier, password, client: 'web' });
-export const register = (full_name: string, email: string, password: string, timezone: string) =>
-  api<LoginResult>('POST', 'auth/register', { full_name, email, password, client: 'web', timezone });
+export const register = (full_name: string, email: string, password: string, timezone: string, gender: 'male' | 'female') =>
+  api<LoginResult>('POST', 'auth/register', { full_name, email, password, client: 'web', timezone, gender });
 /** `push_endpoint`: this device's push subscription ends with the session (shared phones). */
 export const logout = (push_endpoint = '') => api<null>('POST', 'auth/logout', push_endpoint ? { push_endpoint } : undefined);
 // Admin portal (separate sign-in; the server rejects non-admin accounts).
@@ -76,7 +77,7 @@ export interface WeeklyChild {
   latest_feedback: { date: string; assignment: string; decision: string; next_step: string } | null;
 }
 export const parentWeekly = () => api<{ week: { from: string; to: string }; children: WeeklyChild[]; definitions: Record<string, string> }>('GET', 'parent/weekly-summary');
-export const updateMe = (patch: Partial<Pick<Me, 'full_name' | 'timezone' | 'phone' | 'notify_prefs'>>) => api<Me>('PATCH', 'me', patch);
+export const updateMe = (patch: Partial<Pick<Me, 'full_name' | 'gender' | 'timezone' | 'phone' | 'notify_prefs'>>) => api<Me>('PATCH', 'me', patch);
 export const saveOnboarding = (d: { level: string; daily_goal: string; preferred_days: string[]; preferred_period: string }) =>
   api<Me>('PUT', 'me/onboarding', d);
 export const forgot = (email: string) => api<{ message: string }>('POST', 'auth/password/forgot', { email });
@@ -261,7 +262,7 @@ export function toTask(a: ApiAssignment, tz: string): Task {
 export function toTeacher(t: ApiTeacher): Teacher {
   const types = [t.offers_individual && 'فردية', t.offers_group && 'جماعية'].filter(Boolean) as string[];
   return {
-    id: String(t.id), name: t.full_name, ini: t.full_name.replace(/^(الشيخ|الأستاذة?|د\.)\s+/, '').trim().charAt(0) || '؟',
+    id: String(t.id), name: t.display_name || t.full_name, ini: initialOf(t.full_name),
     spec: t.specialization || '—', tags: t.tags ?? [], types: types.length ? types : ['فردية'], levels: t.levels || '—',
     aud: t.audience || '—', bio: t.bio || '',
   };

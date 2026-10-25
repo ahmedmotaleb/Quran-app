@@ -193,7 +193,7 @@ def _notify_cancelled(booking_id: int) -> None:
     b = Booking.objects.select_related("occurrence__teacher", "student").get(pk=booking_id)
     tz = ZoneInfo(b.student.timezone or "Africa/Cairo")
     when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
-    notify(b.student, "booking_cancelled", "أُلغيت جلستك", f"مع {b.occurrence.teacher.full_name} · {when}. يمكنك حجز موعد آخر.",
+    notify(b.student, "booking_cancelled", "أُلغيت جلستك", f"مع {b.occurrence.teacher.display_name} · {when}. يمكنك حجز موعد آخر.",
            link="/sessions", dedupe=f"booking:{b.pk}:cancelled", data={"booking": b.pk})
 
 
@@ -217,10 +217,10 @@ def notify_attendance(booking_id: int) -> None:
         return
     tz = ZoneInfo(b.student.timezone or "Africa/Cairo")
     when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
-    notify(b.student, "attendance_absent", "سُجّل غيابك عن جلسة", f"مع {b.occurrence.teacher.full_name} · {when}", link="/sessions",
+    notify(b.student, "attendance_absent", "سُجّل غيابك عن جلسة", f"مع {b.occurrence.teacher.display_name} · {when}", link="/sessions",
            dedupe=f"booking:{b.pk}:att:{b.attendance}", data={"booking": b.pk})
     for g in GuardianLink.objects.filter(student=b.student, status=LinkStatus.ACTIVE).select_related("guardian"):
-        notify(g.guardian, "child_absent", f"غياب {b.student.full_name} عن جلسة", f"مع {b.occurrence.teacher.full_name} · {when}",
+        notify(g.guardian, "child_absent", f"غياب {b.student.full_name} عن جلسة", f"مع {b.occurrence.teacher.display_name} · {when}",
                link="/parent", dedupe=f"booking:{b.pk}:att:{b.attendance}:g{g.guardian_id}", data={"booking": b.pk, "child": b.student_id})
 
 
@@ -230,7 +230,7 @@ def _notify_booked(booking_id: int) -> None:
     b = Booking.objects.select_related("occurrence__teacher", "student").get(pk=booking_id)
     tz = ZoneInfo(b.student.timezone)
     when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
-    notify(b.student, "booking_confirmed", "تم تأكيد حجزك", f"مع {b.occurrence.teacher.full_name} · {when}", link=f"/sessions/{b.pk}", dedupe=f"booking:{b.pk}:confirmed", data={"booking": b.pk})
+    notify(b.student, "booking_confirmed", "تم تأكيد حجزك", f"مع {b.occurrence.teacher.display_name} · {when}", link=f"/sessions/{b.pk}", dedupe=f"booking:{b.pk}:confirmed", data={"booking": b.pk})
     notify(b.occurrence.teacher, "booking_new", "حجز جديد", f"{b.student.full_name} · {when}", link="/teacher/schedule", dedupe=f"booking:{b.pk}:teacher", data={"booking": b.pk})
 
 

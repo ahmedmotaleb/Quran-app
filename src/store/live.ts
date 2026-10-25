@@ -6,6 +6,7 @@
  * lessons, quizzes and progress.
  * Not wired (screens keep demo content, labelled): teacher content authoring, live video.
  */
+import { stripTitle } from '@/lib/names';
 import { diag } from '@/services/diag';
 import * as E from '@/api/endpoints';
 import { ApiError, api, resetCsrf } from '@/api/client';
@@ -29,11 +30,12 @@ const tzIdFor = (zone: string): TzId => TZS.find((t) => t.iana === zone)?.id ?? 
 const homeFor = (r: Role) => (r === 'student' ? 'home' : r === 'teacher' ? 'tdash' : 'phome');
 
 function applyUser(u: E.Me) {
-  const name = u.full_name || u.email;
+  // Shown name: a teacher with «الشيخ» / «الأستاذة» (lib/names.ts); the stored name stays in `me.full_name`.
+  const name = u.display_name || u.full_name || u.email;
   setState((s) => ({
     me: u, tz: tzIdFor(u.timezone),
     notif: { tasks: true, sessions: true, feedback: true, news: true, ...(u.notify_prefs ?? {}) },
-    user: { ...s.user, name, first: name.split(' ')[0], email: u.email, level: u.level || '—', goal: u.daily_goal || '—' },
+    user: { ...s.user, name, first: stripTitle(u.full_name || u.email).split(' ')[0], email: u.email, level: u.level || '—', goal: u.daily_goal || '—' },
   }));
 }
 
@@ -156,16 +158,16 @@ export async function login(email: string, password: string) {
   }
 }
 
-export async function register(name: string, email: string, password: string) {
+export async function register(name: string, email: string, password: string, gender: 'male' | 'female') {
   try {
-    const r = await E.register(name, email, password, Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Cairo');
+    const r = await E.register(name, email, password, Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Cairo', gender);
     resetCsrf();
     applyUser(r.user);
     setState((s) => ({ signup: { ...s.signup, errors: {}, pw: '' }, ob: { ...s.ob, step: 0 } }));
     reset('onboard', 'student');
   } catch (e) {
     const err = e as ApiError;
-    up('signup', { errors: { name: err.field?.('full_name') ?? null, email: err.field?.('email') ?? null, pw: err.field?.('password') ?? null } });
+    up('signup', { errors: { name: err.field?.('full_name') ?? null, email: err.field?.('email') ?? null, pw: err.field?.('password') ?? null, gender: err.field?.('gender') ?? null } });
     if (!err.fields || !Object.keys(err.fields).length) toast(msg(e), 'alert');
   }
 }
@@ -202,6 +204,11 @@ export async function logout() {
   // Nothing from the previous account stays in memory.
   media.discardRecorder(); // the next account never sees this one's recording (device copies are per account)
   setState({ me: null, pendingRecs: [], tasks: [], sessions: [], fb: {}, recs: {}, avail: {}, reviews: null, students: [], teachers: [], parent: null, tsched: null, subs: [], lessons: null, lessonCur: null, tests: null, lq: null, grading: null });
+}
+
+/** A teacher's own title («الشيخ» / «الأستاذة»); the server shows it everywhere from the next request. */
+export async function saveGender(gender: 'male' | 'female') {
+  try { applyUser(await E.updateMe({ gender })); toast('حُفظ اللقب'); } catch (e) { toast(msg(e), 'alert'); }
 }
 
 export async function saveTimezone(id: TzId) {

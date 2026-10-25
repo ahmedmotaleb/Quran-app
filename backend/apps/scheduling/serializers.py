@@ -13,7 +13,7 @@ def booking_excuse(b) -> BookingExcuse | None:
 
 
 class SlotSerializer(serializers.ModelSerializer):
-    teacher_name = serializers.CharField(source="teacher.full_name")
+    teacher_name = serializers.CharField(source="teacher.display_name")
     seats_left = serializers.SerializerMethodField()
     circle_name = serializers.CharField(source="circle.name", default=None)
 

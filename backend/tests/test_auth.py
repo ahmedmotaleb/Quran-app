@@ -12,19 +12,19 @@ from .conftest import PW, client_for, make_user
 @pytest.mark.django_db
 class TestRegistration:
     def test_role_in_body_is_ignored(self):
-        r = APIClient().post("/api/v1/auth/register", {"full_name": "مهاجم", "email": "x@x.test", "password": PW, "role": "admin"})
+        r = APIClient().post("/api/v1/auth/register", {"gender": "male", "full_name": "مهاجم", "email": "x@x.test", "password": PW, "role": "admin"})
         assert r.status_code == 201
         u = User.objects.get(email="x@x.test")
         assert u.role == Role.STUDENT and not u.is_staff and not u.is_superuser
 
     def test_weak_password_has_arabic_field_error(self):
-        r = APIClient().post("/api/v1/auth/register", {"full_name": "طالب", "email": "y@x.test", "password": "12345678"})
+        r = APIClient().post("/api/v1/auth/register", {"gender": "male", "full_name": "طالب", "email": "y@x.test", "password": "12345678"})
         assert r.status_code == 400
         assert r.json()["fields"]["password"][0] in {"استخدم 10 أحرف على الأقل.", "كلمة المرور شائعة جدًا. اختر كلمة أقوى."}
 
     def test_duplicate_email_case_insensitive(self):
         make_user("dup@x.test")
-        r = APIClient().post("/api/v1/auth/register", {"full_name": "طالب", "email": "DUP@x.test", "password": PW})
+        r = APIClient().post("/api/v1/auth/register", {"gender": "male", "full_name": "طالب", "email": "DUP@x.test", "password": PW})
         assert r.status_code == 400 and "email" in r.json()["fields"]
 
 
@@ -120,7 +120,7 @@ class TestInvitations:
     def test_teacher_invitation_creates_teacher_once(self, world):
         code = client_for(world.admin).post("/api/v1/invitations", {"purpose": "teacher_account", "email": "newt@x.test", "share_link": True},
                                            format="json").json()["link"].split("code=")[1]
-        body = {"code": code, "full_name": "معلم جديد", "email": "newt@x.test", "password": PW}
+        body = {"code": code, "full_name": "معلم جديد", "email": "newt@x.test", "password": PW, "gender": "male"}
         assert APIClient().post("/api/v1/auth/invitations/accept", body).status_code == 201
         assert User.objects.get(email="newt@x.test").role == Role.TEACHER
         assert APIClient().post("/api/v1/auth/invitations/accept", {**body, "email": "other@x.test"}).json()["code"] == "invitation_invalid"

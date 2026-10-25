@@ -1,4 +1,5 @@
 /** Live Lectures (courses, lessons, enrollments) and Quizzes (tests, versioned questions) sections — pack prompt 07. */
+import { nameOf } from '@/lib/names';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { color, font } from '@/theme/tokens';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
@@ -104,7 +105,7 @@ function CourseForm({ course, onClose, onSaved }: { course?: A.Course; onClose: 
         <Field id="co-d" label="الوصف (يظهر للطلاب)"><textarea id="co-d" rows={3} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} style={{ ...inputStyle(null), minHeight: 80, paddingTop: 10 }} /></Field>
         <Field id="co-tc" label="المعلم المسؤول" err={err.teacher}>
           <select id="co-tc" value={f.teacher} onChange={(e) => setF({ ...f, teacher: Number(e.target.value) })} style={inputStyle(err.teacher)}>
-            <option value={0}>— اختر —</option>{teachers.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+            <option value={0}>— اختر —</option>{teachers.map((t) => <option key={t.id} value={t.id}>{nameOf(t)}</option>)}
           </select>
         </Field>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -256,7 +257,7 @@ function StudentPicker({ exclude, onClose, onPick }: { exclude: number[]; onClos
       {rows?.filter((r) => !exclude.includes(r.id)).map((r) => (
         <button key={r.id} disabled={busy} onClick={async () => { setBusy(true); try { await onPick(r); onClose(); } catch (e) { setErr(errMsg(e)); setBusy(false); } }}
           style={{ minHeight: 52, padding: '0 12px', borderRadius: 12, border: `1px solid ${color.divider}`, background: color.card, textAlign: 'right', cursor: 'pointer' }}>
-          <span style={{ display: 'block', fontWeight: 700 }}>{r.full_name}</span><bdi dir="ltr" style={{ fontSize: 12, color: color.muted }}>{r.email}</bdi>
+          <span style={{ display: 'block', fontWeight: 700 }}>{nameOf(r)}</span><bdi dir="ltr" style={{ fontSize: 12, color: color.muted }}>{r.email}</bdi>
         </button>
       ))}
     </Modal>

@@ -110,7 +110,7 @@ const initial = () => ({
   intro: 0,
   /** `parent`: the «تسجيل دخول ولي الأمر» entry. Only wording changes; the server decides the role and the portal. */
   login: { email: '', pw: '', show: false, errors: {} as Record<string, string | null>, loading: false, parent: false },
-  signup: { name: '', email: '', pw: '', errors: {} as Record<string, string | null> },
+  signup: { name: '', email: '', pw: '', gender: '' as '' | 'male' | 'female', errors: {} as Record<string, string | null> },
   forgot: { email: '', sent: false, errors: {} as Record<string, string | null> },
   ob: { step: 0, level: null as string | null, goal: null as string | null, days: ['الأحد', 'الثلاثاء', 'الخميس'], period: 'مساءً', error: null as string | null },
   planTab: 'hifz' as TaskType,
@@ -514,8 +514,9 @@ export function doSignup() {
   if (!em) e.email = 'أدخل بريدك الإلكتروني'; else if (!EMAIL_RE.test(em)) e.email = 'صيغة البريد الإلكتروني غير صحيحة';
   else if (!LIVE && ACCOUNTS[em]) e.email = 'هذا البريد مسجّل بالفعل. سجّل الدخول بدلًا من ذلك.';
   if (S.pw.length < PW_MIN) e.pw = `استخدم ${PW_MIN} أحرف على الأقل`;
+  if (!S.gender) e.gender = 'اختر: ذكر أو أنثى.';
   if (Object.keys(e).length) { up('signup', { errors: e }); return; }
-  if (LIVE) { live.register(S.name.trim(), em, S.pw); return; }
+  if (LIVE) { live.register(S.name.trim(), em, S.pw, S.gender as 'male' | 'female'); return; }
   const name = S.name.trim();
   set((s) => ({ user: { ...s.user, name, first: name.split(' ')[0], email: em }, signup: { ...s.signup, errors: {} }, ob: { ...s.ob, step: 0 } }));
   // Public sign-up only ever grants the student role.

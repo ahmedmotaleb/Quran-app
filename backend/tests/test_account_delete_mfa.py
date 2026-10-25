@@ -84,7 +84,7 @@ def test_parent_without_history_is_removed_and_email_reusable(world, owner):
     assert r.json()["done"] == [{"id": p.pk, "label": p.full_name, "result": {"mode": "removed"}}]
     assert not User.objects.filter(pk=p.pk).exists()
     assert client_for(owner).get("/api/v1/admin/users?role=parent").json()["count"] == 1  # only the fixture parent
-    r = APIClient().post("/api/v1/auth/register", {"full_name": "حساب جديد", "email": "reuse@x.test", "password": "a-new-strong-pass-77"}, format="json")
+    r = APIClient().post("/api/v1/auth/register", {"gender": "male", "full_name": "حساب جديد", "email": "reuse@x.test", "password": "a-new-strong-pass-77"}, format="json")
     assert r.status_code == 201
 
 
@@ -107,7 +107,7 @@ def test_student_with_history_is_anonymized(world, owner):
     m.refresh_from_db()
     assert m.state == MediaObject.State.DELETED and not (get_storage().root / m.key).exists()
     assert login("s1@x.test").status_code in (400, 401, 403)
-    assert APIClient().post("/api/v1/auth/register", {"full_name": "طالب جديد", "email": "s1@x.test", "password": "a-new-strong-pass-77"},
+    assert APIClient().post("/api/v1/auth/register", {"gender": "male", "full_name": "طالب جديد", "email": "s1@x.test", "password": "a-new-strong-pass-77"},
                             format="json").status_code == 201
     # The list no longer shows it, and it cannot be restored.
     rows = client_for(owner).get("/api/v1/admin/users?role=student").json()["results"]

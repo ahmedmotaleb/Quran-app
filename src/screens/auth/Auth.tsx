@@ -126,6 +126,17 @@ export function Signup() {
         <input id="su-name" autoComplete="name" value={S.name} aria-invalid={!!E.name} onChange={(e) => field('name', e.target.value)} style={inputStyle(E.name)} />
         <FieldError msg={E.name} />
       </div>
+      <div role="radiogroup" aria-labelledby="su-g-l" aria-invalid={!!E.gender} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span id="su-g-l" style={labelStyle}>الجنس</span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {([['male', 'ذكر'], ['female', 'أنثى']] as const).map(([k, l]) => {
+            const on = S.gender === k;
+            return <button key={k} type="button" role="radio" aria-checked={on} onClick={() => up('signup', { gender: k, errors: { ...E, gender: null } })}
+              style={{ flex: 1, minHeight: 52, borderRadius: 14, border: `1.5px solid ${on ? color.primary : E.gender ? color.dangerInk : color.borderInput}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.ink, fontSize: 16, fontWeight: 700, cursor: 'pointer' }}>{l}</button>;
+          })}
+        </div>
+        <FieldError msg={E.gender} />
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <label htmlFor="su-email" style={labelStyle}>البريد الإلكتروني</label>
         <input id="su-email" type="email" dir="ltr" autoComplete="email" value={S.email} placeholder="name@example.com" aria-invalid={!!E.email} onChange={(e) => field('email', e.target.value)} style={inputStyle(E.email, true)} />

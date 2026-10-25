@@ -25,7 +25,7 @@ def create_assignment(teacher: User, student: User, data: dict, *, actor: User, 
     audit("assignment.created", actor=actor, target=a, request=request, **audit_data)
     from apps.notifications.services import after_commit
 
-    after_commit(student, "assignment_new", "واجب جديد من معلمك", f"{a.title} · {teacher.full_name}", link=f"/tasks/{a.pk}",
+    after_commit(student, "assignment_new", "واجب جديد من معلمك", f"{a.title} · {teacher.display_name}", link=f"/tasks/{a.pk}",
                  dedupe=f"assignment:{a.pk}:new", data={"assignment": a.pk})
     return a
 

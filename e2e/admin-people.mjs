@@ -120,6 +120,9 @@ await step('create a teacher: account now, setup email, password from the link, 
   await page.getByRole('button', { name: 'إضافة / دعوة معلم' }).click();
   await dialog().locator('#ad-n').fill(TN); await dialog().locator('#ad-e').fill(`teach+${stamp}@example.com`);
   await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال رابط الإعداد' }).click();
+  await dialog().getByText('اختر اللقب: الشيخ أو الأستاذة.').waitFor();          // the title is required for a teacher
+  await dialog().locator('#ad-g').selectOption('male');
+  await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال رابط الإعداد' }).click();
   await dialog().getByText(`تم إرسال رابط الإعداد إلى`, { exact: false }).waitFor();
   if (await dialog().locator('code').count()) throw new Error('a raw link is shown');
   const m = await linkFor(`teach+${stamp}@example.com`);
@@ -128,7 +131,7 @@ await step('create a teacher: account now, setup email, password from the link, 
   const c3 = await b.newContext(); const p3 = await c3.newPage(); await p3.goto(invite.replace(/^https?:\/\/[^/]+\//, BASE));
   await p3.locator('#sp-pw').fill('E2e-Teacher-2026!'); await p3.locator('#sp-pw2').fill('E2e-Teacher-2026!');
   await p3.getByRole('button', { name: 'حفظ كلمة المرور' }).click(); await p3.getByText('تم إعداد حسابك بنجاح').waitFor(); await c3.close();
-  await settledReload(); await nav('المعلمون'); await openPerson(TN);
+  await settledReload(); await nav('المعلمون'); await openPerson(`الشيخ ${TN}`);
   await dialog().getByRole('button', { name: 'اعتماد المعلم' }).click();  // account setup ≠ approval
   await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
 });
@@ -137,6 +140,7 @@ await step('a student email in «دعوة معلم»: no new account; «ترقي
   await page.keyboard.press('Escape'); await nav('المعلمون');
   await page.getByRole('button', { name: 'إضافة / دعوة معلم' }).click();
   await dialog().locator('#ad-n').fill('معلم تجريبي'); await dialog().locator('#ad-e').fill('admin@halqa.app');
+  await dialog().locator('#ad-g').selectOption('male');
   await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال رابط الإعداد' }).click();
   await dialog().getByText('هذا البريد لحساب إدارة', { exact: false }).waitFor();
   const before = (await (await page.request.post(BASE + 'api/v1/auth/login', { data: { email: 'sara@halqa.app', password: 'halqa123', client: 'native' } })).json()).user;

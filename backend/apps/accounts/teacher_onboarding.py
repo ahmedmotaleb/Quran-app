@@ -27,6 +27,7 @@ from .permissions import IsAdminRole
 class TeacherIn(serializers.Serializer):
     full_name = serializers.CharField(min_length=2, max_length=120)
     email = serializers.EmailField()
+    gender = serializers.ChoiceField(choices=["male", "female", ""], required=False, default="")  # «الشيخ» / «الأستاذة»
 
 
 def check_email(email: str) -> None:
@@ -46,12 +47,15 @@ def check_email(email: str) -> None:
     raise ApiError("email_taken", "هذا البريد مسجّل بالفعل لحساب آخر. استخدم بريدًا آخر لحساب المعلم.", 409, {"email": ["بريد مسجّل."]})
 
 
-def create_teacher(full_name: str, email: str, actor=None, request=None) -> User:
+def create_teacher(full_name: str, email: str, actor=None, request=None, gender: str = "") -> User:
     email = email.strip().lower()
     check_email(email)
     try:
         with transaction.atomic():
-            user = User.objects.create_user(email, None, full_name=full_name.strip(), role=Role.TEACHER)  # unusable password
+            # The stored name stays plain: a title typed into it is removed (it is added when shown, display.py).
+            from .display import strip_title
+
+            user = User.objects.create_user(email, None, full_name=strip_title(full_name), role=Role.TEACHER, gender=gender)  # unusable password
             TeacherProfile.objects.create(user=user)  # approved_at stays empty until an admin approves
             # The account replaces any open invitation of the previous flow for this address.
             Invitation.objects.filter(purpose=Invitation.Purpose.TEACHER_ACCOUNT, email=email, revoked_at__isnull=True, uses=0).update(
@@ -74,7 +78,7 @@ class AdminTeacherCreate(APIView):
 
         s = TeacherIn(data=request.data)
         s.is_valid(raise_exception=True)
-        user = create_teacher(s.validated_data["full_name"], s.validated_data["email"], request.user, request)
+        user = create_teacher(s.validated_data["full_name"], s.validated_data["email"], request.user, request, gender=s.validated_data["gender"])
         sent = send_setup_email(user, request.user, request)
         user.refresh_from_db()
         return Response({**AdminUserSerializer(user, context={"request": request}).data, "setup_email_sent": sent, "sent_to": user.email},

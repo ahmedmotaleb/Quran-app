@@ -43,7 +43,7 @@ class Command(BaseCommand):
         now, today = timezone.now(), timezone.localdate()
         with transaction.atomic():
             teachers = User.objects.bulk_create([
-                User(email=f"load-t{i:02d}@example.test", full_name=f"معلم تجريبي {i}", role=Role.TEACHER, password=pw)
+                User(email=f"load-t{i:02d}@example.test", full_name=f"معلم تجريبي {i}", role=Role.TEACHER, gender="female" if i % 2 else "male", password=pw)
                 for i in range(o["teachers"])])
             TeacherProfile.objects.bulk_create([TeacherProfile(user=t, specialization="حفظ وتجويد", approved_at=now, offers_group=True)
                                                 for t in teachers])

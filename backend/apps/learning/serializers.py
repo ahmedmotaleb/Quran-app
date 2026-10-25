@@ -6,7 +6,7 @@ from .models import Assignment
 
 
 class AssignmentSerializer(serializers.ModelSerializer):
-    teacher_name = serializers.CharField(source="teacher.full_name", read_only=True)
+    teacher_name = serializers.CharField(source="teacher.display_name", read_only=True)
     student_name = serializers.CharField(source="student.full_name", read_only=True)
 
     class Meta:

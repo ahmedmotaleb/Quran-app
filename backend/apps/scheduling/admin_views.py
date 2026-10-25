@@ -64,7 +64,7 @@ def _circles():
 
 
 def _circle_out(c: Circle) -> dict:
-    return {"id": c.id, "name": c.name, "teacher": {"id": c.teacher_id, "name": c.teacher.full_name}, "level": c.level,
+    return {"id": c.id, "name": c.name, "teacher": {"id": c.teacher_id, "name": c.teacher.display_name}, "level": c.level,
             "capacity": c.capacity, "schedule_note": c.schedule_note, "state": c.state,
             "upcoming_sessions": getattr(c, "upcoming", None), "upcoming_booked_seats": getattr(c, "booked", None),
             "members": getattr(c, "member_count", None),
@@ -74,7 +74,7 @@ def _circle_out(c: Circle) -> dict:
 def _occ_out(o: SessionOccurrence) -> dict:
     return {"id": o.id, "starts_at": o.starts_at.isoformat(), "ends_at": o.ends_at.isoformat(), "status": o.status,
             "capacity": o.capacity, "booked": getattr(o, "booked", None), "kind": o.kind,
-            "teacher": {"id": o.teacher_id, "name": o.teacher.full_name}}
+            "teacher": {"id": o.teacher_id, "name": o.teacher.display_name}}
 
 
 class AdminCircles(AdminView):
@@ -224,9 +224,9 @@ def _booking_out(b: Booking) -> dict:
     o = b.occurrence
     return {"id": b.id, "status": b.status, "attendance": b.attendance, "starts_at": o.starts_at.isoformat(), "ends_at": o.ends_at.isoformat(),
             "kind": o.kind, "circle": o.circle.name if o.circle_id else None, "session_status": o.status,
-            "teacher": {"id": o.teacher_id, "name": o.teacher.full_name}, "student": {"id": b.student_id, "name": b.student.full_name},
+            "teacher": {"id": o.teacher_id, "name": o.teacher.display_name}, "student": {"id": b.student_id, "name": b.student.full_name},
             "cancel_reason": b.cancel_reason, "cancelled_at": b.cancelled_at.isoformat() if b.cancelled_at else None,
-            "cancelled_by": b.cancelled_by.full_name if b.cancelled_by_id else None, "created_at": b.created_at.isoformat(),
+            "cancelled_by": b.cancelled_by.display_name if b.cancelled_by_id else None, "created_at": b.created_at.isoformat(),
             "occurrence": o.pk, "google": _google_brief(o)}
 
 
@@ -385,7 +385,7 @@ class AdminStudentDiscipline(APIView):
 
         mk = dict(MakeupCredit.objects.filter(student=s).values_list("source_booking_id", "status"))
         return Response({**excuses.summary(s),
-                         "absences": [{"booking": b.pk, "starts_at": b.occurrence.starts_at.isoformat(), "teacher": b.occurrence.teacher.full_name,
+                         "absences": [{"booking": b.pk, "starts_at": b.occurrence.starts_at.isoformat(), "teacher": b.occurrence.teacher.display_name,
                                        "attendance": b.attendance, "counts": b.pk in counted,
                                        "excuse": ex[b.pk].status if b.pk in ex else None, "makeup": mk.get(b.pk)} for b in absences],
                          "excuses": _excuse_rows(BookingExcuse.objects.filter(student=s))})

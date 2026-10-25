@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
+import { nameOf } from '@/lib/names';
 import { color, font } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
@@ -211,7 +212,7 @@ function Portal() {
         <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div><h1 style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>{label}</h1><p style={{ margin: '4px 0 0', fontSize: 14, color: color.muted }}>{s.sec === 'overview' && LIVE ? todayCairo() : TITLES[s.sec]}</p></div>
           <span style={{ fontSize: 13, color: demoBadge ? color.dangerInk : color.muted, background: color.sand, padding: '6px 12px', borderRadius: 999 }}>
-            {!LIVE ? 'بيانات عرض تجريبية' : !demoBadge ? `${s.me?.full_name ?? ''} · بيانات حقيقية` : 'هذا القسم ما زال ببيانات عرض تجريبية — لا تُحفظ التغييرات'}
+            {!LIVE ? 'بيانات عرض تجريبية' : !demoBadge ? `${s.me ? nameOf(s.me) : ''} · بيانات حقيقية` : 'هذا القسم ما زال ببيانات عرض تجريبية — لا تُحفظ التغييرات'}
           </span>
         </header>
         {LIVE && s.me && !s.me.mfa_enabled && <MfaSetup />}

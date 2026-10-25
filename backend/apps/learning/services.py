@@ -40,7 +40,7 @@ def submission_out(s, user, request) -> dict:
     }
     if fb is not None:
         out["feedback"] = {
-            "id": fb.id, "teacher": fb.teacher_id, "teacher_name": fb.teacher.full_name, "created_at": fb.created_at.isoformat(),
+            "id": fb.id, "teacher": fb.teacher_id, "teacher_name": fb.teacher.display_name, "created_at": fb.created_at.isoformat(),
             "score_hifz": fb.score_hifz, "score_tajweed": fb.score_tajweed, "score_fluency": fb.score_fluency,
             "decision": fb.decision, "general": fb.general, "needs_review": fb.needs_review, "next_step": fb.next_step,
             "notes": [{"at_seconds": n.at_seconds, "text": n.text, "category": n.category} for n in fb.notes.all()],

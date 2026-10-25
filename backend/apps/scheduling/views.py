@@ -52,7 +52,7 @@ class TeacherSlots(APIView):
                         offered=Count("waitlist", filter=Q(waitlist__status="offered", waitlist__offer_expires_at__gt=now), distinct=True))
               .order_by("starts_at"))
         rows = SlotSerializer([o for o in qs if not av.is_placeholder(o)], many=True).data
-        computed = [{"id": av.token_for(teacher.pk, x.start, x.minutes), "teacher": teacher.pk, "teacher_name": teacher.full_name,
+        computed = [{"id": av.token_for(teacher.pk, x.start, x.minutes), "teacher": teacher.pk, "teacher_name": teacher.display_name,
                      "kind": "individual", "starts_at": x.start.isoformat(), "ends_at": x.end.isoformat(), "minutes": x.minutes,
                      "capacity": 1, "seats_left": 1, "circle_name": None, "topic": "", "title": "", "prep_note": ""}
                     for x in av.compute(teacher, lo, hi, now=now, cfg=cfg)]
@@ -342,7 +342,7 @@ def _excuse_rows(qs):
         return "override" if ex.override_at else ex.decided_by_role or ("teacher" if ex.teacher_status else "")
 
     return [{**excuse_out(ex), "student": {"id": ex.student_id, "name": ex.student.full_name},
-             "teacher": {"id": ex.booking.occurrence.teacher_id, "name": ex.booking.occurrence.teacher.full_name},
+             "teacher": {"id": ex.booking.occurrence.teacher_id, "name": ex.booking.occurrence.teacher.display_name},
              "starts_at": ex.booking.occurrence.starts_at.isoformat(), "kind": ex.booking.occurrence.kind,
              "topic": ex.booking.occurrence.topic, "circle": ex.booking.occurrence.circle.name if ex.booking.occurrence.circle_id else None,
              "attendance": ex.booking.attendance, "teacher_status": ex.teacher_status, "override_reason": ex.override_reason,

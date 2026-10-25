@@ -64,7 +64,7 @@ def media_out(m: MediaObject | None) -> dict | None:
 
 
 def person(u: User | None) -> dict | None:
-    return {"id": u.pk, "name": u.full_name, "role": u.role} if u else None
+    return {"id": u.pk, "name": u.display_name, "role": u.role} if u else None
 
 
 def msg_out(m: TicketMessage, *, staff: bool) -> dict:
@@ -234,7 +234,7 @@ class AdminSupportStaff(APIView):
         from apps.accounts.admin_access import admin_users
 
         admins = admin_users().select_related("admin_profile").order_by("full_name")
-        return Response({"results": [{"id": u.pk, "name": u.full_name} for u in admins if has(u, "support.view")]})
+        return Response({"results": [{"id": u.pk, "name": u.display_name} for u in admins if has(u, "support.view")]})
 
 
 class AdminTicketDetail(APIView):

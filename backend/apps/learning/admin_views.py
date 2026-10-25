@@ -115,7 +115,7 @@ class LessonIn(serializers.Serializer):
 
 def _course_out(c: Course) -> dict:
     return {"id": c.id, "title": c.title, "description": c.description, "topic": c.topic, "level": c.level,
-            "teacher": {"id": c.teacher_id, "name": c.teacher.full_name}, "state": c.state, "restricted": c.restricted,
+            "teacher": {"id": c.teacher_id, "name": c.teacher.display_name}, "state": c.state, "restricted": c.restricted,
             "lessons": getattr(c, "n_lessons", None), "published_lessons": getattr(c, "n_published", None),
             "enrolled": getattr(c, "n_enrolled", None), "updated_at": c.updated_at.isoformat()}
 
