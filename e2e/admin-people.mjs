@@ -45,6 +45,9 @@ await step('add a student: the setup link is emailed (nothing to copy)', async (
   await page.getByRole('button', { name: 'إضافة طالب' }).click();
   await dialog().locator('#ad-n').fill(SN); await dialog().locator('#ad-e').fill(`e2e+${stamp}@example.com`);
   await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال رابط الإعداد' }).click();
+  await dialog().getByText('اختر: ذكر أو أنثى.').waitFor();                     // gender is asked for every student
+  await dialog().locator('#ad-g').selectOption('male');
+  await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال رابط الإعداد' }).click();
   await dialog().getByText('تم إرسال رابط الإعداد إلى', { exact: false }).waitFor();
   if (await dialog().locator('code').count()) throw new Error('a raw link is shown');
   const m = await linkFor(`e2e+${stamp}@example.com`);
