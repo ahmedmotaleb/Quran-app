@@ -29,11 +29,11 @@ class MeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "phone_verified", "mfa_enabled", "mfa_required",
-                  "level", "daily_goal", "date_joined", "admin_access", "teacher_approved", "notify_prefs"]
-        # Only the name, time zone and contact phone change here. Role, status, email and two-step verification have
+        fields = ["id", "email", "full_name", "display_name", "gender", "role", "status", "timezone", "phone", "phone_verified", "mfa_enabled",
+                  "mfa_required", "level", "daily_goal", "date_joined", "admin_access", "teacher_approved", "notify_prefs"]
+        # Only the name, gender (a teacher's title), time zone and contact phone change here. Role, status, email and two-step verification have
         # their own audited flows (a misplaced list let `PATCH me` change them on 22–23 Oct; test_me_protected_fields).
-        read_only_fields = ["id", "email", "role", "status", "mfa_enabled", "date_joined"]
+        read_only_fields = ["id", "email", "display_name", "role", "status", "mfa_enabled", "date_joined"]
 
     def get_level(self, u) -> str:
         return _student_field(u, "level")
@@ -57,6 +57,12 @@ class MeSerializer(serializers.ModelSerializer):
             return None
         prof = getattr(u, "teacher_profile", None)
         return bool(prof and prof.approved_at)
+
+    def validate_full_name(self, v):
+        # A teacher's title is shown, never stored (display.py): «الشيخ أحمد» is saved as «أحمد».
+        from .display import strip_title
+
+        return strip_title(v) if self.instance is not None and self.instance.role == "teacher" else v
 
     def validate_phone(self, v):
         # A verified sign-in number changes only through «تأكيد رقم الهاتف» (the new number is verified first).
@@ -155,7 +161,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "role", "status", "timezone", "phone", "phone_verified", "level", "approved", "has_password",
+        fields = ["id", "email", "full_name", "display_name", "gender", "role", "status", "timezone", "phone", "phone_verified", "level", "approved", "has_password",
                   "date_joined", "last_login", "teachers", "guardians", "children", "status_reason", "status_changed_at",
                   "setup_email_status", "setup_email_last_at", "setup_email_count"]
         read_only_fields = fields
@@ -175,7 +181,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
         return bool(u.phone_verified_at and u.phone_e164)
 
     def get_teachers(self, u):
-        return [{"id": a.teacher_id, "name": a.teacher.full_name, "assignment_id": a.id} for a in u.teacher_assignments.all() if a.active]
+        return [{"id": a.teacher_id, "name": a.teacher.display_name, "assignment_id": a.id} for a in u.teacher_assignments.all() if a.active]
 
     def get_guardians(self, u):
         return [{"id": g.guardian_id, "name": g.guardian.full_name, "status": g.status, "link_id": g.id}
@@ -200,6 +206,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
 
 class AdminUserUpdateSerializer(serializers.Serializer):
     full_name = serializers.CharField(min_length=2, max_length=120, required=False)
+    gender = serializers.ChoiceField(choices=["male", "female", ""], required=False)  # a teacher's title
     phone = serializers.CharField(max_length=32, required=False, allow_blank=True)
     timezone = serializers.CharField(max_length=64, required=False)
 
@@ -292,7 +299,8 @@ class TeacherPublicSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "full_name", "timezone", "specialization", "bio", "audience", "levels", "tags", "offers_individual", "offers_group"]
+        fields = ["id", "full_name", "display_name", "gender", "timezone", "specialization", "bio", "audience", "levels", "tags",
+                  "offers_individual", "offers_group"]
 
 
 class TeacherProfileSerializer(serializers.ModelSerializer):

@@ -1,6 +1,7 @@
 /** «الإدارة والصلاحيات»: who can do what in the portal. The server decides everything (admin_management.py): only
  *  `admins.manage`, never your own account, only owners touch owners, never more than you hold, always one active
  *  owner, and a current authenticator code for every change. This screen presents those rules. */
+import { nameOf } from '@/lib/names';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { color, font } from '@/theme/tokens';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
@@ -47,7 +48,7 @@ export default function AdminsLive() {
         {d.results.map((a) => (
           <div role="listitem" key={a.id} style={{ ...card, padding: 16, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-              <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>{a.full_name}{a.is_self ? ' (أنت)' : ''}</p>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 16 }}>{nameOf(a)}{a.is_self ? ' (أنت)' : ''}</p>
               <p style={{ margin: '2px 0 0', fontSize: 13, color: color.muted }}><bdi dir="ltr" style={{ fontFamily: font.latin }}>{a.email}</bdi>{a.phone ? <> · <bdi dir="ltr">{a.phone}</bdi></> : null}</p>
               <p style={{ margin: '4px 0 0', fontSize: 13, color: color.muted }}>آخر دخول: {date(a.last_login)} · {a.mfa_enabled ? 'التحقق بخطوتين مفعّل' : <span style={{ color: color.dangerInk }}>لم يفعّل التحقق بخطوتين بعد</span>}</p>
             </div>
@@ -58,18 +59,18 @@ export default function AdminsLive() {
             <span style={{ fontSize: 13, fontWeight: 700, color: a.status === 'active' && a.access_active ? color.primary : color.dangerInk }}>
               {!a.access_active ? 'صلاحيات الإدارة معطلة' : STATUS_L[a.status] ?? a.status}</span>
             {mayTouch(a) && a.teacher_admin && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button onClick={() => setForm({ edit: a })} aria-label={`تعديل صلاحيات ${a.full_name}`} style={smallBtn()}>تعديل الصلاحيات</button>
+              <button onClick={() => setForm({ edit: a })} aria-label={`تعديل صلاحيات ${nameOf(a)}`} style={smallBtn()}>تعديل الصلاحيات</button>
               {a.access_active
-                ? <button disabled={a.level === 'owner' && owners <= 1} onClick={() => setAcc({ row: a, action: 'suspend' })} aria-label={`تعطيل صلاحيات الإدارة لـ${a.full_name}`} style={smallBtn('danger')}>تعطيل صلاحيات الإدارة</button>
-                : <button onClick={() => setAcc({ row: a, action: 'reactivate' })} aria-label={`إعادة تفعيل صلاحيات الإدارة لـ${a.full_name}`} style={smallBtn('primary')}>إعادة تفعيل صلاحيات الإدارة</button>}
-              <button disabled={a.level === 'owner' && a.access_active && owners <= 1} onClick={() => setAcc({ row: a, action: 'remove' })} aria-label={`إزالة صلاحيات الإدارة من ${a.full_name}`} style={smallBtn('danger')}>إزالة صلاحيات الإدارة</button>
+                ? <button disabled={a.level === 'owner' && owners <= 1} onClick={() => setAcc({ row: a, action: 'suspend' })} aria-label={`تعطيل صلاحيات الإدارة لـ${nameOf(a)}`} style={smallBtn('danger')}>تعطيل صلاحيات الإدارة</button>
+                : <button onClick={() => setAcc({ row: a, action: 'reactivate' })} aria-label={`إعادة تفعيل صلاحيات الإدارة لـ${nameOf(a)}`} style={smallBtn('primary')}>إعادة تفعيل صلاحيات الإدارة</button>}
+              <button disabled={a.level === 'owner' && a.access_active && owners <= 1} onClick={() => setAcc({ row: a, action: 'remove' })} aria-label={`إزالة صلاحيات الإدارة من ${nameOf(a)}`} style={smallBtn('danger')}>إزالة صلاحيات الإدارة</button>
             </div>}
             {mayTouch(a) && !a.teacher_admin && <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setForm({ edit: a })} aria-label={`تعديل صلاحيات ${a.full_name}`} style={smallBtn()}>تعديل الصلاحيات</button>
+              <button onClick={() => setForm({ edit: a })} aria-label={`تعديل صلاحيات ${nameOf(a)}`} style={smallBtn()}>تعديل الصلاحيات</button>
               {a.status === 'active'
                 ? <button disabled={a.level === 'owner' && owners <= 1} title={a.level === 'owner' && owners <= 1 ? 'يجب أن يبقى مالك نشط واحد على الأقل' : undefined}
-                    onClick={() => setStatus(a)} aria-label={`إيقاف ${a.full_name}`} style={smallBtn('danger')}>إيقاف</button>
-                : <button onClick={() => setStatus(a)} aria-label={`إعادة تفعيل ${a.full_name}`} style={smallBtn('primary')}>إعادة التفعيل</button>}
+                    onClick={() => setStatus(a)} aria-label={`إيقاف ${nameOf(a)}`} style={smallBtn('danger')}>إيقاف</button>
+                : <button onClick={() => setStatus(a)} aria-label={`إعادة تفعيل ${nameOf(a)}`} style={smallBtn('primary')}>إعادة التفعيل</button>}
             </div>}
           </div>
         ))}
@@ -93,9 +94,9 @@ export default function AdminsLive() {
         onTeacher={(t) => setForm({ edit: null, teacher: t })} />}
       {acc && <ReasonDialog otp required={acc.action !== 'reactivate'}
         title={acc.action === 'remove' ? 'إزالة صلاحيات الإدارة' : acc.action === 'suspend' ? 'تعطيل صلاحيات الإدارة' : 'إعادة تفعيل صلاحيات الإدارة'}
-        body={acc.action === 'remove' ? `ستُزال صلاحيات الإدارة من ${acc.row.full_name} وتنتهي جلسته في لوحة الإدارة فورًا. يبقى حسابه كمعلم كما هو (طلابه وجلساته وبياناته).`
-          : acc.action === 'suspend' ? `لن يستطيع ${acc.row.full_name} دخول لوحة الإدارة حتى تُعاد صلاحياته، وتنتهي جلسته فيها فورًا. حسابه كمعلم يعمل كالمعتاد.`
-          : `سيستطيع ${acc.row.full_name} دخول لوحة الإدارة بالصلاحيات نفسها.`}
+        body={acc.action === 'remove' ? `ستُزال صلاحيات الإدارة من ${nameOf(acc.row)} وتنتهي جلسته في لوحة الإدارة فورًا. يبقى حسابه كمعلم كما هو (طلابه وجلساته وبياناته).`
+          : acc.action === 'suspend' ? `لن يستطيع ${nameOf(acc.row)} دخول لوحة الإدارة حتى تُعاد صلاحياته، وتنتهي جلسته فيها فورًا. حسابه كمعلم يعمل كالمعتاد.`
+          : `سيستطيع ${nameOf(acc.row)} دخول لوحة الإدارة بالصلاحيات نفسها.`}
         ok={acc.action === 'remove' ? 'إزالة الصلاحيات' : acc.action === 'suspend' ? 'تعطيل الصلاحيات' : 'إعادة التفعيل'} onClose={() => setAcc(null)}
         run={async (r, otp) => {
           await A.teacherAccess(acc.row.id, acc.action, r, otp);
@@ -103,7 +104,7 @@ export default function AdminsLive() {
           void load();
         }} />}
       {status && <ReasonDialog otp title={status.status === 'active' ? 'إيقاف المسؤول' : 'إعادة تفعيل المسؤول'}
-        body={status.status === 'active' ? `سيُمنع ${status.full_name} من دخول لوحة الإدارة فورًا وتُنهى جلساته. لا يُحذف أي سجل.` : `سيستطيع ${status.full_name} دخول لوحة الإدارة بالصلاحيات نفسها.`}
+        body={status.status === 'active' ? `سيُمنع ${nameOf(status)} من دخول لوحة الإدارة فورًا وتُنهى جلساته. لا يُحذف أي سجل.` : `سيستطيع ${nameOf(status)} دخول لوحة الإدارة بالصلاحيات نفسها.`}
         ok={status.status === 'active' ? 'إيقاف' : 'إعادة التفعيل'} onClose={() => setStatus(null)}
         run={async (r, otp) => { await A.setAdminStatus(status.id, status.status === 'active' ? 'suspended' : 'active', r, otp); toast('حُفظ التغيير'); void load(); }} />}
     </div>
@@ -275,9 +276,9 @@ function GrantTeacher({ page, meOwner, initial, onClose, onDone }: {
           <div role="listbox" aria-label="المعلمون" style={{ display: 'flex', flexDirection: 'column', maxHeight: 220, overflowY: 'auto' }}>
             {found === null ? <span style={{ fontSize: 13, color: color.muted }}>جارٍ البحث…</span>
               : !found.length ? <span style={{ fontSize: 13, color: color.muted }}>لا يوجد معلم مطابق دون صلاحيات إدارة.</span>
-              : found.map((t) => <button type="button" role="option" aria-selected={false} key={t.id} onClick={() => setTeacher(t)}
+              : found.map((t) => <button type="button" role="option" aria-selected={false} key={t.id} onClick={() => setTeacher({ id: t.id, full_name: nameOf(t) })}
                   style={{ minHeight: 48, textAlign: 'right', border: 'none', borderTop: `1px solid ${color.divider}`, background: 'transparent', cursor: 'pointer', fontSize: 14, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <strong>{t.full_name}</strong><bdi dir="ltr" style={{ fontFamily: font.latin, color: color.muted }}>{t.email}</bdi>{t.phone && <bdi dir="ltr" style={{ color: color.muted }}>{t.phone}</bdi>}
+                  <strong>{nameOf(t)}</strong><bdi dir="ltr" style={{ fontFamily: font.latin, color: color.muted }}>{t.email}</bdi>{t.phone && <bdi dir="ltr" style={{ color: color.muted }}>{t.phone}</bdi>}
                 </button>)}
           </div>
         </>}

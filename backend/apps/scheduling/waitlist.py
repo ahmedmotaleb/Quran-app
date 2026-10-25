@@ -158,7 +158,7 @@ def _notify_offer(entry_id: int) -> None:
     if e is None:
         return
     notify(e.student, "waitlist_offer", "توفّر مقعد في جلسة تنتظرها",
-           f"مع {e.occurrence.teacher.full_name}. احجزه قبل انتهاء المهلة وإلا انتقل إلى التالي.",
+           f"مع {e.occurrence.teacher.display_name}. احجزه قبل انتهاء المهلة وإلا انتقل إلى التالي.",
            link="/bookings", dedupe=f"waitlist:{e.pk}:offer", data={"waitlist": e.pk, "occurrence": e.occurrence_id})
 
 
@@ -169,4 +169,4 @@ def entry_out(e: WaitlistEntry) -> dict:
     return {"id": e.id, "status": e.status, "joined_at": e.joined_at.isoformat(), "position": ahead + 1 if e.status == W.WAITING else None,
             "offer_expires_at": e.offer_expires_at.isoformat() if e.offer_expires_at and e.status == W.OFFERED else None,
             "occurrence": {"id": o.pk, "starts_at": o.starts_at.isoformat(), "ends_at": o.ends_at.isoformat(), "teacher": o.teacher_id,
-                           "teacher_name": o.teacher.full_name, "kind": o.kind, "circle_name": o.circle.name if o.circle_id else None}}
+                           "teacher_name": o.teacher.display_name, "kind": o.kind, "circle_name": o.circle.name if o.circle_id else None}}

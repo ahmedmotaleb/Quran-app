@@ -50,7 +50,7 @@ def ensure_session_reminders(user) -> int:
     for b in qs:
         tz = ZoneInfo(user.timezone or "Africa/Cairo")
         when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
-        other = b.occurrence.teacher.full_name if user.role == "student" else b.student.full_name
+        other = b.occurrence.teacher.display_name if user.role == "student" else b.student.full_name
         made += bool(notify(user, "session_reminder", "تذكير بجلسة قادمة", f"مع {other} · {when}", link="/sessions",
                             dedupe=f"booking:{b.pk}:reminder", data={"booking": b.pk}))
     return made

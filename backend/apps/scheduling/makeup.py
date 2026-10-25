@@ -101,5 +101,5 @@ def expire_all(now=None) -> int:
 def credit_out(c: MakeupCredit) -> dict:
     o = c.source_booking.occurrence
     return {"id": c.pk, "status": c.status if not (c.status == M.AVAILABLE and c.expires_at <= timezone.now()) else M.EXPIRED,
-            "teacher": c.teacher_id, "teacher_name": c.teacher.full_name, "expires_at": c.expires_at.isoformat(),
+            "teacher": c.teacher_id, "teacher_name": c.teacher.display_name, "expires_at": c.expires_at.isoformat(),
             "issued_at": c.issued_at.isoformat(), "source_starts_at": o.starts_at.isoformat(), "used_booking": c.used_booking_id}

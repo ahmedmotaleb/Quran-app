@@ -303,7 +303,7 @@ def _delete_params(raw: dict, actor) -> dict:
 
 
 def _teachers_of(u: User) -> str:
-    return "، ".join(a.teacher.full_name for a in u.teacher_assignments.filter(active=True).select_related("teacher"))
+    return "، ".join(a.teacher.display_name for a in u.teacher_assignments.filter(active=True).select_related("teacher"))
 
 
 register(Resource(
@@ -324,7 +324,7 @@ register(Resource(
         "resend_setup": Action(_resend_setup, params=_resend_params),
     },
     export=[
-        ("الرقم", lambda u: u.pk), ("الاسم", lambda u: u.full_name), ("البريد", lambda u: u.email), ("الهاتف", lambda u: u.phone),
+        ("الرقم", lambda u: u.pk), ("الاسم", lambda u: u.display_name), ("البريد", lambda u: u.email), ("الهاتف", lambda u: u.phone),
         ("النوع", lambda u: Role(u.role).label), ("الحالة", lambda u: AccountStatus(u.status).label),
         ("المستوى", lambda u: getattr(getattr(u, "student_profile", None), "level", "") if u.role == Role.STUDENT else ""),
         ("المعلمون", lambda u: _teachers_of(u) if u.role == Role.STUDENT else ""),

@@ -4,7 +4,7 @@ import { api, apiDownload, type Page } from '@/api/client';
 export type Role = 'student' | 'teacher' | 'parent';
 export type AccountStatus = 'pending' | 'active' | 'suspended' | 'archived';
 export interface Person {
-  id: number; email: string; full_name: string; role: Role; status: AccountStatus; timezone: string; phone: string; phone_verified?: boolean;
+  id: number; email: string; full_name: string; display_name?: string; gender?: 'male' | 'female' | ''; role: Role; status: AccountStatus; timezone: string; phone: string; phone_verified?: boolean;
   level: string; approved: boolean | null; has_password: boolean; date_joined: string; last_login: string | null;
   status_reason: string; status_changed_at: string | null;
   setup_email_status: '' | 'sent' | 'failed' | 'pending'; setup_email_last_at: string | null; setup_email_count: number;
@@ -23,7 +23,7 @@ export const listPeople = (p: { role: Role; q?: string; status?: string; page?: 
   api<Page<Person>>('GET', `admin/users?${qs(p)}`);
 export const peopleCounts = (role: Role) => api<Counts>('GET', `admin/users/counts?role=${role}`);
 export const getPerson = (id: number) => api<Person>('GET', `admin/users/${id}`);
-export const updatePerson = (id: number, patch: Partial<Pick<Person, 'full_name' | 'phone' | 'timezone'>>) => api<Person>('PATCH', `admin/users/${id}`, patch);
+export const updatePerson = (id: number, patch: Partial<Pick<Person, 'full_name' | 'phone' | 'timezone' | 'gender'>>) => api<Person>('PATCH', `admin/users/${id}`, patch);
 export const setPersonStatus = (id: number, status: AccountStatus, reason = '') => api<Person>('POST', `admin/users/${id}/status`, { status, reason });
 export const createPerson = (full_name: string, email: string, role: 'student' | 'parent') =>
   api<Person & SetupLink>('POST', 'admin/users', { full_name, email, role });
@@ -33,7 +33,7 @@ export const newSetupLink = (id: number, share = false) => api<SetupLink>('POST'
 /** A task for a student by an academic admin (assignments.manage); `teacher`: one of the student's linked teachers. */
 export const adminCreateTask = (b: { student: number; teacher?: number; kind: string; title: string; surah: number; ayah_from: number; ayah_to: number;
   instructions: string; due_at: string; requires_recording: boolean }) => api<{ id: number; title: string; teacher_name: string }>('POST', 'admin/assignments', b);
-export const createTeacher = (full_name: string, email: string) => api<Person & SetupLink>('POST', 'admin/teachers', { full_name, email });
+export const createTeacher = (full_name: string, email: string, gender: '' | 'male' | 'female' = '') => api<Person & SetupLink>('POST', 'admin/teachers', { full_name, email, gender });
 export const setTeacherApproval = (id: number, approved: boolean, reason = '') => api<Person>('POST', `admin/teachers/${id}/approval`, { approved, reason });
 export const assignTeacher = (teacher: number, student: number) => api<{ id: number }>('POST', 'admin/teacher-assignments', { teacher, student });
 export const endAssignment = (id: number) => api<null>('POST', `admin/teacher-assignments/${id}/end`);
@@ -181,7 +181,7 @@ export const deleteView = (id: number) => api<null>('DELETE', `admin/saved-views
 /* ---------------- admins & permissions (owner request, 23 October 2026) ---------------- */
 export interface AdminRow {
   id: number; full_name: string; email: string; phone: string; status: AccountStatus; mfa_enabled: boolean; last_login: string | null;
-  level: 'owner' | 'admin' | ''; preset: string; preset_label: string; permissions: string[]; is_self: boolean;
+  level: 'owner' | 'admin' | ''; preset: string; preset_label: string; permissions: string[]; is_self: boolean; display_name?: string;
   /** «معلم + إدارة»: a teacher account with admin access (role stays teacher). */
   teacher_admin: boolean; access_active: boolean; access_reason: string;
 }
@@ -195,7 +195,7 @@ export const listAdmins = () => api<AdminsPage>('GET', 'admin/admins');
 export const inviteAdmin = (d: AdminAccess & { full_name: string; email: string; otp: string }) =>
   api<{ id: number; email_sent: boolean; expires_at: string }>('POST', 'admin/admins', d);
 export const updateAdmin = (id: number, d: AdminAccess & { otp: string }) => api<AdminRow>('PATCH', `admin/admins/${id}`, d);
-export type TeacherCandidate = { id: number; full_name: string; email: string; phone: string; status: string; mfa_enabled: boolean };
+export type TeacherCandidate = { id: number; full_name: string; display_name?: string; email: string; phone: string; status: string; mfa_enabled: boolean };
 export const teacherCandidates = (q: string) => api<{ results: TeacherCandidate[] }>('GET', `admin/admins/teacher-candidates?q=${encodeURIComponent(q)}`);
 export const grantTeacherAccess = (d: AdminAccess & { teacher: number; otp: string }) => api<AdminRow>('POST', 'admin/admins/grant-teacher-access', d);
 export const teacherAccess = (id: number, action: 'suspend' | 'reactivate' | 'remove', reason: string, otp: string) =>

@@ -2,6 +2,7 @@
  *  collapsible to icons; on screens under 900px a top header whose ☰ opens the same menu as a drawer from the right.
  *  Navigation only: record actions stay next to the records. Sections the signed-in admin may not open are not shown
  *  (the server still checks every request). */
+import { nameOf } from '@/lib/names';
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { color, font } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
@@ -102,7 +103,7 @@ function AccountModal({ kind, onClose }: { kind: 'account' | 'security'; onClose
           <button type="button" onClick={onClose} aria-label="إغلاق" style={{ width: 44, height: 44, border: 'none', background: 'transparent', cursor: 'pointer', color: color.muted }}><Icon name="x" /></button>
         </div>
         {kind === 'account' ? (<>
-          <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{me?.full_name ?? 'مدير المنصة'}</p>
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{me ? nameOf(me) : 'مدير المنصة'}</p>
           {me?.email && <p dir="ltr" style={{ margin: 0, fontFamily: font.latin, color: color.muted, textAlign: 'right' }}>{me.email}</p>}
           <p style={{ margin: 0 }}>مستوى الوصول: <strong>{a ? (a.level === 'owner' ? LEVEL.owner : LEVEL[a.preset] ?? a.preset) : LIVE ? '—' : 'عرض تجريبي'}</strong>{a && a.level !== 'owner' ? ` · ${a.permissions.length} صلاحية` : ''}</p>
           <p style={{ margin: 0 }}>التحقق بخطوتين: <strong>{me?.mfa_enabled ? 'مفعّل' : 'غير مفعّل'}</strong></p>
@@ -118,7 +119,7 @@ function AccountModal({ kind, onClose }: { kind: 'account' | 'security'; onClose
 function AccountBlock({ compact = false, extra }: { compact?: boolean; extra?: ReactNode }) {
   const me = useAdmin((s) => s.me);
   const [menu, setMenu] = useState(false); const [modal, setModal] = useState<'account' | 'security' | null>(null);
-  const name = me?.full_name || 'مدير المنصة';
+  const name = me ? nameOf(me) : 'مدير المنصة';
   const a = me?.admin_access;
   const level = a ? (a.level === 'owner' ? LEVEL.owner : LEVEL[a.preset] ?? a.preset) : LIVE ? '' : 'عرض تجريبي';
   const avatar = (

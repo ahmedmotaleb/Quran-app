@@ -233,7 +233,7 @@ def _notify_decision(excuse_id: int) -> None:
     b, s = ex.booking, ex.student
     ok = ex.status == E.APPROVED
     when = _when(b, s.timezone)
-    body = f"مع {b.occurrence.teacher.full_name} · {when}"
+    body = f"مع {b.occurrence.teacher.display_name} · {when}"
     if not ok and ex.decided_by_role == "admin" and ex.admin_response:
         body += f"\nرد الإدارة: {ex.admin_response}"
     elif not ok and ex.teacher_response:
@@ -244,7 +244,7 @@ def _notify_decision(excuse_id: int) -> None:
     first = s.full_name.split(" ")[0]
     for g in _guardians(s.pk):
         notify(g.guardian, "excuse_child", f"تم قبول اعتذار {first} عن جلسة {when}" if ok else f"لم يتم قبول اعتذار {first} عن الجلسة.",
-               f"مع {b.occurrence.teacher.full_name} · {when}", link="/parent",
+               f"مع {b.occurrence.teacher.display_name} · {when}", link="/parent",
                dedupe=f"excuse:{b.pk}:{ex.status}:g{g.guardian_id}:{ex.override_at or ex.reviewed_at}", data={"booking": b.pk, "child": s.pk})
     if ex.decided_by_role == "admin":  # the teacher did not decide it: tell them the final state
         t = b.occurrence.teacher

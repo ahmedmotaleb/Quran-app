@@ -14,8 +14,9 @@ from apps.scheduling.models import AvailabilityRule
 
 PEOPLE = [
     ("admin@halqa.app", "مدير المنصة", Role.ADMIN),
-    ("teacher@halqa.app", "الشيخ عبدالرحمن السالم", Role.TEACHER),
-    ("khalid@halqa.app", "الشيخ خالد العمري", Role.TEACHER),
+    # Teachers' names are stored plain; the app shows them as «الشيخ …» (accounts/display.py, gender below).
+    ("teacher@halqa.app", "عبدالرحمن السالم", Role.TEACHER),
+    ("khalid@halqa.app", "خالد العمري", Role.TEACHER),
     ("yousef@halqa.app", "يوسف أحمد", Role.STUDENT),
     ("sara@halqa.app", "سارة أحمد", Role.STUDENT),
     ("parent@halqa.app", "أحمد العلي", Role.PARENT),
@@ -34,7 +35,7 @@ class Command(BaseCommand):
             for email, name, role in PEOPLE:
                 user = User.objects.filter(email=email).first()
                 if user is None:
-                    user = User.objects.create_user(email, password, full_name=name, role=role,
+                    user = User.objects.create_user(email, password, full_name=name, role=role, gender="male" if role == Role.TEACHER else "",
                                                     is_staff=role == Role.ADMIN, is_superuser=role == Role.ADMIN)
                 if role == Role.ADMIN:
                     from apps.accounts.admin_access import ensure_owner

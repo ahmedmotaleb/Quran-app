@@ -71,7 +71,7 @@ def invitation_out(inv: Invitation) -> dict:
             "student": inv.student_id, "teacher": inv.teacher_id, "status": inv.status, "email_status": inv.email_status,
             "send_count": inv.send_count, "last_sent_at": inv.last_sent_at.isoformat() if inv.last_sent_at else None,
             "expires_at": inv.expires_at.isoformat(), "created_at": inv.created_at.isoformat(),
-            "created_by": inv.created_by.full_name if inv.created_by_id else None}
+            "created_by": inv.created_by.display_name if inv.created_by_id else None}
 
 
 class InvitationIn(serializers.Serializer):

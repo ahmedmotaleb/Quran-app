@@ -84,7 +84,7 @@ def student_progress(student, start: date | None = None, end: date | None = None
     }
     last = Feedback.objects.filter(submission__student=student).select_related("submission__assignment", "teacher").order_by("-created_at").first()
     latest_feedback = None if last is None else {
-        "date": last.created_at.isoformat(), "teacher": last.teacher.full_name, "assignment": last.submission.assignment.title,
+        "date": last.created_at.isoformat(), "teacher": last.teacher.display_name, "assignment": last.submission.assignment.title,
         "decision": last.decision, "general": last.general, "next_step": last.next_step, "needs_review": last.needs_review,
         "scores": {"hifz": last.score_hifz, "tajweed": last.score_tajweed, "fluency": last.score_fluency},
     }
@@ -291,7 +291,7 @@ def _week_extras(k, start, end, tz, p) -> dict:
         "mistakes": {"new_this_week": new_now.count(), "new_previous_week": new_before,
                      "open": Correction.objects.filter(student=k).exclude(status=Correction.Status.CORRECTED).count(),
                      "top_categories": [{"category": t["category"], "label": labels.get(t["category"], t["category"]), "count": t["n"]} for t in top]},
-        "upcoming_sessions": [{"starts_at": b.occurrence.starts_at.isoformat(), "teacher": b.occurrence.teacher.full_name} for b in upcoming[:5]],
+        "upcoming_sessions": [{"starts_at": b.occurrence.starts_at.isoformat(), "teacher": b.occurrence.teacher.display_name} for b in upcoming[:5]],
         "targets": [{"title": a.title, "kind": a.kind, "surah": a.surah, "ayah_from": a.ayah_from, "ayah_to": a.ayah_to,
                      "due_at": a.due_at.isoformat()} for a in targets[:5]],
     }
@@ -409,7 +409,7 @@ def today_plan(student) -> dict:
                                     occurrence__starts_at__lt=d1).select_related("occurrence__teacher").order_by("occurrence__starts_at"):
         o = b.occurrence
         ended = o.ends_at <= now
-        add(9 if ended else 4, "session", f"جلسة مع {o.teacher.full_name}", b.id, o.starts_at, "done" if ended else "todo",
+        add(9 if ended else 4, "session", f"جلسة مع {o.teacher.display_name}", b.id, o.starts_at, "done" if ended else "todo",
             "انتهت" if ended else "اليوم", int((o.ends_at - o.starts_at).total_seconds() // 60))
     done_lessons = set(LessonCompletion.objects.filter(student=student).values_list("lesson_id", flat=True))
     for lc in LessonCompletion.objects.filter(student=student, completed_at__gte=d0).select_related("lesson"):

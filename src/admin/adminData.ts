@@ -75,7 +75,7 @@ export const initialTeachers = (): AdminTeacher[] => [
   { id: 2, name: 'الأستاذة مريم القحطاني', spec: 'تحفيظ الأطفال', email: 'maryam@halqa.app', types: 'فردية', st: 'active' },
   { id: 3, name: 'الشيخ خالد العمري', spec: 'تجويد متقدم', email: 'khalid@halqa.app', types: 'فردية · جماعية', st: 'active' },
   { id: 5, name: 'الأستاذة هدى الزهراني', spec: 'مراجعة وتثبيت', email: 'huda@halqa.app', types: 'جماعية', st: 'active' },
-  { id: 4, name: 'الأستاذ ماجد الغامدي', spec: 'قراءات', email: 'majed@halqa.app', types: 'فردية', st: 'pending' },
+  { id: 4, name: 'الشيخ ماجد الغامدي', spec: 'قراءات', email: 'majed@halqa.app', types: 'فردية', st: 'pending' },
 ];
 
 export const initialContent = (): AdminContent[] => [

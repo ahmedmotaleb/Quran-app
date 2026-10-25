@@ -64,7 +64,7 @@ register(Resource(
         "archive": Action(_course_state(PublishState.ARCHIVED), reason_required=True),
         "delete": Action(_course_delete, destructive=True),
     },
-    export=[("الرقم", lambda c: c.pk), ("الدورة", lambda c: c.title), ("المعلم", lambda c: c.teacher.full_name), ("الموضوع", lambda c: c.topic),
+    export=[("الرقم", lambda c: c.pk), ("الدورة", lambda c: c.title), ("المعلم", lambda c: c.teacher.display_name), ("الموضوع", lambda c: c.topic),
             ("المستوى", lambda c: c.level), ("الحالة", lambda c: PublishState(c.state).label),
             ("المسجّلون", lambda c: c.enrollments.filter(status=Enrollment.Status.ACTIVE).count()), ("أُنشئت", lambda c: c.created_at)],
 ))

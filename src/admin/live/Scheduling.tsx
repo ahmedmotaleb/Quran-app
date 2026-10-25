@@ -1,4 +1,5 @@
 /** Live Circles and Bookings sections (pack prompt 06). Every action is a server call; lists re-read after writes. */
+import { nameOf } from '@/lib/names';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { color, font } from '@/theme/tokens';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
@@ -106,7 +107,7 @@ function CircleForm({ circle, onClose, onSaved }: { circle?: A.Circle; onClose: 
         {field('ci-n', 'اسم الحلقة', <input id="ci-n" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} style={inputStyle(err.name)} />, err.name)}
         {!circle && field('ci-t', 'المعلم (المعتمدون فقط)', (
           <select id="ci-t" value={f.teacher} onChange={(e) => setF({ ...f, teacher: Number(e.target.value) })} style={inputStyle(err.teacher)}>
-            <option value={0}>— اختر —</option>{teachers.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+            <option value={0}>— اختر —</option>{teachers.map((t) => <option key={t.id} value={t.id}>{nameOf(t)}</option>)}
           </select>), err.teacher)}
         {field('ci-c', 'السعة (عدد الطلاب)', <input id="ci-c" inputMode="numeric" dir="ltr" value={f.capacity} onChange={(e) => setF({ ...f, capacity: e.target.value.replace(/\D/g, '') })} style={inputStyle(err.capacity, true)} />, err.capacity)}
         {field('ci-l', 'المستوى', <input id="ci-l" value={f.level} placeholder="مبتدئ / متوسط / متقدم" onChange={(e) => setF({ ...f, level: e.target.value })} style={inputStyle(null)} />)}

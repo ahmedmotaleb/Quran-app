@@ -5,6 +5,7 @@ import { tzOf } from '@/lib/format';
 import { go, logout, openSheet, setState, toast, up, useApp } from '@/store/store';
 import { INSTALL_STEPS, promptInstall, useInstall } from '@/pwa/install';
 import { LIVE, type ApiError } from '@/api/client';
+import { saveGender } from '@/store/live';
 import * as E from '@/api/endpoints';
 import { useEffect, useState, type FormEvent } from 'react';
 import { disablePush, enablePush, pushState, type PushState } from '@/pwa/push';
@@ -27,7 +28,7 @@ export default function Account() {
   const email = live ? s.user.email : role === 'teacher' ? 'teacher@halqa.app' : role === 'parent' ? 'parent@halqa.app' : s.user.email;
   // Live: the teachers who assigned this student's tasks.
   const myTeachers = [...new Set(s.tasks.map((t) => t.teacherName).filter(Boolean))].join('، ') || 'لم يُربط معلم بعد';
-  const ini = role === 'teacher' ? 'ع' : role === 'parent' ? 'أ' : s.user.first[0];
+  const ini = live ? (s.user.first[0] ?? '؟') : role === 'teacher' ? 'ع' : role === 'parent' ? 'أ' : s.user.first[0];
   const roleL = { student: 'حساب طالب', teacher: 'حساب معلم', parent: 'حساب ولي أمر', admin: 'حساب إدارة' }[role || 'student'];
   const tz = tzOf(s.tz);
 
@@ -87,6 +88,15 @@ export default function Account() {
             <span style={{ display: 'block', fontSize: 12, color: color.muted }}>لديك صلاحيات إدارة على هذا الحساب</span></span>
           <span style={{ color: color.primary }}><Icon name="chevL" /></span>
         </button>
+      )}
+      {LIVE && role === 'teacher' && (
+        <section style={{ ...card, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <h2 style={{ margin: 0, fontSize: 14, color: color.muted, fontWeight: 700 }}>اللقب الظاهر للطلاب وأولياء الأمور</h2>
+          {!s.me?.gender && <p style={{ margin: 0, fontSize: 13, color: color.warnInk }}>اختر لقبك؛ يظهر اسمك حاليًا دون لقب.</p>}
+          <Segmented role="group" label="اللقب" options={[['male', 'الشيخ'], ['female', 'الأستاذة']] as const}
+            value={(s.me?.gender || '') as 'male' | 'female'} onChange={(g) => void saveGender(g)} />
+          <p style={{ margin: 0, fontSize: 12, color: color.muted }}>يُعرض اسمك «{s.user.name}». لا يُضاف اللقب إلى اسمك المحفوظ.</p>
+        </section>
       )}
       {LIVE && role === 'teacher' && <GoogleCalendarCard />}
       {LIVE && <PhoneRow />}

@@ -37,7 +37,7 @@ INVITE_DAYS = 3
 def admin_out(u: User, viewer) -> dict:
     prof = getattr(u, "admin_profile", None)
     return {"teacher_admin": aa.is_teacher_admin(u), "access_active": bool(prof.is_active) if prof else True,
-            "access_reason": prof.status_reason if prof else "","id": u.pk, "full_name": u.full_name, "email": u.email,
+            "access_reason": prof.status_reason if prof else "","id": u.pk, "full_name": u.full_name, "display_name": u.display_name, "email": u.email,
             "phone": u.phone if aa.has(viewer, "users.view_contact") else mask(u.phone_e164 or u.phone),
             "status": u.status, "mfa_enabled": u.mfa_enabled, "last_login": u.last_login.isoformat() if u.last_login else None,
             "level": prof.access_level if prof else "", "preset": prof.preset if prof else "",
@@ -125,7 +125,7 @@ class AdminAccounts(APIView):
                 and existing.status != AccountStatus.DELETED:
             # Nothing is emailed: the portal offers «منح صلاحيات إدارة» for this teacher's own account instead.
             raise ApiError("teacher_exists", "هذا البريد يخص معلمًا موجودًا. يمكنك منحه صلاحيات الإدارة من حسابه الحالي.", 409,
-                           {"user": [str(existing.pk)], "full_name": [existing.full_name]})
+                           {"user": [str(existing.pk)], "full_name": [existing.display_name]})
         if existing is not None:
             raise ApiError("email_taken", "لهذا البريد حساب في حَلْقة بالفعل. استخدم بريدًا آخر لحساب المسؤول.", 409, {"email": ["بريد مسجّل."]})
         with transaction.atomic():
@@ -219,7 +219,7 @@ class AdminTeacherCandidates(APIView):
         if q:
             qs = qs.filter(_contact_q(q))
         see = aa.has(request.user, "users.view_contact")
-        return Response({"results": [{"id": u.pk, "full_name": u.full_name, "email": u.email, "status": u.status,
+        return Response({"results": [{"id": u.pk, "full_name": u.full_name, "display_name": u.display_name, "email": u.email, "status": u.status,
                                       "phone": u.phone if see else mask(u.phone_e164 or u.phone), "mfa_enabled": u.mfa_enabled}
                                      for u in qs[:20]]})
 

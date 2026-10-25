@@ -406,3 +406,18 @@ Admin access: view `teachers.view`, change `sessions.manage`. Audit: `teacher.av
 `teacher.availability_admin_changed` (admin), with the operation and times only. Settings (`admin/settings`):
 `slot_increment_minutes` (15|30, «الفاصل الزمني للمواعيد»), `session_durations` (default `[30, 45, 60]`),
 `session_buffer_minutes` (0–120).
+
+## Teacher titles (owner request, 25 Oct 2026)
+
+Every teacher's name is shown with its Arabic title — «الشيخ» (male) / «الأستاذة» (female) — wherever it appears:
+screens, notifications, exports, admin tables. It is presentation only:
+- `User.gender` (`male` / `female` / empty) decides the title; empty → the plain name (no guessed title).
+- `full_name` is stored plain. Titles typed into a teacher's name are removed on save (`PATCH me`, admin edit,
+  teacher creation), and removed again when shown (`الشيخ/الأستاذة/أستاذ/الشيخ/الشيخة/أ.` at the start), so a title
+  is never doubled.
+- One formatter on each side: `apps/accounts/display.py` (`User.display_name`; used for `teacher_name`, `teacher.name`,
+  notification texts, exports) and `src/lib/names.ts` (`formatTeacherName`, `nameOf`) for raw user objects in the app.
+- `display_name` and `gender` are returned by `me`, `teachers`, admin users and admin lists; editable fields stay `full_name`.
+- Only `role = teacher` accounts get a title (students, parents and admin-only accounts never).
+- Setting it: the teacher in «حسابي → اللقب»; an admin in the teacher's profile («اللقب», `users.edit`); required when an
+  admin creates a teacher (`POST admin/teachers {gender}`).

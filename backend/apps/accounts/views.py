@@ -475,7 +475,7 @@ class AcceptInvitationView(APIView):
                 if user is None or user.role != Role.STUDENT:
                     raise ApiError("student_required", "سجّل الدخول بحساب الطالب أولًا.", 403)
                 TeacherAssignment.objects.get_or_create(teacher=inv.teacher, student=user, active=True, defaults={"created_by": inv.teacher})
-                result = {"teacher": {"id": inv.teacher_id, "name": inv.teacher.full_name}}
+                result = {"teacher": {"id": inv.teacher_id, "name": inv.teacher.display_name}}
             inv.uses += 1
             inv.save(update_fields=["uses"])
             audit("invitation.accepted", actor=user, target=inv, request=request, purpose=inv.purpose)
@@ -558,6 +558,10 @@ class AdminUserDetail(APIView):
         user = generics.get_object_or_404(User.objects.exclude(role=Role.ADMIN).exclude(status=AccountStatus.DELETED), pk=pk)
         s = AdminUserUpdateSerializer(data=request.data, partial=True)
         s.is_valid(raise_exception=True)
+        if user.role == Role.TEACHER and "full_name" in s.validated_data:
+            from .display import strip_title
+
+            s.validated_data["full_name"] = strip_title(s.validated_data["full_name"])  # the title is shown, never stored
         changed = sorted(k for k, v in s.validated_data.items() if getattr(user, k) != v)
         if "phone" in changed:
             from .admin_access import require

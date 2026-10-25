@@ -145,7 +145,7 @@ def validate(rows: list[dict], admin) -> dict:
             if t is None:
                 errs.append("المعلم غير موجود أو غير معتمد أو غير نشط.")
             else:
-                clean["teacher"] = {"id": t.pk, "name": t.full_name}
+                clean["teacher"] = {"id": t.pk, "name": t.display_name}
         if d.get("circle"):
             key = d["circle"].strip()
             c = circles_by.get(key)

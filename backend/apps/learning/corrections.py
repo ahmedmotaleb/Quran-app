@@ -48,7 +48,7 @@ def out(c: Correction, user) -> dict:
          "resolved_at": c.resolved_at.isoformat() if c.resolved_at else None}
     if user.role == Role.PARENT:
         return d  # parent-safe: no free text, no teacher identity, no links to recordings
-    d.update({"note": c.note, "guidance": c.guidance, "teacher": c.teacher_id, "teacher_name": c.teacher.full_name,
+    d.update({"note": c.note, "guidance": c.guidance, "teacher": c.teacher_id, "teacher_name": c.teacher.display_name,
               "submission": c.submission_id, "booking": c.booking_id, "assignment": c.assignment_id,
               "follow_up": c.follow_up_id, "student_name": c.student.full_name})
     if user.role in (Role.TEACHER, Role.ADMIN):
@@ -238,7 +238,7 @@ class CorrectionFollowUp(APIView):
             audit("correction.follow_up_created", actor=request.user, target=c, request=request, assignment=a.pk, kind=kind_key)
             from apps.notifications.services import after_commit
 
-            after_commit(c.student, "assignment_new", "واجب جديد من معلمك", f"{a.title} · {request.user.full_name}",
+            after_commit(c.student, "assignment_new", "واجب جديد من معلمك", f"{a.title} · {request.user.display_name}",
                          link=f"/tasks/{a.pk}", dedupe=f"assignment:{a.pk}:new", data={"assignment": a.pk})
         return Response({"correction": out(_with_recurrence(_visible(request.user)).get(pk=c.pk), request.user), "assignment": a.pk},
                         status=201)

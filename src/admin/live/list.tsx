@@ -5,6 +5,7 @@
  * an RTL filter drawer with removable chips, sortable headers, and cards instead of a table on narrow screens.
  * The server decides every rule; this file only presents it.
  */
+import { nameOf } from '@/lib/names';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { color, font } from '@/theme/tokens';
 import { FieldError, inputStyle, labelStyle } from '@/components/ui';
@@ -635,7 +636,7 @@ function FilterDrawer({ fields, q, opts, onClose, onApply }: { fields: FilterFie
 
 /* ---------------- shared option loaders ---------------- */
 export const teacherOptions = async (): Promise<[string, string][]> =>
-  (await A.listPeople({ role: 'teacher', page_size: 100, sort: 'name' })).results.map((t) => [String(t.id), t.full_name]);
+  (await A.listPeople({ role: 'teacher', page_size: 100, sort: 'name' })).results.map((t) => [String(t.id), nameOf(t)]);
 export const studentOptions = async (): Promise<[string, string][]> =>
   (await A.listPeople({ role: 'student', page_size: 100, sort: 'name' })).results.map((t) => [String(t.id), t.full_name]);
 export const circleOptions = async (): Promise<[string, string][]> =>
