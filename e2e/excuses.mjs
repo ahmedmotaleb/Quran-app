@@ -33,7 +33,7 @@ await step(S.page, 'student books a session (server)', async () => {
   const me = await native(S.page, 'yousef@halqa.app');
   const H = { Authorization: `Bearer ${me.token}` };
   const teachers = (await (await S.page.request.get(BASE + 'api/v1/teachers', { headers: H })).json()).results;
-  const t = teachers.find((x) => x.full_name === 'الشيخ عبدالرحمن السالم');
+  const t = teachers.find((x) => x.display_name === 'الشيخ عبدالرحمن السالم');
   const slots = await (await S.page.request.get(BASE + `api/v1/teachers/${t.id}/slots`, { headers: H })).json();
   const slot = (slots.results ?? slots).find((x) => new Date(x.starts_at).getTime() > Date.now() + 26 * 3600_000 && x.seats_left > 0);
   const r = await S.page.request.post(BASE + 'api/v1/bookings', { headers: { ...H, 'Idempotency-Key': 'e2e-excuse-' + Date.now() }, data: { occurrence: slot.id } });
@@ -81,7 +81,7 @@ await S.page.screenshot({ path: out + '/excuse-accepted.png' });
 // ---- C. the admin decides pending requests in «طلبات الاعتذار» ---------------------------------------------
 await step(S.page, 'admin accepts one excuse and rejects another; rows disappear and the badge updates', async () => {
   const me = await native(S.page, 'yousef@halqa.app'); const H = { Authorization: `Bearer ${me.token}` };
-  const t = (await (await S.page.request.get(BASE + 'api/v1/teachers', { headers: H })).json()).results.find((x) => x.full_name === 'الشيخ عبدالرحمن السالم');
+  const t = (await (await S.page.request.get(BASE + 'api/v1/teachers', { headers: H })).json()).results.find((x) => x.display_name === 'الشيخ عبدالرحمن السالم');
   const slots = await (await S.page.request.get(BASE + `api/v1/teachers/${t.id}/slots`, { headers: H })).json();
   // Start times are computed every 15 minutes, so neighbours overlap: take times at least two hours apart.
   const free = [];
