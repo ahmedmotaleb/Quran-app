@@ -89,6 +89,14 @@ export default function Account() {
           <span style={{ color: color.primary }}><Icon name="chevL" /></span>
         </button>
       )}
+      {LIVE && role === 'student' && (
+        <section style={{ ...card, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <h2 style={{ margin: 0, fontSize: 14, color: color.muted, fontWeight: 700 }}>الجنس</h2>
+          {!s.me?.gender && <p style={{ margin: 0, fontSize: 13, color: color.warnInk }}>اختر الجنس لإكمال بيانات حسابك.</p>}
+          <Segmented role="group" label="الجنس" options={[['male', 'ذكر'], ['female', 'أنثى']] as const}
+            value={(s.me?.gender || '') as 'male' | 'female'} onChange={(g) => void saveGender(g, 'حُفظ')} />
+        </section>
+      )}
       {LIVE && role === 'teacher' && (
         <section style={{ ...card, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h2 style={{ margin: 0, fontSize: 14, color: color.muted, fontWeight: 700 }}>اللقب الظاهر للطلاب وأولياء الأمور</h2>

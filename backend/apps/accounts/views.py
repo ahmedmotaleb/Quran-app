@@ -515,7 +515,7 @@ class AdminUserList(generics.ListCreateAPIView):
         d = s.validated_data
         with transaction.atomic():
             # No password is set: the person sets one through the recovery link sent to them.
-            user = User.objects.create_user(d["email"], None, full_name=d["full_name"], role=d["role"])
+            user = User.objects.create_user(d["email"], None, full_name=d["full_name"], role=d["role"], gender=d.get("gender", ""))
             if user.role == Role.STUDENT:
                 StudentProfile.objects.create(user=user)
             audit("admin.user_created", actor=request.user, target=user, request=request, role=user.role)

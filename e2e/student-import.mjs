@@ -24,7 +24,7 @@ await step('template downloads with the expected columns', async () => {
   await p.getByRole('button', { name: 'استيراد CSV' }).click();
   const [d] = await Promise.all([p.waitForEvent('download'), dlg().getByRole('button', { name: 'تنزيل القالب' }).click()]);
   const f = `${out}/template.csv`; await d.saveAs(f);
-  if (readFileSync(f, 'utf8') !== '﻿full_name,email,phone,timezone,level,teacher_email,circle\r\n') throw new Error(readFileSync(f, 'utf8'));
+  if (readFileSync(f, 'utf8') !== '﻿full_name,email,gender,phone,timezone,level,teacher_email,circle\r\n') throw new Error(readFileSync(f, 'utf8'));
 });
 
 await step('preview shows valid, duplicate and error rows and writes nothing', async () => {

@@ -39,7 +39,7 @@ def test_list_search_filter_and_link_ids(world):
 
 def test_create_student_gives_setup_link_without_email(world, settings):
     c = client_for(world.admin)
-    r = c.post(f"{A}/users", {"full_name": "طالب جديد", "email": "New@X.test", "role": "student"}, format="json")
+    r = c.post(f"{A}/users", {"full_name": "طالب جديد", "email": "New@X.test", "role": "student", "gender": "male"}, format="json")
     assert r.status_code == 201
     d = r.json()
     assert d["email"] == "new@x.test" and d["has_password"] is False

@@ -11,7 +11,8 @@ type Row = { line: number; data: Record<string, string>; status: 'valid' | 'dupl
 type Report = { dry_run: boolean; rows: Row[]; summary: { valid: number; duplicate: number; error: number; total: number };
   result?: { created: number; skipped: number; failed: number; emails: { sent: number; failed: number; pending: number } } };
 
-const COLUMNS = ['full_name', 'email', 'phone', 'timezone', 'level', 'teacher_email', 'circle'];
+// «gender»: male / female (or ذكر / أنثى); optional.
+const COLUMNS = ['full_name', 'email', 'gender', 'phone', 'timezone', 'level', 'teacher_email', 'circle'];
 const STATUS: Record<Row['status'], [string, string]> = { valid: ['صالح', color.primary], duplicate: ['مكرر', '#9A6B00'], error: ['خطأ', color.danger] };
 
 function send(file: File, dry: boolean) {

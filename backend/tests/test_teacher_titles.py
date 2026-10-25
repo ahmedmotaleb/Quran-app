@@ -130,3 +130,22 @@ def test_teacher_invitation_asks_for_title(world):
     assert APIClient().post("/api/v1/auth/invitations/accept", {**body, "gender": "female"}, format="json").status_code == 201
     u = User.objects.get(email="huda2@x.test")
     assert u.full_name == "هدى" and u.gender == "female" and u.display_name == "الأستاذة هدى"
+
+
+def test_student_gender_from_admin_csv_and_account(world):
+    c = client_for(world.admin)
+    r = c.post("/api/v1/admin/users", {"full_name": "طالبة", "email": "st1@x.test", "role": "student"}, format="json")
+    assert r.status_code == 400 and r.json()["fields"]["gender"] == ["اختر: ذكر أو أنثى."]
+    r = c.post("/api/v1/admin/users", {"full_name": "طالبة", "email": "st1@x.test", "role": "student", "gender": "female"}, format="json")
+    assert r.status_code == 201 and User.objects.get(email="st1@x.test").gender == "female"
+    assert c.post("/api/v1/admin/users", {"full_name": "ولي", "email": "pa1@x.test", "role": "parent"}, format="json").status_code == 201
+    assert c.patch(f"/api/v1/admin/users/{world.s1.pk}", {"gender": "male"}, format="json").json()["gender"] == "male"
+    assert client_for(world.s2).patch("/api/v1/me", {"gender": "female"}, format="json").json()["gender"] == "female"
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    csv = "full_name,email,gender\nأحمد,a1@x.test,ذكر\nمريم,m1@x.test,female\nعلي,u1@x.test,\nخطأ,e1@x.test,maybe\n".encode()
+    r = c.post("/api/v1/admin/import/students", {"file": SimpleUploadedFile("s.csv", csv, "text/csv"), "dry_run": "false"}, format="multipart")
+    assert r.status_code == 200, r.content
+    by = {u.email: u.gender for u in User.objects.filter(email__in=["a1@x.test", "m1@x.test", "u1@x.test"])}
+    assert by == {"a1@x.test": "male", "m1@x.test": "female", "u1@x.test": ""}
+    assert not User.objects.filter(email="e1@x.test").exists()

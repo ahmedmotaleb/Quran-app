@@ -227,10 +227,11 @@ function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => voi
     if (f.name.trim().length < 2) x.name = 'اكتب الاسم الكامل.';
     if (!/^\S+@\S+\.\S+$/.test(email)) x.email = 'صيغة البريد الإلكتروني غير صحيحة.';
     if (role === 'teacher' && !f.gender) x.gender = 'اختر اللقب: الشيخ أو الأستاذة.';
+    if (role === 'student' && !f.gender) x.gender = 'اختر: ذكر أو أنثى.';
     if (Object.keys(x).length) return setErr(x);
     setBusy(true); setErr({});
     try {
-      const r = role === 'teacher' ? await A.createTeacher(f.name.trim(), email, f.gender) : await A.createPerson(f.name.trim(), email, role);
+      const r = role === 'teacher' ? await A.createTeacher(f.name.trim(), email, f.gender) : await A.createPerson(f.name.trim(), email, role, f.gender);
       setMade({ id: r.id, sent: r.setup_email_sent });
       onDone();
     } catch (y) {
@@ -255,6 +256,13 @@ function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => voi
           <label htmlFor="ad-n" style={labelStyle}>الاسم الكامل</label>
           <input id="ad-n" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} aria-invalid={!!err.name} style={inputStyle(err.name)} />
           <FieldError msg={err.name} />
+          {role === 'student' && <>
+            <label htmlFor="ad-g" style={labelStyle}>الجنس</label>
+            <select id="ad-g" value={f.gender} onChange={(e) => setF({ ...f, gender: e.target.value as '' | 'male' | 'female' })} aria-invalid={!!err.gender} style={inputStyle(err.gender)}>
+              <option value="">— اختر —</option><option value="male">ذكر</option><option value="female">أنثى</option>
+            </select>
+            <FieldError msg={err.gender} />
+          </>}
           {role === 'teacher' && <>
             <label htmlFor="ad-g" style={labelStyle}>اللقب</label>
             <select id="ad-g" value={f.gender} onChange={(e) => setF({ ...f, gender: e.target.value as '' | 'male' | 'female' })} aria-invalid={!!err.gender} style={inputStyle(err.gender)}>
@@ -410,6 +418,13 @@ function PersonPanel({ id, onClose, onChanged, onDeleted }: { id: number; onClos
               ? <span style={{ color: color.dangerInk, fontWeight: 700 }}>فشل الإرسال</span> : u.setup_email_status === 'pending' ? 'في قائمة الإرسال (خلال ساعة)' : 'لم يُرسل بعد')}
             {!u.has_password && u.setup_email_count > 0 && row('آخر إرسال', <>{date(u.setup_email_last_at)} · عدد مرات الإرسال: <span style={{ fontFamily: font.latin }}>{u.setup_email_count}</span></>)}
             {u.role === 'teacher' && row('الاعتماد', u.approved ? 'معتمد' : <span style={{ color: color.dangerInk, fontWeight: 700 }}>بانتظار الاعتماد</span>)}
+            {u.role === 'student' && row('الجنس', <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {u.gender ? (u.gender === 'male' ? 'ذكر' : 'أنثى') : <span style={{ color: color.dangerInk, fontWeight: 700 }}>غير محدد</span>}
+              {can('users.edit') && <select aria-label="تغيير الجنس" value={u.gender ?? ''} disabled={busy}
+                onChange={(e) => act(() => A.updatePerson(u.id, { gender: e.target.value as '' | 'male' | 'female' }), 'حُفظ')} style={{ minHeight: 36, borderRadius: 8 }}>
+                <option value="">غير محدد</option><option value="male">ذكر</option><option value="female">أنثى</option>
+              </select>}
+            </span>)}
             {u.role === 'teacher' && row('اللقب', <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               {u.gender ? (u.gender === 'male' ? 'الشيخ' : 'الأستاذة') : <span style={{ color: color.dangerInk, fontWeight: 700 }}>غير محدد (يظهر الاسم دون لقب)</span>}
               {can('users.edit') && <select aria-label="تغيير اللقب" value={u.gender ?? ''} disabled={busy}
