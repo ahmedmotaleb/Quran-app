@@ -8,7 +8,7 @@ on:
       task:
         description: What to run
         type: choice
-        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check, upload-trace, client-diagnostics, delete-trace, account-integrity, trusted-devices, migrate-teacher-invitations]
+        options: [import-quran, verify-quran, create-admin, promote-admin, smoke-test, alert-drill, recent-errors, audio-check, upload-trace, client-diagnostics, delete-trace, account-integrity, availability-report, trusted-devices, migrate-teacher-invitations]
       admin_email:
         description: create-admin / promote-admin — the admin's email (create-admin takes the password from the ADMIN_PASSWORD secret; promote-admin keeps the account's password)
         required: false
@@ -95,6 +95,47 @@ jobs:
               line = f"{r.get('timestamp','')[:19]} {json.dumps(keep, ensure_ascii=False)[:400]}"
               print(line)
               print(f"::notice title=error::{line}")
+          PY
+
+  # Read-only, after the switch from fixed times to availability ranges (25 Oct): per teacher (ids only) the weekly
+  # ranges, sessions still opened by hand, booked sessions, Google connection and the bookable times for 7 days.
+  availability:
+    if: inputs.task == 'availability-report'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Run availability_report inside production and read its lines
+        run: |
+          P="${{ vars.GCP_PROJECT_ID }}"
+          START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          gcloud run jobs execute halqa-tasks --project "$P" --region europe-west1 --args manage.py,availability_report --wait --quiet || echo "::warning::report failed"
+          sleep 20
+          gcloud logging read 'jsonPayload.msg=("availability_report_teacher" OR "availability_report_summary") AND timestamp>="'$START'"' \
+            --project "$P" --limit 500 --format json > /tmp/a.json || true
+          python3 - <<'PY'
+          import json
+          rows = json.load(open("/tmp/a.json"))
+          if not rows:
+              print("::warning::no report lines found"); raise SystemExit
+          keys = ["teacher", "approved", "ranges", "weekdays", "weekly_hours", "overrides_ahead", "opened_by_hand",
+                  "booked_upcoming", "google", "bookable_starts_7d", "last_changed"]
+          summary = [r["jsonPayload"] for r in rows if r["jsonPayload"].get("msg") == "availability_report_summary"]
+          teachers = sorted((r["jsonPayload"] for r in rows if r["jsonPayload"].get("msg") == "availability_report_teacher"), key=lambda x: x.get("teacher", 0))
+          if summary:
+              s = summary[0]
+              print("::notice title=summary::" + json.dumps({k: v for k, v in s.items() if k in {"teachers", "approved", "approved_with_ranges",
+                    "approved_without_ranges", "without_ranges_but_opened_by_hand", "changed_since_switch"}}))
+          # GitHub shows about 10 notices per step: several teachers per line.
+          for i in range(0, len(teachers), 6):
+              chunk = [{k: t.get(k) for k in keys} for t in teachers[i:i + 6]]
+              print(f"::notice title=teachers {i + 1}-{i + len(chunk)}::" + json.dumps(chunk))
           PY
 
   # Read-only check after the profile-update fix (22–23 Oct): accounts whose role, status or two-step verification has
