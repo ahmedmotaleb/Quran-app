@@ -28,7 +28,7 @@ export interface ApiTeacher {
   id: number; full_name: string; timezone: string; specialization: string; bio: string; audience: string; levels: string; tags: string[];
   offers_individual: boolean; offers_group: boolean;
 }
-export interface ApiSlot { id: number; teacher: number; teacher_name: string; kind: 'individual' | 'group'; starts_at: string; ends_at: string; capacity: number; seats_left: number;
+export interface ApiSlot { id: number | string; minutes?: number; teacher: number; teacher_name: string; kind: 'individual' | 'group'; starts_at: string; ends_at: string; capacity: number; seats_left: number;
   topic?: string; title?: string; prep_note?: string }
 export interface ApiBooking {
   id: number; occurrence: ApiSlot; student: number; student_name: string; status: 'confirmed' | 'cancelled'; assignment: number | null;
@@ -89,7 +89,8 @@ export const startAssignment = (id: number) => api<ApiAssignment>('POST', `assig
 export const teachers = () => api<Page<ApiTeacher>>('GET', 'teachers?page_size=100');
 export const slots = (teacherId: number) => api<ApiSlot[]>('GET', `teachers/${teacherId}/slots`);
 export const bookings = () => api<Page<ApiBooking>>('GET', 'bookings?page_size=100');
-export const book = (occurrence: number, key: string, assignment: number | null, note: string, makeup_credit: number | null = null) =>
+/** `occurrence`: a session id, or a computed slot token from `slots()` (the server checks it again). */
+export const book = (occurrence: number | string, key: string, assignment: number | null, note: string, makeup_credit: number | null = null) =>
   api<ApiBooking>('POST', 'bookings', { occurrence, assignment, note, ...(makeup_credit ? { makeup_credit } : {}) }, { idempotencyKey: key });
 /* ---- waiting list and make-up sessions (PROMPT 44) ---- */
 export interface WaitlistRow {
@@ -110,7 +111,7 @@ export const requestExcuse = (id: number, reason: string) => api<ApiExcuse>('POS
 export const teacherExcuses = (status = 'pending') => api<{ results: ApiExcuseRow[] }>('GET', `teacher/excuses?status=${status}`);
 export const reviewExcuse = (bookingId: number, approve: boolean, response: string) =>
   api<ApiExcuse>('POST', `teacher/bookings/${bookingId}/excuse/${approve ? 'approve' : 'reject'}`, { response });
-export const reschedule = (id: number, occurrence: number, key: string) =>
+export const reschedule = (id: number, occurrence: number | string, key: string) =>
   api<ApiBooking>('POST', `bookings/${id}/reschedule`, { occurrence }, { idempotencyKey: key });
 export { newIdempotencyKey };
 

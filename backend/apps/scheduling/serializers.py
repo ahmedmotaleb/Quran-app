@@ -76,8 +76,26 @@ class BookingSerializer(serializers.ModelSerializer):
         return bool(b.occurrence.meeting_url)
 
 
+class SlotTarget(serializers.Field):
+    """A session id, or the token of a computed start time («s:<teacher>:<epoch>:<minutes>», availability.py)."""
+
+    def to_internal_value(self, v):
+        from .availability import parse_token
+
+        if isinstance(v, bool):
+            raise serializers.ValidationError("اختر موعدًا.")
+        if isinstance(v, int) or (isinstance(v, str) and v.isdigit()):
+            return int(v)
+        if isinstance(v, str) and parse_token(v):
+            return v
+        raise serializers.ValidationError("اختر موعدًا.")
+
+    def to_representation(self, v):
+        return v
+
+
 class BookingCreateSerializer(serializers.Serializer):
-    occurrence = serializers.IntegerField()
+    occurrence = SlotTarget()
     assignment = serializers.IntegerField(required=False, allow_null=True)
     note = serializers.CharField(required=False, allow_blank=True, max_length=500, default="")
     makeup_credit = serializers.IntegerField(required=False, allow_null=True)  # «جلسة تعويضية» (makeup.py)

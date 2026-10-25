@@ -18,27 +18,45 @@ from .models import Booking, SessionOccurrence
 from .serializers import AttendanceSerializer, BookingCreateSerializer, BookingSerializer, SlotSerializer
 
 
-class TeacherSlots(generics.ListAPIView):
-    """Open slots for one teacher within the booking window. Seat counts come from the database."""
+class TeacherSlots(APIView):
+    """What a student can book with one teacher, from now until `?days=` ahead (default 7, within the booking window):
+    - the start times computed from the teacher's availability (availability.py): `id` is a slot token, `seats_left` 1;
+    - existing sessions with seats (circle/group sessions), and individual sessions already booked (seats_left 0, for
+      the waitlist). Seat counts come from the database. Free rows of the old fixed-slot model are not listed (their
+      time is part of the computed availability)."""
 
     permission_classes = [IsLearningUser]
-    serializer_class = SlotSerializer
-    pagination_class = None
 
-    def get_queryset(self):
+    def get(self, request, pk):
+        from apps.accounts.models import User
+
+        from . import availability as av
+
         cfg = AppSettings.load()
         now = timezone.now()
-        qs = (SessionOccurrence.objects.filter(
-            teacher_id=self.kwargs["pk"], status=SessionOccurrence.Status.SCHEDULED,
-            teacher__teacher_profile__approved_at__isnull=False,
-            starts_at__gte=now + timedelta(minutes=cfg.booking_lead_minutes), starts_at__lte=now + timedelta(days=cfg.booking_horizon_days))
-            .filter(Q(circle__isnull=True) | Q(circle__state="published"))
-            .select_related("teacher", "circle")
-            .annotate(confirmed_count=Count("bookings", filter=Q(bookings__status=Booking.Status.CONFIRMED), distinct=True),
-                      # seats offered to waiting students are held for them (waitlist.py)
-                      held_count=Count("waitlist", filter=Q(waitlist__status="offered", waitlist__offer_expires_at__gt=now), distinct=True))
-            .order_by("starts_at"))
-        return qs
+        try:
+            days = min(cfg.booking_horizon_days, max(1, int(request.query_params.get("days", 7))))
+        except ValueError:
+            days = 7
+        lo, hi = now + timedelta(minutes=cfg.booking_lead_minutes), now + timedelta(days=days)
+        teacher = User.objects.filter(pk=pk, role=Role.TEACHER, status="active", teacher_profile__approved_at__isnull=False).first()
+        if teacher is None:
+            return Response([])
+        qs = (SessionOccurrence.objects.filter(teacher=teacher, status=SessionOccurrence.Status.SCHEDULED, starts_at__gte=lo, starts_at__lte=hi)
+              .filter(Q(circle__isnull=True) | Q(circle__state="published"))
+              .select_related("teacher", "circle", "google_event")
+              .annotate(confirmed_count=Count("bookings", filter=Q(bookings__status=Booking.Status.CONFIRMED), distinct=True),
+                        # seats offered to waiting students are held for them (waitlist.py)
+                        held_count=Count("waitlist", filter=Q(waitlist__status="offered", waitlist__offer_expires_at__gt=now), distinct=True),
+                        confirmed=Count("bookings", filter=Q(bookings__status=Booking.Status.CONFIRMED), distinct=True),
+                        offered=Count("waitlist", filter=Q(waitlist__status="offered", waitlist__offer_expires_at__gt=now), distinct=True))
+              .order_by("starts_at"))
+        rows = SlotSerializer([o for o in qs if not av.is_placeholder(o)], many=True).data
+        computed = [{"id": av.token_for(teacher.pk, x.start, x.minutes), "teacher": teacher.pk, "teacher_name": teacher.full_name,
+                     "kind": "individual", "starts_at": x.start.isoformat(), "ends_at": x.end.isoformat(), "minutes": x.minutes,
+                     "capacity": 1, "seats_left": 1, "circle_name": None, "topic": "", "title": "", "prep_note": ""}
+                    for x in av.compute(teacher, lo, hi, now=now, cfg=cfg)]
+        return Response(sorted([*rows, *computed], key=lambda r: r["starts_at"]))
 
 
 class BookingScopeMixin:
@@ -90,8 +108,8 @@ class BookingList(BookingScopeMixin, generics.ListCreateAPIView):
             if assignment is None:
                 raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"assignment": ["مهمة غير صالحة."]})
         key = request.headers.get("Idempotency-Key", "")
-        booking, created = services.book(student=request.user, occurrence_id=d["occurrence"], idempotency_key=key, assignment=assignment, note=d["note"],
-                                         makeup_credit_id=d.get("makeup_credit"))
+        booking, created = services.book_any(student=request.user, target=d["occurrence"], idempotency_key=key, assignment=assignment,
+                                             note=d["note"], makeup_credit_id=d.get("makeup_credit"))
         if created:
             audit("booking.created", actor=request.user, target=booking, request=request)
         return Response(BookingSerializer(booking, context=self.get_serializer_context()).data, status=201 if created else 200)
@@ -118,8 +136,10 @@ class BookingReschedule(APIView):
     permission_classes = [IsStudent]
 
     def post(self, request, pk):
+        from .availability import parse_token
+
         new_id = request.data.get("occurrence")
-        if not isinstance(new_id, int):
+        if isinstance(new_id, bool) or not (isinstance(new_id, int) or (isinstance(new_id, str) and parse_token(new_id))):
             raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"occurrence": ["اختر موعدًا."]})
         b = services.reschedule(booking_id=pk, new_occurrence_id=new_id, by=request.user, idempotency_key=request.headers.get("Idempotency-Key", ""))
         audit("booking.rescheduled", actor=request.user, target=b, request=request, from_booking=pk)

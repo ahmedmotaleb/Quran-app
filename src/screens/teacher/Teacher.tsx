@@ -4,17 +4,17 @@ import { Icon, type IconName } from '@/components/Icon';
 import {
   Avatar, BackHeader, Badge, Chips, FieldError, Ltr, PlayerBar, RecDot, SearchInput, Segmented, Switch, card, iconTile, inputStyle, labelStyle, muted, outlineBtn, primaryBtn, usePlayer,
 } from '@/components/ui';
-import { DAYS, SUR, TODAY_LABEL } from '@/data/demo';
+import { SUR, TODAY_LABEL } from '@/data/demo';
 import { fmt, scoreL, timeIn, typeIcon, tzLabel, tzOf } from '@/lib/format';
-import { dateKey, dayLabel, fmtDay, fmtTime, zonedToIso as zonedIso } from '@/lib/time';
-import { gradeRecitation, refreshSchedule, reviewExcuse, saveMeetingLink, setAttendance, teacherCancelBooking, toggleSlot as toggleLiveSlot } from '@/store/live';
+import { dayLabel, fmtDay, fmtTime } from '@/lib/time';
+import { gradeRecitation, refreshSchedule, reviewExcuse, saveMeetingLink, setAttendance, teacherCancelBooking } from '@/store/live';
+import AvailabilityEditor, { demoAvail, httpAvail } from '@/components/AvailabilityEditor';
 import { me as getMe, teacherCircles, type ApiGradingItem } from '@/api/endpoints';
 import { useState } from 'react';
-import { weekDays } from '@/store/selectors';
 import { openSheet } from '@/store/store';
 import {
   go, openAssign, openReview, playerSeek, selectReviews, sendAssign, sendReview, setState, tab, toast, up, useApp, back,
-  type AppState, type ReviewItem,
+  type ReviewItem,
 } from '@/store/store';
 import { useEvals } from '@/screens/student/Progress';
 import { BRAND } from '@/theme/brand';
@@ -596,18 +596,16 @@ function VoiceNoteLive() {
 }
 
 /* ---------------- Schedule & availability ---------------- */
-const BASE_HOURS = [16, 17, 18.5, 20, 21];
 const SCHEDULE = [
   { d: 'اليوم', h: 16, stu: 'عمر الحربي', type: 'فردية' }, { d: 'اليوم', h: 17, stu: 'يوسف أحمد', type: 'فردية' },
   { d: 'اليوم', h: 20, stu: 'حلقة المراجعة المسائية', type: 'جماعية · 6 طلاب' }, { d: 'الإثنين 12 أكتوبر', h: 18.5, stu: 'ليان الشمري', type: 'فردية' },
   { d: 'الثلاثاء 13 أكتوبر', h: 17, stu: 'فيصل الدوسري', type: 'فردية' },
 ];
 
-function toggleSlot(s: AppState, day: number, h: number) {
-  const ex = s.avail.t1[day].find((x) => x.h === h);
-  if (ex?.taken) { toast('لا يمكن إلغاء موعد محجوز من هنا؛ أعد جدولة الجلسة أولًا', 'alert'); return; }
-  setState((st) => ({ avail: { ...st.avail, t1: st.avail.t1.map((d, i) => (i === day ? (ex ? d.filter((x) => x.h !== h) : [...d, { h, taken: false }].sort((a, b) => a.h - b.h)) : d)) } }));
-}
+// «الإتاحة»: time ranges anywhere in the day (components/AvailabilityEditor.tsx); bookable times are computed by
+// the server. The demo keeps the same screen on in-memory data.
+const DEMO_AVAIL = demoAvail();
+const LIVE_AVAIL = httpAvail('teacher/availability');
 
 export function TeacherSchedule() {
   const s = useApp(); const SD = s.sched;
@@ -625,37 +623,7 @@ export function TeacherSchedule() {
           <button onClick={() => toast(`أُرسل طلب إعادة جدولة إلى ${x.stu}`, 'cal')} style={{ minHeight: 44, padding: '0 12px', borderRadius: 10, border: `1px solid ${color.borderStrong}`, background: 'transparent', color: color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>إعادة جدولة</button>
         </div>
       ))}
-      {SD.tab === 'avail' && (
-        <>
-          <p style={muted(13, { display: 'flex', gap: 6, alignItems: 'center' })}><Icon name="globe" size={18} /> تظهر للطلاب {tzLabel(s.tz)}، وتُحوَّل تلقائيًا لتوقيت كل طالب.</p>
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', margin: '0 -16px', padding: '2px 16px' }}>
-            {DAYS.map((d, i) => {
-              const on = SD.day === i;
-              return (
-                <button key={i} aria-pressed={on} onClick={() => up('sched', { day: i })} style={{ flexShrink: 0, width: 64, minHeight: 68, borderRadius: 14, border: `1.5px solid ${on ? color.primary : color.borderChip}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.ink, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                  <span style={{ fontSize: 12, fontWeight: 700 }}>{i === 0 ? 'اليوم' : d[0]}</span>
-                  <span style={{ fontFamily: font.latin, fontSize: 18, fontWeight: 700 }}>{d[1]}</span>
-                </button>
-              );
-            })}
-          </div>
-          <div style={{ ...card, padding: '4px 14px' }}>
-            {BASE_HOURS.map((h) => {
-              const ex = s.avail.t1[SD.day].find((x) => x.h === h);
-              const stt = ex ? (ex.taken ? 'محجوز' : 'متاح') : 'غير متاح';
-              const label = timeIn(s.tz, h);
-              return (
-                <div key={h} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 56, borderBottom: `1px solid ${color.divider}` }}>
-                  <span style={{ flex: 1, fontSize: 16, fontWeight: 700 }}>{label}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: ex?.taken ? color.warnInk : ex ? color.primary : color.muted }}>{stt}</span>
-                  <Switch on={!!ex} label={`إتاحة ${label}`} onToggle={() => toggleSlot(s, SD.day, h)} />
-                </div>
-              );
-            })}
-          </div>
-          <p style={muted(12)}>التغييرات تنعكس فورًا على صفحة الحجز لدى الطلاب داخل النموذج.</p>
-        </>
-      )}
+      {SD.tab === 'avail' && <AvailabilityEditor io={DEMO_AVAIL} toast={(m) => toast(m)} days={7} />}
     </div>
   );
 }
@@ -801,10 +769,6 @@ function ExcusesPanel() {
     </section>
   );
 }
-const hhmm = (iso: string, tz: string) =>
-  new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
-const hoursToHHMM = (h: number) => `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
-const labelHHMM = (v: string) => { const [h, m] = v.split(':').map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'ص' : 'م'}`; };
 
 function TodayLive() {
   const s = useApp(); const tz = tzOf(s.tz).iana;
@@ -833,11 +797,6 @@ function ScheduleLive() {
   const now = Date.now();
   // Booked sessions, and every Google-backed session the teacher created (also while its Meet is being prepared).
   const booked = occ.filter((o) => (o.bookings.length || o.google) && new Date(o.ends_at).getTime() > now - 7 * 86_400_000);
-  const days = weekDays(s);
-  const dayIso = new Date(Date.now() + SD.day * 86_400_000).toISOString();
-  const key = dateKey(dayIso, tz);
-  const dayOcc = occ.filter((o) => dateKey(o.starts_at, tz) === key);
-  const times = [...new Set([...BASE_HOURS.map(hoursToHHMM), ...dayOcc.map((o) => hhmm(o.starts_at, tz))])].sort();
   return (
     <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>المواعيد</h1>
@@ -879,41 +838,7 @@ function ScheduleLive() {
           );
         })}
       </>}
-      {SD.tab === 'avail' && <>
-        <p style={muted(13, { display: 'flex', gap: 6, alignItems: 'center' })}><Icon name="globe" size={18} /> الأوقات {tzLabel(s.tz)}، وتظهر لكل طالب بتوقيته.</p>
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', margin: '0 -16px', padding: '2px 16px' }}>
-          {days.map((d, i) => {
-            const on = SD.day === i;
-            return (
-              <button key={i} aria-pressed={on} onClick={() => up('sched', { day: i })} style={{ flexShrink: 0, width: 64, minHeight: 68, borderRadius: 14, border: `1.5px solid ${on ? color.primary : color.borderChip}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.ink, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                <span style={{ fontSize: 12, fontWeight: 700 }}>{d.label}</span>
-                <span style={{ fontFamily: font.latin, fontSize: 18, fontWeight: 700 }}>{d.num}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ ...card, padding: '4px 14px' }}>
-          {times.map((t) => {
-            const o = dayOcc.find((x) => hhmm(x.starts_at, tz) === t);
-            const isBooked = !!o?.bookings.length;
-            const past = new Date(zonedIso(key, t, tz)).getTime() < now + 60 * 60_000;
-            const stt = isBooked ? 'محجوز' : o ? 'متاح' : 'غير متاح';
-            const label = labelHHMM(t);
-            return (
-              <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 56, borderBottom: `1px solid ${color.divider}` }}>
-                <span style={{ flex: 1, fontSize: 16, fontWeight: 700, color: past ? color.muted : color.ink }}>{label}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: isBooked ? color.warnInk : o ? color.primary : color.muted }}>{stt}</span>
-                <Switch on={!!o} label={`إتاحة ${label}`} onToggle={() => {
-                  if (isBooked) { toast('لا يمكن إغلاق موعد محجوز من هنا؛ ألغِ الحجز من تبويب الجلسات', 'alert'); return; }
-                  if (past) { toast('لا يمكن تعديل موعد مضى أو يبدأ خلال ساعة', 'alert'); return; }
-                  toggleLiveSlot(key, t, o?.id ?? null);
-                }} />
-              </div>
-            );
-          })}
-        </div>
-        <p style={muted(12)}>الإتاحة الأسبوعية الثابتة تضبطها الإدارة؛ هنا تفتح أو تغلق مواعيد محددة.</p>
-      </>}
+      {SD.tab === 'avail' && <AvailabilityEditor io={LIVE_AVAIL} toast={(m) => toast(m)} />}
     </div>
   );
 }

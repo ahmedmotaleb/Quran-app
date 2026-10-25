@@ -8,6 +8,7 @@ import json as _json
 from django.core.cache import cache
 
 KEY = "google-fake:events"
+BUSY_KEY = "google-fake:busy"  # [{"id", "start": {"dateTime"}, "end": {"dateTime"}}] — a teacher's own events (E2E)
 
 
 def _events() -> dict:
@@ -39,6 +40,8 @@ def handle(method, url, *, params=None, data=None, json=None, headers=None):
     path = url.split("/calendar/v3", 1)[-1]
     parts = path.strip("/").split("/")  # calendars/<cal>/events[/<id>]
     eid = parts[3] if len(parts) > 3 else None
+    if method == "GET" and eid is None:  # events.list: HALQA's own events plus any personal "busy" ones set for tests
+        return 200, {"items": list(events.values()) + list(cache.get(BUSY_KEY) or [])}
     if method == "POST":
         body = dict(json or {})
         if body.get("id") in events:

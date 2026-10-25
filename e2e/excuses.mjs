@@ -83,7 +83,12 @@ await step(S.page, 'admin accepts one excuse and rejects another; rows disappear
   const me = await native(S.page, 'yousef@halqa.app'); const H = { Authorization: `Bearer ${me.token}` };
   const t = (await (await S.page.request.get(BASE + 'api/v1/teachers', { headers: H })).json()).results.find((x) => x.full_name === 'الشيخ عبدالرحمن السالم');
   const slots = await (await S.page.request.get(BASE + `api/v1/teachers/${t.id}/slots`, { headers: H })).json();
-  const free = (slots.results ?? slots).filter((x) => new Date(x.starts_at).getTime() > Date.now() + 26 * 3600_000 && x.seats_left > 0);
+  // Start times are computed every 15 minutes, so neighbours overlap: take times at least two hours apart.
+  const free = [];
+  for (const x of (slots.results ?? slots)) {
+    const t = new Date(x.starts_at).getTime();
+    if (t > Date.now() + 26 * 3600_000 && x.seats_left > 0 && free.every((f) => Math.abs(new Date(f.starts_at).getTime() - t) >= 2 * 3600_000)) free.push(x);
+  }
   for (const [i, reason] of [['a', 'سفر مع الأسرة'], ['b', 'موعد طبي مهم']].entries()) {
     const r = await S.page.request.post(BASE + 'api/v1/bookings', { headers: { ...H, 'Idempotency-Key': `e2e-adm-ex-${reason[0]}-${Date.now()}` }, data: { occurrence: free[i + 1].id } });
     const id = (await r.json()).id; if (!id) throw new Error('booking ' + r.status());
