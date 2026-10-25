@@ -112,7 +112,7 @@ def test_permissions(world):
     assert post(cc, "a b,ab@x.test,,,,,حلقة\n").status_code == 400  # circle column without circles.manage
     assert post(cc, "a b,ab@x.test,0101,,,,\n").status_code == 400  # phone column without users.view_contact
     t = cc.get(URL)
-    assert t.status_code == 200 and t.content.decode("utf-8").startswith("﻿full_name,email,phone,timezone,level,teacher_email,circle")
+    assert t.status_code == 200 and t.content.decode("utf-8").startswith("﻿full_name,email,gender,phone,timezone,level,teacher_email,circle")
 
 
 def test_a_row_failing_at_commit_does_not_block_the_others(world, circle, monkeypatch):

@@ -39,12 +39,14 @@ from .permissions import IsAdminRole
 
 log = logging.getLogger(__name__)
 
-COLUMNS = ["full_name", "email", "phone", "timezone", "level", "teacher_email", "circle"]
+COLUMNS = ["full_name", "email", "gender", "phone", "timezone", "level", "teacher_email", "circle"]
+# «gender»: male / female (or ذكر / أنثى). Optional in a file; an empty cell leaves it unset.
+GENDERS = {"male": "male", "m": "male", "ذكر": "male", "female": "female", "f": "female", "أنثى": "female", "انثى": "female"}
 REQUIRED = ["full_name", "email"]
 MAX_ROWS = 500
 MAX_BYTES = 1024 * 1024
 EMAIL_BUDGET_SECONDS = 45  # Cloud Run answers within 120 s; the rest are queued for the hourly job
-TEMPLATE_NOTE = "full_name,email,phone,timezone,level,teacher_email,circle"
+TEMPLATE_NOTE = "full_name,email,gender,phone,timezone,level,teacher_email,circle"
 
 
 def _fail(msg: str) -> ApiError:
@@ -128,6 +130,10 @@ def validate(rows: list[dict], admin) -> dict:
             validate_email(clean["email"])
         except ValidationError:
             errs.append("بريد إلكتروني غير صالح.")
+        g = (d.get("gender") or "").strip().lower()
+        if g and g not in GENDERS:
+            errs.append("الجنس: اكتب male أو female (ذكر أو أنثى).")
+        clean["gender"] = GENDERS.get(g, "")
         if d.get("phone"):
             p = phones.normalize(d["phone"])
             if not p:
@@ -183,7 +189,7 @@ def create_row(row: dict, admin, request) -> User:
     c = row["clean"]
     with transaction.atomic():
         user = User.objects.create_user(c["email"], None, full_name=c["full_name"], role=Role.STUDENT, timezone=c["timezone"],
-                                        phone=c.get("phone", ""))  # a contact number only: never verified here
+                                        phone=c.get("phone", ""), gender=c.get("gender", ""))  # a contact number only: never verified here
         StudentProfile.objects.create(user=user, level=c.get("level", ""))
         audit("admin.user_created", actor=admin, target=user, request=request, role=Role.STUDENT, source="csv_import")
         if c.get("teacher"):

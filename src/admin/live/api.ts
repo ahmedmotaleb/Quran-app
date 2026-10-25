@@ -25,8 +25,8 @@ export const peopleCounts = (role: Role) => api<Counts>('GET', `admin/users/coun
 export const getPerson = (id: number) => api<Person>('GET', `admin/users/${id}`);
 export const updatePerson = (id: number, patch: Partial<Pick<Person, 'full_name' | 'phone' | 'timezone' | 'gender'>>) => api<Person>('PATCH', `admin/users/${id}`, patch);
 export const setPersonStatus = (id: number, status: AccountStatus, reason = '') => api<Person>('POST', `admin/users/${id}/status`, { status, reason });
-export const createPerson = (full_name: string, email: string, role: 'student' | 'parent') =>
-  api<Person & SetupLink>('POST', 'admin/users', { full_name, email, role });
+export const createPerson = (full_name: string, email: string, role: 'student' | 'parent', gender: '' | 'male' | 'female' = '') =>
+  api<Person & SetupLink>('POST', 'admin/users', { full_name, email, role, gender });
 /** Emails a fresh setup link. `share` (owner only, and only when the email fails): also return the link to copy. */
 export const newSetupLink = (id: number, share = false) => api<SetupLink>('POST', `admin/users/${id}/setup-link`, share ? { share: true } : {});
 /** «إنشاء الحساب وإرسال رابط الإعداد»: the teacher account exists at once (unapproved); the setup email goes directly. */

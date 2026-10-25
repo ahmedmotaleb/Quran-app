@@ -220,6 +220,12 @@ class AdminCreateUserSerializer(serializers.Serializer):
     full_name = serializers.CharField(min_length=2, max_length=120)
     email = serializers.EmailField()
     role = serializers.ChoiceField(choices=[Role.STUDENT, Role.PARENT])  # teachers join by invitation; admins via ops
+    gender = serializers.ChoiceField(choices=["male", "female", ""], required=False, default="")
+
+    def validate(self, attrs):
+        if attrs["role"] == Role.STUDENT and not attrs.get("gender"):  # asked for every student, as at sign-up
+            raise serializers.ValidationError({"gender": ["اختر: ذكر أو أنثى."]})
+        return attrs
 
     def validate_email(self, v):
         v = v.strip().lower()

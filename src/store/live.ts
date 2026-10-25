@@ -206,9 +206,10 @@ export async function logout() {
   setState({ me: null, pendingRecs: [], tasks: [], sessions: [], fb: {}, recs: {}, avail: {}, reviews: null, students: [], teachers: [], parent: null, tsched: null, subs: [], lessons: null, lessonCur: null, tests: null, lq: null, grading: null });
 }
 
-/** A teacher's own title («الشيخ» / «الأستاذة»); the server shows it everywhere from the next request. */
-export async function saveGender(gender: 'male' | 'female') {
-  try { applyUser(await E.updateMe({ gender })); toast('حُفظ اللقب'); } catch (e) { toast(msg(e), 'alert'); }
+/** The account's gender: a teacher's title («الشيخ» / «الأستاذة», shown everywhere from the next request) or a
+ *  student's own profile field. */
+export async function saveGender(gender: 'male' | 'female', done = 'حُفظ اللقب') {
+  try { applyUser(await E.updateMe({ gender })); toast(done); } catch (e) { toast(msg(e), 'alert'); }
 }
 
 export async function saveTimezone(id: TzId) {

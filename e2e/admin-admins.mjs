@@ -93,7 +93,7 @@ await step('the owner narrows the access to «مشاهدة فقط»; the next re
   await page.reload(); await navOf(page).getByRole('button', { name: /^الطلاب/ }).click();
   await page.getByRole('searchbox').first().waitFor();
   if (await page.getByRole('button', { name: 'إضافة طالب' }).count()) throw new Error('add student still shown');
-  const r = await call(page, 'POST', 'admin/users', { full_name: 'طالب', email: `s${Date.now()}@example.com`, role: 'student' });
+  const r = await call(page, 'POST', 'admin/users', { full_name: 'طالب', email: `s${Date.now()}@example.com`, role: 'student', gender: 'male' });
   if (r !== 403) throw new Error(`create student ${r}`);
 });
 await step('the owner cannot remove their own access, and suspending the admin ends their session', async () => {
