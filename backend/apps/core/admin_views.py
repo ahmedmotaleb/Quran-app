@@ -32,7 +32,8 @@ class SettingsSerializer(serializers.ModelSerializer):
                   "excuse_deadline_minutes", "join_minutes", "individual_minutes", "group_minutes", "booking_horizon_days", "booking_lead_minutes",
                   "open_signup", "session_reminders", "parent_weekly_report", "max_recording_seconds", "max_upload_mb", "review_intervals",
                   "waitlist_offer_hours", "makeup_enabled", "makeup_expiry_days", "makeup_granters",
-                  "parent_report_weekday", "parent_report_hour", "parent_report_email", "updated_at"]
+                  "parent_report_weekday", "parent_report_hour", "parent_report_email",
+                  "slot_increment_minutes", "session_durations", "session_buffer_minutes", "updated_at"]
         read_only_fields = ["updated_at"]
         extra_kwargs = {"cancel_hours": {"max_value": 168}, "booking_horizon_days": {"min_value": 1, "max_value": 90},
                         "booking_lead_minutes": {"max_value": 10080}, "max_recording_seconds": {"min_value": 30, "max_value": 3600},
@@ -40,7 +41,20 @@ class SettingsSerializer(serializers.ModelSerializer):
                         "group_minutes": {"min_value": 10, "max_value": 240}, "join_minutes": {"max_value": 60},
                         "excuse_deadline_minutes": {"max_value": 10080}, "waitlist_offer_hours": {"min_value": 1, "max_value": 72},
                         "makeup_expiry_days": {"min_value": 1, "max_value": 90}, "parent_report_weekday": {"max_value": 6},
-                        "parent_report_hour": {"max_value": 23}}
+                        "parent_report_hour": {"max_value": 23}, "session_buffer_minutes": {"max_value": 120}}
+
+    def validate_slot_increment_minutes(self, v):
+        if v not in (15, 30):
+            raise serializers.ValidationError("اختر 15 أو 30 دقيقة.")
+        return v
+
+    def validate_session_durations(self, v):
+        if v in (None, []):
+            return []
+        if (not isinstance(v, list) or not 1 <= len(v) <= 8
+                or any(not isinstance(x, int) or isinstance(x, bool) or not 10 <= x <= 240 or x % 5 for x in v)):
+            raise serializers.ValidationError("من 1 إلى 8 مدد بالدقائق بين 10 و240 (مضاعفات 5).")
+        return sorted(set(v))
 
     def validate_makeup_granters(self, v):
         if v not in ("teachers_admins", "admins"):

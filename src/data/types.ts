@@ -55,7 +55,8 @@ export interface Session {
 }
 
 /** Live mode adds the occurrence id, its instant and kind; `h` is then local hour + minutes/60. */
-export interface Slot { h: number; taken: boolean; occ?: number; iso?: string; kind?: string }
+/** `occ`: a session id, or the token of a time computed from the teacher's availability («s:…»). */
+export interface Slot { h: number; taken: boolean; occ?: number | string; iso?: string; kind?: string }
 /** teacherId → 7 days → slots (hours in Riyadh time, GMT+3). */
 export type Availability = Record<string, Slot[][]>;
 

@@ -83,6 +83,59 @@ def book(*, student, occurrence_id: int, idempotency_key: str, assignment=None, 
         return b, True
 
 
+def _lock_teacher(teacher_id: int) -> None:
+    with connection.cursor() as c:
+        c.execute("SELECT pg_advisory_xact_lock(%s, %s)", [7302, teacher_id])  # 7302 = teacher time namespace
+
+
+def book_slot(*, student, token: str, idempotency_key: str, assignment=None, note: str = "", now: datetime | None = None,
+              makeup_credit_id: int | None = None) -> tuple[Booking, bool]:
+    """Book a computed start time (availability.py) by its token. Under the student's and the teacher's locks: the
+    same request twice returns the first booking; the time is checked again on the server (windows, blocked time,
+    sessions ± gap, Google Calendar live, booking window); unheld rows of the old fixed-slot model in the way are
+    closed; then the session row is created — the exclusion constraint refuses any overlap that slipped through."""
+    from apps.accounts.models import User
+
+    from . import availability as av
+
+    parsed = av.parse_token(token)
+    if parsed is None:
+        raise av.UNAVAILABLE
+    teacher_id, start, minutes = parsed
+    if student.role != Role.STUDENT or student.status != AccountStatus.ACTIVE:
+        raise ApiError("not_eligible", "هذا الحساب لا يمكنه حجز الجلسات.", 403)
+    if not idempotency_key or len(idempotency_key) > 64:
+        raise ApiError("idempotency_key_required", "تعذّر إرسال الطلب. حدّث الصفحة وحاول مرة أخرى.", 400)
+    teacher = User.objects.filter(pk=teacher_id, role=Role.TEACHER, status=AccountStatus.ACTIVE).first()
+    if teacher is None:
+        raise av.UNAVAILABLE
+    now = now or timezone.now()
+    with transaction.atomic():
+        _lock_student(student.pk)
+        existing = Booking.objects.filter(student=student, idempotency_key=idempotency_key).first()
+        if existing:
+            return existing, False
+        _lock_teacher(teacher.pk)
+        slot = av.check(teacher, start, minutes, now=now, google_live=True)
+        for o in av.free_placeholders(teacher, slot.start, slot.end):
+            SessionOccurrence.objects.filter(pk=o.pk).update(status=SessionOccurrence.Status.CANCELLED)
+        try:
+            with transaction.atomic():
+                occ = SessionOccurrence.objects.create(teacher=teacher, starts_at=slot.start, ends_at=slot.end, capacity=1,
+                                                       source_rule_id=slot.rule_id)
+        except IntegrityError:
+            raise ApiError("slot_taken", "لم يعد هذا الموعد متاحًا؛ حجزه طالب آخر قبل قليل. اختر موعدًا آخر.", 409) from None
+        return book(student=student, occurrence_id=occ.pk, idempotency_key=idempotency_key, assignment=assignment, note=note,
+                    now=now, makeup_credit_id=makeup_credit_id)
+
+
+def book_any(*, student, target, **kw) -> tuple[Booking, bool]:
+    """`target`: a session id (circle/group sessions, sessions already created) or a computed slot token."""
+    if isinstance(target, int):
+        return book(student=student, occurrence_id=target, **kw)
+    return book_slot(student=student, token=str(target), **kw)
+
+
 def cancel(*, booking_id: int, by, reason: str = "", now: datetime | None = None) -> Booking:
     now = now or timezone.now()
     cfg = AppSettings.load()
@@ -116,7 +169,7 @@ def cancel(*, booking_id: int, by, reason: str = "", now: datetime | None = None
         return b
 
 
-def reschedule(*, booking_id: int, new_occurrence_id: int, by, idempotency_key: str) -> Booking:
+def reschedule(*, booking_id: int, new_occurrence_id, by, idempotency_key: str) -> Booking:
     """Atomic: reserve the new slot and release the old one, or change nothing."""
     with transaction.atomic():
         old = Booking.objects.select_for_update().get(pk=booking_id)
@@ -125,7 +178,7 @@ def reschedule(*, booking_id: int, new_occurrence_id: int, by, idempotency_key: 
         if old.status != Booking.Status.CONFIRMED:
             raise ApiError("not_active", "هذا الحجز غير نشط.", 409)
         cancel(booking_id=old.pk, by=by, reason="rescheduled")
-        new, _ = book(student=by, occurrence_id=new_occurrence_id, idempotency_key=idempotency_key, assignment=old.assignment, note=old.note)
+        new, _ = book_any(student=by, target=new_occurrence_id, idempotency_key=idempotency_key, assignment=old.assignment, note=old.note)
         if new.rescheduled_from_id is None:
             new.rescheduled_from = old
             new.save(update_fields=["rescheduled_from"])
@@ -231,7 +284,8 @@ def _local_slots(rule: AvailabilityRule, day: date):
 
 
 def generate_occurrences(teacher, *, start: date, days: int) -> int:
-    """Create missing individual occurrences from the teacher's rules. Safe to run repeatedly."""
+    """Legacy (the fixed-slot model): create individual session rows from the rules. No longer used by the app —
+    bookable times are computed (availability.py); kept for older test fixtures. Safe to run repeatedly."""
     created = 0
     rules = list(AvailabilityRule.objects.filter(teacher=teacher))
     offs = {(e.date) for e in AvailabilityException.objects.filter(teacher=teacher, kind=AvailabilityException.Kind.OFF, start_time__isnull=True)}

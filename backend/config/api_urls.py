@@ -180,3 +180,6 @@ urlpatterns = [
     path("push/config", notifications.PushConfig.as_view()),
     path("push/subscriptions", notifications.PushSubscriptions.as_view()),
 ]
+from apps.scheduling.availability_views import urls as _availability_urls  # noqa: E402
+
+urlpatterns += _availability_urls()

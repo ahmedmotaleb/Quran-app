@@ -11,7 +11,6 @@ from apps.accounts.models import GuardianLink, LinkStatus, Role, StudentProfile,
 from apps.assessments.models import Question, Test
 from apps.learning.models import Assignment, AssignmentStatus, Course, Lesson
 from apps.scheduling.models import AvailabilityRule
-from apps.scheduling.services import generate_occurrences
 
 PEOPLE = [
     ("admin@halqa.app", "مدير المنصة", Role.ADMIN),
@@ -62,7 +61,8 @@ class Command(BaseCommand):
                 for wd in (6, 1, 3):  # Sunday, Tuesday, Thursday
                     AvailabilityRule.objects.get_or_create(teacher=t, weekday=wd, defaults=dict(
                         start_time=hours[0], end_time=hours[1], timezone="Africa/Cairo", session_minutes=45, buffer_minutes=15, valid_from=today))
-            created = sum(generate_occurrences(t, start=today, days=21) for t in (teacher, khalid))
+            # Bookable times are computed from these ranges (scheduling/availability.py); nothing is pre-created.
+            created = AvailabilityRule.objects.filter(teacher__in=(teacher, khalid)).count()
             if not Assignment.objects.filter(student=yousef).exists():
                 due = timezone.now() + timedelta(hours=8)
                 Assignment.objects.bulk_create([
@@ -97,4 +97,4 @@ class Command(BaseCommand):
                     Question.objects.create(test=t, order=i, kind="mcq", prompt=prompt, options=options, answer_key=key)
                 Question.objects.create(test=t, order=5, kind="recitation", points=2,
                                         prompt="سجّل تلاوتك لموضع من سورة الملك يجتمع فيه حكما الإظهار والإخفاء.")
-        self.stdout.write(self.style.SUCCESS(f"Seeded {len(PEOPLE)} accounts (password from SEED_PASSWORD), {created} new session slots."))
+        self.stdout.write(self.style.SUCCESS(f"Seeded {len(PEOPLE)} accounts (password from SEED_PASSWORD), {created} weekly availability ranges."))

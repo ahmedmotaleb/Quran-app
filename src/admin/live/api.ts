@@ -127,7 +127,7 @@ export const removeQuestion = (id: number) => api<null>('DELETE', `admin/questio
 export interface Settings {
   org_name: string; support_email: string; support_whatsapp: string; show_support_button: boolean; default_timezone: string;
   cancel_hours: number; excuse_deadline_minutes: number; join_minutes: number; individual_minutes: number; group_minutes: number; booking_horizon_days: number;
-  booking_lead_minutes: number; open_signup: boolean; session_reminders: boolean; parent_weekly_report: boolean;
+  booking_lead_minutes: number; slot_increment_minutes: number; session_durations: number[]; session_buffer_minutes: number; open_signup: boolean; session_reminders: boolean; parent_weekly_report: boolean;
   max_recording_seconds: number; max_upload_mb: number; review_intervals: number[]; updated_at: string; sensitive: string[];
   waitlist_offer_hours: number; makeup_enabled: boolean; makeup_expiry_days: number; makeup_granters: 'teachers_admins' | 'admins';
   parent_report_weekday: number; parent_report_hour: number; parent_report_email: boolean;

@@ -125,7 +125,7 @@ const initial = () => ({
   bk: {
     t: 't1', type: 'فردية', day: 0, h: null as number | null, note: '', task: 'k1' as string | null, error: null as string | null, resched: null as string | null,
     /** Live mode: request state and the Idempotency-Key for the chosen slot. */
-    loading: false, busy: false, key: null as null | { occ: number; key: string },
+    loading: false, busy: false, key: null as null | { occ: number | string; key: string },
     /** «جلسة تعويضية»: the credit this booking uses (same teacher). */ makeup: null as number | null,
   },
   rec: { phase: 'idle' as RecPhase, secs: 0, task: (LIVE ? '' : 'k1') as string, demo: false, prog: 0, ...REC_LIVE },

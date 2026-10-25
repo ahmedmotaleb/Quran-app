@@ -19,7 +19,6 @@ from apps.accounts.models import GuardianLink, LinkStatus, Role, StudentProfile,
 from apps.assessments.models import Question, Test
 from apps.learning.models import Assignment, AssignmentStatus, Course, Lesson
 from apps.scheduling.models import AvailabilityRule, SessionOccurrence
-from apps.scheduling.services import generate_occurrences
 
 KINDS = ["hifz", "review", "tajweed"]
 
@@ -80,7 +79,7 @@ class Command(BaseCommand):
                 for wd in range(7):
                     AvailabilityRule.objects.create(teacher=t, weekday=wd, start_time=time(8), end_time=time(22), timezone="Africa/Cairo",
                                                     session_minutes=45, buffer_minutes=15, valid_from=today)
-        slots = sum(generate_occurrences(t, start=today, days=14) for t in teachers)
+        slots = AvailabilityRule.objects.filter(teacher__in=teachers).count()  # bookable times are computed
         race = self.race_slot(teachers[-1], today)
         self.stdout.write(f"students={len(students)} teachers={len(teachers)} parents={len(parents)} tasks={len(tasks)} "
                           f"slots={slots} race_occurrence={race.pk} race_teacher={teachers[-1].pk} quiz={quiz.pk}")
@@ -100,7 +99,7 @@ class Command(BaseCommand):
     def refresh(self):
         teachers = list(User.objects.filter(email__startswith="load-t", role=Role.TEACHER).order_by("email"))
         today = timezone.localdate()
-        slots = sum(generate_occurrences(t, start=today, days=14) for t in teachers)
+        slots = AvailabilityRule.objects.filter(teacher__in=teachers).count()  # bookable times are computed
         race = self.race_slot(teachers[-1], today)
         self.stdout.write(f"refreshed: students={User.objects.filter(email__startswith='load-s').count()} teachers={len(teachers)} "
                           f"new_slots={slots} race_occurrence={race.pk} race_teacher={teachers[-1].pk}")

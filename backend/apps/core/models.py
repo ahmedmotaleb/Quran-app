@@ -46,6 +46,11 @@ class AppSettings(models.Model):
     group_minutes = models.PositiveSmallIntegerField(default=60)
     booking_horizon_days = models.PositiveSmallIntegerField(default=21)
     booking_lead_minutes = models.PositiveSmallIntegerField(default=60)
+    # Teacher availability (24 h ranges): bookable starts every `slot_increment_minutes` (15 or 30) inside a window;
+    # the session lengths a teacher may offer; the minimum gap kept between a teacher's sessions.
+    slot_increment_minutes = models.PositiveSmallIntegerField(default=15)
+    session_durations = models.JSONField(default=list, blank=True)  # [] = [30, 45, 60]
+    session_buffer_minutes = models.PositiveSmallIntegerField(default=0)
     # Waiting list (PROMPT 44): how long an offered seat is held for the next student.
     waitlist_offer_hours = models.PositiveSmallIntegerField(default=12)
     # Make-up sessions for approved excuses: on/off, how long a credit lasts, who may grant one.

@@ -301,7 +301,7 @@ export function TeacherPage() {
                 {days[B.day].map((x) => {
                   const on = B.h === x.h; const label = slotTime(s, x);
                   return (
-                    <button key={x.h} onClick={() => { if (!x.taken) up('bk', { h: x.h, error: null }); else if (s.liveMode && x.occ) askWaitlist(x.occ, label); }}
+                    <button key={x.h} onClick={() => { if (!x.taken) up('bk', { h: x.h, error: null }); else if (s.liveMode && x.occ) askWaitlist(Number(x.occ), label); }}
                       disabled={x.taken && !(s.liveMode && x.occ)} aria-pressed={on} aria-label={x.taken ? `${label} محجوز${s.liveMode ? ' — الانضمام إلى قائمة الانتظار' : ''}` : label}
                       style={{ minHeight: 52, borderRadius: 12, border: `1.5px solid ${x.taken ? '#E0D9C8' : on ? color.primary : color.borderStrong}`, background: x.taken ? color.takenSlot : on ? color.primary : color.card, color: x.taken ? color.faint : on ? color.ivory : color.primary, fontSize: 15, fontWeight: 700, cursor: x.taken ? 'default' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1.2 }}>
                       <span style={{ textDecoration: x.taken ? 'line-through' : 'none' }}>{label}</span>

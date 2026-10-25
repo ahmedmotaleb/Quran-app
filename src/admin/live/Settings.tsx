@@ -25,7 +25,9 @@ const LABEL: Record<string, string> = Object.fromEntries([...NUM.map(([k, l]) =>
   ['support_whatsapp', 'واتساب الدعم'], ['show_support_button', 'زر الدعم'], ['default_timezone', 'المنطقة الزمنية'], ['open_signup', 'التسجيل المفتوح'],
   ['session_reminders', 'تذكير الجلسات'], ['parent_weekly_report', 'تقرير أولياء الأمور'], ['makeup_enabled', 'الجلسات التعويضية'],
   ['makeup_granters', 'من يمنح الجلسة التعويضية'], ['parent_report_weekday', 'يوم تقرير أولياء الأمور'], ['parent_report_hour', 'ساعة تقرير أولياء الأمور'],
-  ['parent_report_email', 'إرسال التقرير بالبريد أيضًا']]);
+  ['parent_report_email', 'إرسال التقرير بالبريد أيضًا'], ['slot_increment_minutes', 'الفاصل الزمني للمواعيد'],
+  ['session_durations', 'مدد الجلسات المتاحة للمعلمين'], ['session_buffer_minutes', 'الحد الأدنى بين جلستين']]);
+const DURATIONS = [20, 30, 40, 45, 50, 60, 75, 90, 120];
 const WEEKDAYS = ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
@@ -103,6 +105,35 @@ function SettingsForm() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 14 }}>
           {NUM.slice(0, 6).map(([k, l, unit]) => <Num key={k} k={k} label={l} unit={unit} v={v} up={up} err={err[k]} sensitive={saved.sensitive.includes(k)} />)}
         </div>
+        {/* Teacher availability (24 h ranges): bookable starts are computed on this increment inside each range. */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="st-slot_increment_minutes" style={labelStyle}>{LABEL.slot_increment_minutes}</label>
+            <select id="st-slot_increment_minutes" value={v.slot_increment_minutes} onChange={(e) => up({ slot_increment_minutes: Number(e.target.value) })} style={inputStyle(err.slot_increment_minutes)}>
+              <option value={15}>15 دقيقة</option><option value={30}>30 دقيقة</option>
+            </select>
+            <span style={{ fontSize: 12, color: color.muted }}>تبدأ مواعيد الحجز كل هذا الفاصل داخل فترات إتاحة المعلم.</span>
+            <FieldError msg={err.slot_increment_minutes} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="st-session_buffer_minutes" style={labelStyle}>{LABEL.session_buffer_minutes}</label>
+            <select id="st-session_buffer_minutes" value={v.session_buffer_minutes} onChange={(e) => up({ session_buffer_minutes: Number(e.target.value) })} style={inputStyle(err.session_buffer_minutes)}>
+              {[0, 5, 10, 15, 20, 30].map((n) => <option key={n} value={n}>{n ? `${n} دقيقة` : 'بدون فاصل'}</option>)}
+            </select>
+            <FieldError msg={err.session_buffer_minutes} />
+          </div>
+        </div>
+        <fieldset style={{ border: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <legend style={labelStyle}>{LABEL.session_durations}</legend>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {DURATIONS.map((d) => {
+              const cur = v.session_durations.length ? v.session_durations : [30, 45, 60]; const on = cur.includes(d);
+              return <label key={d} style={{ display: 'flex', gap: 6, alignItems: 'center', minHeight: 40, fontSize: 14 }}>
+                <input type="checkbox" checked={on} disabled={on && cur.length === 1} onChange={() => up({ session_durations: on ? cur.filter((x) => x !== d) : [...cur, d].sort((a, b) => a - b) })} style={{ width: 18, height: 18 }} />{d} دقيقة</label>;
+            })}
+          </div>
+          <FieldError msg={err.session_durations} />
+        </fieldset>
       </Group>
       <Group title="قائمة الانتظار والجلسات التعويضية">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 14 }}>

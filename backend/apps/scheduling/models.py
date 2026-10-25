@@ -25,7 +25,9 @@ class TsTzRange(Func):
 
 
 class AvailabilityRule(TimeStamped):
-    """Weekly window in the teacher's own timezone, e.g. Sunday 16:00–21:00 Africa/Cairo."""
+    """Weekly window in the teacher's own timezone, e.g. Sunday 16:00–21:00 Africa/Cairo. Any time of the day
+    (00:00–23:59, on the booking increment); an end earlier than the start runs past midnight into the next day.
+    Bookable start times are computed from these windows (availability.py); nothing is pre-created."""
 
     teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name="availability_rules")
     weekday = models.PositiveSmallIntegerField()  # 0 = Monday … 6 = Sunday (Python convention)
@@ -36,22 +38,33 @@ class AvailabilityRule(TimeStamped):
     buffer_minutes = models.PositiveSmallIntegerField(default=0)
     valid_from = models.DateField()
     valid_until = models.DateField(null=True, blank=True)
+    active = models.BooleanField(default=True)
 
     class Meta:
         constraints = [models.CheckConstraint(condition=Q(weekday__gte=0, weekday__lte=6), name="weekday_range")]
 
 
 class AvailabilityException(TimeStamped):
+    """A change for one date only («تعديل هذا اليوم فقط»); the weekly rules stay as they are.
+    OFF: the whole date closed (start/end null). EXTRA: an additional window that date. BLOCKED: «حظر وقت» — a part of
+    the day removed (the reason is private to the teacher and admins; students only see the time as unavailable)."""
+
     class Kind(models.TextChoices):
-        OFF = "off", "إجازة"
+        OFF = "off", "غير متاح"
         EXTRA = "extra", "إتاحة إضافية"
+        BLOCKED = "blocked", "وقت محظور"
 
     teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name="availability_exceptions")
     date = models.DateField()
     kind = models.CharField(max_length=8, choices=Kind.choices)
     start_time = models.TimeField(null=True, blank=True)  # null = whole day (for OFF)
-    end_time = models.TimeField(null=True, blank=True)
+    end_time = models.TimeField(null=True, blank=True)    # earlier than start_time = runs past midnight
     reason = models.CharField(max_length=200, blank=True)
+    timezone = models.CharField(max_length=64, default="Africa/Cairo")
+    session_minutes = models.PositiveSmallIntegerField(null=True, blank=True)  # EXTRA: session length offered
+
+    class Meta:
+        indexes = [models.Index(fields=["teacher", "date"])]
 
 
 class Circle(TimeStamped):

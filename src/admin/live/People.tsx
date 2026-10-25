@@ -2,7 +2,7 @@
  * Live Students / Teachers / Parents sections: server-side search, status filter and pagination; a detail
  * panel whose every action is a server call. The screen only changes after the server confirms.
  */
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { color, font } from '@/theme/tokens';
 import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
 import { Icon } from '@/components/Icon';
@@ -13,6 +13,7 @@ import { zonedToIso } from '@/lib/time';
 import { card } from '../AdminTables';
 import * as A from './api';
 import StudentImport from './StudentImport';
+import AvailabilityEditor, { httpAvail } from '@/components/AvailabilityEditor';
 import { chip, date, dateTime, errMsg, LinkBox, Modal, ReasonDialog, smallBtn } from './ui';
 import {
   BulkBar, type BulkDef, circleOptions, type Col, courseOptions, DataView, ExportButton, type FilterField, FilterControls, filterOf, items, accounts, listParams, Pager,
@@ -301,6 +302,8 @@ function InvitationsPanel({ reloadKey }: { reloadKey: number }) {
 type Sub = { kind: 'reason'; title: string; body: string; ok: string; required?: boolean; typeWord?: string; otp?: boolean; run: (r: string, otp: string) => Promise<unknown> } | { kind: 'pick'; target: A.Role } | null;
 
 function PersonPanel({ id, onClose, onChanged, onDeleted }: { id: number; onClose: () => void; onChanged: () => void; onDeleted: (id: number) => void }) {
+  const [avail, setAvail] = useState(false);
+  const availIo = useMemo(() => httpAvail(`admin/teachers/${id}/availability`), [id]);
   const [u, setU] = useState<A.Person | null>(null); const [err, setErr] = useState<string | null>(null);
   const [edit, setEdit] = useState<{ full_name: string; phone: string } | null>(null); const [editErr, setEditErr] = useState<Record<string, string | null>>({});
   const [sub, setSub] = useState<Sub>(null); const [setup, setSetup] = useState<boolean | null>(null); const [busy, setBusy] = useState(false);
@@ -429,6 +432,17 @@ function PersonPanel({ id, onClose, onChanged, onDeleted }: { id: number; onClos
               : <button disabled={busy} onClick={() => act(() => A.setTeacherApproval(u.id, true), 'تم اعتماد المعلم')} style={smallBtn('primary')}>اعتماد المعلم</button>}
           </div>
         ))}
+
+        {u.role === 'teacher' && section('الإتاحة', (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ flex: '1 1 220px', fontSize: 14 }}>فترات الإتاحة الأسبوعية وتعديلات الأيام وجلسات كل يوم.</span>
+            <button onClick={() => setAvail(true)} style={smallBtn()}>{can('sessions.manage') ? 'عرض وتعديل الإتاحة' : 'عرض الإتاحة'}</button>
+          </div>
+        ))}
+        {avail && <Modal title={`إتاحة ${u.full_name}`} onClose={() => setAvail(false)} wide>
+          {can('sessions.manage') && <p style={{ margin: 0, fontSize: 13, color: color.muted }}>تعديلاتك هنا تُسجَّل في سجل التدقيق باسمك. عدّل فقط عند الحاجة التشغيلية.</p>}
+          <AvailabilityEditor io={availIo} toast={toast} readOnly={!can('sessions.manage')} />
+        </Modal>}
 
         {u.role === 'student' && section('المعلمون', (<>
           {u.teachers.length === 0 && <p style={{ margin: 0, color: color.danger, fontSize: 14 }}>غير مرتبط بأي معلم.</p>}

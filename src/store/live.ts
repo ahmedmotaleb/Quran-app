@@ -452,15 +452,6 @@ export async function refreshSchedule() {
   try { setState({ tsched: await E.teacherOccurrences() }); } catch (e) { toast(msg(e), 'alert'); }
 }
 
-/** Opens (on) or closes (off) the slot at a local date + "HH:MM" in the teacher's timezone. */
-export async function toggleSlot(dateKey: string, hhmm: string, existingId: number | null) {
-  try {
-    if (existingId) { await E.closeSlot(existingId); toast('أُغلق الموعد', 'cal'); }
-    else { await E.openSlot(zonedToIso(dateKey, hhmm, iana())); toast('فُتح الموعد للحجز', 'cal'); }
-  } catch (e) { toast(msg(e), 'alert'); }
-  await refreshSchedule();
-}
-
 export async function setAttendance(bookingId: number, value: string) {
   try { await E.markAttendance(bookingId, value); toast('حُفظ الحضور'); } catch (e) { toast(msg(e), 'alert'); }
   await refreshSchedule();
