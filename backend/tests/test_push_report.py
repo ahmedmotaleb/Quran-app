@@ -37,3 +37,14 @@ def test_report_checks_keys_and_counts_devices(world, settings):
     assert "secret-endpoint" not in raw and "P" * 80 not in raw and priv not in raw
     assert report(settings, pair()[0], priv)[1]["config"]["keys_match"] is False      # mismatched pair
     assert report(settings, "", "")[1]["config"]["keys_match"] is False
+
+
+def test_report_shows_admin_tests_and_switched_off_devices(world, settings):
+    from apps.core.audit import audit
+
+    PushSubscription.objects.create(user=world.s1, endpoint="https://fcm.googleapis.com/fcm/send/x", p256dh="P" * 80, auth="A" * 20,
+                                    device="Android", active=False, last_failure="unauthorized")
+    audit("admin.push_test", target=world.s1, devices=1, sent=0, failed=["unauthorized"])
+    r = report(settings, *pair())[1]
+    assert r["devices"]["inactive"] == 1 and r["devices"]["last_failures"] == {"unauthorized": 1}
+    assert r["admin_tests_7d"][0]["target"] == str(world.s1.pk) and r["admin_tests_7d"][0]["sent"] == 0

@@ -78,11 +78,19 @@ class Command(BaseCommand):
                 "delivered_ever": sum(1 for s in subs if s.last_success_at),
                 "delivered_7d": sum(1 for s in subs if s.last_success_at and s.last_success_at >= week),
                 "failing": sum(1 for s in subs if s.failures),
+                "inactive": sum(1 for s in subs if not s.active),
+                "last_failures": dict(Counter(s.last_failure for s in subs if s.last_failure)),
                 "oldest": min((s.created_at for s in subs), default=None),
                 "newest": max((s.created_at for s in subs), default=None),
             },
             "notifications_7d": {"total": recent.count(),
                                  "to_users_with_a_device": recent.filter(recipient_id__in=with_devices).count()},
         }
+        # Admin «إرسال إشعار تجريبي» presses (counts only): did the owner's test reach a device?
+        from apps.core.models import AuditEvent
+
+        report["admin_tests_7d"] = [
+            {"at": e.created_at, "target": e.target_id, **{k: e.data.get(k) for k in ("devices", "sent", "failed")}}
+            for e in AuditEvent.objects.filter(action="admin.push_test", created_at__gte=week)[:10]]
         log.warning("push_report", extra={"report": json.dumps(report, default=str)})
         self.stdout.write(json.dumps(report, default=str, ensure_ascii=False))
