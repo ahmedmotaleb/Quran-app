@@ -56,7 +56,8 @@ sleep 8
 curl -s "$URL/api/ready" | grep -o '"push":"[^"]*"' || true
 cat <<MSG
 
-"push" above should say "configured". On your phone: open the installed app → حسابي → «إشعارات على هذا الجهاز»
-→ turn it on and allow. Then ask a teacher to send you feedback (or book a session): a short, generic
-notification should arrive, and tapping it opens the app. On iPhone the app must be installed (iOS 16.4+).
+"push" above should say "ready" ("misconfigured" means the two keys do not belong together: run again with ROTATE=1).
+On your phone: open the installed app → حسابي → الإشعارات → «تفعيل الإشعارات» and allow. Then, in the admin portal,
+open your account → «الإشعارات على الأجهزة» → «إرسال إشعار تجريبي»: a short, generic notification should arrive, and
+tapping it opens the app. On iPhone the app must be installed to the Home Screen (iOS 16.4+).
 MSG

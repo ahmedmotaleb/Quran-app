@@ -8,7 +8,7 @@ import { LIVE, type ApiError } from '@/api/client';
 import { saveGender } from '@/store/live';
 import * as E from '@/api/endpoints';
 import { useEffect, useState, type FormEvent } from 'react';
-import { disablePush, enablePush, pushState, type PushState } from '@/pwa/push';
+import { disablePush, enablePush, PushError, pushState, type PushState } from '@/pwa/push';
 import { GoogleCalendarCard } from '@/screens/teacher/GoogleSessions';
 
 /** The admin portal may run on its own address (the admin service); ask the server where. */
@@ -63,7 +63,7 @@ export default function Account() {
       )}
       <section style={{ ...card, padding: '4px 16px' }}>
         <h2 style={{ margin: '12px 0 4px', fontSize: 14, color: color.muted, fontWeight: 700 }}>الإشعارات</h2>
-        {LIVE && <p style={{ margin: '0 0 4px', fontSize: 12, color: color.muted }}>تتحكم في إشعارات الجوال لكل نوع. تنبيهات الحساب والحضور تصل دائمًا، وتبقى كل الإشعارات داخل التطبيق.</p>}
+          {LIVE && <p style={{ margin: '0 0 4px', fontSize: 12, color: color.muted }}>تتحكم في إشعارات الجوال لكل نوع. تنبيهات الحساب والحضور تصل دائمًا، وتبقى كل الإشعارات داخل التطبيق.</p>}
         {NOTIFS.map(([k, l]) => (
           <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 52, borderBottom: `1px solid ${color.divider}` }}>
             <span style={{ fontSize: 15 }}>{l}</span>
@@ -207,36 +207,47 @@ function InstallRow() {
 }
 
 
-const PUSH_TEXT: Record<PushState, string> = {
-  'unsupported': 'هذا المتصفح لا يدعم إشعارات الجوال. ستجد كل الإشعارات داخل التطبيق.',
-  'ios-install': 'على iPhone وiPad: ثبّت التطبيق على الشاشة الرئيسية أولًا (iOS 16.4 أو أحدث)، ثم فعّل الإشعارات من هنا.',
-  'server-off': 'إشعارات الجوال غير مفعّلة على الخادم بعد. ستجد كل الإشعارات داخل التطبيق.',
-  'denied': 'رُفض إذن الإشعارات لهذا الموقع. فعّله من إعدادات المتصفح ثم عد إلى هنا.',
-  'off': 'تصلك تنبيهات قصيرة عند وصول تقييم أو واجب أو تذكير بجلسة، دون تفاصيل على شاشة القفل.',
-  'on': 'الإشعارات مفعّلة على هذا الجهاز. تظهر تنبيهات عامة فقط، والتفاصيل داخل التطبيق.',
+/** What this device really does (permission + subscription + the server's record), in the owner's words. */
+const PUSH: Record<PushState, { head: string; text: string; tone: 'ok' | 'warn' | 'muted' }> = {
+  'on': { head: 'الإشعارات مفعلة', tone: 'ok', text: 'ستصلك الإشعارات على هذا الجهاز حتى عند إغلاق التطبيق. تظهر على شاشة القفل تنبيهات عامة فقط، والتفاصيل داخل التطبيق.' },
+  'off': { head: 'هذا الجهاز غير مشترك في الإشعارات', tone: 'warn', text: 'فعّلها لتصلك تنبيهات الواجبات والتقييمات والجلسات على هذا الجهاز، دون تفاصيل على شاشة القفل.' },
+  'denied': { head: 'تم رفض إذن الإشعارات من إعدادات الجهاز', tone: 'warn',
+    text: 'لتفعيلها: على Android افتح إعدادات الهاتف ← التطبيقات ← الحلقة (أو Chrome) ← الإشعارات ← السماح. على الكمبيوتر اضغط رمز القفل بجانب عنوان الموقع ← الإشعارات ← السماح. ثم ارجع إلى هنا.' },
+  'ios-install': { head: 'الإشعارات غير مفعلة', tone: 'muted',
+    text: 'على iPhone وiPad تعمل الإشعارات بعد تثبيت الحلقة: افتحها في Safari ← زر المشاركة ← «إضافة إلى الشاشة الرئيسية»، ثم افتح الحلقة من أيقونتها وفعّل الإشعارات من هنا (iOS 16.4 أو أحدث).' },
+  'server-off': { head: 'الإشعارات غير مفعلة', tone: 'muted', text: 'إشعارات الجوال غير متاحة على الخادم حاليًا. ستجد كل الإشعارات داخل التطبيق.' },
+  'unsupported': { head: 'الإشعارات غير مفعلة', tone: 'muted', text: 'هذا المتصفح لا يدعم إشعارات الويب. استخدم Chrome أو Edge، أو ثبّت التطبيق. ستجد كل الإشعارات داخل التطبيق.' },
 };
 
-/** Phone notifications for this device: explained first, permission asked only on tap, easy to turn off. */
+/** «تفعيل الإشعارات» for this device: the permission is asked only when the button is tapped. */
 function PushRow() {
   const [st, setSt] = useState<PushState | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
   useEffect(() => { pushState().then(setSt).catch(() => setSt('unsupported')); }, []);
-  if (!st) return null;
-  const act = async () => {
-    setBusy(true);
-    try { const n = st === 'on' ? await disablePush() : await enablePush(); setSt(n); if (n === 'on') toast('ستصلك الإشعارات على هذا الجهاز'); if (n === 'off' && st === 'on') toast('أُوقفت الإشعارات على هذا الجهاز'); }
-    catch { toast('تعذّر تغيير الإشعارات. حاول مرة أخرى.', 'alert'); }
+  if (!st) return <p role="status" style={{ margin: '4px 0', fontSize: 13, color: color.muted }}>جارٍ التحقق من إشعارات هذا الجهاز…</p>;
+  const act = async (on: boolean) => {
+    setBusy(true); setErr(null);
+    try {
+      const n = on ? await enablePush() : await disablePush();
+      setSt(n);
+      if (n === 'on') toast('ستصلك الإشعارات على هذا الجهاز');
+      if (!on) toast('أُوقفت الإشعارات على هذا الجهاز');
+    } catch (e) { setErr(e instanceof PushError ? e.message : 'تعذّر تغيير الإشعارات. تحقق من الاتصال وحاول مرة أخرى.'); }
     finally { setBusy(false); }
   };
-  const can = st === 'on' || st === 'off';
+  const p = PUSH[st];
+  const ink = p.tone === 'ok' ? color.primary : p.tone === 'warn' ? color.warnInk : color.ink;
   return (
-    <section aria-labelledby="push-h" style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ color: color.primary }}><Icon name="bell" size={18} /></span>
-        <h2 id="push-h" style={{ flex: 1, margin: 0, fontSize: 15, fontWeight: 700 }}>إشعارات على هذا الجهاز</h2>
-        {can && <Switch on={st === 'on'} onToggle={() => { if (!busy) act(); }} label="إشعارات على هذا الجهاز" />}
-      </div>
-      <p role="status" style={{ margin: 0, fontSize: 13, color: color.muted, lineHeight: 1.7 }}>{PUSH_TEXT[st]}</p>
-    </section>
+    <div aria-labelledby="push-h" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 0 12px', borderBottom: `1px solid ${color.divider}` }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ color: ink }}><Icon name="bell" size={18} /></span>
+        <strong id="push-h" role="status" style={{ fontSize: 15, color: ink }}>{p.head}</strong>
+      </span>
+      <p style={{ margin: 0, fontSize: 13, color: color.muted, lineHeight: 1.7 }}>{p.text}</p>
+      {st === 'off' && <button onClick={() => void act(true)} disabled={busy} style={primaryBtn(48, 15)}>{busy ? 'جارٍ التفعيل…' : 'تفعيل الإشعارات'}</button>}
+      {st === 'on' && <button onClick={() => void act(false)} disabled={busy} style={outlineBtn(44, 14)}>{busy ? 'جارٍ الإيقاف…' : 'إيقاف الإشعارات على هذا الجهاز'}</button>}
+      {st === 'denied' && <button onClick={() => { setSt(null); pushState().then(setSt).catch(() => setSt('unsupported')); }} style={outlineBtn(44, 14)}>أعد التحقق بعد تغيير الإعدادات</button>}
+      {err && <p role="alert" style={{ margin: 0, fontSize: 13, color: color.dangerInk }}>{err}</p>}
+    </div>
   );
 }

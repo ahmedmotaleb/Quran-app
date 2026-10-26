@@ -32,4 +32,9 @@ class PushSubscription(models.Model):
     device = models.CharField(max_length=120, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     last_success_at = models.DateTimeField(null=True, blank=True)
-    failures = models.PositiveSmallIntegerField(default=0)
+    failures = models.PositiveSmallIntegerField(default=0)  # consecutive
+    # Off after a failure that cannot recover (other keys) or MAX_FAILURES in a row; the app re-subscribes it when
+    # opened. Nothing is sent to inactive devices. Diagnostics keep only a category, never the endpoint or keys.
+    active = models.BooleanField(default=True)
+    last_failure = models.CharField(max_length=20, blank=True)
+    last_failure_at = models.DateTimeField(null=True, blank=True)

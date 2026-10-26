@@ -6,6 +6,7 @@
  * lessons, quizzes and progress.
  * Not wired (screens keep demo content, labelled): teacher content authoring, live video.
  */
+import { syncPush } from '@/pwa/push';
 import { stripTitle } from '@/lib/names';
 import { diag } from '@/services/diag';
 import * as E from '@/api/endpoints';
@@ -133,6 +134,8 @@ async function restoreSession(): Promise<boolean> {
     // Back from Google's consent page: open «حسابي», where the Google Calendar card shows the outcome.
     if (useApp.getState().googleResult && u.role === 'teacher') go('account');
     await loadData();
+    void syncPush(); // a device that already allowed notifications stays registered for this account (never prompts)
+    void openFromHash(); // opened from a tapped phone notification
     return true;
   } catch {
     return false;
@@ -145,6 +148,8 @@ export async function login(email: string, password: string) {
     const r = await E.login(email, password);
     resetCsrf();
     applyUser(r.user);
+    void syncPush();
+    setTimeout(() => { void openFromHash(); }, 0);
     const viaParent = get().login.parent;
     up('login', { loading: false, pw: '', parent: false });
     reset(homeFor(r.user.role), r.user.role);
@@ -192,8 +197,32 @@ export async function forgot(email: string) {
   }
 }
 
+/** A tapped phone notification opens HALQA at `#/n/<id>` (or `#/inbox`): once signed in, open it exactly as the inbox
+ *  would. The notification is fetched for the signed-in account only (another account's id → the inbox). */
+export async function openFromHash() {
+  const m = window.location.hash.match(/^#\/(?:n\/(\d+)|inbox)$/);
+  if (!m || !get().me) return;
+  window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  if (!m[1]) { go('inbox'); return; }
+  try {
+    const n = await api<import('@/screens/common/Inbox').Note>('GET', `notifications/${m[1]}`);
+    if (!n.read_at) void api('POST', 'notifications/read', { ids: [n.id] });
+    const { open } = await import('@/screens/common/Inbox');
+    open(n, get().role);
+  } catch { go('inbox'); }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('hashchange', () => { void openFromHash(); });
+  // The service worker asks an open window to go somewhere when it cannot navigate it itself.
+  navigator.serviceWorker?.addEventListener?.('message', (e: MessageEvent) => {
+    const d = e.data as { type?: string; url?: string } | null;
+    if (d?.type === 'halqa:navigate' && typeof d.url === 'string' && d.url.startsWith('/#/')) window.location.hash = d.url.slice(2);
+  });
+}
+
 export async function logout() {
   // This device stops receiving the account's phone notifications (the browser subscription is dropped too).
+  // Only THIS device: the server removes the subscription with this endpoint; other devices keep theirs.
   let endpoint = '';
   try {
     const sub = 'serviceWorker' in navigator ? await (await navigator.serviceWorker.getRegistration())?.pushManager?.getSubscription() : null;
