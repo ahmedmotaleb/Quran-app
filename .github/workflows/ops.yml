@@ -123,7 +123,7 @@ jobs:
           gcloud logging read 'jsonPayload.msg="push_report" AND timestamp>="'$START'"' --project "$P" --limit 5 --format json > /tmp/r.json || true
           gcloud logging read '(jsonPayload.msg="push_failed" OR jsonPayload.msg="push_endpoint_removed" OR jsonPayload.msg="push_sent" OR jsonPayload.msg="push_test") AND timestamp>="'$SINCE'"' \
             --project "$P" --limit 500 --format json > /tmp/f.json || true
-          gcloud logging read 'resource.type="cloud_run_revision" AND httpRequest.requestUrl:"/api/v1/push/" AND timestamp>="'$SINCE'"' \
+          gcloud logging read 'resource.type="cloud_run_revision" AND (httpRequest.requestUrl:"/api/v1/push/" OR httpRequest.requestUrl:"/push-test" OR httpRequest.requestUrl:"/push-devices") AND timestamp>="'$SINCE'"' \
             --project "$P" --limit 500 --format json > /tmp/q.json || true
           python3 - <<'PY'
           import json, collections
