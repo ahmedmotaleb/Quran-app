@@ -223,3 +223,9 @@ const kq = (f: KpiFilter) => qs({ from: f.from, to: f.to, teacher: f.teacher || 
 export const getKpis = (f: KpiFilter) => api<{ range: KpiRange; kpis: Kpis; definitions: Record<string, string>; not_filtered: Record<string, string[]> }>('GET', `admin/kpis?${kq(f)}`);
 export const getWorkload = (f: KpiFilter) => api<{ range: KpiRange; results: Workload[]; definitions: Record<string, string> }>('GET', `admin/teacher-workload?${kq(f)}`);
 export const exportWorkload = (f: KpiFilter) => apiDownload('admin/teacher-workload/export', f);
+
+/* ---------------- push diagnostics for one person (notifications.send) ---------------- */
+export type PushDevice = { id: number; active: boolean; family: string; created_at: string; last_success_at: string | null; last_failure: string; last_failure_at: string | null };
+export const pushDevices = (id: number) => api<{ status: string; results: PushDevice[] }>('GET', `admin/users/${id}/push-devices`);
+/** «إرسال إشعار تجريبي»: the fixed test text only; the server rate-limits and audits it. */
+export const pushTest = (id: number) => api<{ devices: number; sent: number; failed: string[]; message: string }>('POST', `admin/users/${id}/push-test`);

@@ -9,7 +9,7 @@ import { fmtRelative } from '@/lib/time';
 import { tzOf } from '@/lib/format';
 import { go, tab, useApp } from '@/store/store';
 
-interface Note { id: number; kind: string; title: string; body: string; data: Record<string, number>; read_at: string | null; created_at: string }
+export interface Note { id: number; kind: string; title: string; body: string; data: Record<string, number>; read_at: string | null; created_at: string }
 const ICON: Record<string, IconName> = {
   assignment_new: 'plan', review_due: 'repeat', submission_new: 'mic', feedback_new: 'award', booking_confirmed: 'cal', booking_new: 'cal',
   booking_cancelled: 'cal', booking_cancelled_by_student: 'cal', booking_rescheduled: 'cal', session_reminder: 'clock',
@@ -39,7 +39,8 @@ export function InboxBell() {
   );
 }
 
-function open(n: Note, role: string | null) {
+/** Where a notification leads (the inbox, and a tapped phone notification: `#/n/<id>`). */
+export function open(n: Note, role: string | null) {
   const d = n.data || {};
   if (n.kind.startsWith('support') && d.ticket) return go('support', { id: String(d.ticket) });
   if (n.kind === 'submission_new') return tab('treviews');

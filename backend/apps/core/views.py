@@ -57,7 +57,8 @@ def ready(request):
         "media_storage": storage_status(),
         "email": "smtp" if "smtp" in settings.EMAIL_BACKEND else "test_mailbox" if "filebased" in settings.EMAIL_BACKEND else "log_only",
         "sms": sms_status(),  # phone verification ("not_configured" = unavailable; email sign-in unaffected)
-        "push": "configured" if settings.VAPID_PUBLIC_KEY and settings.VAPID_PRIVATE_KEY else "not_configured",
+        # «ready» only when both VAPID keys are set AND match; «misconfigured» when they do not belong together.
+        "push": _push_readiness(),
         "ayah_audio": (f"quran_foundation_{settings.QF_ENV}" if settings.QF_CLIENT_ID and settings.QF_CLIENT_SECRET
                        else "template" if settings.AYAH_AUDIO_URL else "off"),
     }
@@ -66,6 +67,12 @@ def ready(request):
 
         features["quran_text"] = "imported" if QuranSource.objects.filter(is_active=True).exists() else "not_imported"
     return Response({"status": "ok" if ok else "unavailable", "checks": checks, "features": features}, status=200 if ok else 503)
+
+
+def _push_readiness() -> str:
+    from apps.notifications.push import readiness
+
+    return readiness()
 
 
 def _db_problem(msg: str) -> str:

@@ -2,6 +2,7 @@
 // server has no VAPID keys, so push is "not enabled on the server" and nothing is asked); and the service worker's
 // push handler shows a generic RTL notification that opens the app, checked by injecting a push message through
 // Chrome DevTools (a real push service is not reachable from CI browsers).
+// A tapped notification opens `#/n/<id>` (or `#/inbox`): the app opens it for the signed-in account only.
 //   node e2e/push.mjs <shots> [liveUrl=http://localhost:4175/]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 import { mkdtempSync } from 'node:fs';
@@ -34,12 +35,15 @@ await step('Account explains push honestly; nothing is requested on its own', as
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText('السلام عليكم، يوسف').waitFor();
   await page.getByRole('navigation').getByRole('button', { exact: true, name: 'حسابي' }).click();
-  await app.getByRole('heading', { name: 'إشعارات على هذا الجهاز' }).waitFor();
   const ready = await (await page.request.get(LIVE + 'api/ready')).json();
-  if (ready.features.push === 'configured') await app.getByRole('switch', { name: 'إشعارات على هذا الجهاز' }).waitFor();
-  else {
-    await app.getByText('إشعارات الجوال غير مفعّلة على الخادم بعد.', { exact: false }).waitFor();
-    if (await app.getByRole('switch', { name: 'إشعارات على هذا الجهاز' }).count()) throw new Error('a switch is offered while the server has no keys');
+  if (ready.features.push === 'ready') {
+    // permission already granted in this browser, no subscription yet: the device is not subscribed; one button
+    await app.getByText('هذا الجهاز غير مشترك في الإشعارات').waitFor();
+    await app.getByRole('button', { name: 'تفعيل الإشعارات', exact: true }).waitFor();
+  } else {
+    await app.getByText('الإشعارات غير مفعلة', { exact: true }).waitFor();
+    await app.getByText('إشعارات الجوال غير متاحة على الخادم حاليًا.', { exact: false }).waitFor();
+    if (await app.getByRole('button', { name: 'تفعيل الإشعارات', exact: true }).count()) throw new Error('enable offered while the server is not ready');
   }
   if (prompted) throw new Error('a prompt appeared without a tap');
 });
@@ -61,7 +65,7 @@ await step('a push message shows a generic RTL notification that opens the app',
   const reg = await new Promise((resolve) => {
     cdp.on('ServiceWorker.workerRegistrationUpdated', ({ registrations }) => { const r = registrations.find((x) => !x.isDeleted); if (r) resolve(r); });
   });
-  const payload = { title: 'الحلقة', body: 'وصل تقييم جديد من معلمك.', url: '/#/tasks/7', tag: 'feedback' };
+  const payload = { title: 'الحلقة', body: 'وصل تقييم جديد من معلمك.', url: '/#/n/7', tag: 'feedback' };
   await cdp.send('ServiceWorker.deliverPushMessage', { origin: new URL(LIVE).origin, registrationId: reg.registrationId, data: JSON.stringify(payload) });
   let shown = null;
   for (let i = 0; i < 40 && !shown; i++) {   // the handler runs asynchronously in the worker: poll for its notification
@@ -72,7 +76,28 @@ await step('a push message shows a generic RTL notification that opens the app',
     if (!shown) await page.waitForTimeout(250);
   }
   if (!shown) throw new Error('no notification was shown within 10 s');
-  if (shown.title !== 'الحلقة' || shown.body !== payload.body || shown.dir !== 'rtl' || shown.url !== '/#/tasks/7') throw new Error(JSON.stringify(shown));
+  if (shown.title !== 'الحلقة' || shown.body !== payload.body || shown.dir !== 'rtl' || shown.url !== '/#/n/7') throw new Error(JSON.stringify(shown));
+});
+await step('a push asking for an outside or unknown link is reduced to the inbox', async () => {
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('ServiceWorker.enable');
+  const reg = await new Promise((resolve) => {
+    cdp.on('ServiceWorker.workerRegistrationUpdated', ({ registrations }) => { const r = registrations.find((x) => !x.isDeleted); if (r) resolve(r); });
+  });
+  await cdp.send('ServiceWorker.deliverPushMessage', { origin: new URL(LIVE).origin, registrationId: reg.registrationId,
+    data: JSON.stringify({ title: 'الحلقة', body: 'x', url: 'https://evil.example/#/n/1', tag: 'evil' }) });
+  let url = null;
+  for (let i = 0; i < 40 && !url; i++) {
+    url = await page.evaluate(async () => { const r = await navigator.serviceWorker.ready; const n = (await r.getNotifications({ tag: 'evil' }))[0]; return n ? n.data.url : null; });
+    if (!url) await page.waitForTimeout(250);
+  }
+  if (url !== '/#/inbox') throw new Error(`unsafe url kept: ${url}`);
+});
+await step('opening HALQA from a notification link lands on the right screen', async () => {
+  await page.goto(LIVE + '#/inbox'); await app.getByRole('heading', { name: 'الإشعارات', exact: true }).waitFor();
+  await page.goto(LIVE + '#/n/999999');   // not this account's notification: the inbox, nothing else
+  await app.getByRole('heading', { name: 'الإشعارات', exact: true }).waitFor();
+  if (page.url().includes('#/n/')) throw new Error('the hash was not cleared');
 });
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
 process.exitCode = fails ? 1 : 0;

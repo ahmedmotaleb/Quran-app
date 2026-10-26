@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from apps.notifications.models import PushSubscription
+from apps.notifications.models import Notification, PushSubscription
 from apps.notifications.services import notify
 
 from .conftest import client_for
@@ -12,9 +12,22 @@ pytestmark = pytest.mark.django_db
 SUB = {"endpoint": "https://push.example.test/abc", "keys": {"p256dh": "BPk3", "auth": "a1"}}
 
 
+def key_pair():
+    """A real P-256 pair (generated per test run, never stored): readiness checks that the keys belong together."""
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    k = ec.generate_private_key(ec.SECP256R1())
+    b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()  # noqa: E731
+    return (b64(k.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)),
+            b64(k.private_numbers().private_value.to_bytes(32, "big")))
+
+
 @pytest.fixture
 def keys(settings):
-    settings.VAPID_PUBLIC_KEY, settings.VAPID_PRIVATE_KEY = "PUBLIC-KEY", "PRIVATE-KEY"
+    settings.VAPID_PUBLIC_KEY, settings.VAPID_PRIVATE_KEY = key_pair()
 
 
 class FakePush:
@@ -33,7 +46,8 @@ class FakePush:
 def test_push_is_off_without_keys(world, settings):
     settings.VAPID_PUBLIC_KEY = settings.VAPID_PRIVATE_KEY = ""
     c = client_for(world.s1)
-    assert c.get("/api/v1/push/config").json() == {"enabled": False, "public_key": None, "this_device": False, "devices": 0}
+    assert c.get("/api/v1/push/config").json() == {"enabled": False, "status": "not_configured", "public_key": None, "this_device": False,
+                                                   "this_device_inactive": False, "devices": 0}
     r = c.post("/api/v1/push/subscriptions", SUB, format="json")
     assert r.status_code == 503 and r.json()["code"] == "push_not_configured"
     assert client_for(world.admin).get("/api/ready").json()["features"]["push"] == "not_configured"
@@ -46,7 +60,8 @@ def test_subscribe_receive_generic_text_and_opt_out(world, keys, monkeypatch):
     assert c.get("/api/v1/push/config", {"endpoint": SUB["endpoint"]}).json()["this_device"] is True
     notify(world.s1, "feedback_new", "تقييم جديد من الشيخ فلان", "سورة الملك 1–10: 4 من 5", link="/tasks/7", dedupe="t1")
     [(ep, payload)] = fake.sent
-    assert ep == SUB["endpoint"] and payload["body"] == "وصل تقييم جديد من معلمك." and payload["url"] == "/#/tasks/7"
+    n = Notification.objects.get(recipient=world.s1, kind="feedback_new")
+    assert ep == SUB["endpoint"] and payload["body"] == "وصل تقييم جديد من معلمك." and payload["url"] == f"/#/n/{n.pk}"
     assert "الملك" not in json.dumps(payload, ensure_ascii=False) and "فلان" not in json.dumps(payload, ensure_ascii=False)
     notify(world.s2, "feedback_new", "x", dedupe="t2")  # other users' devices are not touched
     assert len(fake.sent) == 1

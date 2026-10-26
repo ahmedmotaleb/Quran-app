@@ -421,3 +421,28 @@ screens, notifications, exports, admin tables. It is presentation only:
 - Only `role = teacher` accounts get a title (students, parents and admin-only accounts never).
 - Setting it: the teacher in «حسابي → اللقب»; an admin in the teacher's profile («اللقب», `users.edit`); required when an
   admin creates a teacher (`POST admin/teachers {gender}`).
+
+## Web Push (production, 26 Oct 2026)
+
+- `/api/ready` → `features.push`: `ready` only when both VAPID keys are set **and** the private key derives the public
+  key; `misconfigured` (keys do not belong together) or `not_configured`. Keys come from `deploy/gcp-push.sh` (private
+  key in Secret Manager `halqa-vapid-private`; the public key is a plain setting); the admin service and the hourly job
+  copy them on every deploy.
+- `GET push/config[?endpoint=]` → `enabled`, `status`, `public_key` (only when ready), `this_device` (this endpoint is
+  registered **and active** for this account), `this_device_inactive`, `devices` (active).
+- `POST push/subscriptions` (one row per browser endpoint; registering again re-activates it and clears failures; an
+  endpoint used by another account on a shared browser moves) · `DELETE push/subscriptions {endpoint}` (this device only).
+  `POST auth/logout {push_endpoint}` removes only the signing-out device.
+- Delivery (`notifications.push`): every in-app notification is pushed to the recipient's **active** devices if the
+  category is on (`notify_prefs`; account alerts always). Lock-screen text is generic per kind; the payload is only
+  `{title, body, url:"/#/n/<id>", tag}` — the app opens that notification for the signed-in account (`GET notifications/<id>`,
+  own only) exactly as the inbox does. The service worker accepts only `/#/n/<id>` or `/#/inbox`.
+- Failures: 404/410 → the subscription is deleted; 401/403 (other keys) → switched off at once; other errors count
+  up and switch the device off after 5 in a row. Rows keep `last_success_at`, `last_failure` (category) and
+  `last_failure_at`; logs `push_sent` / `push_failed` / `push_endpoint_removed` carry category and device family only.
+- Admin (`notifications.send`): `GET admin/users/{id}/push-devices` (active, family, created, last success, last failure
+  category — never the endpoint, keys or user agent) · `POST admin/users/{id}/push-test` «إرسال إشعار تجريبي»: the fixed
+  text «الحلقة / هذا إشعار تجريبي للتأكد من عمل الإشعارات.» to the person's active devices; 1 per person per minute,
+  10 per admin per hour; audited `admin.push_test` (counts only).
+- Ops task `push-report` (read-only): key check, devices by role/family, deliveries/failures, and push requests/results
+  from the logs.

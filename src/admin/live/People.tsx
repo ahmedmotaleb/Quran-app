@@ -476,6 +476,8 @@ function PersonPanel({ id, onClose, onChanged, onDeleted }: { id: number; onClos
           <AvailabilityEditor io={availIo} toast={toast} readOnly={!can('sessions.manage')} />
         </Modal>}
 
+        {can('notifications.send') && section('الإشعارات على الأجهزة', <PushDevices id={u.id} />)}
+
         {u.role === 'student' && section('المعلمون', (<>
           {u.teachers.length === 0 && <p style={{ margin: 0, color: color.danger, fontSize: 14 }}>غير مرتبط بأي معلم.</p>}
           {u.teachers.map((t) => (
@@ -824,5 +826,42 @@ function PendingExcusesPanel() {
         </div>
       ))}
     </details>
+  );
+}
+
+const FAMILY: Record<string, string> = { android: 'Android', ios: 'iPhone / iPad', 'desktop-chrome': 'Chrome (كمبيوتر)', 'desktop-edge': 'Edge (كمبيوتر)',
+  'desktop-firefox': 'Firefox (كمبيوتر)', 'desktop-safari': 'Safari (كمبيوتر)', other: 'متصفح آخر' };
+const FAIL: Record<string, string> = { unauthorized: 'مفاتيح الإشعارات تغيّرت (يُعاد الاشتراك عند فتح التطبيق)', rate_limited: 'خدمة الإشعارات طلبت التمهّل',
+  push_service: 'خطأ مؤقت في خدمة الإشعارات', network: 'تعذّر الاتصال بخدمة الإشعارات', too_large: 'رسالة كبيرة', other: 'خطأ غير معروف' };
+
+/** Safe device facts only (no endpoint, keys or browser string) and «إرسال إشعار تجريبي». */
+function PushDevices({ id }: { id: number }) {
+  const [d, setD] = useState<{ status: string; results: A.PushDevice[] } | null>(null);
+  const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<string | null>(null);
+  const load = useCallback(() => { A.pushDevices(id).then((x) => { setD(x); setErr(null); }).catch((e) => setErr(errMsg(e))); }, [id]);
+  useEffect(() => { load(); }, [load]);
+  const test = async () => {
+    setBusy(true); setMsg(null);
+    try { const r = await A.pushTest(id); setMsg(r.message); toast(r.message); load(); } catch (e) { setMsg(errMsg(e)); } finally { setBusy(false); }
+  };
+  if (err) return <p role="alert" style={{ margin: 0, color: color.danger, fontSize: 14 }}>{err}</p>;
+  if (!d) return <p role="status" style={{ margin: 0, color: color.muted, fontSize: 14 }}>جارٍ التحميل…</p>;
+  const ready = d.status === 'ready';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {!ready && <p style={{ margin: 0, fontSize: 14, color: color.dangerInk, fontWeight: 700 }}>إشعارات الجوال غير جاهزة على الخادم ({d.status === 'misconfigured' ? 'مفاتيح VAPID غير متطابقة' : 'مفاتيح VAPID غير مضبوطة'}).</p>}
+      {d.results.length === 0 && <p style={{ margin: 0, fontSize: 14, color: color.muted }}>لا توجد أجهزة مفعّل عليها الإشعارات لهذا المستخدم.</p>}
+      {d.results.map((x) => (
+        <div key={x.id} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', fontSize: 14, borderTop: `1px solid ${color.divider}`, paddingTop: 6 }}>
+          <strong>{FAMILY[x.family] ?? x.family}</strong>
+          <span style={{ color: x.active ? color.primary : color.dangerInk, fontWeight: 700 }}>{x.active ? 'نشط' : 'متوقف'}</span>
+          <span style={{ color: color.muted }}>أُضيف {date(x.created_at)}</span>
+          <span style={{ color: color.muted }}>آخر إرسال ناجح: {x.last_success_at ? date(x.last_success_at) : '—'}</span>
+          {x.last_failure && <span style={{ color: color.dangerInk }}>آخر خطأ: {FAIL[x.last_failure] ?? x.last_failure} ({date(x.last_failure_at)})</span>}
+        </div>
+      ))}
+      <button disabled={busy || !ready} onClick={() => void test()} style={{ ...smallBtn('primary'), alignSelf: 'flex-start', minHeight: 40 }}>{busy ? 'جارٍ الإرسال…' : 'إرسال إشعار تجريبي'}</button>
+      {msg && <p role="status" style={{ margin: 0, fontSize: 14 }}>{msg}</p>}
+    </div>
   );
 }
