@@ -118,7 +118,7 @@ await step(S.page, 'student sees the newly assigned task', async () => {
   await S.page.getByRole('button', { name: /رجوع/ }).first().click();
   await S.page.getByRole('button', { name: /رجوع/ }).first().click();
   await S.app.getByRole('tab', { name: /حفظ/ }).click();
-  await S.app.getByText('حفظ سورة النبأ').first().waitFor();
+  await S.app.getByText(/حفظ سورة النب[أإ]/).first().waitFor(); // the verified source's spelling (Tanzil: «النبإ»)
 });
 console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no page errors');
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
