@@ -29,8 +29,29 @@ await step(T.page, 'teacher records a mistake for a student (validation first)',
   await T.app.getByRole('button', { exact: true, name: 'حفظ الخطأ' }).click();
   await T.app.getByText('اختر نوع الخطأ.').waitFor();
   await T.app.getByRole('radio', { name: 'المدود' }).click();
-  await T.app.getByLabel('السورة').selectOption('67');
-  await T.app.getByLabel('الآية').selectOption('3');
+  // Searchable pickers: all 114 surahs from the verified source; the ayah list follows the chosen surah.
+  const surah = T.app.getByRole('combobox', { name: 'السورة' }); const ayah = T.app.getByRole('combobox', { name: 'الآية' });
+  if (!(await ayah.isDisabled())) throw new Error('ayah picker enabled before a surah is chosen');
+  await surah.click();
+  const opts = T.app.getByRole('listbox', { name: 'السورة' }).getByRole('option');
+  if ((await opts.count()) !== 114) throw new Error(`surah list has ${await opts.count()} entries`);
+  if (!/^1\. الفاتحة/.test(await opts.first().innerText()) || !/^114\. الناس/.test(await opts.last().innerText())) throw new Error('not in Mushaf order');
+  await surah.fill('بق');
+  await T.app.getByRole('option', { name: /^2\. البقرة/ }).click();
+  await ayah.click(); await ayah.fill('286');
+  await T.app.getByRole('option', { name: 'الآية 286' }).click();
+  // Changing the surah resets the ayah: الفاتحة has 7, so 286 is gone and only 1–7 are offered.
+  await surah.click(); await surah.fill('الفاتحه');
+  await T.app.getByRole('option', { name: /^1\. الفاتحة/ }).click();
+  if ((await ayah.inputValue()) !== 'الآية 1') throw new Error('ayah not reset: ' + await ayah.inputValue());
+  await ayah.click();
+  if ((await T.app.getByRole('listbox', { name: 'الآية' }).getByRole('option').count()) !== 7) throw new Error('al-Fatihah should offer 7 ayat');
+  await ayah.fill('20'); await T.app.getByText('لا توجد آية بهذا الرقم؛ السورة 7 آية.').waitFor();
+  await ayah.press('Escape');
+  await surah.click(); await surah.fill('الملك');
+  await T.app.getByRole('option', { name: /^67\. الملك/ }).click();
+  await ayah.click(); await ayah.fill('3'); await ayah.press('Enter');
+  if ((await ayah.inputValue()) !== 'الآية 3') throw new Error('Enter did not pick the ayah');
   await T.app.getByRole('button', { exact: true, name: 'مهم' }).click();
   await T.app.getByLabel('ملاحظة للطالب').fill(NOTE);
   await T.app.getByLabel('التوجيه (كيف يصحّحه)').fill(GUIDE);
@@ -38,9 +59,31 @@ await step(T.page, 'teacher records a mistake for a student (validation first)',
   await T.app.getByRole('button', { exact: true, name: 'حفظ الخطأ' }).click();
   await T.page.getByText('حُفظت الملاحظة وأُبلغ الطالب').waitFor();
   const c = T.app.getByTestId('correction').first();
-  await c.getByText('سورة الملك · الآية 3').waitFor(); await c.getByText(INTERNAL, { exact: false }).waitFor();
+  await c.getByText('الملك — الآية 3').waitFor(); await c.getByText(INTERNAL, { exact: false }).waitFor();
 });
 await T.page.screenshot({ path: out + '/mistakes-teacher.png' });
+await step(T.page, 'teacher edits the reference to البقرة 255 (backend refusal of impossible pairs: test_quran_reference.py)', async () => {
+  const c = T.app.getByTestId('correction').first();
+  await c.getByRole('button', { name: 'تعديل' }).click();
+  const form = T.app.getByRole('region', { name: 'تعديل الخطأ' });
+  const surah = form.getByRole('combobox', { name: 'السورة' }); const ayah = form.getByRole('combobox', { name: 'الآية' });
+  if ((await surah.inputValue()) !== '67. الملك' || (await ayah.inputValue()) !== 'الآية 3') throw new Error('edit form not prefilled');
+  await surah.click(); await surah.fill('2'); await form.getByRole('option', { name: /^2\. البقرة/ }).click();
+  await ayah.click(); await ayah.fill('٢٥٥'); await form.getByRole('option', { name: 'الآية 255' }).click();
+  await form.getByRole('button', { exact: true, name: 'حفظ التعديل' }).click();
+  await T.page.getByText('حُدّث الخطأ').waitFor();
+  await T.app.getByTestId('correction').first().getByText('البقرة — الآية 255').waitFor();
+});
+await step(T.page, 'edit back to الملك 3 for the student journey', async () => {
+  const c = T.app.getByTestId('correction').first();
+  await c.getByRole('button', { name: 'تعديل' }).click();
+  const form = T.app.getByRole('region', { name: 'تعديل الخطأ' });
+  const surah = form.getByRole('combobox', { name: 'السورة' });
+  await surah.click(); await surah.fill('ملك'); await form.getByRole('option', { name: /^67\. الملك/ }).click();
+  const ayah = form.getByRole('combobox', { name: 'الآية' }); await ayah.click(); await ayah.fill('3'); await ayah.press('Enter');
+  await form.getByRole('button', { exact: true, name: 'حفظ التعديل' }).click();
+  await T.app.getByTestId('correction').first().getByText('الملك — الآية 3').waitFor();
+});
 
 const S = await session('yousef@halqa.app', 'السلام عليكم، يوسف');
 await step(S.page, 'student is notified and sees the point with note and guidance (no internal note)', async () => {

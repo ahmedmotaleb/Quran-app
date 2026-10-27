@@ -15,7 +15,7 @@ import { TZS } from '@/data/demo';
 import type { Feedback, Recording, Role, Slot, TzId } from '@/data/types';
 import { dayOffset, fmtRelative, zonedToIso } from '@/lib/time';
 import { rangeL, tzOf, typeL } from '@/lib/format';
-import { SUR } from '@/data/demo';
+import { loadSurahIndex, surahLabel } from '@/lib/quranIndex';
 import { BRAND } from '@/theme/brand';
 import * as media from '@/services/media';
 import * as pending from '@/services/pendingRec';
@@ -109,6 +109,7 @@ export async function loadParentData() {
 
 export const loadData = () => {
   const r = get().me?.role;
+  void loadSurahIndex().catch(() => {}); // all 114 surah names/counts for references and pickers
   return r === 'teacher' ? loadTeacherData() : r === 'parent' ? loadParentData() : loadStudentData();
 };
 
@@ -455,7 +456,7 @@ export async function createAssignment(f: AssignForm) {
   const tz = iana();
   const day = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(Date.now() + DUE_DAYS[f.due] * 86_400_000));
-  const name = SUR[+f.s][0];
+  const name = surahLabel(+f.s);
   const stu = get().students.find((x) => x.id === f.sid);
   if (f.busy) return; // no second submission (a circle task is many tasks)
   up('af', { busy: true });

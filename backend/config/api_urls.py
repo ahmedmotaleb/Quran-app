@@ -32,6 +32,7 @@ urlpatterns = [
     # Quran (verified, versioned reference data)
     path("quran/source", quran.SourceView.as_view()),
     path("quran/surahs", quran.SurahList.as_view()),
+    path("quran/index", quran.SurahIndex.as_view()),
     path("quran/surahs/<int:number>", quran.SurahText.as_view()),
     path("quran/audio/<int:number>", quran.SurahAudio.as_view()),
     path("quran/position", quran.ReadingPositionView.as_view()),

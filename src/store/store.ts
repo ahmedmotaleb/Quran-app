@@ -8,6 +8,7 @@ import type {
   Availability, Decision, Feedback, OtherSubmission, Recording, Role, Scores, Session, SurahData, SurahListItem, Student, Task, TaskStatus, TaskType, Teacher, TimedNote, TzId,
 } from '@/data/types';
 import { rangeL, typeL } from '@/lib/format';
+import { ayahCount, surahLabel } from '@/lib/quranIndex';
 import { ayahAudioUrl, currentReciter, fetchSurah, fetchSurahList, hasSurahAudio, loadSurahAudio, saveReciter } from '@/services/quran';
 import { ApiError } from '@/api/client';
 import * as media from '@/services/media';
@@ -682,15 +683,16 @@ export function openAssign(sid?: string, opts: { fixed?: boolean; circle?: Assig
   go('tassign');
 }
 export function sendAssign() {
-  const f = get().af!; const e: Record<string, string> = {}; const max = SUR[+f.s][1];
+  const f = get().af!; const e: Record<string, string> = {}; const max = ayahCount(+f.s);
   const a = parseInt(f.from, 10), b = parseInt(f.to, 10);
-  if (!a || a < 1) e.from = 'أدخل رقم آية البداية'; else if (a > max) e.from = `السورة تحتوي ${max} آية فقط`;
-  if (!b || b < 1) e.to = 'أدخل رقم آية النهاية'; else if (b > max) e.to = `السورة تحتوي ${max} آية فقط`; else if (a && b < a) e.to = 'يجب أن تكون النهاية بعد البداية';
+  if (!max) e.from = 'اختر السورة';
+  else if (!a || a < 1) e.from = 'أدخل رقم آية البداية'; else if (a > max) e.from = `السورة تحتوي ${max} آية فقط`;
+  if (!max) { /* the surah error above is enough */ } else if (!b || b < 1) e.to = 'أدخل رقم آية النهاية'; else if (b > max) e.to = `السورة تحتوي ${max} آية فقط`; else if (a && b < a) e.to = 'يجب أن تكون النهاية بعد البداية';
   if (Object.keys(e).length) { up('af', { errors: e }); return; }
   if (LIVE) { if (f.circle || f.sid) void live.createAssignment(f); else toast('لا يوجد طلاب مرتبطون بك بعد', 'alert'); return; }
   const stu = STUDENTS.find((x) => x.id === f.sid)!;
   const due = { today: 'اليوم، 9:00 م', tomorrow: 'غدًا، 9:00 م', in3: 'الأربعاء 14 أكتوبر', week: 'الأحد 18 أكتوبر' }[f.due];
-  const name = SUR[+f.s][0];
+  const name = surahLabel(+f.s);
   // Only the demo student (u1) has a live plan; others are summary-only demo rows.
   if (f.sid === 'u1') {
     const task: Task = {

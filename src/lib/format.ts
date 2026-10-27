@@ -1,4 +1,5 @@
-import { DAYS, SUR, TZS } from '@/data/demo';
+import { DAYS, TZS } from '@/data/demo';
+import { surahLabel } from '@/lib/quranIndex';
 import type { BadgeKind, Task, TaskType, TzId } from '@/data/types';
 import type { IconName } from '@/components/Icon';
 import { color } from '@/theme/tokens';
@@ -34,7 +35,7 @@ export function timeIn(tz: TzId, h: number): string {
 
 export const dayFull = (i: number) => { const d = DAYS[i]; return `${d[0]} ${d[1]} أكتوبر`; };
 export const dayL = (i: number) => (i === 0 ? 'اليوم' : i === 1 ? 'غدًا' : dayFull(i));
-export const surahName = (n: number) => (SUR[n] || ['سورة'])[0];
+export const surahName = (n: number) => surahLabel(n).replace(/^سورة /, ''); // the canonical index (all 114)
 export const rangeL = (t: Pick<Task, 's' | 'from' | 'to'>) => `سورة ${surahName(t.s)} · الآيات ${t.from}–${t.to}`;
 export const typeL = (t: TaskType) => ({ hifz: 'حفظ', review: 'مراجعة', tajweed: 'تجويد' })[t];
 export const typeIcon = (t: TaskType): IconName => ({ hifz: 'book', review: 'repeat', tajweed: 'volume' } as const)[t];

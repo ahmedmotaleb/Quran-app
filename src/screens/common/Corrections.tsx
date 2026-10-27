@@ -6,7 +6,8 @@ import { color, font } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
 import { BackHeader, Chips, FieldError, card, inputStyle, labelStyle, muted, outlineBtn, primaryBtn } from '@/components/ui';
 import { api, ApiError, type Page } from '@/api/client';
-import { SUR } from '@/data/demo';
+import { formatRef, surahLabel, useSurahIndex } from '@/lib/quranIndex';
+import { AyahPicker, SurahPicker } from '@/components/QuranPickers';
 import { go, toast, useApp } from '@/store/store';
 
 export type CorrectionStatus = 'new' | 'improving' | 'corrected';
@@ -39,7 +40,7 @@ function useCategories() {
   return c;
 }
 
-const ref = (c: { surah: number; ayah: number }) => `سورة ${SUR[c.surah]?.[0] ?? c.surah} · الآية ${c.ayah}`;
+const ref = (c: { surah: number; ayah: number }) => formatRef(c.surah, c.ayah);
 const qs = (q: Record<string, string | number | undefined>) =>
   Object.entries(q).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
 
@@ -53,16 +54,21 @@ export interface CorrectionContext {
   submission?: number; booking?: number; assignment?: number; surah?: number; from?: number; to?: number;
 }
 
-export function CorrectionForm({ ctx, onSaved, label = 'إضافة خطأ' }: { ctx: CorrectionContext; onSaved?: () => void; label?: string }) {
+export function CorrectionForm({ ctx, onSaved, label = 'إضافة خطأ', edit, onClose }: {
+  ctx: CorrectionContext; onSaved?: () => void; label?: string; edit?: ApiCorrection; onClose?: () => void;
+}) {
   const cats = useCategories();
-  const [open, setOpen] = useState(false);
-  const blank = { category: '', surah: ctx.surah ?? 1, ayah: ctx.from ?? 1, priority: 'review' as CorrectionPriority, note: '', guidance: '', internal_note: '' };
-  const [f, setF] = useState(blank);
+  const [open, setOpen] = useState(!!edit);
+  type F = { category: string; surah: number | null; ayah: number | null; priority: CorrectionPriority; note: string; guidance: string; internal_note: string };
+  const blank: F = edit
+    ? { category: edit.category, surah: edit.surah, ayah: edit.ayah, priority: edit.priority, note: edit.note ?? '', guidance: edit.guidance ?? '', internal_note: edit.internal_note ?? '' }
+    : { category: '', surah: ctx.surah ?? null, ayah: ctx.surah ? ctx.from ?? 1 : null, priority: 'review', note: '', guidance: '', internal_note: '' };
+  const [f, setF] = useState<F>(blank);
   const [err, setErr] = useState<Record<string, string>>({}); const [busy, setBusy] = useState(false);
-  const id = `cf-${ctx.source}-${ctx.submission ?? ctx.booking ?? ctx.assignment ?? ctx.student}`;
-  const maxAyah = SUR[f.surah]?.[1] ?? 1;
-  const ayahs = ctx.surah && ctx.from && ctx.to && f.surah === ctx.surah
-    ? Array.from({ length: ctx.to - ctx.from + 1 }, (_, i) => ctx.from! + i) : Array.from({ length: maxAyah }, (_, i) => i + 1);
+  const id = `cf-${edit ? `e${edit.id}` : `${ctx.source}-${ctx.submission ?? ctx.booking ?? ctx.assignment ?? ctx.student}`}`;
+  // Ayahs of the task being reviewed are marked, but any ayah of any surah can be chosen.
+  const inTask = (n: number) => (ctx.surah && ctx.from && ctx.to && f.surah === ctx.surah && n >= ctx.from && n <= ctx.to ? 'ضمن المهمة' : undefined);
+  const close = () => { setOpen(false); onClose?.(); };
 
   if (!open) return (
     <button onClick={() => { setF(blank); setErr({}); setOpen(true); }} style={outlineBtn(44, 14, { padding: '0 14px', borderRadius: 12, alignSelf: 'flex-start' })}>
@@ -70,11 +76,15 @@ export function CorrectionForm({ ctx, onSaved, label = 'إضافة خطأ' }: { 
     </button>
   );
   const save = async () => {
-    if (!f.category) { setErr({ category: 'اختر نوع الخطأ.' }); return; }
+    const miss: Record<string, string> = {};
+    if (!f.category) miss.category = 'اختر نوع الخطأ.';
+    if (!f.surah) miss.surah = 'اختر السورة.'; else if (!f.ayah) miss.ayah = 'اختر الآية.';
+    if (Object.keys(miss).length) { setErr(miss); return; }
     setBusy(true); setErr({});
     try {
-      await api('POST', 'corrections', { ...f, student: ctx.student, source: ctx.source, submission: ctx.submission, booking: ctx.booking, assignment: ctx.assignment });
-      toast('حُفظت الملاحظة وأُبلغ الطالب'); setOpen(false); onSaved?.();
+      if (edit) await api('PATCH', `corrections/${edit.id}`, f);
+      else await api('POST', 'corrections', { ...f, student: ctx.student, source: ctx.source, submission: ctx.submission, booking: ctx.booking, assignment: ctx.assignment });
+      toast(edit ? 'حُدّث الخطأ' : 'حُفظت الملاحظة وأُبلغ الطالب'); close(); onSaved?.();
     } catch (e) {
       const x = e as ApiError;
       const fe: Record<string, string> = {};
@@ -82,9 +92,8 @@ export function CorrectionForm({ ctx, onSaved, label = 'إضافة خطأ' }: { 
       setErr(Object.keys(fe).length ? fe : { _: x.message || 'تعذّر الحفظ.' });
     } finally { setBusy(false); }
   };
-  const sel = { ...inputStyle(false), padding: '0 12px', fontSize: 15 };
   return (
-    <section aria-label="إضافة خطأ" style={{ ...card, borderColor: color.gold, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <section aria-label={edit ? 'تعديل الخطأ' : 'إضافة خطأ'} style={{ ...card, borderColor: color.gold, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <span style={labelStyle}>نوع الخطأ</span>
       <div role="radiogroup" aria-label="نوع الخطأ" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {cats.map((c) => {
@@ -94,18 +103,10 @@ export function CorrectionForm({ ctx, onSaved, label = 'إضافة خطأ' }: { 
         })}
       </div>
       <FieldError msg={err.category} fs={12} />
-      <div style={{ display: 'flex', gap: 8 }}>
-        <label style={{ ...labelStyle, flex: 2 }}>السورة
-          <select id={`${id}-s`} value={f.surah} onChange={(e) => setF({ ...f, surah: +e.target.value, ayah: 1 })} style={{ ...sel, display: 'block', marginTop: 4, width: '100%' }}>
-            {Object.keys(SUR).map((k) => <option key={k} value={k}>{SUR[+k][0]}</option>)}
-          </select>
-        </label>
-        <label style={{ ...labelStyle, flex: 1 }}>الآية
-          <select id={`${id}-a`} value={f.ayah} onChange={(e) => setF({ ...f, ayah: +e.target.value })} style={{ ...sel, display: 'block', marginTop: 4, width: '100%' }}>
-            {ayahs.map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
-        </label>
-      </div>
+      <SurahPicker id={`${id}-s`} value={f.surah} invalid={!!err.surah}
+        onChange={(n) => { if (n !== f.surah) setF({ ...f, surah: n, ayah: 1 }); setErr({ ...err, surah: '', ayah: '' }); }} />
+      <AyahPicker id={`${id}-a`} surah={f.surah} value={f.ayah} invalid={!!err.ayah} hint={inTask}
+        onChange={(n) => { setF({ ...f, ayah: n }); setErr({ ...err, ayah: '' }); }} />
       <FieldError msg={err.ayah || err.surah} fs={12} />
       <span style={labelStyle}>الأولوية</span>
       <Chips options={[['minor', 'بسيط'], ['review', 'يحتاج مراجعة'], ['important', 'مهم']] as const} value={f.priority} onChange={(k) => setF({ ...f, priority: k })} wrapStyle={{ paddingBottom: 0 }} />
@@ -120,8 +121,8 @@ export function CorrectionForm({ ctx, onSaved, label = 'إضافة خطأ' }: { 
       </label>
       {(err._ || err.submission || err.booking || err.assignment) && <p role="alert" style={{ margin: 0, color: color.dangerInk, fontSize: 13 }}>{err._ || err.submission || err.booking || err.assignment}</p>}
       <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={save} disabled={busy} aria-busy={busy} style={primaryBtn(44, 15, { flex: 1, borderRadius: 10, opacity: busy ? 0.7 : 1 })}>حفظ الخطأ</button>
-        <button onClick={() => setOpen(false)} style={{ minHeight: 44, padding: '0 14px', borderRadius: 10, border: `1px solid ${color.borderStrong}`, background: 'transparent', color: color.primary, fontWeight: 700, cursor: 'pointer' }}>إلغاء</button>
+        <button onClick={save} disabled={busy} aria-busy={busy} style={primaryBtn(44, 15, { flex: 1, borderRadius: 10, opacity: busy ? 0.7 : 1 })}>{edit ? 'حفظ التعديل' : 'حفظ الخطأ'}</button>
+        <button onClick={close} style={{ minHeight: 44, padding: '0 14px', borderRadius: 10, border: `1px solid ${color.borderStrong}`, background: 'transparent', color: color.primary, fontWeight: 700, cursor: 'pointer' }}>إلغاء</button>
       </div>
     </section>
   );
@@ -129,7 +130,8 @@ export function CorrectionForm({ ctx, onSaved, label = 'إضافة خطأ' }: { 
 
 /* ---------------- One correction (all roles) ---------------- */
 function CorrectionCard({ c, teacher, onChange }: { c: ApiCorrection; teacher: boolean; onChange?: () => void }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false); const [editing, setEditing] = useState(false);
+  useSurahIndex(); // re-render with the surah name once the index arrives
   const role = useApp((s) => s.role);
   const [bg, fg] = STATUS_C[c.status];
   const patch = async (status: CorrectionStatus) => {
@@ -143,6 +145,7 @@ function CorrectionCard({ c, teacher, onChange }: { c: ApiCorrection; teacher: b
     catch (e) { toast((e as ApiError).message, 'alert'); } finally { setBusy(false); }
   };
   const small = { minHeight: 40, padding: '0 12px', borderRadius: 10, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer' } as const;
+  if (editing) return <CorrectionForm ctx={{ student: c.student, source: 'task' }} edit={c} onClose={() => setEditing(false)} onSaved={onChange} />;
   return (
     <div data-testid="correction" style={{ ...card, borderRadius: 14, padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -158,6 +161,7 @@ function CorrectionCard({ c, teacher, onChange }: { c: ApiCorrection; teacher: b
       <span style={muted(12)}>{c.created_at.slice(0, 10)}{c.resolved_at ? ` · صُحّح ${c.resolved_at.slice(0, 10)}` : ''}{c.follow_up ? ' · لها مهمة متابعة' : ''}</span>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {role !== 'parent' && <button onClick={() => go('mushaf', { s: c.surah, from: c.ayah, to: c.ayah })} style={small}><Icon name="book" size={16} /> افتح في المصحف</button>}
+        {teacher && <button disabled={busy} onClick={() => setEditing(true)} style={small}><Icon name="edit" size={16} /> تعديل</button>}
         {teacher && c.status !== 'corrected' && <>
           {c.status === 'new' && <button disabled={busy} onClick={() => patch('improving')} style={small}>يتحسن</button>}
           <button disabled={busy} onClick={() => patch('corrected')} style={small}>تم التصحيح</button>
@@ -231,10 +235,11 @@ export function CorrectionsSummaryCard({ student, who }: { student?: number; who
 type MTab = 'open' | 'recurring' | 'done' | 'surah' | 'cat';
 export function MyMistakes() {
   const [t, setT] = useState<MTab>('open');
+  useSurahIndex();
   const query = t === 'open' ? { open: 1 } : t === 'recurring' ? { open: 1, recurring: 1 } : t === 'done' ? { status: 'corrected' } : { open: 1 };
   const { d, err } = useCorrections(query, 0);
   const groups = d && (t === 'surah' || t === 'cat')
-    ? Object.entries(d.reduce<Record<string, ApiCorrection[]>>((a, c) => { const k = t === 'surah' ? `سورة ${SUR[c.surah]?.[0] ?? c.surah}` : c.category_label; (a[k] ??= []).push(c); return a; }, {}))
+    ? Object.entries(d.reduce<Record<string, ApiCorrection[]>>((a, c) => { const k = t === 'surah' ? surahLabel(c.surah) : c.category_label; (a[k] ??= []).push(c); return a; }, {}))
     : null;
   const empty: Record<MTab, string> = {
     open: 'لا توجد نقاط تحتاج مراجعة الآن. أحسنت!', recurring: 'لا توجد أخطاء متكررة.', done: 'لم تُصحَّح أي نقطة بعد.',
@@ -270,6 +275,7 @@ interface Overview {
 }
 export function TeacherCorrectionsCard() {
   const [o, setO] = useState<Overview | null>(null);
+  useSurahIndex();
   useEffect(() => { let on = true; api<Overview>('GET', 'teacher/corrections/overview').then((x) => on && setO(x)).catch(() => {}); return () => { on = false; }; }, []);
   if (!o || (!o.students_with_open.length)) return null;
   const rows: [string, Overview['repeated_memorization']][] = [
