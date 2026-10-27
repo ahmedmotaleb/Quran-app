@@ -20,6 +20,8 @@ jobs:
       - name: Known vulnerabilities in shipped dependencies
         run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
+      - name: Surah/ayah picker search (unit)
+        run: node --experimental-strip-types e2e/quran-search.test.mjs
       - name: Build (demo mode)
         run: npm run build
       - name: Check the PWA output

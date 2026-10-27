@@ -1,6 +1,6 @@
 import { LIVE } from '@/api/client';
 import { addMark, labelMark, removeMark, saveTimezone } from '@/store/live';
-import { SUR } from '@/data/demo';
+import { surahLabel } from '@/lib/quranIndex';
 import { useEffect, useRef, useState } from 'react';
 import { color, font } from '@/theme/tokens';
 import { Icon, type IconName } from './Icon';
@@ -126,7 +126,7 @@ function BookmarkList({ marks, names }: { marks: Mark[] | null; names: { n: numb
   const [edit, setEdit] = useState<number | null>(null);
   const [label, setLabel] = useState('');
   useEffect(() => { loadSurahList(); }, []); // all 114 names come from the verified source
-  const sname = (n: number) => names?.find((x) => x.n === n)?.name ?? (SUR[n] ? `سورة ${SUR[n][0]}` : `سورة ${n}`);
+  const sname = (n: number) => names?.find((x) => x.n === n)?.name ?? `سورة ${surahLabel(n).replace(/^سورة /, '')}`;
   if (!marks) return <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}><Spinner /></div>;
   if (!marks.length) return <p style={{ margin: 0, fontSize: 15, color: color.muted, lineHeight: 1.7 }}>لا توجد علامات بعد. اضغط على أي آية ثم «ضع علامة مرجعية».</p>;
   return (

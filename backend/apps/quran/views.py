@@ -35,6 +35,16 @@ class SurahList(APIView):
         return Response(SurahSerializer(Surah.objects.filter(source=src), many=True).data)
 
 
+class SurahIndex(APIView):
+    """All 114 surahs for pickers (mistakes, tasks): names from the verified source, counts from the Hafs table the
+    import is checked against. Works before the text is imported (names are then empty and pickers show numbers)."""
+
+    def get(self, request):
+        from .reference import surah_index
+
+        return Response(surah_index())
+
+
 class SurahText(APIView):
     """Verbatim ayahs for a surah, optionally a range (?from=&to=)."""
 

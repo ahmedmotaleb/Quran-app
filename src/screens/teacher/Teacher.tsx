@@ -4,7 +4,9 @@ import { Icon, type IconName } from '@/components/Icon';
 import {
   Avatar, BackHeader, Badge, Chips, FieldError, Ltr, PlayerBar, RecDot, SearchInput, Segmented, Switch, card, iconTile, inputStyle, labelStyle, muted, outlineBtn, primaryBtn, usePlayer,
 } from '@/components/ui';
-import { SUR, TODAY_LABEL } from '@/data/demo';
+import { TODAY_LABEL } from '@/data/demo';
+import { ayahCount, surahLabel } from '@/lib/quranIndex';
+import { SurahPicker } from '@/components/QuranPickers';
 import { fmt, scoreL, timeIn, typeIcon, tzLabel, tzOf } from '@/lib/format';
 import { dayLabel, fmtDay, fmtTime } from '@/lib/time';
 import { gradeRecitation, refreshSchedule, reviewExcuse, saveMeetingLink, setAttendance, teacherCancelBooking } from '@/store/live';
@@ -274,7 +276,7 @@ export function TeacherStudent() {
   const isY = live || u.id === 'u1';
   const recs = revs.filter((r) => r.sid === u.id);
   const tasks = isY
-    ? s.tasks.filter((t) => t.status !== 'reviewed' && (!live || t.sid === u.id)).map((t) => ({ id: t.id, title: t.title, range: `سورة ${SUR[t.s]?.[0] ?? ''} · الآيات ${t.from}–${t.to}`, kind: t.status, icon: typeIcon(t.type),
+    ? s.tasks.filter((t) => t.status !== 'reviewed' && (!live || t.sid === u.id)).map((t) => ({ id: t.id, title: t.title, range: `سورة ${surahLabel(t.s)} · الآيات ${t.from}–${t.to}`, kind: t.status, icon: typeIcon(t.type),
       open: () => { const r = revs.find((rr) => rr.taskId === t.id && rr.status === 'submitted'); if (r) open(r); else toast('لا يوجد تسليم لهذه المهمة بعد', 'clock'); } }))
     : [{ id: 'x', title: u.plan, range: 'الواجب الحالي', kind: 'in_progress' as const, icon: 'book' as IconName, open: () => toast('بيانات عرض مختصرة لهذا الطالب', 'clock') }];
 
@@ -339,7 +341,7 @@ export function TeacherStudent() {
 export function TeacherAssign() {
   const f = useApp((s) => s.af); const tz = useApp((s) => s.tz); const students = useApp((s) => s.students);
   if (!f) return <BackHeader title="واجب جديد" sticky />;
-  const max = SUR[+f.s][1];
+  const max = ayahCount(+f.s);
   const stu = students.find((x) => x.id === f.sid);
   const sel = { ...inputStyle(false), padding: '0 14px' };
   return (
@@ -365,11 +367,8 @@ export function TeacherAssign() {
           <Segmented role="group" label="نوع الواجب" options={[['hifz', 'حفظ'], ['review', 'مراجعة'], ['tajweed', 'تجويد']] as const} value={f.type} onChange={(k) => up('af', { type: k })} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label htmlFor="af-s" style={labelStyle}>السورة</label>
-          <select id="af-s" value={f.s} onChange={(e) => up('af', { s: e.target.value, errors: {} })} style={sel}>
-            {Object.keys(SUR).map((k) => <option key={k} value={k}>{SUR[+k][0]} ({SUR[+k][1]} آية)</option>)}
-          </select>
-          <p style={muted(12)}>عدد آيات السورة: {max}</p>
+          <SurahPicker id="af-s" value={+f.s || null} onChange={(n) => up('af', { s: String(n), errors: {} })} />
+          {max > 0 && <p style={muted(12)}>عدد آيات السورة: {max}</p>}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           {([['af-from', 'من الآية', 'from'], ['af-to', 'إلى الآية', 'to']] as const).map(([id, l, k]) => (
@@ -392,7 +391,7 @@ export function TeacherAssign() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label htmlFor="af-title" style={labelStyle}>عنوان المهمة (اختياري)</label>
-          <input id="af-title" maxLength={160} value={f.title ?? ''} onChange={(e) => up('af', { title: e.target.value })} placeholder={`${f.type === 'tajweed' ? 'تجويد: سورة' : f.type === 'review' ? 'مراجعة سورة' : 'حفظ سورة'} ${SUR[+f.s][0]}`} style={inputStyle(false)} />
+          <input id="af-title" maxLength={160} value={f.title ?? ''} onChange={(e) => up('af', { title: e.target.value })} placeholder={`${f.type === 'tajweed' ? 'تجويد: سورة' : f.type === 'review' ? 'مراجعة سورة' : 'حفظ سورة'} ${surahLabel(+f.s)}`} style={inputStyle(false)} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <label htmlFor="af-instr" style={labelStyle}>توجيهات للطالب</label>

@@ -9,7 +9,8 @@ import { FieldError, inputStyle, labelStyle, primaryBtn } from '@/components/ui'
 import { Icon } from '@/components/Icon';
 import type { ApiError } from '@/api/client';
 import { can, refreshCounts, toast, useAdmin } from '../adminStore';
-import { SUR } from '@/data/demo';
+import { ayahCount, surahLabel } from '@/lib/quranIndex';
+import { SurahPicker } from '@/components/QuranPickers';
 import { zonedToIso } from '@/lib/time';
 import { card } from '../AdminTables';
 import * as A from './api';
@@ -591,16 +592,17 @@ function TaskDialog({ u, onClose }: { u: A.Person; onClose: () => void }) {
   const [f, setF] = useState({ teacher: u.teachers.length === 1 ? String(u.teachers[0].id) : '', kind: 'hifz', surah: '67', from: '', to: '', title: '',
     instructions: '', day: tomorrow, time: '21:00', rec: true });
   const [err, setErr] = useState<Record<string, string | null>>({}); const [busy, setBusy] = useState(false);
-  const max = SUR[+f.surah][1];
+  const max = ayahCount(+f.surah);
   const submit = async (e: FormEvent) => {
     e.preventDefault(); if (busy) return;
     const x: Record<string, string> = {}; const a = parseInt(f.from, 10), b = parseInt(f.to, 10);
     if (!f.teacher) x.teacher = 'اختر المعلم المسؤول عن المهمة.';
-    if (!a || a < 1 || a > max) x.from = `من 1 إلى ${max}.`;
-    if (!b || b < 1 || b > max) x.to = `من 1 إلى ${max}.`; else if (a && b < a) x.to = 'يجب أن تكون النهاية بعد البداية.';
+    if (!max) x.surah = 'اختر السورة.';
+    else if (!a || a < 1 || a > max) x.from = `من 1 إلى ${max}.`;
+    if (max && (!b || b < 1 || b > max)) x.to = `من 1 إلى ${max}.`; else if (max && a && b < a) x.to = 'يجب أن تكون النهاية بعد البداية.';
     if (Object.keys(x).length) return setErr(x);
     setBusy(true); setErr({});
-    const name = SUR[+f.surah][0];
+    const name = surahLabel(+f.surah).replace(/^سورة /, '');
     try {
       await A.adminCreateTask({ student: u.id, teacher: Number(f.teacher), kind: f.kind, surah: +f.surah, ayah_from: a, ayah_to: b,
         title: f.title.trim() || `${{ hifz: 'حفظ', review: 'مراجعة', tajweed: 'تجويد:' }[f.kind]} سورة ${name}`,
@@ -624,8 +626,8 @@ function TaskDialog({ u, onClose }: { u: A.Person; onClose: () => void }) {
           <option value="">اختر…</option>{u.teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select>, err.teacher)}
         {field('tk-k', 'النوع', <select id="tk-k" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })} style={inputStyle(null)}>
           <option value="hifz">حفظ</option><option value="review">مراجعة</option><option value="tajweed">تجويد</option></select>)}
-        {field('tk-s', 'السورة', <select id="tk-s" value={f.surah} onChange={(e) => setF({ ...f, surah: e.target.value })} style={inputStyle(null)}>
-          {Object.keys(SUR).map((k) => <option key={k} value={k}>{SUR[+k][0]} ({SUR[+k][1]} آية)</option>)}</select>)}
+        <SurahPicker id="tk-s" value={+f.surah || null} invalid={!!err.surah} onChange={(n) => { setF({ ...f, surah: String(n) }); setErr({ ...err, surah: null }); }} />
+        <FieldError msg={err.surah} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           {field('tk-f', 'من الآية', <input id="tk-f" inputMode="numeric" dir="ltr" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} style={inputStyle(err.from, true)} />, err.from)}
           {field('tk-to', 'إلى الآية', <input id="tk-to" inputMode="numeric" dir="ltr" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} style={inputStyle(err.to, true)} />, err.to)}

@@ -26,7 +26,7 @@ from apps.accounts.permissions import IsAdminRole, IsLearningUser, IsTeacher, as
 from apps.core.audit import audit
 from apps.core.exceptions import ApiError
 from apps.core.pagination import StandardPagination
-from apps.quran.models import HAFS_AYAH_COUNTS
+from apps.quran.reference import validate_ref
 
 from .models import Assignment, AssignmentType, Correction, Submission
 
@@ -62,8 +62,8 @@ class CorrectionIn(serializers.Serializer):
     submission = serializers.IntegerField(required=False, allow_null=True)
     booking = serializers.IntegerField(required=False, allow_null=True)
     assignment = serializers.IntegerField(required=False, allow_null=True)
-    surah = serializers.IntegerField(min_value=1, max_value=114)
-    ayah = serializers.IntegerField(min_value=1)
+    surah = serializers.IntegerField()
+    ayah = serializers.IntegerField()
     category = serializers.ChoiceField(choices=C.Category.choices)
     priority = serializers.ChoiceField(choices=C.Priority.choices, default=C.Priority.REVIEW)
     note = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
@@ -71,13 +71,13 @@ class CorrectionIn(serializers.Serializer):
     internal_note = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
 
     def validate(self, d):
-        n = HAFS_AYAH_COUNTS[d["surah"] - 1]
-        if d["ayah"] > n:
-            raise serializers.ValidationError({"ayah": [f"السورة تحتوي {n} آية فقط."]})
+        d["surah"], d["ayah"] = validate_ref(d["surah"], d["ayah"])  # the ayah must exist in that surah
         return d
 
 
 class CorrectionPatch(serializers.Serializer):
+    surah = serializers.IntegerField(required=False)
+    ayah = serializers.IntegerField(required=False)
     status = serializers.ChoiceField(choices=C.Status.choices, required=False)
     priority = serializers.ChoiceField(choices=C.Priority.choices, required=False)
     category = serializers.ChoiceField(choices=C.Category.choices, required=False)
@@ -187,8 +187,13 @@ class CorrectionDetail(APIView):
             raise ApiError("permission_denied", "ليست لديك صلاحية لهذا الإجراء.", 403)
         s = CorrectionPatch(data=request.data)
         s.is_valid(raise_exception=True)
-        d = s.validated_data
-        old = c.status
+        d = dict(s.validated_data)
+        if "surah" in d or "ayah" in d:
+            # A new surah needs its ayah: the pair is validated together, never a stale ayah from another surah.
+            if "surah" in d and "ayah" not in d and d["surah"] != c.surah:
+                raise serializers.ValidationError({"ayah": ["اختر الآية في السورة الجديدة."]})
+            d["surah"], d["ayah"] = validate_ref(d.get("surah", c.surah), d.get("ayah", c.ayah))
+        old, old_ref = c.status, f"{c.surah}:{c.ayah}"
         with transaction.atomic():
             for k, v in d.items():
                 setattr(c, k, v)
@@ -198,7 +203,8 @@ class CorrectionDetail(APIView):
             action = ("correction.resolved" if d.get("status") == C.Status.CORRECTED and old != C.Status.CORRECTED
                       else "correction.reopened" if old == C.Status.CORRECTED and d.get("status") not in (None, C.Status.CORRECTED)
                       else "correction.updated")
-            audit(action, actor=request.user, target=c, request=request, fields=sorted(d), old_status=old, new_status=c.status)
+            audit(action, actor=request.user, target=c, request=request, fields=sorted(d), old_status=old, new_status=c.status,
+                  **({"old_ref": old_ref, "new_ref": f"{c.surah}:{c.ayah}"} if old_ref != f"{c.surah}:{c.ayah}" else {}))
         return Response(out(self._get(request, pk), request.user))
 
 

@@ -529,6 +529,9 @@ jobs:
         run: |
           python manage.py import_quran quran-uthmani.txt --verify 2>&1 | tee /tmp/ops-5-verify.log
           echo "::notice title=quran::$(tail -2 /tmp/ops-5-verify.log | tr '\n' ' ')"
+          # The 114-surah index the mistake/task pickers use: counts, names vs quran-data.xml, no impossible saved refs.
+          python manage.py check_quran_reference --metadata quran-data.xml 2>&1 | tee /tmp/ops-5b-index.log || true
+          echo "::notice title=surah index::$(tail -c 900 /tmp/ops-5b-index.log | tr '\n' ' ')"
 
       - name: Create the first admin
         if: inputs.task == 'create-admin'

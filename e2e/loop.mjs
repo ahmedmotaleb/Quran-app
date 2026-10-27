@@ -88,7 +88,8 @@ await step(T.page, 'teacher assigns new task (Cairo time)', async () => {
   await T.page.getByRole('button', { exact: true, name: 'الطلاب' }).click();
   await T.app.getByText('يوسف أحمد').click();
   await T.app.getByRole('button', { name: 'إضافة مهمة' }).click();
-  await T.app.locator('#af-s').selectOption('78');
+  await T.app.locator('#af-s').click(); await T.app.locator('#af-s').fill('78');   // searchable surah picker (number or name)
+  await T.app.getByRole('option', { name: /^78\. / }).click();
   await T.app.locator('#af-from').fill('1'); await T.app.locator('#af-to').fill('16');
   await T.app.getByRole('button', { name: /إرسال الواجب إلى يوسف أحمد/ }).click();
   await T.page.getByText('أُرسل الواجب إلى يوسف أحمد').waitFor();
