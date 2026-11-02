@@ -134,6 +134,7 @@ await step(null, '12. RTL at 320 px: no sideways scroll, ≥44 px targets, above
   await page.getByText('السلام عليكم، يوسف').waitFor();
   await offer(page);
   const s = sheet(page); await s.waitFor();
+  await page.evaluate(() => Promise.all(document.getAnimations().map((x) => x.finished)));   // measure after the entrance animation
   const dir = await page.evaluate(() => getComputedStyle(document.querySelector('[data-testid="install-sheet"]')).direction);
   if (dir !== 'rtl') throw new Error('direction ' + dir);
   if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error('horizontal scroll at 320 px');
