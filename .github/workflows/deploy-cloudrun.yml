@@ -23,7 +23,7 @@ env:
 jobs:
   staging:
     if: vars.GCP_PROJECT_ID != '' && vars.STAGING_ENABLED == '1'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # Playwright 1.56 cannot install its browser deps on ubuntu-latest (26.04)
     timeout-minutes: 30
     environment: staging
     permissions:

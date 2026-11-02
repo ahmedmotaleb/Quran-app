@@ -74,6 +74,8 @@ reseed; ABS_CMD="bash e2e/ci/py.sh absences.py" run excuses
 # 5. PWA: manifest, installability, offline shell, no API data in caches (preview builds); an update published
 #    during a recording waits until the recording is submitted.
 reseed; run pwa http://localhost:4173/
+# «ثبّت تطبيق الحلقة» sheet: Android install offer and choice, iPhone guidance, never when installed/desktop, cooldown.
+reseed; run install
 reseed; run push http://localhost:4175/
 reseed; NEW_VERSION_CMD="echo '// e2e update' >> ${LIVE_DIST:-/tmp/dist-live}/sw.js" run pwa-update http://localhost:4175/
 

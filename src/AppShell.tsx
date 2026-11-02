@@ -134,10 +134,11 @@ export default function AppShell({ framed }: { framed: boolean }) {
           <Icon name="alert" size={18} /> محتوى تجريبي — هذا القسم لم يُربط بالخادم بعد.
         </div>
       )}
-      {INSTALL_SCREENS.includes(screen) && <InstallBanner />}
       <main id="scr" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', position: 'relative', zoom: { s: 0.92, m: 1, l: 1.1 }[uiScale] }}>
         {showState ? <DataStateView screen={screen} ds={ds as Exclude<DataState, 'normal'>} /> : <Cur key={screen} />}
       </main>
+      {/* Bottom install sheet: above the tab bar and the safe area, never over them. */}
+      {INSTALL_SCREENS.includes(screen) && !framed && <InstallBanner />}
       {showNav && (
         <nav aria-label="التنقل الرئيسي" style={{ flexShrink: 0, display: 'flex', background: color.card, borderTop: `1px solid ${color.border}`, padding: '6px 4px 2px' }}>
           {tabs.map(([k, l, i]) => {
