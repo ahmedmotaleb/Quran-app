@@ -8,6 +8,7 @@ a:hover{color:#0B332F}
 #scr::-webkit-scrollbar{width:0;height:0}
 button:disabled{cursor:default}
 @keyframes hqspin{to{transform:rotate(360deg)}}
+@keyframes hqrise{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
 @keyframes hqpulse{0%,100%{opacity:1}50%{opacity:.35}}
 @media (prefers-reduced-motion: reduce){*{animation-duration:0s!important;animation-iteration-count:1!important}}
 
