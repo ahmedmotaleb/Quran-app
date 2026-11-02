@@ -107,6 +107,7 @@ the server default zone, Africa/Cairo). Lists are paginated:
 **After setup**
 - The teacher sets a password, then signs in on the normal login and the role routes them.
 - `me.teacher_approved` stays false until an admin approves. Unapproved teachers are not listed or bookable.
+- While waiting, the teacher chooses their Qira'at (`PUT teacher/riwayat`, at least one). Approving the teacher confirms that choice (see «Qira'at qualifications»).
 - «نسيت كلمة المرور؟» works from the start, because the account exists.
 
 **Delivery status and resend**
@@ -157,7 +158,7 @@ server logs.
 | `GET, PATCH me` | signed in | name, timezone, phone |
 | `PUT me/onboarding` | student | level, goal, preferred days/period |
 | `POST invitations` | admin (any purpose); teacher (`student_teacher` only) | code shown once |
-| `GET teachers`, `GET teachers/{id}` | learning users | approved, active teachers; `?q=`, `?tag=` |
+| `GET teachers`, `GET teachers/{id}` | learning users | approved, active teachers; `?q=`, `?tag=`, `?riwayah=<code>` (a confirmed Riwayah; unknown code → 400). Each teacher has `riwayat_qualifications` (confirmed only). See «Qira'at qualifications» below |
 | `GET teachers/{id}/slots?days=7` | learning users | (1) start times **computed** from the teacher's availability ranges (`id` is a token `s:<teacher>:<epoch>:<minutes>`, `seats_left` 1, `minutes`); (2) existing sessions with seats (circle/group sessions, sessions opened explicitly) and booked individual sessions (`seats_left` 0, for the waitlist). See «Teacher availability» below |
 | `GET/PUT… teacher/availability…` | teacher (own), admin (`admin/teachers/{id}/availability…`) | see «Teacher availability» below |
 | `GET teacher/students` | teacher | assigned students only: id, name, level, birth year, whether a guardian is linked |
@@ -193,6 +194,7 @@ server logs.
 | `POST bookings/{id}/reschedule` | owner | atomic: new booking + cancel old, or nothing |
 | `POST bookings/{id}/attendance` | session teacher, after start | audited |
 | `GET quran/source`, `GET quran/surahs`, `GET quran/surahs/{n}?from&to` | signed in | verbatim text from the active verified source; `503 quran_unavailable` if none |
+| `GET quran/index` | signed in | the 114-surah index for pickers; see «Quran references» below |
 | `GET quran/audio/{surah}?reciter={id}` | signed in | ayah audio URLs from Quran Foundation (Quran.com) for one of the offered reciters (`settings/public` → `ayah_audio.reciters`, `default`); another id → 400; cached a day per reciter |
 | `GET lessons`, `GET lessons/{id}`, `POST lessons/{id}/complete` | learning users (complete: student) | published lessons of published courses; completion is self-reported |
 | `GET tests`, `GET tests/{id}` | student | open, published tests; questions never include answer keys |
@@ -206,7 +208,7 @@ server logs.
 | `POST invitations/{id}/resend`, `POST invitations/{id}/revoke` | admin or the inviter | resend issues a new code (the old one stops working) with a fresh expiry and emails it; `429 too_soon` within a minute |
 | `GET corrections?student&status&category&surah&submission&booking&open=1&recurring=1` | scoped (own student, assigned teacher, linked parent) | learning points at an ayah; `times` = how often the same category recurred at that ayah; parents get category, reference, priority, status and dates only (no note, guidance or internal note); `internal_note` only for teachers |
 | `POST corrections` | the student's teacher | `source` submission/session/task/review with a matching link (the submission, booking or task must belong to that student; a booking must be the teacher's); ayah checked against the surah; audited; the student is notified (`correction_new`, generic push text) |
-| `GET, PATCH corrections/{id}` | read scoped; edit by the student's teacher | `status` new/improving/corrected sets or clears `resolved_at`; `correction.resolved` / `correction.reopened` audited |
+| `GET, PATCH corrections/{id}` | read scoped; edit by the student's teacher | `status` new/improving/corrected sets or clears `resolved_at`; `correction.resolved` / `correction.reopened` audited. `surah` + `ayah` can be edited, validated as a pair (a new surah needs its ayah); the audit records `old_ref` / `new_ref` |
 | `POST corrections/{id}/follow-up` | the student's teacher | `kind` ayah/tajweed/rerecord, `days` 1–14: creates one practice task for that ayah (the review scheduler is unchanged) |
 | `GET corrections/summary?student`, `GET corrections/categories` | scoped | open/new/improving/corrected, recurring, by category, 8-week trend; never a score |
 | `GET teacher/corrections/overview`, `GET admin/corrections/summary` | teacher / admin | students with open points, repeated memorization and Tajweed points, awaiting re-check; admin: aggregate counts only |
@@ -444,5 +446,66 @@ screens, notifications, exports, admin tables. It is presentation only:
   category — never the endpoint, keys or user agent) · `POST admin/users/{id}/push-test` «إرسال إشعار تجريبي»: the fixed
   text «الحلقة / هذا إشعار تجريبي للتأكد من عمل الإشعارات.» to the person's active devices; 1 per person per minute,
   10 per admin per hour; audited `admin.push_test` (counts only).
-- Ops task `push-report` (read-only): key check, devices by role/family, deliveries/failures, and push requests/results
-  from the logs.
+- Ops task `push-report` (read-only): key check, devices by role/family, deliveries/failures, switched-off devices
+  and their last failure categories, the last 10 «إرسال إشعار تجريبي» presses (`admin_tests_7d`: time, target id,
+  devices/sent/failed), and push and admin push-test requests/results from the logs.
+
+## Quran references: surah/ayah pickers (owner request, 27 Oct 2026)
+
+- **`GET quran/index`** (signed in) → `{source, verified, surahs: [{number, name_ar, ayah_count}] ×114}` in Mushaf order.
+  - Names come from the active verified Tanzil import (`quran-data.xml`).
+  - Counts come from `HAFS_AYAH_COUNTS`, which the import is checked against.
+  - Works before the text is imported: names are then empty and pickers show numbers.
+  - `verified` is true when the stored source has every name and the canonical count for every surah.
+- **One validator** (`apps/quran/reference.validate_ref`): the surah must be 1–114 and the ayah must exist in that surah.
+  - Field errors are in Arabic and name the surah and its range, e.g. «سورة الفاتحة تحتوي 7 آية فقط؛ اختر آية من 1 إلى 7.».
+  - Used by `POST corrections` and by `PATCH corrections/{id}`, which may change `surah` + `ayah` together.
+- **Stored identifiers:** references are stored as numbers (`surah`, `ayah`), never names.
+- **App formatter:** `src/lib/quranIndex.formatRef` gives «البقرة — الآية 255», or compact «البقرة · 255».
+- **Ops `verify-quran`** also runs `check_quran_reference --metadata quran-data.xml` (read-only). It checks:
+  - all 114 surahs are present, with the canonical counts and stored ayahs;
+  - every surah has a name, and the names equal Tanzil's metadata;
+  - no saved mistake, task, bookmark or reading position points at an ayah that does not exist (reported, never changed).
+
+## Qira'at qualifications «القراءات والروايات» (owner request, 2 Nov 2026)
+
+**Reference data.** Migration `accounts 0015_qiraat` adds two tables, seeded from `apps/accounts/qiraat.py` (`CANON`):
+- `Qiraah` (`code`, `name_ar`, `order`): the ten Qira'at in classical order.
+- `Riwayah` (`code`, `qiraah`, `name_ar`, `narrator_ar`, `order`): two primary narrators each, 20 in all.
+- The codes are the identities; the Arabic text is display only:
+
+| Qiraah | Riwayat |
+|---|---|
+| `nafi` نافع المدني | `qalun` قالون عن نافع · `warsh` ورش عن نافع |
+| `ibn_kathir` ابن كثير المكي | `bazzi` البزي عن ابن كثير · `qunbul` قنبل عن ابن كثير |
+| `abu_amr` أبو عمرو البصري | `duri_abu_amr` الدوري عن أبي عمرو · `susi` السوسي عن أبي عمرو |
+| `ibn_amir` ابن عامر الشامي | `hisham` هشام عن ابن عامر · `ibn_dhakwan` ابن ذكوان عن ابن عامر |
+| `asim` عاصم الكوفي | `shubah` شعبة عن عاصم · `hafs` حفص عن عاصم |
+| `hamzah` حمزة الكوفي | `khalaf_hamzah` خلف عن حمزة · `khallad` خلاد عن حمزة |
+| `kisai` الكسائي | `abu_harith` أبو الحارث عن الكسائي · `duri_kisai` الدوري عن الكسائي |
+| `abu_jafar` أبو جعفر المدني | `ibn_wardan` ابن وردان عن أبي جعفر · `ibn_jammaz` ابن جماز عن أبي جعفر |
+| `yaqub` يعقوب الحضرمي | `ruways` رويس عن يعقوب · `rawh` روح عن يعقوب |
+| `khalaf` خلف العاشر | `ishaq` إسحاق عن خلف · `idris` إدريس عن خلف |
+
+A teacher's qualifications are `TeacherRiwayah` rows (`teacher`, `riwayah`, `verified_at`, `verified_by`): one per
+teacher + Riwayah. Learners only ever see rows with `verified_at`.
+
+**Endpoints**
+- `GET qiraat` (signed in) → `[{code, name, order, riwayat: [{code, name, narrator, order}]}]`.
+- `GET teacher/riwayat` · `PUT teacher/riwayat {riwayat: [...]}` (teacher, own) → `{riwayat: [{code, name, qiraah, qiraah_name, verified}]}`.
+  - Items are codes (`"hafs"`) or pairs (`{"qiraah": "asim", "riwayah": "hafs"}`); a pair's Qiraah must be the Riwayah's own.
+  - At least one is required.
+  - Refused with `400`, field `riwayat`: free text, unknown codes, duplicates, a Riwayah under the wrong Qiraah, not a list.
+  - An addition waits for the admin (`verified: false`). A removal applies at once.
+  - Audited as `teacher.riwayat_updated` (`added`, `removed`).
+- `GET admin/teachers/{id}/riwayat` (`teachers.view`) · `PUT admin/teachers/{id}/riwayat {riwayat}` (`teachers.approve`).
+  - `PUT` sets the confirmed list exactly; it may be empty.
+  - Audited as `admin.teacher_riwayat` (`before` with `?` marking unconfirmed, `after`).
+- `GET admin/users/{id}` → `riwayat`: all rows with `verified` for teachers, `null` for other roles.
+- Approving a teacher (`POST admin/teachers/{id}/approval`, or bulk `approve`) confirms the Riwayat they chose.
+  `admin.teacher_approval` records `riwayat_confirmed`.
+- `GET teachers`, `GET teachers/{id}` → `riwayat_qualifications: [{code, name, qiraah, qiraah_name}]` (confirmed only).
+  `?riwayah=<code>` filters on a confirmed one.
+
+**Existing teachers.** Nothing is assumed: their list is empty, they stay listed and bookable, and both the teacher
+and the admin are asked to «أضف القراءات والروايات».
