@@ -16,6 +16,8 @@ export interface TimeZone { id: TzId; label: string; iana: string }
 export interface Teacher {
   id: string; name: string; ini: string; spec: string; tags: string[];
   types: string[]; levels: string; aud: string; bio: string;
+  /** Confirmed Riwayat (live mode). */
+  riwayat?: { code: string; name: string }[];
 }
 
 export interface Student {

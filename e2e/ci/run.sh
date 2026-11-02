@@ -61,6 +61,8 @@ reseed; SOON_CMD="bash e2e/ci/py.sh google_soon.py" run google-sessions
 reseed; run phone-login
 reseed; run teacher-onboarding
 reseed; CIRCLE_CMD="bash e2e/ci/py.sh circle_for_teacher.py" run assigning
+# Qira'at qualifications: teacher ticks Riwayat, admin confirms and approves, students see and filter.
+reseed; QIRAAT_CMD="bash e2e/ci/py.sh qiraat_teacher.py" run qiraat
 reseed; SETUP_CMD="cd backend && ${PYTHON:-python} manage.py shell < ../e2e/ci/waitlist_setup.py 2>/dev/null" run waitlist
 reseed; run circle-members
 reseed; SETUP_CMD="bash e2e/ci/py.sh delete_setup.py" run account-delete http://localhost:5176/

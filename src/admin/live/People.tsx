@@ -11,6 +11,7 @@ import type { ApiError } from '@/api/client';
 import { can, refreshCounts, toast, useAdmin } from '../adminStore';
 import { ayahCount, surahLabel } from '@/lib/quranIndex';
 import { SurahPicker } from '@/components/QuranPickers';
+import { RiwayatChips, RiwayatPicker } from '@/components/RiwayatPicker';
 import { zonedToIso } from '@/lib/time';
 import { card } from '../AdminTables';
 import * as A from './api';
@@ -462,9 +463,14 @@ function PersonPanel({ id, onClose, onChanged, onDeleted }: { id: number; onClos
             <span>{u.approved ? 'معتمد: يظهر للطلاب ويمكن حجز مواعيده.' : 'غير معتمد: لا يظهر للطلاب.'}</span>
             {!can('teachers.approve') ? null : u.approved
               ? <button disabled={busy} onClick={() => reasonRun('سحب اعتماد المعلم', 'لن يظهر المعلم للطلاب ولن تُقبل حجوزات جديدة معه. الحجوزات الحالية تبقى.', 'سحب الاعتماد', 'سُحب الاعتماد', (r) => A.setTeacherApproval(u.id, false, r))} style={smallBtn('danger')}>سحب الاعتماد</button>
-              : <button disabled={busy} onClick={() => act(() => A.setTeacherApproval(u.id, true), 'تم اعتماد المعلم')} style={smallBtn('primary')}>اعتماد المعلم</button>}
+              : <button disabled={busy} onClick={() => act(() => A.setTeacherApproval(u.id, true), u.riwayat?.some((r) => !r.verified) ? 'تم اعتماد المعلم والروايات التي اختارها' : 'تم اعتماد المعلم')} style={smallBtn('primary')}>اعتماد المعلم</button>}
+            {!u.approved && can('teachers.approve') && (u.riwayat?.some((r) => !r.verified)
+              ? <span style={{ flexBasis: '100%', fontSize: 13, color: color.muted }}>الاعتماد يؤكد الروايات التي اختارها المعلم (أدناه). عدّلها أولًا إن لزم.</span>
+              : !u.riwayat?.length && <span style={{ flexBasis: '100%', fontSize: 13, color: color.dangerInk, fontWeight: 700 }}>لم تُحدَّد القراءات والروايات بعد.</span>)}
           </div>
         ))}
+
+        {u.role === 'teacher' && section('القراءات والروايات', <TeacherRiwayatAdmin u={u} busy={busy} act={act} />)}
 
         {u.role === 'teacher' && section('الإتاحة', (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -864,6 +870,37 @@ function PushDevices({ id }: { id: number }) {
       ))}
       <button disabled={busy || !ready} onClick={() => void test()} style={{ ...smallBtn('primary'), alignSelf: 'flex-start', minHeight: 40 }}>{busy ? 'جارٍ الإرسال…' : 'إرسال إشعار تجريبي'}</button>
       {msg && <p role="status" style={{ margin: 0, fontSize: 14 }}>{msg}</p>}
+    </div>
+  );
+}
+
+
+/** «القراءات والروايات» in a teacher's record: what the teacher chose (✓ confirmed / بانتظار الاعتماد), confirm it, or
+ *  edit and confirm (audited as admin.teacher_riwayat). Nothing is assumed for teachers who have not chosen yet. */
+function TeacherRiwayatAdmin({ u, busy, act }: { u: A.Person; busy: boolean; act: (fn: () => Promise<unknown>, ok: string) => Promise<void> }) {
+  const [edit, setEdit] = useState<string[] | null>(null);
+  const rows = u.riwayat ?? [];
+  const pending = rows.filter((r) => !r.verified);
+  const may = can('teachers.approve');
+  const btn = (tone: 'primary' | 'plain' = 'plain') => ({ minHeight: 40, padding: '0 12px', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+    border: tone === 'primary' ? 'none' : `1px solid ${color.borderStrong}`, background: tone === 'primary' ? color.primary : color.card, color: tone === 'primary' ? color.ivory : color.primary });
+  if (edit) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 520 }}>
+      <RiwayatPicker value={edit} onChange={setEdit} idPrefix={`adm-rw-${u.id}`} />
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button disabled={busy} onClick={() => void act(async () => { await A.setTeacherRiwayat(u.id, edit); setEdit(null); }, 'حُفظت القراءات والروايات وأُكّدت')} style={btn('primary')}>حفظ وتأكيد</button>
+        <button onClick={() => setEdit(null)} style={btn()}>إلغاء</button>
+      </div>
+    </div>
+  );
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {rows.length ? <RiwayatChips items={rows} pending={new Set(pending.map((r) => r.code))} />
+        : <p style={{ margin: 0, fontSize: 14, color: color.dangerInk, fontWeight: 700 }}>لم تُحدَّد بعد. لا يُفترض أي رواية للمعلم.</p>}
+      {may && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {pending.length > 0 && <button disabled={busy} onClick={() => void act(() => A.setTeacherRiwayat(u.id, rows.map((r) => r.code)), 'أُكّدت القراءات والروايات')} style={btn('primary')}>تأكيد المختار</button>}
+        <button disabled={busy} onClick={() => setEdit(rows.map((r) => r.code))} style={btn()}>{rows.length ? 'تعديل' : 'أضف القراءات والروايات'}</button>
+      </div>}
     </div>
   );
 }

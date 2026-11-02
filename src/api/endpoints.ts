@@ -28,7 +28,15 @@ export interface ApiAssignment {
 export interface ApiTeacher {
   id: number; full_name: string; display_name?: string; gender?: 'male' | 'female' | ''; timezone: string; specialization: string; bio: string; audience: string; levels: string; tags: string[];
   offers_individual: boolean; offers_group: boolean;
+  /** Confirmed Qira'at qualifications (structured; codes are the identities). */
+  riwayat_qualifications?: RiwayahRef[];
 }
+export interface RiwayahRef { code: string; name: string; qiraah: string; qiraah_name: string }
+export interface MyRiwayah extends RiwayahRef { verified: boolean }
+export interface QiraahCat { code: string; name: string; order: number; riwayat: { code: string; name: string; narrator: string; order: number }[] }
+export const qiraat = () => api<QiraahCat[]>('GET', 'qiraat');
+export const myRiwayat = () => api<{ riwayat: MyRiwayah[] }>('GET', 'teacher/riwayat');
+export const saveMyRiwayat = (codes: string[]) => api<{ riwayat: MyRiwayah[] }>('PUT', 'teacher/riwayat', { riwayat: codes });
 export interface ApiSlot { id: number | string; minutes?: number; teacher: number; teacher_name: string; kind: 'individual' | 'group'; starts_at: string; ends_at: string; capacity: number; seats_left: number;
   topic?: string; title?: string; prep_note?: string }
 export interface ApiBooking {
@@ -264,7 +272,7 @@ export function toTeacher(t: ApiTeacher): Teacher {
   return {
     id: String(t.id), name: t.display_name || t.full_name, ini: initialOf(t.full_name),
     spec: t.specialization || '—', tags: t.tags ?? [], types: types.length ? types : ['فردية'], levels: t.levels || '—',
-    aud: t.audience || '—', bio: t.bio || '',
+    aud: t.audience || '—', bio: t.bio || '', riwayat: (t.riwayat_qualifications ?? []).map((r) => ({ code: r.code, name: r.name })),
   };
 }
 

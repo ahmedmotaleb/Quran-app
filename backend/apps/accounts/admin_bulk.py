@@ -144,6 +144,10 @@ def _approve(on: bool):
             raise Skip("unchanged", "معتمد بالفعل." if on else "غير معتمد بالفعل.")
         prof.approved_at = timezone.now() if on else None
         prof.save(update_fields=["approved_at"])
+        if on:
+            from .riwayat import verify_pending
+
+            verify_pending(u, actor)  # approving confirms the Riwayat the teacher chose
         if on and u.status == AccountStatus.PENDING:
             u.status = AccountStatus.ACTIVE
             u.save(update_fields=["status"])

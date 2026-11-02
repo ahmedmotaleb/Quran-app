@@ -320,3 +320,42 @@ class PhoneVerification(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["user", "created_at"]), models.Index(fields=["phone_e164", "created_at"])]
+
+
+# ---- Qira'at qualifications (owner request, 2 Nov 2026) --------------------------------------------------------
+class Qiraah(models.Model):
+    """One of the ten canonical Qira'at (seeded from qiraat.CANON; reference data, never edited in the app)."""
+
+    code = models.SlugField(max_length=20, unique=True)
+    name_ar = models.CharField(max_length=40)
+    order = models.PositiveSmallIntegerField(unique=True)
+
+    class Meta:
+        ordering = ["order"]
+
+
+class Riwayah(models.Model):
+    """A primary narration of a Qiraah (two per Qiraah)."""
+
+    code = models.SlugField(max_length=20, unique=True)
+    qiraah = models.ForeignKey(Qiraah, on_delete=models.PROTECT, related_name="riwayat")
+    name_ar = models.CharField(max_length=60)
+    narrator_ar = models.CharField(max_length=30)
+    order = models.PositiveSmallIntegerField()
+
+    class Meta:
+        ordering = ["qiraah__order", "order"]
+        constraints = [models.UniqueConstraint(fields=["qiraah", "order"], name="riwayah_order_per_qiraah")]
+
+
+class TeacherRiwayah(TimeStamped):
+    """A Riwayah a teacher is qualified to teach. A teacher's own addition waits for an admin (`verified_at` empty);
+    learners only ever see verified rows. One row per teacher + Riwayah."""
+
+    teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name="riwayat", limit_choices_to={"role": Role.TEACHER})
+    riwayah = models.ForeignKey(Riwayah, on_delete=models.PROTECT, related_name="+")
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verified_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["teacher", "riwayah"], name="one_row_per_teacher_riwayah")]

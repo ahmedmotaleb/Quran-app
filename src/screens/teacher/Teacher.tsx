@@ -5,6 +5,7 @@ import {
   Avatar, BackHeader, Badge, Chips, FieldError, Ltr, PlayerBar, RecDot, SearchInput, Segmented, Switch, card, iconTile, inputStyle, labelStyle, muted, outlineBtn, primaryBtn, usePlayer,
 } from '@/components/ui';
 import { TODAY_LABEL } from '@/data/demo';
+import { MyRiwayatSection } from './Riwayat';
 import { ayahCount, surahLabel } from '@/lib/quranIndex';
 import { SurahPicker } from '@/components/QuranPickers';
 import { fmt, scoreL, timeIn, typeIcon, tzLabel, tzOf } from '@/lib/format';
@@ -188,6 +189,7 @@ export function TeacherDash() {
         {live && <InboxBell />}
       </header>
       {live && <PendingApproval />}
+      {live && <MyRiwayatSection whenNeeded />}
       {live && <MyCircles />}
       <section style={{ background: color.primary, color: color.ivory, borderRadius: 20, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

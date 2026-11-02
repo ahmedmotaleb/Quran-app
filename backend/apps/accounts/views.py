@@ -634,10 +634,15 @@ class AdminTeacherApproval(APIView):
         prof, _ = TeacherProfile.objects.get_or_create(user=t)
         prof.approved_at = timezone.now() if approve else None
         prof.save(update_fields=["approved_at"])
+        confirmed = []
+        if approve:
+            from .riwayat import verify_pending
+
+            confirmed = verify_pending(t, request.user)  # approving confirms the Riwayat the teacher chose (shown first)
         if approve and t.status == AccountStatus.PENDING:
             t.status = AccountStatus.ACTIVE
             t.save(update_fields=["status"])
-        audit("admin.teacher_approval", actor=request.user, target=t, request=request, approved=approve, reason=reason)
+        audit("admin.teacher_approval", actor=request.user, target=t, request=request, approved=approve, reason=reason, riwayat_confirmed=confirmed)
         return Response(AdminUserSerializer(_admin_users().get(pk=pk), context={"request": request}).data)
 
 
@@ -735,7 +740,18 @@ class TeacherDirectory(generics.ListAPIView):
         tag = self.request.query_params.get("tag")
         if tag:
             qs = qs.filter(teacher_profile__tags__contains=[tag])
-        return qs
+        riwayah = self.request.query_params.get("riwayah")
+        if riwayah:
+            from .qiraat import RIWAYAH_QIRAAH
+
+            if riwayah not in RIWAYAH_QIRAAH:
+                raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"riwayah": ["رواية غير معروفة."]})
+            # one condition set on the same row: a confirmed qualification for that Riwayah
+            qs = qs.filter(riwayat__riwayah__code=riwayah, riwayat__verified_at__isnull=False).distinct()
+        from .models import TeacherRiwayah
+
+        return qs.prefetch_related(Prefetch("riwayat", to_attr="confirmed_riwayat", queryset=TeacherRiwayah.objects.filter(
+            verified_at__isnull=False).select_related("riwayah__qiraah").order_by("riwayah__qiraah__order", "riwayah__order")))
 
 
 class TeacherDetail(generics.RetrieveAPIView):
