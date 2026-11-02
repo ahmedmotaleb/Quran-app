@@ -3,9 +3,13 @@ import { api, apiDownload, type Page } from '@/api/client';
 
 export type Role = 'student' | 'teacher' | 'parent';
 export type AccountStatus = 'pending' | 'active' | 'suspended' | 'archived';
+/** A teacher's Riwayah (code = identity); `verified` = confirmed by an admin. */
+export interface TeacherRiwayah { code: string; name: string; qiraah: string; qiraah_name: string; verified: boolean }
+export const setTeacherRiwayat = (id: number, codes: string[]) => api<{ riwayat: TeacherRiwayah[] }>('PUT', `admin/teachers/${id}/riwayat`, { riwayat: codes });
+
 export interface Person {
   id: number; email: string; full_name: string; display_name?: string; gender?: 'male' | 'female' | ''; role: Role; status: AccountStatus; timezone: string; phone: string; phone_verified?: boolean;
-  level: string; approved: boolean | null; has_password: boolean; date_joined: string; last_login: string | null;
+  level: string; approved: boolean | null; riwayat?: TeacherRiwayah[] | null; has_password: boolean; date_joined: string; last_login: string | null;
   status_reason: string; status_changed_at: string | null;
   setup_email_status: '' | 'sent' | 'failed' | 'pending'; setup_email_last_at: string | null; setup_email_count: number;
   teachers: { id: number; name: string; assignment_id: number }[];

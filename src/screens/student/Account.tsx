@@ -10,6 +10,7 @@ import * as E from '@/api/endpoints';
 import { useEffect, useState, type FormEvent } from 'react';
 import { disablePush, enablePush, PushError, pushState, type PushState } from '@/pwa/push';
 import { GoogleCalendarCard } from '@/screens/teacher/GoogleSessions';
+import { MyRiwayatSection } from '@/screens/teacher/Riwayat';
 
 /** The admin portal may run on its own address (the admin service); ask the server where. */
 async function openAdmin() {
@@ -106,6 +107,7 @@ export default function Account() {
           <p style={{ margin: 0, fontSize: 12, color: color.muted }}>يُعرض اسمك «{s.user.name}». لا يُضاف اللقب إلى اسمك المحفوظ.</p>
         </section>
       )}
+      {LIVE && role === 'teacher' && <MyRiwayatSection />}
       {LIVE && role === 'teacher' && <GoogleCalendarCard />}
       {LIVE && <PhoneRow />}
       <InstallRow />

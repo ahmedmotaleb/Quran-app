@@ -30,6 +30,9 @@ class Command(BaseCommand):
         if settings.APP_ENV not in {"development", "test"}:
             raise CommandError("seed_dev only runs when APP_ENV is development or test.")
         password = os.environ.get("SEED_PASSWORD", "halqa123")  # dev-only shared password
+        from apps.accounts.qiraat import ensure_canon
+
+        ensure_canon()  # reference data seeded by a migration; `flush` empties it in dev/test
         with transaction.atomic():
             u = {}
             for email, name, role in PEOPLE:

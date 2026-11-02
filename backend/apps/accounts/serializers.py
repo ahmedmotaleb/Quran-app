@@ -158,12 +158,13 @@ class AdminUserSerializer(serializers.ModelSerializer):
     children = serializers.SerializerMethodField()
     level = serializers.SerializerMethodField()
     approved = serializers.SerializerMethodField()
+    riwayat = serializers.SerializerMethodField()
     has_password = serializers.SerializerMethodField()
     phone_verified = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "display_name", "gender", "role", "status", "timezone", "phone", "phone_verified", "level", "approved", "has_password",
+        fields = ["id", "email", "full_name", "display_name", "gender", "role", "status", "timezone", "phone", "phone_verified", "level", "approved", "riwayat", "has_password",
                   "date_joined", "last_login", "teachers", "guardians", "children", "status_reason", "status_changed_at",
                   "setup_email_status", "setup_email_last_at", "setup_email_count"]
         read_only_fields = fields
@@ -201,6 +202,14 @@ class AdminUserSerializer(serializers.ModelSerializer):
             return None
         prof = getattr(u, "teacher_profile", None)
         return bool(prof and prof.approved_at)
+
+    def get_riwayat(self, u):
+        """Teachers: all chosen Riwayat with `verified` (admin confirmation); None for other roles."""
+        if u.role != Role.TEACHER:
+            return None
+        from .riwayat import rows_for
+
+        return rows_for(u)
 
     def get_has_password(self, u):
         return u.has_usable_password()
@@ -305,11 +314,20 @@ class TeacherPublicSerializer(serializers.ModelSerializer):
     tags = serializers.JSONField(source="teacher_profile.tags", default=list)
     offers_individual = serializers.BooleanField(source="teacher_profile.offers_individual", default=True)
     offers_group = serializers.BooleanField(source="teacher_profile.offers_group", default=False)
+    riwayat_qualifications = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ["id", "full_name", "display_name", "gender", "timezone", "specialization", "bio", "audience", "levels", "tags",
-                  "offers_individual", "offers_group"]
+                  "offers_individual", "offers_group", "riwayat_qualifications"]
+
+    def get_riwayat_qualifications(self, u) -> list[dict]:
+        """Confirmed Riwayat only (structured: code, name, qiraah)."""
+        from .riwayat import row_out, rows_for
+
+        rows = getattr(u, "confirmed_riwayat", None)
+        return [{k: v for k, v in row_out(r).items() if k != "verified"} for r in rows] if rows is not None else \
+            [{k: v for k, v in x.items() if k != "verified"} for x in rows_for(u, verified_only=True)]
 
 
 class TeacherProfileSerializer(serializers.ModelSerializer):

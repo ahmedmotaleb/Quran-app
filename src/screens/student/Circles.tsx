@@ -18,6 +18,7 @@ import type { ApiError } from '@/api/client';
 import { fmtDay, fmtTime } from '@/lib/time';
 
 import { LessonsTabLive, QuizzesTabLive } from './LearnLive';
+import { RiwayatChips, displayOrder, useQiraat } from '@/components/RiwayatPicker';
 
 type CircTab = 'teachers' | 'bookings' | 'lessons' | 'quizzes';
 const TABS: [CircTab, string][] = [['teachers', 'المعلمون'], ['bookings', 'حجوزاتي'], ['lessons', 'الدروس'], ['quizzes', 'الاختبارات']];
@@ -42,14 +43,34 @@ export default function Circles() {
   );
 }
 
+/** «الرواية»: filter teachers by a confirmed Riwayah (live mode). */
+function RiwayahFilter({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { cat } = useQiraat();
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700 }}>
+      الرواية
+      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label="الرواية"
+        style={{ flex: 1, minHeight: 48, padding: '0 12px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15, color: color.ink }}>
+        <option value="all">الكل</option>
+        {cat && displayOrder(cat).map((q) => (
+          <optgroup key={q.code} label={q.name}>{q.riwayat.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}</optgroup>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function TeachersTab() {
   const s = useApp();
   const q = s.q.trim();
-  const list = s.teachers.filter((t) => (s.filt === 'all' || t.tags.includes(s.filt)) && (!q || t.name.includes(q) || t.spec.includes(q)));
+  const [rw, setRw] = useState('all');
+  const list = s.teachers.filter((t) => (s.filt === 'all' || t.tags.includes(s.filt)) && (!q || t.name.includes(q) || t.spec.includes(q))
+    && (rw === 'all' || !!t.riwayat?.some((r) => r.code === rw)));
   return (
     <>
       <SearchInput value={s.q} onChange={(v) => setState({ q: v })} placeholder="ابحث عن معلم أو تخصص" />
       <Chips scroll options={[['all', 'الكل'], ['hifz', 'حفظ'], ['tajweed', 'تجويد'], ['kids', 'أطفال'], ['group', 'حلقات جماعية']] as const} value={s.filt} onChange={(k) => setState({ filt: k })} />
+      {s.liveMode && <RiwayahFilter value={rw} onChange={setRw} />}
       {s.net.error && <NetError msg={s.net.error} />}
       {s.net.loading && !s.teachers.length && <p role="status" style={muted(14)}>جارٍ التحميل…</p>}
       <p style={muted(13)}>{list.length} معلم</p>
@@ -57,7 +78,7 @@ function TeachersTab() {
         <div style={{ textAlign: 'center', padding: 24, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
           <p style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>لا توجد نتائج مطابقة</p>
           <p style={muted(14)}>جرّب كلمة أخرى أو أزل عوامل التصفية.</p>
-          <button onClick={() => setState({ q: '', filt: 'all' })} style={outlineBtn(48, 15, { padding: '0 18px', borderRadius: 12 })}>مسح البحث والتصفية</button>
+          <button onClick={() => { setState({ q: '', filt: 'all' }); setRw('all'); }} style={outlineBtn(48, 15, { padding: '0 18px', borderRadius: 12 })}>مسح البحث والتصفية</button>
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(min(100%,320px),1fr))', gap: 10 }}>
@@ -70,6 +91,7 @@ function TeachersTab() {
                 <span style={{ fontSize: 16, fontWeight: 700 }}>{t.name}</span>
                 <span style={{ fontSize: 14, color: color.body }}>{t.spec} · {t.levels}</span>
                 <span style={{ fontSize: 13, color: color.muted }}>جلسات {t.types.join(' · ')} · {t.aud}</span>
+                {!!t.riwayat?.length && <span style={{ fontSize: 13, color: color.primary, fontWeight: 700 }}>الروايات: {t.riwayat.map((r) => r.name).join(' · ')}</span>}
                 <span style={{ fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, color: color.ink }}>
                   <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: '50%', background: first ? color.primary : '#A0A89F' }} />
                   {s.liveMode ? 'اعرض المواعيد المتاحة' : first ? `أقرب موعد: ${dayL(first.i)}، ${timeIn(s.tz, first.sl!.h)}` : 'لا مواعيد متاحة هذا الأسبوع'}
@@ -256,6 +278,12 @@ export function TeacherPage() {
           </div>
         </div>
         <p style={{ margin: 0, fontSize: 15, lineHeight: 1.8, textWrap: 'pretty' }}>{t.bio}</p>
+        {!!t.riwayat?.length && (
+          <section aria-labelledby="t-riwayat" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <h3 id="t-riwayat" style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>القراءات والروايات</h3>
+            <RiwayatChips items={t.riwayat} />
+          </section>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>نوع الجلسة</p>
           <div style={{ display: 'flex', background: color.sunken, borderRadius: 14, padding: 4, gap: 4 }}>
