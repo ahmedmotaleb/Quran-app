@@ -64,6 +64,11 @@ export interface SourceInfo { name: string; edition: string; narration: string; 
 /** Live recorder state: submission key, uploaded media id, upload id (X-Upload-ID), the honest upload stage, whether the
  *  recording came back from this device's storage, and whether the connection returned after a failure. */
 export type RecStage = 'preparing' | 'uploading' | 'processing' | null;
+export type Who = 'student' | 'teacher' | 'parent';
+const WHO_KEY = 'halqa.login.who';
+function rememberedWho(): Who | null {
+  try { const w = localStorage.getItem(WHO_KEY); return w === 'student' || w === 'teacher' || w === 'parent' ? w : null; } catch { return null; }
+}
 const REC_LIVE = { live: LIVE, key: null as string | null, mediaId: null as string | null, err: null as string | null,
   uploadId: null as string | null, stage: null as RecStage, restored: false, backOnline: false, saved: false };
 
@@ -109,8 +114,10 @@ const initial = () => ({
   uiScale: 'm' as 's' | 'm' | 'l',
   notif: { tasks: true, sessions: true, feedback: true, news: false } as Record<string, boolean>,
   intro: 0,
-  /** `parent`: the «تسجيل دخول ولي الأمر» entry. Only wording changes; the server decides the role and the portal. */
-  login: { email: '', pw: '', show: false, errors: {} as Record<string, string | null>, loading: false, parent: false },
+  /** `who`: the answer to «من أنت؟» on the sign-in screen (remembered on this device); `parent` mirrors who === 'parent'.
+   *  It tailors the screen only: the server decides the account's role and which interface opens. */
+  login: { email: '', pw: '', show: false, errors: {} as Record<string, string | null>, loading: false, parent: rememberedWho() === 'parent',
+    who: rememberedWho() },
   signup: { name: '', email: '', pw: '', gender: '' as '' | 'male' | 'female', errors: {} as Record<string, string | null> },
   forgot: { email: '', sent: false, errors: {} as Record<string, string | null> },
   ob: { step: 0, level: null as string | null, goal: null as string | null, days: ['الأحد', 'الثلاثاء', 'الخميس'], period: 'مساءً', error: null as string | null },
@@ -254,7 +261,7 @@ function onEnter(screen: Screen, p: Params) {
 
 export function startSplash() {
   clearTimeout(splashTimer);
-  splashTimer = setTimeout(() => { if (get().screen === 'splash') set({ screen: get().login.parent ? 'login' : 'intro' }); }, 2000);
+  splashTimer = setTimeout(() => { if (get().screen === 'splash') set({ screen: openedForSignIn ? 'login' : 'intro' }); }, 2000);
   // Live: a still-valid session (cookie or stored token) goes straight to the app.
   if (LIVE) live.bootstrap();
 }
@@ -546,11 +553,18 @@ export async function logout() {
   // Live mode: the sign-in screen appears only after the server has ended the session, so reopening or
   // refreshing right away cannot restore the old account.
   if (LIVE) await live.logout();
-  reset('login', null, { login: { email: '', pw: '', show: false, errors: {}, loading: false, parent: wasParent } });
+  const who = wasParent ? 'parent' : get().login.who;
+  reset('login', null, { login: { email: '', pw: '', show: false, errors: {}, loading: false, parent: who === 'parent', who } });
 }
-/** `#/parent` link (e.g. in the setup email or a bookmark): open the parent sign-in. A signed-in session is unaffected. */
-export function parentLoginEntry() {
-  up('login', { parent: true, errors: {} });
+/** «من أنت؟»: the person's answer on the sign-in screen (null = ask again). Remembered on this device only. */
+export function chooseWho(who: Who | null) {
+  up('login', { who, parent: who === 'parent', errors: {} });
+  try { if (who) localStorage.setItem(WHO_KEY, who); else localStorage.removeItem(WHO_KEY); } catch { /* private mode */ }
+}
+/** `#/parent`, `#/teacher`, `#/student` links (setup emails, bookmarks): open that sign-in. A signed-in session is unaffected. */
+let openedForSignIn = false; // opened from a sign-in link: after the splash, straight to that sign-in (no intro)
+export function parentLoginEntry(who: Who = 'parent') {
+  chooseWho(who); openedForSignIn = true;
   const sc = get().screen;
   if (sc === 'intro' || sc === 'login' || sc === 'signup' || sc === 'forgot') set({ screen: 'login', stack: [], params: {} });
 }

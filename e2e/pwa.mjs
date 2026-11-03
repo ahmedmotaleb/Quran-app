@@ -2,6 +2,7 @@
 // in caches, phone back button walks in-app history. Run against `vite preview` builds.
 //   node e2e/pwa.mjs <shots> [demoUrl=http://localhost:4173/] [liveUrl=http://localhost:4175/]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 const out = process.argv[2]; const DEMO = process.argv[3] || 'http://localhost:4173/'; const LIVE = process.argv[4] || 'http://localhost:4175/';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -73,7 +74,7 @@ await step(lp, 'live: sign in through the service worker; no API data in caches'
   await lp.waitForFunction(() => navigator.serviceWorker.ready.then(() => true), null, { timeout: 15000 });
   await lp.reload(); await lp.waitForFunction(() => !!navigator.serviceWorker.controller);
   await la.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await la.locator('#lg-email').fill('yousef@halqa.app'); await la.locator('#lg-pw').fill('halqa123');
+  await pickWho(la, 'yousef@halqa.app'); await la.locator('#lg-email').fill('yousef@halqa.app'); await la.locator('#lg-pw').fill('halqa123');
   await la.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await la.getByText('السلام عليكم، يوسف').waitFor();
   const urls = await lp.evaluate(async () => {

@@ -6,6 +6,7 @@
 //   ABS_CMD="bash e2e/ci/py.sh absences.py" node e2e/excuses.mjs <shots> [base-url]
 import { execSync } from 'node:child_process';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 let fails = 0; const errs = [];
@@ -18,7 +19,7 @@ async function session(email) {
   await page.goto(BASE);
   const skip = app.getByRole('button', { exact: true, name: 'تخطَّ' }); await skip.or(app.locator('#lg-email')).first().waitFor();
   if (await skip.count()) await skip.click();
-  await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, email); await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   return { page, app, ctx };
 }

@@ -1,5 +1,6 @@
 // Live lessons, quiz (server grading + teacher grading of the recitation) and progress.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 import { execSync } from 'node:child_process';
 // Re-runnable: SETUP_CMD may reset the student's lesson completions and quiz attempts first.
 if (process.env.SETUP_CMD) execSync(process.env.SETUP_CMD, { stdio: 'ignore' });
@@ -12,7 +13,7 @@ async function session(email) {
   page.on('pageerror', (e) => errs.push(e.message));
   const app = page.locator('main#scr');
   await page.goto(BASE); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, email); await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   return { page, app };
 }

@@ -3,6 +3,7 @@
 // the student sees the lesson; the teacher sees it published and can no longer delete it.
 //   node e2e/teacher-content.mjs <shots-dir> [base-url]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const errs = [];
@@ -15,7 +16,7 @@ async function learner(email) {
   page.on('pageerror', (e) => errs.push(e.message));
   const app = page.locator('main#scr');
   await page.goto(BASE); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, email); await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   return { page, app };
 }

@@ -9,6 +9,7 @@
 import { createHmac } from 'node:crypto';
 import { execSync } from 'node:child_process';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 if (process.env.SETUP_CMD) execSync(process.env.SETUP_CMD, { stdio: 'inherit' });
 const OWNER = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'; const TEACHER = 'KRSXG5CTMVRXEZLUKRSXG5CTMVRXEZLU';
@@ -55,7 +56,7 @@ await step(T, 'teacher opens «لوحة الإدارة», signs in, and returns 
   await T.goto(BASE);
   const skip = T.getByRole('button', { exact: true, name: 'تخطَّ' }); await skip.or(T.locator('#lg-email')).first().waitFor();
   if (await skip.count()) await skip.click();
-  await T.locator('#lg-email').fill('teacher@halqa.app'); await T.locator('#lg-pw').fill('halqa123');
+  await pickWho(T, 'teacher@halqa.app'); await T.locator('#lg-email').fill('teacher@halqa.app'); await T.locator('#lg-pw').fill('halqa123');
   await T.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await T.getByText('مرحبًا، الشيخ عبدالرحمن السالم').waitFor();
   await T.getByRole('navigation').getByRole('button', { exact: true, name: 'حسابي' }).click();

@@ -3,6 +3,7 @@
 // The student verifies a number from «حسابي» (code by SMS), signs out, signs in with the local number; a wrong
 // password and an unverified number get the same generic answer; the email still works.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 import { readFileSync } from 'node:fs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const SMS = process.env.SMS_FILE_PATH || '/tmp/halqa-sms.jsonl';
@@ -19,7 +20,7 @@ const lastCode = (to) => {
   return /(\d{6})/.exec(m?.body ?? '')?.[1];
 };
 const signIn = async (ident, pw = 'halqa123') => {
-  await app.locator('#lg-email').fill(ident); await app.locator('#lg-pw').fill(pw);
+  await pickWho(app, ident); await app.locator('#lg-email').fill(ident); await app.locator('#lg-pw').fill(pw);
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
 };
 const signOut = async () => {
@@ -31,7 +32,7 @@ const signOut = async () => {
 
 await page.goto(BASE); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
 await step('the sign-in field accepts an email or a phone number', async () => {
-  await app.getByText('البريد الإلكتروني أو رقم الهاتف').waitFor();
+  await pickWho(app, 'yousef@halqa.app'); await app.getByText('البريد الإلكتروني أو رقم الهاتف').waitFor();
   await signIn('yousef@halqa.app'); await app.getByText('السلام عليكم، يوسف').waitFor();
 });
 await step('verify a phone number from «حسابي» with the SMS code', async () => {

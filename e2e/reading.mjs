@@ -3,6 +3,7 @@
 //   node e2e/reading.mjs <shots-dir> [base-url]
 // Needs the verified Quran text imported (CI imports it from Tanzil); without it the suite reports SKIPPED.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 let fails = 0;
@@ -10,7 +11,7 @@ async function device() {
   const page = await (await b.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Africa/Cairo' })).newPage(); page.setDefaultTimeout(10000);
   const app = page.locator('main#scr');
   await page.goto(BASE); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, 'yousef@halqa.app'); await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText('السلام عليكم، يوسف').waitFor();
   return { page, app };

@@ -4,6 +4,7 @@
 // student sees the new time) and cancels it (the student sees the cancellation).
 //   SOON_CMD="bash e2e/ci/py.sh google_soon.py" node e2e/google-sessions.mjs <shots> [base-url]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 import { execSync } from 'node:child_process';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -14,7 +15,7 @@ async function session(email, hello) {
   const page = await ctx.newPage(); page.setDefaultTimeout(15000); page.on('pageerror', (e) => errs.push(e.message));
   const app = page.locator('main#scr');
   await page.goto(BASE); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, email); await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText(hello).waitFor();
   return { ctx, page, app };

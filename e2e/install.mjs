@@ -4,6 +4,7 @@
 // The browser's `beforeinstallprompt` is dispatched with a controlled userChoice (Chrome's real installability is
 // checked in pwa.mjs).   node e2e/install.mjs <shots> [base-url]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 let fails = 0;
@@ -32,7 +33,7 @@ async function open(kind, { standalone = false, storage = {}, width = 390 } = {}
   const page = await ctx.newPage(); page.setDefaultTimeout(8000);
   await page.goto(BASE);
   await page.locator('main#scr').getByRole('button', { exact: true, name: 'تخطَّ' }).click();   // intro → sign-in (a main screen)
-  await page.locator('#lg-email').waitFor();
+  await page.getByRole('group', { name: 'من أنت؟' }).waitFor();
   return { ctx, page };
 }
 /** The browser offers installation; `outcome` is what the person picks in its dialog. */
@@ -129,7 +130,7 @@ await step(null, '11. desktop browser: no sheet (the browser’s own install ico
 });
 await step(null, '12. RTL at 320 px: no sideways scroll, ≥44 px targets, above the tab bar on the home screen', async () => {
   const { ctx, page } = await open('android', { width: 320 });
-  await page.locator('#lg-email').fill('yousef@halqa.app'); await page.locator('#lg-pw').fill('halqa123');
+  await pickWho(page, 'yousef@halqa.app'); await page.locator('#lg-email').fill('yousef@halqa.app'); await page.locator('#lg-pw').fill('halqa123');
   await page.locator('main#scr').getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await page.getByText('السلام عليكم، يوسف').waitFor();
   await offer(page);

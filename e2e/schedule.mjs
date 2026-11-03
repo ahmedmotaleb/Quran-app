@@ -1,6 +1,7 @@
 // Live teacher schedule: availability ranges → student books a computed time → teacher sees it, cancels (student
 // notified); attendance on a past session.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 import { execSync } from 'node:child_process';
 // PAST_CMD (optional): creates a booked session that already happened for teacher@halqa.app (needed for attendance).
 const out = process.argv[2]; const BASE = process.argv[3] || 'http://localhost:5174/';
@@ -11,7 +12,7 @@ async function session(email) {
   page.on('pageerror', (e) => errs.push(e.message));
   const app = page.locator('main#scr');
   await page.goto(BASE); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, email); await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   return { page, app };
 }

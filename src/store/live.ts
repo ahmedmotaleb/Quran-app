@@ -19,7 +19,7 @@ import { loadSurahIndex, surahLabel } from '@/lib/quranIndex';
 import { BRAND } from '@/theme/brand';
 import * as media from '@/services/media';
 import * as pending from '@/services/pendingRec';
-import { back, go, openSheet, rememberedChild, reset, setState, toast, up, useApp, type AssignForm, type Mark, type ReviewDraft, type ReviewItem } from './store';
+import { back, chooseWho, go, openSheet, rememberedChild, reset, setState, toast, up, useApp, type AssignForm, type Mark, type ReviewDraft, type ReviewItem } from './store';
 import { discardVoiceNote, stopVoiceNote, voiceNote, voiceNoteRecording } from '@/services/voiceNote';
 
 // Lazy: store.ts and this module import each other.
@@ -151,10 +151,12 @@ export async function login(email: string, password: string) {
     applyUser(r.user);
     void syncPush();
     setTimeout(() => { void openFromHash(); }, 0);
-    const viaParent = get().login.parent;
-    up('login', { loading: false, pw: '', parent: false });
-    reset(homeFor(r.user.role), r.user.role);
-    if (viaParent && r.user.role !== 'parent') toast('هذا ليس حساب ولي أمر؛ فُتحت الواجهة المناسبة لحسابك.', 'alert');
+    const asked = get().login.who; const role = r.user.role;
+    up('login', { loading: false, pw: '' });
+    if (role === 'student' || role === 'teacher' || role === 'parent') chooseWho(role); // next sign-in on this device starts there
+    reset(homeFor(role), role);
+    // «من أنت؟» only tailors the sign-in screen; the account's own role decides the interface.
+    if (asked && asked !== role) toast(`هذا الحساب حساب ${({ student: 'طالب', teacher: 'معلم', parent: 'ولي أمر' } as Record<string, string>)[role] ?? 'آخر'}؛ فُتحت الواجهة المناسبة له.`, 'alert');
     await loadData();
   } catch (e) {
     const err = e as ApiError;

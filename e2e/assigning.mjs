@@ -2,6 +2,7 @@
 // Teacher: «إضافة مهمة» from the student's file (student fixed), «إرسال مهمة لكل الحلقة» with a per-member result;
 // academic admin: «إضافة مهمة» in the student record. Students see the tasks at once.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 import { execSync } from 'node:child_process';
 if (process.env.CIRCLE_CMD) execSync(process.env.CIRCLE_CMD, { stdio: 'inherit' });
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
@@ -19,7 +20,7 @@ const tctx = await b.newContext({ viewport: { width: 390, height: 844 }, timezon
 const tp = await tctx.newPage(); tp.setDefaultTimeout(10000); tp.on('pageerror', (e) => errs.push(e.message));
 const app = tp.locator('main#scr');
 await tp.goto(BASE); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-await app.locator('#lg-email').fill('teacher@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
+await pickWho(app, 'teacher@halqa.app'); await app.locator('#lg-email').fill('teacher@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
 await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
 await app.getByText(/^مرحبًا،/).waitFor();
 const nav = (n) => tp.getByRole('navigation').getByRole('button', { exact: true, name: n }).click();

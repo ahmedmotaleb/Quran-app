@@ -1,6 +1,7 @@
 // In-app notifications (pack prompt 17): an event reaches the right person once, the bell shows the unread count,
 // the inbox opens the related item and marks it read. node e2e/inbox.mjs <shots-dir> [base-url]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 let fails = 0; const errs = [];
@@ -10,7 +11,7 @@ async function session(email) {
   page.on('pageerror', (e) => errs.push(e.message));
   const app = page.locator('main#scr');
   await page.goto(BASE); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, email); await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   return { page, app };
 }

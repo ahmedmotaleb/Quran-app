@@ -5,6 +5,7 @@
 // A tapped notification opens `#/n/<id>` (or `#/inbox`): the app opens it for the signed-in account only.
 //   node e2e/push.mjs <shots> [liveUrl=http://localhost:4175/]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,7 +32,7 @@ await step('the generated service worker loads the push handlers', async () => {
 });
 await step('Account explains push honestly; nothing is requested on its own', async () => {
   await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, 'yousef@halqa.app'); await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText('السلام عليكم، يوسف').waitFor();
   await page.getByRole('navigation').getByRole('button', { exact: true, name: 'حسابي' }).click();

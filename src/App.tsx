@@ -31,7 +31,7 @@ function useMedia(q: string) {
 }
 
 /** `/admin/` → admin portal (its own page and manifest: installs as a separate app; old `#/admin` links move there),
- *  `#/parent` → app on the parent sign-in, `#/design-system` → style guide, `#/reset`/`#/invite` → link pages, else → the mobile app. */
+ *  `#/parent` / `#/teacher` / `#/student` → app on that sign-in, `#/design-system` → style guide, `#/reset`/`#/invite` → link pages, else → the mobile app. */
 export default function App() {
   return <><Routes /><PwaUpdate /></>;
 }
@@ -43,7 +43,9 @@ function Routes() {
   if (h.startsWith('#/design-system')) return <Suspense fallback={null}><DesignSystem /></Suspense>;
   if (h.startsWith('#/reset')) return <Suspense fallback={null}><SetPasswordPage /></Suspense>;
   if (h.startsWith('#/invite')) return <Suspense fallback={null}><AcceptInvitePage /></Suspense>;
-  if (h.startsWith('#/parent')) return <ParentEntry />;
+  if (h.startsWith('#/parent')) return <ParentEntry who="parent" />;
+  if (h.startsWith('#/teacher')) return <ParentEntry who="teacher" />;
+  if (h.startsWith('#/student')) return <ParentEntry who="student" />;
   if (h.startsWith('#/google')) return <GoogleReturn />;
   return <MobileApp />;
 }
@@ -58,10 +60,11 @@ function GoogleReturn() {
   return null;
 }
 
-/** `#/parent` (or `#/parent/login`): the app opened on the parent sign-in. The hash is cleared so in-app back works. */
-function ParentEntry() {
+/** `#/parent`, `#/teacher`, `#/student`: the app opened on that sign-in («من أنت؟» already answered). The hash is
+ *  cleared so in-app back works. */
+function ParentEntry({ who }: { who: 'parent' | 'teacher' | 'student' }) {
   useEffect(() => {
-    parentLoginEntry();
+    parentLoginEntry(who);
     history.replaceState(history.state, '', location.pathname + location.search);
     // After the parent's hash listener is attached (child effects run first).
     setTimeout(() => window.dispatchEvent(new HashChangeEvent('hashchange')), 0);

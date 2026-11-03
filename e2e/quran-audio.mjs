@@ -4,6 +4,7 @@
 // asked, and stops when the reader leaves the Mushaf.
 //   node e2e/quran-audio.mjs <shots> [noAudioUrl=http://localhost:5174/] [audioUrl=http://localhost:5176/]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 const out = process.argv[2];
 const OFF = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const ON = (process.argv[4] || 'http://localhost:5176/').replace(/\/?$/, '/');
@@ -27,7 +28,7 @@ async function reader(base) {
   const app = page.locator('main#scr');
   if ((await (await page.request.get(base + 'api/ready')).json()).features?.quran_text !== 'imported') return null;
   await page.goto(base); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, 'yousef@halqa.app'); await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText('السلام عليكم، يوسف').waitFor();
   await app.getByRole('button', { name: /افتح المصحف/ }).click();
@@ -107,7 +108,7 @@ const Q = await (async () => {
   const page = await ctx.newPage(); page.setDefaultTimeout(10000);
   const app = page.locator('main#scr');
   await page.goto(OFF); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, 'yousef@halqa.app'); await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText('السلام عليكم، يوسف').waitFor();
   await app.getByRole('button', { name: /افتح المصحف/ }).click();

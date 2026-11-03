@@ -3,6 +3,7 @@
 // An existing teacher with none keeps working and is asked to add them. Mobile 390 px / 320 px, RTL.
 //   QIRAAT_CMD="bash e2e/ci/py.sh qiraat_teacher.py" node e2e/qiraat.mjs <shots> [base-url]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 import { execSync } from 'node:child_process';
 if (process.env.QIRAAT_CMD) execSync(process.env.QIRAAT_CMD, { stdio: 'inherit' });
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
@@ -14,7 +15,7 @@ async function learner(email, hello, width = 390) {
   const page = await ctx.newPage(); page.setDefaultTimeout(10000);
   const app = page.locator('main#scr');
   await page.goto(BASE); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, email); await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText(hello).first().waitFor();
   return { ctx, page, app };

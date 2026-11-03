@@ -133,3 +133,12 @@ def test_open_invitations_are_migrated_once(world, mailbox):
     assert User.objects.get(pk=world.s2.pk).role == Role.STUDENT  # left for «ترقية إلى معلم»
     call_command("migrate_teacher_invitations", "--apply", stdout=StringIO())
     assert User.objects.filter(email="old@example.com").count() == 1
+
+
+def test_setup_links_open_the_matching_sign_in(world):
+    """The password link says which sign-in to show afterwards («من أنت؟» answered): teacher, parent, or none."""
+    from apps.accounts.views import password_link
+
+    assert password_link(world.t1).endswith("&next=teacher")
+    assert password_link(world.p1).endswith("&next=parent")
+    assert "next=" not in password_link(world.s1)
