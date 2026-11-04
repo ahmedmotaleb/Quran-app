@@ -33,7 +33,7 @@ async function open(kind, { standalone = false, storage = {}, width = 390 } = {}
   const page = await ctx.newPage(); page.setDefaultTimeout(8000);
   await page.goto(BASE);
   await page.locator('main#scr').getByRole('button', { exact: true, name: 'تخطَّ' }).click();   // intro → sign-in (a main screen)
-  await page.getByRole('group', { name: 'من أنت؟' }).waitFor();
+  await page.locator('#lg-email').waitFor();
   return { ctx, page };
 }
 /** The browser offers installation; `outcome` is what the person picks in its dialog. */

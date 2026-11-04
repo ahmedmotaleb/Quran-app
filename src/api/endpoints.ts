@@ -59,7 +59,9 @@ export interface ApiExcuseRow extends ApiExcuse {
 
 // ---- auth ----
 /** `identifier`: an email or a verified phone number (the server decides which; same error either way). */
-export const login = (identifier: string, password: string) => api<LoginResult>('POST', 'auth/login', { identifier, password, client: 'web' });
+/** `role`: the sign-in's «طالب / معلم» choice; the server refuses an account of another role (`wrong_role`, no session). */
+export const login = (identifier: string, password: string, role?: 'student' | 'teacher') =>
+  api<LoginResult>('POST', 'auth/login', { identifier, password, client: 'web', ...(role ? { role } : {}) });
 export const register = (full_name: string, email: string, password: string, timezone: string, gender: 'male' | 'female') =>
   api<LoginResult>('POST', 'auth/register', { full_name, email, password, client: 'web', timezone, gender });
 /** `push_endpoint`: this device's push subscription ends with the session (shared phones). */

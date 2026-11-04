@@ -1,19 +1,10 @@
-// Sign-in now asks «من أنت؟» first (student / teacher / parent). Tests answer from the account they sign in with:
-// a teacher or parent address, otherwise a student (phone numbers and wrong-account checks included).
-// `who` overrides the guess. Works on a page or a locator (e.g. main#scr); if the form is already open for another
-// choice, «… تغيير» is used first.
+// Sign-in has a «طالب / معلم / ولي أمر» choice at the top (default طالب); for طالب and معلم the server refuses an
+// account of another role. Tests pick the choice that matches the account they sign in with (a teacher or parent
+// address, otherwise a student; `who` overrides the guess). Works on a page or a locator (e.g. main#scr).
 export async function pickWho(scope, ident, who) {
   const w = who ?? (/parent/i.test(ident) ? 'parent' : /teacher|qtest|^t\d*@/i.test(String(ident)) ? 'teacher' : 'student');
-  const label = { student: 'أنا طالب', teacher: 'أنا معلم', parent: 'أنا ولي أمر' }[w];
-  const title = { student: 'دخول الطالب', teacher: 'دخول المعلم', parent: 'دخول ولي الأمر' }[w];
-  const question = scope.getByRole('group', { name: 'من أنت؟' });
-  const form = scope.locator('#lg-email');
-  await question.or(form).first().waitFor();
-  if (await form.isVisible()) {
-    if (await scope.getByRole('heading', { name: title }).count()) return;
-    await scope.getByRole('button', { name: /؟ تغيير$/ }).click();
-    await question.waitFor();
-  }
-  await question.getByRole('button', { name: new RegExp(`^${label}`) }).click();
-  await form.waitFor();
+  const label = { student: 'طالب', teacher: 'معلم', parent: 'ولي أمر' }[w];
+  const radio = scope.getByRole('radiogroup', { name: 'نوع الحساب' }).getByRole('radio', { name: label, exact: true });
+  await radio.waitFor();
+  if ((await radio.getAttribute('aria-checked')) !== 'true') await radio.click();
 }

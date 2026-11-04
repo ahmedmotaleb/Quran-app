@@ -149,6 +149,14 @@ class RegisterView(APIView):
         return Response(_session_payload(request, user, client, request.data.get("device", "")), status=status.HTTP_201_CREATED)
 
 
+WRONG_ROLE = {
+    ("teacher", Role.STUDENT): "هذا الحساب لا يملك صلاحية المعلم؛ إنه حساب طالب. اختر «طالب» ثم سجّل الدخول.",
+    ("teacher", Role.PARENT): "هذا الحساب لا يملك صلاحية المعلم؛ إنه حساب ولي أمر. اختر «ولي أمر» ثم سجّل الدخول.",
+    ("student", Role.TEACHER): "هذا حساب معلم. اختر «معلم» ثم سجّل الدخول.",
+    ("student", Role.PARENT): "هذا حساب ولي أمر. اختر «ولي أمر» ثم سجّل الدخول.",
+}
+
+
 class _BaseLogin(APIView):
     authentication_classes: list = []
     permission_classes = [AllowAny]
@@ -196,6 +204,12 @@ class _BaseLogin(APIView):
     def check_portal(self, user, d):
         if user.role == Role.ADMIN:
             raise ApiError("admin_portal_only", "حساب الإدارة يدخل من بوابة الإدارة المنفصلة.", 403)
+        want = d.get("role")
+        if want and user.role != want:
+            # Chose «معلم» with a student/parent account (or «طالب» with a teacher/parent account): no session, a clear
+            # answer. The role always comes from the account; the choice can never grant teacher access.
+            audit("auth.login_wrong_role", actor=user, target=user, request=self.request, chosen=want, role=user.role)
+            raise ApiError("wrong_role", WRONG_ROLE.get((want, user.role), "نوع الحساب لا يطابق اختيارك."), 403, {"role": [user.role]})
 
 
 class LoginView(_BaseLogin):

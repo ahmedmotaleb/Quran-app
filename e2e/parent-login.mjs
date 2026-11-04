@@ -27,7 +27,7 @@ await step('setup link sets the password once and leads to the parent sign-in', 
   await page.getByRole('button', { name: 'حفظ كلمة المرور' }).click();
   await page.getByText('تم إعداد حسابك بنجاح').waitFor();
   await page.getByRole('button', { name: 'تسجيل الدخول' }).click();
-  await app.getByRole('heading', { name: 'دخول ولي الأمر' }).waitFor({ timeout: 15000 });
+  await app.getByRole('heading', { name: 'تسجيل دخول ولي الأمر' }).waitFor({ timeout: 15000 });
   if (new URL(page.url()).hash) throw new Error('hash kept: ' + page.url());
 });
 await step('the link cannot be used again', async () => {
@@ -56,20 +56,20 @@ await step('logout ends the session and returns to the parent sign-in', async ()
   await app.getByRole('button', { name: 'حسابي' }).click();
   await app.getByRole('button', { name: 'تسجيل الخروج' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'تسجيل الخروج' }).click();
-  await app.getByRole('heading', { name: 'دخول ولي الأمر' }).waitFor();
+  await app.getByRole('heading', { name: 'تسجيل دخول ولي الأمر' }).waitFor();
   const me = await page.evaluate(async () => (await fetch('/api/v1/me', { credentials: 'include' })).status);
   if (me !== 401 && me !== 403) throw new Error('me after logout: ' + me);
   await page.reload();
-  await app.getByRole('heading', { name: 'دخول ولي الأمر' }).or(app.getByRole('button', { name: 'تخطَّ' })).first().waitFor();
+  await app.getByRole('heading', { name: 'تسجيل دخول ولي الأمر' }).or(app.getByRole('button', { name: 'تخطَّ' })).first().waitFor();
 });
 await step('a student using the parent entry still gets the student app (role from the server)', async () => {
   await page.goto(`${BASE}#/parent`);
-  await app.getByRole('heading', { name: 'دخول ولي الأمر' }).waitFor({ timeout: 15000 });
+  await app.getByRole('heading', { name: 'تسجيل دخول ولي الأمر' }).waitFor({ timeout: 15000 });
   // answered «ولي أمر» by the link, signs in as a student
   await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText('السلام عليكم، يوسف').waitFor();
-  await page.getByText('هذا الحساب حساب طالب؛ فُتحت الواجهة المناسبة له.', { exact: false }).waitFor();
+  await page.getByText('هذا ليس حساب ولي أمر', { exact: false }).waitFor();
 });
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
 process.exitCode = fails ? 1 : 0;

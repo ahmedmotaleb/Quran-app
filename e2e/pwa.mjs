@@ -43,7 +43,7 @@ await step(page, 'launches offline (app shell from cache)', async () => {
 });
 await step(page, 'phone back button walks in-app screens, not out of the app', async () => {
   await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.getByRole('button', { exact: true, name: 'طالب' }).click();
+  await app.getByRole('button', { exact: true, name: 'طالب' }).click();          // demo account chip (also picks «طالب»)
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText('السلام عليكم، يوسف').waitFor();
   await page.getByRole('navigation').getByRole('button', { exact: true, name: 'تعلمي' }).click();

@@ -65,10 +65,6 @@ export interface SourceInfo { name: string; edition: string; narration: string; 
  *  recording came back from this device's storage, and whether the connection returned after a failure. */
 export type RecStage = 'preparing' | 'uploading' | 'processing' | null;
 export type Who = 'student' | 'teacher' | 'parent';
-const WHO_KEY = 'halqa.login.who';
-function rememberedWho(): Who | null {
-  try { const w = localStorage.getItem(WHO_KEY); return w === 'student' || w === 'teacher' || w === 'parent' ? w : null; } catch { return null; }
-}
 const REC_LIVE = { live: LIVE, key: null as string | null, mediaId: null as string | null, err: null as string | null,
   uploadId: null as string | null, stage: null as RecStage, restored: false, backOnline: false, saved: false };
 
@@ -114,10 +110,9 @@ const initial = () => ({
   uiScale: 'm' as 's' | 'm' | 'l',
   notif: { tasks: true, sessions: true, feedback: true, news: false } as Record<string, boolean>,
   intro: 0,
-  /** `who`: the answer to «من أنت؟» on the sign-in screen (remembered on this device); `parent` mirrors who === 'parent'.
-   *  It tailors the screen only: the server decides the account's role and which interface opens. */
-  login: { email: '', pw: '', show: false, errors: {} as Record<string, string | null>, loading: false, parent: rememberedWho() === 'parent',
-    who: rememberedWho() },
+  /** `who`: the sign-in's «طالب / معلم / ولي أمر» choice (default طالب); `parent` mirrors who === 'parent'. For طالب and
+   *  معلم the server refuses an account of another role (no session); it never grants a role. */
+  login: { email: '', pw: '', show: false, errors: {} as Record<string, string | null>, loading: false, parent: false, who: 'student' as Who },
   signup: { name: '', email: '', pw: '', gender: '' as '' | 'male' | 'female', errors: {} as Record<string, string | null> },
   forgot: { email: '', sent: false, errors: {} as Record<string, string | null> },
   ob: { step: 0, level: null as string | null, goal: null as string | null, days: ['الأحد', 'الثلاثاء', 'الخميس'], period: 'مساءً', error: null as string | null },
@@ -500,6 +495,9 @@ export function identifierError(v: string): string | null {
 }
 /** The server enforces 10 (Django MinimumLengthValidator); the demo keeps the design's 8. */
 export const PW_MIN = LIVE ? 10 : 8;
+const DEMO_WRONG_ROLE = (want: Who, role: string) => want === 'teacher'
+  ? `هذا الحساب لا يملك صلاحية المعلم؛ إنه حساب ${role === 'parent' ? 'ولي أمر' : 'طالب'}. اختر «${role === 'parent' ? 'ولي أمر' : 'طالب'}» ثم سجّل الدخول.`
+  : role === 'teacher' ? 'هذا حساب معلم. اختر «معلم» ثم سجّل الدخول.' : 'هذا حساب ولي أمر. اختر «ولي أمر» ثم سجّل الدخول.';
 export function doLogin() {
   const L = get().login; const e: Record<string, string> = {}; const raw = L.email.trim();
   const em = raw.includes('@') ? raw.toLowerCase() : raw;
@@ -508,6 +506,7 @@ export function doLogin() {
   if (!L.pw) e.pw = 'أدخل كلمة المرور'; else if (!LIVE && L.pw.length < 6) e.pw = 'كلمة المرور 6 أحرف على الأقل';
   if (LIVE) { if (Object.keys(e).length) up('login', { errors: e }); else live.login(em, L.pw); return; }
   if (!e.email && ACCOUNTS[em] === 'admin') e.email = 'حساب الإدارة يدخل من بوابة الإدارة المنفصلة.';
+  else if (!e.email && ACCOUNTS[em] && L.who !== 'parent' && ACCOUNTS[em] !== L.who) e.role = DEMO_WRONG_ROLE(L.who, ACCOUNTS[em]);
   else if (!e.email && !ACCOUNTS[em]) e.email = 'لا يوجد حساب بهذا البريد. جرّب أحد الحسابات التجريبية أدناه.';
   if (Object.keys(e).length) { up('login', { errors: e }); return; }
   up('login', { loading: true, errors: {} });
@@ -548,18 +547,16 @@ export function obNext() {
   toast(`تم إعداد خطتك. مرحبًا بك في ${BRAND.ar}`);
 }
 export async function logout() {
-  const wasParent = get().role === 'parent';
+  const r = get().role; const who: Who = r === 'teacher' || r === 'parent' ? r : 'student'; // back to this account's sign-in
   set({ sheet: null });
   // Live mode: the sign-in screen appears only after the server has ended the session, so reopening or
   // refreshing right away cannot restore the old account.
   if (LIVE) await live.logout();
-  const who = wasParent ? 'parent' : get().login.who;
   reset('login', null, { login: { email: '', pw: '', show: false, errors: {}, loading: false, parent: who === 'parent', who } });
 }
-/** «من أنت؟»: the person's answer on the sign-in screen (null = ask again). Remembered on this device only. */
-export function chooseWho(who: Who | null) {
+/** The sign-in's role choice. */
+export function chooseWho(who: Who) {
   up('login', { who, parent: who === 'parent', errors: {} });
-  try { if (who) localStorage.setItem(WHO_KEY, who); else localStorage.removeItem(WHO_KEY); } catch { /* private mode */ }
 }
 /** `#/parent`, `#/teacher`, `#/student` links (setup emails, bookmarks): open that sign-in. A signed-in session is unaffected. */
 let openedForSignIn = false; // opened from a sign-in link: after the splash, straight to that sign-in (no intro)

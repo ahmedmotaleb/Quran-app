@@ -112,7 +112,7 @@ await step('logout ends server session', async () => {
   await page.getByRole('button', { exact: true, name: 'حسابي' }).click();
   await app.getByRole('button', { name: /تسجيل الخروج/ }).click();
   await page.getByRole('button', { name: /تسجيل الخروج/ }).last().click().catch(() => {});
-  await app.getByRole('heading', { exact: true, name: 'دخول الطالب' }).waitFor();   // «من أنت؟» remembered on this device
+  await app.getByRole('heading', { exact: true, name: 'تسجيل الدخول' }).waitFor();
   await page.reload(); await page.waitForTimeout(2600);
   if (await app.getByText('السلام عليكم، يوسف').count()) throw new Error('session survived logout');
 });
