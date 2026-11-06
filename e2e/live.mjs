@@ -2,6 +2,7 @@
 // Run: backend on :8000 with `seed_dev`, then `VITE_API_BASE_URL=/ npx vite --port 5174`, then
 //   node e2e/<file>.mjs <screenshot-dir> [base-url]
 // Needs Playwright (PLAYWRIGHT_MODULE overrides the import, CHROMIUM_PATH the browser).
+import { pickWho } from './lib/who.mjs';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const out = process.argv[2]; const BASE = process.argv[3] || 'http://localhost:5174/';
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -19,18 +20,18 @@ await page.goto(BASE);
 await step('intro→login', async () => { await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click(); await app.getByRole('heading', { exact: true, name: 'تسجيل الدخول' }).waitFor(); });
 await step('no demo accounts box in live mode', async () => { if (await app.getByText('حسابات تجريبية').count()) throw new Error('demo box visible'); });
 await step('wrong password → server error shown', async () => {
-  await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('wrong-password');
+  await pickWho(app, 'yousef@halqa.app'); await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('wrong-password');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.locator('[role=alert], p').filter({ hasText: /غير صحيحة/ }).first().waitFor();
 });
 await page.screenshot({ path: out + '/l1-bad-login.png' });
 await step('admin rejected on learning sign-in', async () => {
-  await app.locator('#lg-email').fill('admin@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, 'admin@halqa.app'); await app.locator('#lg-email').fill('admin@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText(/بوابة الإدارة/).first().waitFor();
 });
 await step('student login (real API)', async () => {
-  await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, 'yousef@halqa.app'); await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText('السلام عليكم، يوسف').waitFor();
 });

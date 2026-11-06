@@ -4,7 +4,7 @@ import { Icon } from '@/components/Icon';
 import { BackButton, FieldError, Spinner, inputStyle, labelStyle, linkBtn, muted, outlineBtn, primaryBtn, Chips, Segmented } from '@/components/ui';
 import { DAYS, DEMO_PASSWORD } from '@/data/demo';
 import { tzLabel } from '@/lib/format';
-import { PW_MIN, back, doForgot, doLogin, doSignup, go, obNext, reset, setState as set, skipSplash, up, useApp } from '@/store/store';
+import { PW_MIN, back, chooseWho, doForgot, doLogin, doSignup, go, obNext, reset, setState as set, skipSplash, up, useApp, type Who } from '@/store/store';
 import { LIVE } from '@/api/client';
 import { BRAND } from '@/theme/brand';
 import { Logo } from '@/components/Logo';
@@ -54,23 +54,46 @@ export function Intro() {
 
 const prevent = (fn: () => void) => (e: FormEvent) => { e.preventDefault(); fn(); };
 
+/** «طالب / معلم / ولي أمر» at the top of the sign-in (default طالب). For طالب and معلم the server checks the account has
+ *  that role (`wrong_role`, no session); the parent sign-in is unchanged. The choice never grants a role. */
+const WHO: Record<Who, { label: string; title: string; sub: string }> = {
+  student: { label: 'طالب', title: 'تسجيل الدخول', sub: 'ادخل لمتابعة واجباتك وجلساتك وتقدّمك.' },
+  teacher: { label: 'معلم', title: 'تسجيل دخول المعلم', sub: 'حساب المعلم تنشئه إدارة الحلقة، ويصلك بريد لتعيين كلمة المرور.' },
+  parent: { label: 'ولي أمر', title: 'تسجيل دخول ولي الأمر', sub: 'تنشئ إدارة الحلقة حساب ولي الأمر وتربطه بأبنائك، وتصلك رسالة لتعيين كلمة المرور.' },
+};
+
 export function Login() {
   const L = useApp((s) => s.login);
   const openSignup = useApp((s) => s.pub.open_signup);
   const E = L.errors;
+  const who = L.who; const W = WHO[who];
   return (
     <form onSubmit={prevent(doLogin)} noValidate style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', padding: '12px 20px 24px', gap: 18 }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, marginTop: 4 }}>
         <Logo size={84} />
-        <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>{L.parent ? 'تسجيل دخول ولي الأمر' : 'تسجيل الدخول'}</h1>
-        <p style={muted(14, { margin: '4px 0 0', textAlign: 'center', lineHeight: 1.7 })}>{L.parent
-          ? 'تنشئ إدارة الحلقة حساب ولي الأمر وتربطه بأبنائك، وتصلك رسالة لتعيين كلمة المرور.'
-          : 'للطلاب والمعلمين: تُعرض لك الواجهة المناسبة بحسب نوع حسابك'}</p>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div role="radiogroup" aria-label="نوع الحساب" aria-invalid={!!E.role} style={{ display: 'flex', background: color.sunken, borderRadius: 14, padding: 4, gap: 4 }}>
+          {(['student', 'teacher', 'parent'] as const).map((k) => {
+            const on = k === who;
+            return (
+              <button key={k} type="button" role="radio" aria-checked={on} onClick={() => chooseWho(k)}
+                style={{ flex: 1, minHeight: 48, border: 'none', borderRadius: 11, background: on ? color.primary : 'transparent', color: on ? color.ivory : color.body, fontSize: 16, fontWeight: on ? 800 : 600, cursor: 'pointer', padding: '0 6px' }}>
+                {WHO[k].label}
+              </button>
+            );
+          })}
+        </div>
+        <FieldError msg={E.role} />
+      </div>
+      <div style={{ textAlign: 'center' }}>
+        <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>{W.title}</h1>
+        <p style={muted(14, { margin: '4px 0 0', lineHeight: 1.7 })}>{W.sub}</p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <label htmlFor="lg-email" style={labelStyle}>البريد الإلكتروني أو رقم الهاتف</label>
         <input id="lg-email" type="text" inputMode="email" dir="ltr" autoComplete="username" autoCapitalize="none" spellCheck={false} value={L.email} placeholder="name@example.com أو 010…" aria-invalid={!!E.email}
-          onChange={(e) => up('login', { email: e.target.value, errors: { ...E, email: null } })} style={inputStyle(E.email, true)} />
+          onChange={(e) => up('login', { email: e.target.value, errors: { ...E, email: null, role: null } })} style={inputStyle(E.email, true)} />
         <FieldError msg={E.email} />
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -87,21 +110,19 @@ export function Login() {
         <button type="button" onClick={() => go('forgot')} style={linkBtn(14, { alignSelf: 'flex-start', padding: 0 })}>نسيت كلمة المرور؟</button>
       </div>
       <button type="submit" disabled={L.loading} style={primaryBtn()}>{L.loading ? 'جارٍ الدخول…' : 'تسجيل الدخول'}</button>
-      {L.parent
-        ? <button type="button" onClick={() => up('login', { parent: false, errors: {} })} style={linkBtn(14, { alignSelf: 'center' })}>لست وليّ أمر؟ دخول الطالب أو المعلم</button>
-        : <button type="button" onClick={() => up('login', { parent: true, errors: {} })} style={outlineBtn(50, 15)}><Icon name="users" /> تسجيل دخول ولي الأمر</button>}
       {!LIVE && <div style={{ background: color.sand, borderRadius: 14, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <p style={{ margin: 0, fontSize: 13, color: color.subtle }}>حسابات تجريبية (كلمة المرور {DEMO_PASSWORD}):</p>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {([['yousef@halqa.app', 'طالب'], ['teacher@halqa.app', 'معلم'], ['parent@halqa.app', 'ولي أمر']] as const).map(([em, l]) => (
-            <button key={em} type="button" onClick={() => up('login', { email: em, pw: DEMO_PASSWORD, errors: {} })}
-              style={{ minHeight: 40, padding: '0 14px', borderRadius: 999, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{l}</button>
+          {([['yousef@halqa.app', 'student'], ['teacher@halqa.app', 'teacher'], ['parent@halqa.app', 'parent']] as const).map(([em, w]) => (
+            <button key={em} type="button" onClick={() => { chooseWho(w); up('login', { email: em, pw: DEMO_PASSWORD, errors: {} }); }}
+              style={{ minHeight: 40, padding: '0 14px', borderRadius: 999, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{WHO[w].label}</button>
           ))}
         </div>
       </div>}
       <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-        {openSignup ? <p style={muted(15)}>ليس لديك حساب؟ <button type="button" onClick={() => go('signup')} style={linkBtn(15, { fontWeight: 800, padding: '0 4px' })}>أنشئ حساب طالب</button></p>
-          : <p style={muted(14, { textAlign: 'center' })}>التسجيل مغلق حاليًا. تواصل مع إدارة الحلقة لإنشاء حسابك.</p>}
+        {who === 'student' && (openSignup
+          ? <p style={muted(15)}>ليس لديك حساب؟ <button type="button" onClick={() => go('signup')} style={linkBtn(15, { fontWeight: 800, padding: '0 4px' })}>أنشئ حساب طالب</button></p>
+          : <p style={muted(14, { textAlign: 'center' })}>التسجيل مغلق حاليًا. تواصل مع إدارة الحلقة لإنشاء حسابك.</p>)}
         <button type="button" onClick={() => { window.location.href = '/admin/'; }} style={{ fontSize: 13, color: color.muted, minHeight: 44, display: 'flex', alignItems: 'center', border: 'none', background: 'transparent', textDecoration: 'underline', cursor: 'pointer' }}>دخول الإدارة</button>
       </div>
     </form>

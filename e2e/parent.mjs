@@ -1,6 +1,7 @@
 // Live parent app: linked children only, real tasks/feedback/attendance, no audio.
 // Run like e2e/live.mjs. Pass REVOKE_CMD to run between phases (revokes Sara's guardian link).
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 import { execSync } from 'node:child_process';
 const out = process.argv[2]; const BASE = process.argv[3] || 'http://localhost:5174/';
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -11,7 +12,7 @@ const app = page.locator('main#scr'); let fails = 0;
 const step = async (name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await page.screenshot({ path: `${out}/fail-${name.replace(/\W+/g, '_')}.png` }); } };
 await page.goto(BASE);
 await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-await app.locator('#lg-email').fill('parent@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
+await pickWho(app, 'parent@halqa.app'); await app.locator('#lg-email').fill('parent@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
 await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
 await step('parent sees both linked children, no sample banner', async () => {
   await app.getByRole('tab', { name: /يوسف/ }).waitFor(); await app.getByRole('tab', { name: /سارة/ }).waitFor();

@@ -2,6 +2,7 @@
 // Run: backend on :8000 with `seed_dev`, then `VITE_API_BASE_URL=/ npx vite --port 5174`, then
 //   node e2e/<file>.mjs <screenshot-dir> [base-url]
 // Needs Playwright (PLAYWRIGHT_MODULE overrides the import, CHROMIUM_PATH the browser).
+import { pickWho } from './lib/who.mjs';
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const out = process.argv[2]; const BASE = process.argv[3] || 'http://localhost:5174/';
 const b = await chromium.launch({
@@ -16,7 +17,7 @@ async function session(email) {
   const app = page.locator('main#scr');
   await page.goto(BASE);
   await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, email); await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   return { page, app, ctx };
 }

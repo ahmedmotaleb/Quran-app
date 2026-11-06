@@ -3,6 +3,7 @@
 // «إنشاء الحساب وإرسال رابط الإعداد» creates the teacher at once; the email link sets the password; the teacher
 // signs in from the normal login and waits for approval; Forgot Password works for an ignored email; resend works.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 import { linkFor } from './lib/mailbox.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -29,7 +30,7 @@ async function setPassword(p, link) {
 async function signIn(p, email) {
   const app = p.locator('main#scr');
   await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click().catch(() => {});
-  await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill(PW);
+  await pickWho(app, email, 'teacher'); await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill(PW);
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
 }
 async function createTeacher(name, email) {
@@ -78,6 +79,7 @@ await step(admin, 'a teacher who ignored the email uses «نسيت كلمة ال
   const p = await phone(); await p.goto(BASE);
   const app = p.locator('main#scr');
   await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
+  await pickWho(app, T2, 'teacher');
   await app.getByRole('button', { name: 'نسيت كلمة المرور؟' }).click();
   await app.locator('#fg-email').fill(T2); await app.getByRole('button', { name: 'أرسل رابط الاستعادة' }).click();
   let fresh = first;

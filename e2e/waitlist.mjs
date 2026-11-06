@@ -2,6 +2,7 @@
 // A full slot offers «الانضمام إلى قائمة الانتظار»; when the teacher cancels the booking the seat is offered to the
 // student, who books it; a make-up credit for an approved excuse books a replacement with the same teacher.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 import { execSync } from 'node:child_process';
 // SETUP_CMD prints «<full occurrence id> <excused past booking id>» (e2e/ci/waitlist_setup.py).
 const ids = process.env.SETUP_CMD ? execSync(process.env.SETUP_CMD, { encoding: 'utf8' }).trim().split('\n').at(-1) : '';
@@ -18,7 +19,7 @@ const apiAs = (t) => ({ get: (p) => page.request.get(BASE + 'api/v1/' + p, { hea
   post: (p, data = {}) => page.request.post(BASE + 'api/v1/' + p, { data, headers: { Authorization: `Bearer ${t}` } }) });
 
 await page.goto(BASE); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
+await pickWho(app, 'yousef@halqa.app'); await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
 await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click(); await app.getByText('السلام عليكم، يوسف').waitFor();
 const openTeacher = async () => {
   await page.getByRole('button', { exact: true, name: 'الجلسات' }).click();

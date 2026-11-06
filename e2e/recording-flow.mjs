@@ -7,6 +7,7 @@
 //  5. Another account on the same phone never sees a pending recording; deleting asks for confirmation.
 //   node e2e/recording-flow.mjs <shots> [base-url]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined,
   args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
@@ -22,7 +23,7 @@ const signIn = async (email) => {
   const skip = app.getByRole('button', { exact: true, name: 'تخطَّ' }); const emailBox = app.locator('#lg-email');
   await skip.or(emailBox).first().waitFor();
   if (await skip.count()) await skip.click();
-  await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, email); await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
 };
 const pendingCount = () => page.evaluate(async () => {

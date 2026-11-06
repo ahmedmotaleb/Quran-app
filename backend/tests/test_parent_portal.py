@@ -48,8 +48,9 @@ def test_admin_creates_parent_links_children_and_parent_signs_in(world, settings
     # A role sent by the client changes nothing.
     _, r2 = web_login("dad@x.test")
     assert r2.json()["user"]["role"] == "parent"
-    assert APIClient().post("/api/v1/auth/login", {"email": "dad@x.test", "password": PW, "role": "student"},
-                            format="json").json()["user"]["role"] == "parent"
+    # A role sent by the client never grants it: «طالب» with a parent account is refused (no session), not switched.
+    r3 = APIClient().post("/api/v1/auth/login", {"email": "dad@x.test", "password": PW, "role": "student"}, format="json")
+    assert r3.status_code == 403 and r3.json()["code"] == "wrong_role" and "user" not in r3.json()
 
 
 def test_unlinked_child_and_tampered_ids_are_refused(world):

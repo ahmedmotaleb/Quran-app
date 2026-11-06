@@ -3,6 +3,7 @@
 // Runs on the live preview build (default http://localhost:4175/) with a fake microphone:
 //   NEW_VERSION_CMD='<shell that publishes a changed sw.js>' node e2e/pwa-update.mjs <shots> [liveUrl]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 import { execSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -26,7 +27,7 @@ await step('installed app is controlled by the service worker', async () => {
 });
 await step('student signs in and starts recording', async () => {
   await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, 'yousef@halqa.app'); await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText('السلام عليكم، يوسف').waitFor();
   await page.getByRole('button', { exact: true, name: 'تعلمي' }).click();

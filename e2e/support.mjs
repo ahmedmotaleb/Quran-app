@@ -2,6 +2,7 @@
 // an internal note and resolves it; the student sees the team's reply (never the note), gets a notification, and
 // closes the ticket. Another student cannot open it. node e2e/support.mjs <shots-dir> [base-url]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 let fails = 0; const errs = [];
@@ -18,7 +19,7 @@ const subject = `لا يظهر الواجب ${Date.now() % 100000}`;
 
 const s = await session(); const app = s.locator('main#scr');
 await s.goto(BASE); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-await app.locator('#lg-email').fill('sara@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
+await pickWho(app, 'sara@halqa.app'); await app.locator('#lg-email').fill('sara@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
 await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click(); await app.getByText('السلام عليكم، سارة').waitFor();
 let ticketId = 0;
 
@@ -97,7 +98,7 @@ await step(s, 'student closes the ticket; replying is no longer offered', async 
 
 const y = await session(); const yapp = y.locator('main#scr');
 await y.goto(BASE); await yapp.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-await yapp.locator('#lg-email').fill('yousef@halqa.app'); await yapp.locator('#lg-pw').fill('halqa123');
+await pickWho(yapp, 'yousef@halqa.app'); await yapp.locator('#lg-email').fill('yousef@halqa.app'); await yapp.locator('#lg-pw').fill('halqa123');
 await yapp.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click(); await yapp.getByText(/السلام عليكم/).waitFor();
 await step(y, "another student gets 404 for Sara's ticket and sees no tickets", async () => {
   const st = await call(y, 'GET', `support/tickets/${ticketId}`);

@@ -146,19 +146,22 @@ async function restoreSession(): Promise<boolean> {
 export async function login(email: string, password: string) {
   up('login', { loading: true, errors: {} });
   try {
-    const r = await E.login(email, password);
+    const asked = get().login.who;
+    const r = await E.login(email, password, asked === 'parent' ? undefined : asked);
     resetCsrf();
     applyUser(r.user);
     void syncPush();
     setTimeout(() => { void openFromHash(); }, 0);
-    const viaParent = get().login.parent;
-    up('login', { loading: false, pw: '', parent: false });
-    reset(homeFor(r.user.role), r.user.role);
-    if (viaParent && r.user.role !== 'parent') toast('هذا ليس حساب ولي أمر؛ فُتحت الواجهة المناسبة لحسابك.', 'alert');
+    const role = r.user.role;
+    up('login', { loading: false, pw: '' });
+    reset(homeFor(role), role);
+    // The parent sign-in (unchanged): another account still opens its own interface, with a notice.
+    if (asked === 'parent' && role !== 'parent') toast('هذا ليس حساب ولي أمر؛ فُتحت الواجهة المناسبة لحسابك.', 'alert');
     await loadData();
   } catch (e) {
     const err = e as ApiError;
     const field = err.code === 'bad_credentials' || err.code === 'account_pending' || err.code === 'account_suspended' || err.code === 'admin_portal_only' ? 'email' : null;
+    if (err.code === 'wrong_role') { up('login', { loading: false, errors: { role: err.message } }); return; }  // no session was created
     up('login', { loading: false, errors: { email: err.field?.('email') ?? (field ? err.message : null), pw: err.field?.('password') ?? null } });
     if (!field && !err.fields?.email && !err.fields?.password) toast(msg(e), 'alert');
   }

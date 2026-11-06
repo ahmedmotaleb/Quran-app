@@ -4,6 +4,7 @@
 // routed by the server to the student app.
 //   SETUP_CMD="bash e2e/ci/py.sh parent_setup.py" node e2e/parent-login.mjs <shots> [base-url]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -39,7 +40,7 @@ await step('the link cannot be used again', async () => {
   await p2.close();
 });
 await step('parent signs in and lands on the parent portal with both children', async () => {
-  await app.locator('#lg-email').fill('new.parent@halqa.app'); await app.locator('#lg-pw').fill(PW);
+  await pickWho(app, 'new.parent@halqa.app'); await app.locator('#lg-email').fill('new.parent@halqa.app'); await app.locator('#lg-pw').fill(PW);
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByRole('heading', { name: 'متابعة الأبناء' }).waitFor();
   await app.getByRole('tab', { name: /يوسف/ }).waitFor(); await app.getByRole('tab', { name: /سارة/ }).waitFor();
@@ -64,6 +65,7 @@ await step('logout ends the session and returns to the parent sign-in', async ()
 await step('a student using the parent entry still gets the student app (role from the server)', async () => {
   await page.goto(`${BASE}#/parent`);
   await app.getByRole('heading', { name: 'تسجيل دخول ولي الأمر' }).waitFor({ timeout: 15000 });
+  // answered «ولي أمر» by the link, signs in as a student
   await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText('السلام عليكم، يوسف').waitFor();

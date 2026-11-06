@@ -2,6 +2,7 @@
 // refused); the booked student opens it from the app inside the join window; the app shows no simulated call.
 //   SOON_CMD="bash e2e/ci/py.sh soon_booking.py" node e2e/live-session.mjs <shots> [base-url]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+import { pickWho } from './lib/who.mjs';
 import { execSync } from 'node:child_process';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
 const MEET = 'https://meet.google.com/abc-defg-hij';
@@ -14,7 +15,7 @@ async function session(email, hello) {
   const page = await ctx.newPage(); page.setDefaultTimeout(10000);
   const app = page.locator('main#scr');
   await page.goto(BASE); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, email); await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
   await app.getByText(hello).waitFor();
   return { ctx, page, app };

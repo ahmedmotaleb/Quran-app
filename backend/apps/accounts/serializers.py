@@ -137,6 +137,9 @@ class LoginSerializer(serializers.Serializer):
     device = serializers.CharField(required=False, allow_blank=True, max_length=120, default="")
     otp = serializers.CharField(required=False, allow_blank=True, max_length=8, default="")
     trust_device = serializers.BooleanField(required=False, default=False)  # admin portal: skip the code here for 30 days
+    # The learning app's «طالب / معلم» choice: the account must have that role (checked after the password; never
+    # grants anything). Empty = any role (older app versions, the parent sign-in).
+    role = serializers.ChoiceField(choices=["student", "teacher", ""], required=False, default="")
 
     def validate(self, attrs):
         ident = (attrs.get("identifier") or attrs.get("email") or "").strip()

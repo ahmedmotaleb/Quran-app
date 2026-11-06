@@ -219,3 +219,38 @@ def test_password_reset_lifecycle_and_no_secret_in_logs(world, settings, caplog)
     text = " ".join(f"{r.getMessage()} {r.__dict__}" for r in caplog.records)
     assert "email_not_sent_no_provider" in text and "token=" not in text and "#/reset" not in text
 
+
+
+@pytest.mark.django_db
+def test_login_role_choice_is_checked_by_the_server_and_grants_nothing(world):
+    """The sign-in's «طالب / معلم» choice: the account must have that role. A wrong choice is refused after the password
+    check, with an Arabic message, an audit entry and no session; the role always comes from the account."""
+    from apps.accounts.models import AuthToken
+    from apps.core.models import AuditEvent
+
+    def go(email, role, **kw):
+        return APIClient().post("/api/v1/auth/login", {"identifier": email, "password": PW, "role": role, **kw}, format="json")
+
+    r = go("t1@x.test", "teacher")
+    assert r.status_code == 200 and r.json()["user"]["role"] == "teacher"
+    assert go("s1@x.test", "student").json()["user"]["role"] == "student"
+    tokens = AuthToken.objects.count()
+    r = go("s1@x.test", "teacher")                                            # a student cannot become a teacher
+    assert r.status_code == 403 and r.json()["code"] == "wrong_role" and "لا يملك صلاحية المعلم" in r.json()["message"]
+    assert "sessionid" not in r.cookies or not r.cookies["sessionid"].value
+    assert go("p1@x.test", "teacher").json()["code"] == "wrong_role"
+    assert "اختر «معلم»" in go("t1@x.test", "student").json()["message"]
+    assert "اختر «ولي أمر»" in go("p1@x.test", "student").json()["message"]
+    assert go("s1@x.test", "teacher", client="native").status_code == 403 and AuthToken.objects.count() == tokens  # no token
+    assert AuditEvent.objects.filter(action="auth.login_wrong_role").count() == 5
+    # A wrong password is still the generic answer (the role is never revealed before the password is right).
+    bad = APIClient().post("/api/v1/auth/login", {"identifier": "s1@x.test", "password": "nope", "role": "teacher"}, format="json")
+    assert bad.json()["code"] == "bad_credentials"
+    # No choice (older apps, the parent sign-in) keeps the old behaviour; unknown choices are invalid.
+    assert go("s1@x.test", "").status_code == 200
+    assert go("p1@x.test", "admin").status_code == 400
+    from django.core.cache import cache
+
+    cache.clear()  # the sign-in rate limit (still on) counted the attempts above
+    # The admin portal ignores it (its own checks).
+    assert APIClient().post("/api/v1/auth/login", {"identifier": "admin@x.test", "password": PW, "role": "teacher"}, format="json").json()["code"] == "admin_portal_only"
