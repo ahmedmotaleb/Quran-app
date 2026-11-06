@@ -64,6 +64,8 @@ class AppSettings(models.Model):
     parent_report_weekday = models.PositiveSmallIntegerField(default=4)  # Monday = 0 … Friday = 4
     parent_report_hour = models.PositiveSmallIntegerField(default=18)
     parent_report_email = models.BooleanField(default=False)
+    # «اختر معلمك»: how often a student without a teacher gets the in-app reminder (hours; 0 = off).
+    teacher_reminder_hours = models.PositiveSmallIntegerField(default=48)
     max_recording_seconds = models.PositiveSmallIntegerField(default=900)
     max_upload_mb = models.PositiveSmallIntegerField(default=25)
     # Spaced-repetition intervals in days (product defaults, not a pedagogical guarantee).

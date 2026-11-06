@@ -63,6 +63,10 @@ reseed; run teacher-onboarding
 reseed; CIRCLE_CMD="bash e2e/ci/py.sh circle_for_teacher.py" run assigning
 # Qira'at qualifications: teacher ticks Riwayat, admin confirms and approves, students see and filter.
 reseed; QIRAAT_CMD="bash e2e/ci/py.sh qiraat_teacher.py" run qiraat
+# «اختر معلمك»: request / suggest, one pending request, admin review and assignment, card gone after assignment.
+reseed; LONE_CMD="bash e2e/ci/py.sh lone_student.py" run teacher-request
+# Daily Quran reminders: settings in «حسابي» (quiet hours), a reminder opens the Mushaf.
+reseed; NOTE_CMD="bash e2e/ci/py.sh reminder_note.py" run reminders
 reseed; SETUP_CMD="cd backend && ${PYTHON:-python} manage.py shell < ../e2e/ci/waitlist_setup.py 2>/dev/null" run waitlist
 reseed; run circle-members
 reseed; SETUP_CMD="bash e2e/ci/py.sh delete_setup.py" run account-delete http://localhost:5176/
@@ -79,6 +83,8 @@ reseed; run pwa http://localhost:4173/
 # «ثبّت تطبيق الحلقة» sheet: Android install offer and choice, iPhone guidance, never when installed/desktop, cooldown.
 reseed; run install
 reseed; run push http://localhost:4175/
+# «فعّل تذكيرات القرآن الكريم» sheet (production build with the service worker).
+reseed; run reminder-sheet http://localhost:4175/
 reseed; NEW_VERSION_CMD="echo '// e2e update' >> ${LIVE_DIST:-/tmp/dist-live}/sw.js" run pwa-update http://localhost:4175/
 
 {

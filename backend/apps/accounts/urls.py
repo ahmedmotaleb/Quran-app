@@ -1,7 +1,7 @@
 from django.urls import path
 
 from . import invitations as inv
-from . import admin_management, riwayat, student_import, trusted
+from . import admin_management, riwayat, student_import, teacher_requests, trusted
 from . import views as v
 from .teacher_onboarding import AdminTeacherCreate
 
@@ -25,6 +25,9 @@ urlpatterns = [
     path("qiraat", riwayat.QiraatCatalog.as_view()),
     path("teacher/riwayat", riwayat.MyRiwayat.as_view()),
     path("admin/teachers/<int:pk>/riwayat", riwayat.AdminTeacherRiwayat.as_view()),
+    path("student/teacher-request", teacher_requests.MyTeacherRequest.as_view()),
+    path("admin/teacher-requests", teacher_requests.AdminTeacherRequests.as_view()),
+    path("admin/teacher-requests/<int:pk>/decide", teacher_requests.AdminTeacherRequestDecide.as_view()),
     path("teachers", v.TeacherDirectory.as_view()),
     path("teachers/<int:pk>", v.TeacherDetail.as_view()),
     path("teacher/students", v.MyStudents.as_view()),

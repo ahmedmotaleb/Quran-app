@@ -109,14 +109,41 @@ bash deploy/gcp-push.sh
 ```
 
 It generates the app's signing keys, puts the private key in Secret Manager (`halqa-vapid-private`), and sets
-`VAPID_PUBLIC_KEY` on the service and the maintenance job. `/api/ready` then shows `"push":"configured"`. Each
-person turns it on per device in «حسابي» → «إشعارات على هذا الجهاز». Lock-screen text is generic; details stay
-in the app. On iPhone and iPad the app must be installed to the home screen (iOS 16.4 or later).
+`VAPID_PUBLIC_KEY` on the service and the maintenance job. `/api/ready` then shows `"push":"ready"` (keys present
+**and** matching). Do not run it again unless the keys must change: rotating them (`ROTATE=1`) makes every device
+subscribe again. Each person turns it on per device in «حسابي» → «الإشعارات» → «تفعيل الإشعارات», or from the
+student's «فعّل تذكيرات القرآن الكريم» sheet. Lock-screen text is generic; details stay in the app. On iPhone and
+iPad the app must be installed to the home screen (iOS 16.4 or later).
+
+**Daily Quran reminders and «اختر معلمك»** (no extra setup; sent by the hourly job below):
+- `quran_reminders`: reading, memorization, review and end-of-day reminders at each student's chosen hours in
+  their own time zone (`me/reminders`). Each kind at most once a day, one per student per run, none in quiet hours,
+  none when nothing is left to do, only to students with an active push device and «تذكيرات القرآن» on.
+- `teacher_reminders`: «اختر معلمك» (or «طلبك قيد المراجعة» while a request is pending) for students without a
+  teacher, every `teacher_reminder_hours` (Admin → الإعدادات, default 48, 0 = off), never while one is unread;
+  stops as soon as a teacher is assigned.
+
+**Production verification checklist (push and reminders):**
+1. `curl https://<app>/api/ready` → `"push":"ready"`.
+2. Actions → Ops → `push-report`: `keys_match: true`; devices listed by family; no `failing`.
+3. Actions → Scheduled maintenance → Run workflow: the run succeeds; Cloud Logging shows `quran_reminders` with
+   `sent` counts (the maintenance job has the same VAPID settings as the service).
+4. Real Android (installed PWA, Chrome): student home → «فعّل تذكيرات القرآن الكريم» → «تفعيل الإشعارات» → allow;
+   the admin record → «الإشعارات على الأجهزة» shows the device; close the app; «إرسال إشعار تجريبي» arrives; tapping
+   opens HALQA.
+5. Real iPhone (iOS 16.4+, installed from Safari «إضافة إلى الشاشة الرئيسية»): the same steps from the Home Screen app.
+6. Set a reminder hour = the next hour in «حسابي» → «تذكيرات القرآن الكريم»; with the app closed the reminder
+   arrives at about :23 past that hour; tapping it opens the Mushaf (reading) or the task (memorization/review).
+7. Switch «تذكيرات القرآن واختيار المعلم» off: no reminder the next day. Open the Mushaf before the reading hour: no
+   reading reminder that day. No second reminder of the same kind the same day.
+8. Uninstall the app or clear the site data, then send a test: `push-report` later shows the device removed (410) or
+   switched off, never retried forever.
 
 ## 6b. Hourly maintenance job
 
 Every deploy also updates a Cloud Run **job** `halqa-tasks` (same image and settings as the service) that runs
-`python manage.py run_scheduled`: session reminders, due review tasks, and removal of abandoned uploads. The
+`python manage.py run_scheduled`: session reminders, daily Quran reminders, «اختر معلمك» reminders, due review
+tasks, and removal of abandoned uploads. The
 GitHub workflow **Scheduled maintenance** starts it at minute 23 of every hour; a failed step fails the run, so
 GitHub emails the repository owner. Run it by hand from **Actions → Scheduled maintenance → Run workflow**.
 

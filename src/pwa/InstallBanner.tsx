@@ -10,6 +10,7 @@ import { color } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
 import { primaryBtn } from '@/components/ui';
 import { toast } from '@/store/store';
+import { useReminderPromptShown } from './ReminderPrompt';
 import { hasInstallPrompt, isAndroid, isIos, isStandalone, onInstallChange, promptInstall, wasInstalled } from './install';
 
 const LATER_KEY = 'halqa.install.later';
@@ -40,7 +41,8 @@ export function InstallBanner() {
   const m = useSyncExternalStore(onInstallChange, mode, () => null);
   const [hidden, setHidden] = useState(laterRecently);
   const [busy, setBusy] = useState(false);
-  if (!m || hidden) return null;
+  const reminderUp = useReminderPromptShown(); // one bottom sheet at a time
+  if (!m || hidden || reminderUp) return null;
 
   const later = () => { rememberLater(); setHidden(true); };
   const install = async () => {

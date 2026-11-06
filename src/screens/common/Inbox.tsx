@@ -9,7 +9,7 @@ import { fmtRelative } from '@/lib/time';
 import { tzOf } from '@/lib/format';
 import { go, tab, useApp } from '@/store/store';
 
-export interface Note { id: number; kind: string; title: string; body: string; data: Record<string, number>; read_at: string | null; created_at: string }
+export interface Note { id: number; kind: string; title: string; body: string; data: Record<string, number | string>; read_at: string | null; created_at: string }
 const ICON: Record<string, IconName> = {
   assignment_new: 'plan', review_due: 'repeat', submission_new: 'mic', feedback_new: 'award', booking_confirmed: 'cal', booking_new: 'cal',
   booking_cancelled: 'cal', booking_cancelled_by_student: 'cal', booking_rescheduled: 'cal', session_reminder: 'clock',
@@ -44,6 +44,9 @@ export function open(n: Note, role: string | null) {
   const d = n.data || {};
   if (n.kind.startsWith('support') && d.ticket) return go('support', { id: String(d.ticket) });
   if (n.kind === 'submission_new') return tab('treviews');
+  // Daily Quran reminders: the Mushaf, or the task they are about (below); «اختر معلمك» and request updates: home.
+  if (d.screen === 'mushaf') return go('mushaf', {});
+  if (n.kind.startsWith('teacher_pick') || n.kind.startsWith('teacher_request')) return tab('home');
   if (n.kind === 'correction_new') return go('mistakes');
   if (n.kind === 'feedback_new' && d.assignment) return go('feedback', { id: String(d.assignment) });
   if (d.assignment) return go('task', { id: String(d.assignment) });

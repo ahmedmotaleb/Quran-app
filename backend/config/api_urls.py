@@ -179,6 +179,7 @@ urlpatterns = [
     path("notifications/read", notifications.NotificationRead.as_view()),
     path("notifications/unread", notifications.UnreadCount.as_view()),
     path("notifications/<int:pk>", notifications.NotificationDetail.as_view()),
+    path("me/reminders", notifications.MyReminders.as_view()),
     path("push/config", notifications.PushConfig.as_view()),
     path("push/subscriptions", notifications.PushSubscriptions.as_view()),
     path("admin/users/<int:pk>/push-devices", notifications.AdminPushDevices.as_view()),

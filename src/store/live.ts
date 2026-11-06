@@ -35,7 +35,7 @@ function applyUser(u: E.Me) {
   const name = u.display_name || u.full_name || u.email;
   setState((s) => ({
     me: u, tz: tzIdFor(u.timezone),
-    notif: { tasks: true, sessions: true, feedback: true, news: true, ...(u.notify_prefs ?? {}) },
+    notif: { tasks: true, sessions: true, feedback: true, news: true, reminders: true, ...(u.notify_prefs ?? {}) },
     user: { ...s.user, name, first: stripTitle(u.full_name || u.email).split(' ')[0], email: u.email, level: u.level || '—', goal: u.daily_goal || '—' },
   }));
 }

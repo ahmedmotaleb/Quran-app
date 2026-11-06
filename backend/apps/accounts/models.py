@@ -359,3 +359,33 @@ class TeacherRiwayah(TimeStamped):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["teacher", "riwayah"], name="one_row_per_teacher_riwayah")]
+
+
+class TeacherRequest(TimeStamped):
+    """A student's preferred-teacher request «اختر معلمك» (owner request, 4 Nov 2026). It never assigns a teacher by
+    itself: an admin reviews it and confirms the assignment through the normal TeacherAssignment. The student picks an
+    approved teacher, or suggests one by name when not listed. At most one pending request per student."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "بانتظار المراجعة"
+        APPROVED = "approved", "تمت الموافقة"
+        UNAVAILABLE = "unavailable", "المعلم غير متاح"
+        ASSIGNED = "assigned", "تم تعيين المعلم"
+
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name="teacher_requests", limit_choices_to={"role": Role.STUDENT})
+    teacher = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")  # chosen from the list
+    suggested_name = models.CharField(max_length=120, blank=True)  # «اقترح معلمًا» (not in the list)
+    note = models.CharField(max_length=300, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    alternative = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")  # admin's suggestion
+    assigned_teacher = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    admin_note = models.CharField(max_length=300, blank=True)
+    decided_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["student"], condition=Q(status="pending"), name="one_pending_teacher_request"),
+            models.CheckConstraint(condition=Q(teacher__isnull=False) | ~Q(suggested_name=""), name="teacher_request_has_choice"),
+        ]
