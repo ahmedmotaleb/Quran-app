@@ -22,6 +22,12 @@ GENERIC = [
     ("correction", ("الحلقة", "أضاف معلمك ملاحظة جديدة للمراجعة.")),
     ("assignment", ("الحلقة", "لديك واجب جديد.")),
     ("review_due", ("الحلقة", "حان موعد مراجعة.")),
+    ("teacher_pick", ("الحلقة", "تذكير: اختيار معلمك.")),
+    ("teacher_request", ("الحلقة", "تحديث على طلب اختيار المعلم.")),
+    ("reminder_reading", ("الحلقة", "حان وقت وردك من القرآن الكريم.")),
+    ("reminder_hifz", ("الحلقة", "حان وقت الحفظ اليومي.")),
+    ("reminder_review", ("الحلقة", "حان وقت المراجعة اليومية.")),
+    ("reminder_evening", ("الحلقة", "لديك مهام لم تكتمل اليوم.")),
     ("session_reminder", ("الحلقة", "تذكير بجلسة قادمة.")),
     ("booking", ("الحلقة", "تحديث على أحد مواعيدك.")),
     ("submission", ("الحلقة", "تسليم جديد بانتظار مراجعتك.")),
@@ -48,8 +54,9 @@ GENERIC = [
 # decisions, parents' child updates, admin alerts) concern the account itself and are always pushed.
 CATEGORY = [("assignment", "tasks"), ("review_due", "tasks"), ("correction", "tasks"), ("lesson", "tasks"), ("quiz", "tasks"),
             ("submission", "tasks"), ("session_reminder", "sessions"), ("booking", "sessions"), ("waitlist", "sessions"),
-            ("makeup", "sessions"), ("circle", "sessions"), ("feedback", "feedback"), ("weekly_report", "news"), ("admin_message", "news")]
-PREF_KEYS = ("tasks", "sessions", "feedback", "news")
+            ("makeup", "sessions"), ("circle", "sessions"), ("feedback", "feedback"), ("weekly_report", "news"), ("admin_message", "news"),
+            ("reminder", "reminders"), ("teacher_pick", "reminders")]
+PREF_KEYS = ("tasks", "sessions", "feedback", "news", "reminders")
 
 
 def category(kind: str) -> str | None:

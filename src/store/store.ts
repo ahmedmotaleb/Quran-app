@@ -108,7 +108,7 @@ const initial = () => ({
   user: { name: 'يوسف أحمد', first: 'يوسف', email: 'yousef@halqa.app', level: 'متوسط', goal: '5 أسطر يوميًا' },
   tz: 'cairo' as TzId,
   uiScale: 'm' as 's' | 'm' | 'l',
-  notif: { tasks: true, sessions: true, feedback: true, news: false } as Record<string, boolean>,
+  notif: { tasks: true, sessions: true, feedback: true, news: false, reminders: true } as Record<string, boolean>,
   intro: 0,
   /** `who`: the sign-in's «طالب / معلم / ولي أمر» choice (default طالب); `parent` mirrors who === 'parent'. For طالب and
    *  معلم the server refuses an account of another role (no session); it never grants a role. */

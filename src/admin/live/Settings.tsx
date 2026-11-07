@@ -26,7 +26,8 @@ const LABEL: Record<string, string> = Object.fromEntries([...NUM.map(([k, l]) =>
   ['session_reminders', 'تذكير الجلسات'], ['parent_weekly_report', 'تقرير أولياء الأمور'], ['makeup_enabled', 'الجلسات التعويضية'],
   ['makeup_granters', 'من يمنح الجلسة التعويضية'], ['parent_report_weekday', 'يوم تقرير أولياء الأمور'], ['parent_report_hour', 'ساعة تقرير أولياء الأمور'],
   ['parent_report_email', 'إرسال التقرير بالبريد أيضًا'], ['slot_increment_minutes', 'الفاصل الزمني للمواعيد'],
-  ['session_durations', 'مدد الجلسات المتاحة للمعلمين'], ['session_buffer_minutes', 'الحد الأدنى بين جلستين']]);
+  ['session_durations', 'مدد الجلسات المتاحة للمعلمين'], ['session_buffer_minutes', 'الحد الأدنى بين جلستين'],
+  ['teacher_reminder_hours', 'تذكير «اختر معلمك» للطلاب دون معلم']]);
 const DURATIONS = [20, 30, 40, 45, 50, 60, 75, 90, 120];
 const WEEKDAYS = ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
 
@@ -173,6 +174,13 @@ function SettingsForm() {
           </div>
           {sw('parent_report_email', 'نسخة بالبريد بالأرقام نفسها (دون ملاحظات المعلم)')}
         </>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label htmlFor="st-teacher_reminder_hours" style={labelStyle}>{LABEL.teacher_reminder_hours}</label>
+          <select id="st-teacher_reminder_hours" value={v.teacher_reminder_hours} onChange={(e) => up({ teacher_reminder_hours: Number(e.target.value) })} style={inputStyle(err.teacher_reminder_hours)}>
+            {[[0, 'متوقف'], [24, 'كل 24 ساعة'], [48, 'كل 48 ساعة'], [72, 'كل 3 أيام'], [168, 'كل أسبوع']].map(([h, l]) => <option key={h} value={h}>{l}</option>)}
+          </select>
+          <span style={{ fontSize: 13, color: color.muted }}>إشعار داخل التطبيق للطالب الذي لم يُعيَّن له معلم؛ لا يُكرَّر ما دام السابق غير مقروء، ويتوقف فور التعيين.</span>
+        </div>
       </Group>
       {err.form && <FieldError msg={err.form} />}
       {can('settings.manage') && <div style={{ position: 'sticky', bottom: 0, background: color.ivory, padding: '12px 0', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', borderTop: `1px solid ${color.divider}` }}>

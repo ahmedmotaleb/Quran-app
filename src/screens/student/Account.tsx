@@ -11,6 +11,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { disablePush, enablePush, PushError, pushState, type PushState } from '@/pwa/push';
 import { GoogleCalendarCard } from '@/screens/teacher/GoogleSessions';
 import { MyRiwayatSection } from '@/screens/teacher/Riwayat';
+import { ReminderSettingsCard } from './Reminders';
 
 /** The admin portal may run on its own address (the admin service); ask the server where. */
 async function openAdmin() {
@@ -20,6 +21,8 @@ async function openAdmin() {
 }
 
 const NOTIFS = [['tasks', 'تذكير بالواجبات'], ['sessions', 'تذكير قبل الجلسات'], ['feedback', 'تقييمات المعلم'], ['news', 'أخبار الحلقة']] as const;
+// Students: the daily Quran reminders and «اختر معلمك» (category `reminders`).
+const NOTIFS_STUDENT = [...NOTIFS, ['reminders', 'تذكيرات القرآن واختيار المعلم']] as const;
 const rowBtn = { width: '100%', minHeight: 52, border: 'none', background: 'transparent', display: 'flex', alignItems: 'center', gap: 8, padding: 0, cursor: 'pointer', color: color.ink, fontSize: 15 } as const;
 
 export default function Account() {
@@ -65,7 +68,7 @@ export default function Account() {
       <section style={{ ...card, padding: '4px 16px' }}>
         <h2 style={{ margin: '12px 0 4px', fontSize: 14, color: color.muted, fontWeight: 700 }}>الإشعارات</h2>
           {LIVE && <p style={{ margin: '0 0 4px', fontSize: 12, color: color.muted }}>تتحكم في إشعارات الجوال لكل نوع. تنبيهات الحساب والحضور تصل دائمًا، وتبقى كل الإشعارات داخل التطبيق.</p>}
-        {NOTIFS.map(([k, l]) => (
+        {(role === 'student' ? NOTIFS_STUDENT : NOTIFS).map(([k, l]) => (
           <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 52, borderBottom: `1px solid ${color.divider}` }}>
             <span style={{ fontSize: 15 }}>{l}</span>
             <Switch on={s.notif[k]} label={l} onToggle={() => setNotif(k, !s.notif[k])} />
@@ -107,6 +110,7 @@ export default function Account() {
           <p style={{ margin: 0, fontSize: 12, color: color.muted }}>يُعرض اسمك «{s.user.name}». لا يُضاف اللقب إلى اسمك المحفوظ.</p>
         </section>
       )}
+      {LIVE && role === 'student' && s.notif.reminders !== false && <ReminderSettingsCard />}
       {LIVE && role === 'teacher' && <MyRiwayatSection />}
       {LIVE && role === 'teacher' && <GoogleCalendarCard />}
       {LIVE && <PhoneRow />}

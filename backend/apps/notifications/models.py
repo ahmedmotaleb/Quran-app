@@ -38,3 +38,28 @@ class PushSubscription(models.Model):
     active = models.BooleanField(default=True)
     last_failure = models.CharField(max_length=20, blank=True)
     last_failure_at = models.DateTimeField(null=True, blank=True)
+
+
+class ReminderSettings(models.Model):
+    """A student's daily Quran reminders «تذكيرات القرآن الكريم» (hours in the student's own time zone, `User.timezone`).
+    Sent by the hourly maintenance job (`quran_reminders`), only to students with an active push device, at most one
+    per run, never inside quiet hours, and only when there is something left to do today."""
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reminders")
+    reading_on = models.BooleanField(default=True)       # «ورد القراءة»: skipped once the student has read today
+    reading_hour = models.PositiveSmallIntegerField(default=20)
+    hifz_on = models.BooleanField(default=True)          # «الحفظ»: only with an open memorization task
+    hifz_hour = models.PositiveSmallIntegerField(default=17)
+    review_on = models.BooleanField(default=True)        # «المراجعة»: only with a review task due by today
+    review_hour = models.PositiveSmallIntegerField(default=18)
+    evening_on = models.BooleanField(default=True)       # «تذكير آخر اليوم»: only for tasks due today and not done
+    evening_hour = models.PositiveSmallIntegerField(default=21)
+    quiet_start = models.PositiveSmallIntegerField(default=23)  # nothing is sent from quiet_start until quiet_end
+    quiet_end = models.PositiveSmallIntegerField(default=7)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    KINDS = ("reading", "hifz", "review", "evening")
+
+    def in_quiet(self, hour: int) -> bool:
+        s, e = self.quiet_start, self.quiet_end
+        return s != e and ((s <= hour < e) if s < e else (hour >= s or hour < e))

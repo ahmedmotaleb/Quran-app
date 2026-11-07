@@ -11,6 +11,7 @@ import { BRAND } from '@/theme/brand';
 import { useEffect, useState } from 'react';
 import { api } from '@/api/client';
 import { InboxBell } from '@/screens/common/Inbox';
+import { ChooseTeacherCard } from './ChooseTeacher';
 
 interface PlanItem { priority: number; kind: string; title: string; ref: number; due: string | null; state: 'todo' | 'done'; reason: string; est_minutes: number | null; subtitle: string }
 interface Plan { date: string; items: PlanItem[]; counts: { todo: number; done: number; overdue: number }; est_minutes: number | null; rules: string[] }
@@ -95,6 +96,8 @@ export default function Home() {
           <Icon name="bell" />
         </button>}
       </header>
+
+      {s.liveMode && <ChooseTeacherCard />}
 
       {s.pendingRecs.map((p) => {
         const t = s.tasks.find((x) => x.id === p.taskId);

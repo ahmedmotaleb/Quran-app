@@ -161,3 +161,52 @@ class AdminPushTest(APIView):
         else:
             msg = "تم إرسال الإشعار إلى جهاز واحد." if r["sent"] == 1 else f"تم إرسال الإشعار إلى {r['sent']} أجهزة."
         return Response({**r, "message": msg})
+
+
+# ---- Daily Quran reminders «تذكيرات القرآن الكريم» (students) -------------------------------------------------------
+class ReminderIn(serializers.Serializer):
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        from .models import ReminderSettings
+
+        for k in ReminderSettings.KINDS:
+            self.fields[f"{k}_on"] = serializers.BooleanField(required=False)
+            self.fields[f"{k}_hour"] = serializers.IntegerField(required=False, min_value=0, max_value=23)
+        self.fields["quiet_start"] = serializers.IntegerField(required=False, min_value=0, max_value=23)
+        self.fields["quiet_end"] = serializers.IntegerField(required=False, min_value=0, max_value=23)
+
+
+def reminders_out(s, user) -> dict:
+    return {**{f: getattr(s, f) for k in s.KINDS for f in (f"{k}_on", f"{k}_hour")},
+            "quiet_start": s.quiet_start, "quiet_end": s.quiet_end, "timezone": user.timezone or "Africa/Cairo",
+            "enabled": (user.notify_prefs or {}).get("reminders", True) is not False}
+
+
+class MyReminders(APIView):
+    """GET/PUT the signed-in student's reminder hours (their own time zone) and quiet hours. A reminder hour inside
+    the quiet hours is refused (it would never be sent). The category on/off is `notify_prefs.reminders` (PATCH me)."""
+
+    def get_permissions(self):
+        from apps.accounts.permissions import IsStudent
+
+        return [IsStudent()]
+
+    def get(self, request):
+        from .reminders import settings_for
+
+        return Response(reminders_out(settings_for(request.user), request.user))
+
+    def put(self, request):
+        from .models import ReminderSettings
+
+        s = ReminderIn(data=request.data)
+        s.is_valid(raise_exception=True)
+        obj, _ = ReminderSettings.objects.get_or_create(user=request.user)
+        for k, v in s.validated_data.items():
+            setattr(obj, k, v)
+        bad = {f"{k}_hour": ["هذا الوقت ضمن ساعات الهدوء؛ لن يصلك فيه تذكير. اختر وقتًا آخر أو عدّل ساعات الهدوء."]
+               for k in obj.KINDS if getattr(obj, f"{k}_on") and obj.in_quiet(getattr(obj, f"{k}_hour"))}
+        if bad:
+            raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, bad)
+        obj.save()
+        return Response(reminders_out(obj, request.user))

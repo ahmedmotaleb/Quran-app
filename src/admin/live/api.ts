@@ -135,6 +135,7 @@ export interface Settings {
   max_recording_seconds: number; max_upload_mb: number; review_intervals: number[]; updated_at: string; sensitive: string[];
   waitlist_offer_hours: number; makeup_enabled: boolean; makeup_expiry_days: number; makeup_granters: 'teachers_admins' | 'admins';
   parent_report_weekday: number; parent_report_hour: number; parent_report_email: boolean;
+  teacher_reminder_hours: number;
 }
 export interface AuditRow { id: number; at: string; action: string; actor: string | null; target: string; data: Record<string, unknown> }
 export const getSettings = () => api<Settings>('GET', 'admin/settings');
@@ -233,3 +234,16 @@ export type PushDevice = { id: number; active: boolean; family: string; created_
 export const pushDevices = (id: number) => api<{ status: string; results: PushDevice[] }>('GET', `admin/users/${id}/push-devices`);
 /** «إرسال إشعار تجريبي»: the fixed test text only; the server rate-limits and audits it. */
 export const pushTest = (id: number) => api<{ devices: number; sent: number; failed: string[]; message: string }>('POST', `admin/users/${id}/push-test`);
+
+/** «طلبات اختيار المعلم»: students' preferred-teacher requests (review, mark unavailable with an alternative, assign). */
+export type TeacherRequestStatus = 'pending' | 'approved' | 'unavailable' | 'assigned';
+export interface TeacherRequestRow {
+  id: number; status: TeacherRequestStatus; status_label: string; created_at: string; decided_at: string | null;
+  student: { id: number; name: string }; teacher: { id: number; name: string } | null; suggested_name: string; note: string;
+  alternative: { id: number; name: string } | null; assigned_teacher: { id: number; name: string } | null; admin_note: string;
+  history: { at: string; title: string; body: string; read: boolean }[];
+}
+export const teacherRequests = (status = 'open') => api<Page<TeacherRequestRow>>('GET', `admin/teacher-requests?status=${status}`);
+export const decideTeacherRequest = (id: number, action: 'approve' | 'unavailable' | 'assign', teacher?: number | null, note = '') =>
+  api<TeacherRequestRow>('POST', `admin/teacher-requests/${id}/decide`, { action, teacher: teacher ?? null, note });
+export const approvedTeachers = () => api<Page<{ id: number; display_name?: string; full_name: string }>>('GET', 'admin/users?role=teacher&approved=true&status=active&page_size=200');

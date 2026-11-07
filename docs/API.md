@@ -509,3 +509,45 @@ teacher + Riwayah. Learners only ever see rows with `verified_at`.
 
 **Existing teachers.** Nothing is assumed: their list is empty, they stay listed and bookable, and both the teacher
 and the admin are asked to «أضف القراءات والروايات».
+
+## Daily Quran reminders «تذكيرات القرآن الكريم» (owner request, 4 Nov 2026)
+
+- `GET me/reminders` · `PUT me/reminders` (students): `{reading_on, reading_hour, hifz_on, hifz_hour, review_on,
+  review_hour, evening_on, evening_hour, quiet_start, quiet_end}` plus read-only `timezone` and `enabled`.
+  - Hours are 0–23 in the student's `timezone`.
+  - A reminder hour inside the quiet hours is refused (`400`, field `<kind>_hour`).
+  - The category on/off is `notify_prefs.reminders` (`PATCH me`).
+- **Sending:** `quran_reminders` (hourly job) creates notifications of kind `reminder_reading` / `reminder_hifz` /
+  `reminder_review` / `reminder_evening`, with dedupe key `reminder:<kind>:<local date>`.
+  - Only to active students with an active push device.
+  - Within 2 hours after the chosen hour; one per student per run; none in quiet hours.
+  - Only with something left to do: reading skipped once the reading position was saved today; memorization needs
+    an open memorization task; review needs a review task due by today; end of day needs a task due today, not done.
+- **Lock screen:** generic text only. `data`: `{"screen": "mushaf"}` or `{"assignment": id}`, which the app opens.
+
+## Preferred-teacher requests «اختر معلمك» (owner request, 4 Nov 2026)
+
+- **Student endpoints:**
+  - `GET student/teacher-request` → `{has_teacher, request}`.
+  - `POST student/teacher-request {teacher | suggested_name, note?}`: exactly one of an approved, active teacher or
+    a name of at least 3 characters.
+  - Refused: a student who already has a teacher (`409 has_teacher`), a second pending request
+    (`409 duplicate_request`, also a database constraint).
+- **Statuses:** `pending` بانتظار المراجعة, `approved` تمت الموافقة, `unavailable` المعلم غير متاح,
+  `assigned` تم تعيين المعلم. A request never assigns a teacher by itself.
+- **Admin endpoints:**
+  - `GET admin/teacher-requests?status=open|pending|approved|unavailable|assigned` (`teachers.view`): student,
+    requested teacher or suggested name, date, status, alternative, assigned teacher, notification `history`.
+  - `POST admin/teacher-requests/{id}/decide {action, teacher?, note?}` (`teachers.assign`):
+    - `approve`: pending only.
+    - `unavailable`: with an optional alternative teacher, named in the student's notification.
+    - `assign`: the given, requested or alternative teacher, through a normal `TeacherAssignment`.
+  - Audited as `admin.teacher_request_decided` and `admin.teacher_assigned`. The student is notified on each
+    change (`teacher_request_<status>`).
+- **Any assignment** (the request, the student record, a bulk action) closes the open request as `assigned` and
+  marks unread «اختر معلمك» reminders read (`TeacherAssignment` post-save).
+- **Reminder** (`teacher_reminders`, hourly job): for students with no active teacher, every
+  `AppSettings.teacher_reminder_hours` (default 48, 0 = off, at most 336), never while one is unread.
+  - `teacher_pick` «اختر معلمك», or `teacher_pick_pending` «طلبك قيد المراجعة» while a request is pending or approved.
+  - In-app (and push to the student's devices if «تذكيرات القرآن واختيار المعلم» is on). Never on login.
+

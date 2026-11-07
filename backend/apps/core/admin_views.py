@@ -33,7 +33,7 @@ class SettingsSerializer(serializers.ModelSerializer):
                   "open_signup", "session_reminders", "parent_weekly_report", "max_recording_seconds", "max_upload_mb", "review_intervals",
                   "waitlist_offer_hours", "makeup_enabled", "makeup_expiry_days", "makeup_granters",
                   "parent_report_weekday", "parent_report_hour", "parent_report_email",
-                  "slot_increment_minutes", "session_durations", "session_buffer_minutes", "updated_at"]
+                  "slot_increment_minutes", "session_durations", "session_buffer_minutes", "teacher_reminder_hours", "updated_at"]
         read_only_fields = ["updated_at"]
         extra_kwargs = {"cancel_hours": {"max_value": 168}, "booking_horizon_days": {"min_value": 1, "max_value": 90},
                         "booking_lead_minutes": {"max_value": 10080}, "max_recording_seconds": {"min_value": 30, "max_value": 3600},
@@ -41,7 +41,8 @@ class SettingsSerializer(serializers.ModelSerializer):
                         "group_minutes": {"min_value": 10, "max_value": 240}, "join_minutes": {"max_value": 60},
                         "excuse_deadline_minutes": {"max_value": 10080}, "waitlist_offer_hours": {"min_value": 1, "max_value": 72},
                         "makeup_expiry_days": {"min_value": 1, "max_value": 90}, "parent_report_weekday": {"max_value": 6},
-                        "parent_report_hour": {"max_value": 23}, "session_buffer_minutes": {"max_value": 120}}
+                        "parent_report_hour": {"max_value": 23}, "session_buffer_minutes": {"max_value": 120},
+                        "teacher_reminder_hours": {"max_value": 336}}
 
     def validate_slot_increment_minutes(self, v):
         if v not in (15, 30):

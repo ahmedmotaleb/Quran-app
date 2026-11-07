@@ -16,6 +16,7 @@ import Circles, { BookingDone, BookingReview, SessionDetails, TeacherPage } from
 import Live from '@/screens/student/Live';
 import LiveJoin from '@/screens/student/LiveJoin';
 import { InstallBanner } from '@/pwa/InstallBanner';
+import { ReminderPrompt } from '@/pwa/ReminderPrompt';
 import { LessonPage, QuizPage } from '@/screens/student/Learn';
 import Progress from '@/screens/student/Progress';
 import Account from '@/screens/student/Account';
@@ -138,6 +139,8 @@ export default function AppShell({ framed }: { framed: boolean }) {
         {showState ? <DataStateView screen={screen} ds={ds as Exclude<DataState, 'normal'>} /> : <Cur key={screen} />}
       </main>
       {/* Bottom install sheet: above the tab bar and the safe area, never over them. */}
+      {/* «فعّل تذكيرات القرآن الكريم» on the student's home; the install sheet steps aside while it is shown. */}
+      {LIVE_MODE && role === 'student' && screen === 'home' && !framed && <ReminderPrompt />}
       {INSTALL_SCREENS.includes(screen) && !framed && <InstallBanner />}
       {showNav && (
         <nav aria-label="التنقل الرئيسي" style={{ flexShrink: 0, display: 'flex', background: color.card, borderTop: `1px solid ${color.border}`, padding: '6px 4px 2px' }}>

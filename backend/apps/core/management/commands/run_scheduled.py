@@ -2,6 +2,8 @@
 independent: a failing step is reported and the job exits non-zero, but the other steps still run.
 
 - session_reminders: reminder records for sessions in the next 24 hours
+- teacher_reminders: «اختر معلمك» for students without a teacher (every AppSettings.teacher_reminder_hours)
+- quran_reminders: the students' daily Quran reminders that are due this hour (notifications.reminders)
 - generate_reviews: due spaced-repetition review tasks
 - parent_weekly_reports: the weekly in-app summary for parents (acts only on Friday evening, Cairo time)
 - purge_orphan_media: uploads never attached to a submission/feedback after 48 hours (needs object storage)
@@ -22,7 +24,7 @@ class Command(BaseCommand):
     help = "Run the hourly maintenance steps."
 
     def handle(self, **_):
-        steps = ["session_reminders", "generate_reviews", "sync_circle_members", "waitlist_tick", "archive_smoke_accounts", "parent_weekly_reports",
+        steps = ["session_reminders", "generate_reviews", "quran_reminders", "teacher_reminders", "sync_circle_members", "waitlist_tick", "archive_smoke_accounts", "parent_weekly_reports",
                  "send_pending_setup_emails", "google_calendar_sync"]
         if settings.MEDIA_STORAGE != "none":
             steps += ["purge_orphan_media", "purge_reviewed_recordings"]
