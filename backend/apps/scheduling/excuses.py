@@ -15,6 +15,7 @@
 """
 from __future__ import annotations
 
+from apps.core.timefmt import when as local_when
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -210,7 +211,7 @@ def evaluate(student_id: int, *, trigger_booking_id: int | None = None, actor=No
 
 # ---- notifications (lock screens show only generic text: see notifications/push.py) -------------
 def _when(b: Booking, tz: str | None) -> str:
-    return b.occurrence.starts_at.astimezone(ZoneInfo(tz or "Africa/Cairo")).strftime("%Y-%m-%d %H:%M")
+    return local_when(b.occurrence.starts_at, tz)
 
 
 def _guardians(student_id: int):

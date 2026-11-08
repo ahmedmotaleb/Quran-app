@@ -1,6 +1,7 @@
 """Daily Quran reminders: local-time hours, quiet hours, one per run, once per day, only with something left to do,
 only to students with an active push device and the «تذكيرات القرآن» preference on; generic lock-screen text."""
-from datetime import timedelta
+from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -29,8 +30,16 @@ def local_hour(u, now=None):
 def only(u, kind, **kw):
     """Settings with just this kind on, due at the current local hour, no quiet hours."""
     off = {f"{k}_on": False for k in ReminderSettings.KINDS}
-    return ReminderSettings.objects.update_or_create(user=u, defaults={**off, f"{kind}_on": True, f"{kind}_hour": local_hour(u),
-                                                                       "quiet_start": 0, "quiet_end": 0, **kw})[0]
+    s = ReminderSettings.objects.update_or_create(user=u, defaults={**off, f"{kind}_on": True, f"{kind}_hour": local_hour(u),
+                                                                    "quiet_start": 0, "quiet_end": 0, **kw})[0]
+    return backdate(s)
+
+
+def backdate(s, days=3):
+    """Settings saved before today's moments (changing them never fires a reminder at once)."""
+    ReminderSettings.objects.filter(pk=s.pk).update(updated_at=timezone.now() - timedelta(days=days))
+    s.refresh_from_db()
+    return s
 
 
 def task(u, kind="hifz", due=timedelta(days=1), status="not_started"):
@@ -57,19 +66,87 @@ def test_skipped_once_the_student_read_today(world):
     assert run()["reading"] == 0 and not sent(world.s1).exists()
 
 
-def test_local_time_zone_window_and_quiet_hours(world):
+def test_local_time_zone_catch_up_and_quiet_hours(world):
     device(world.s1)
     world.s1.timezone = "Asia/Tokyo"; world.s1.save(update_fields=["timezone"])
     h = local_hour(world.s1)
-    only(world.s1, "reading", reading_hour=(h - 1) % 24)                          # missed last run: caught up
+    if h < 4:
+        pytest.skip("needs three earlier hours in the same local day")
+    only(world.s1, "reading", reading_hour=h - 3)                                # missed runs: caught up the same day
     assert run()["reading"] == 1
     Notification.objects.all().delete()
-    only(world.s1, "reading", reading_hour=(h - 3) % 24)                          # too late today: skipped
-    assert run()["reading"] == 0
     only(world.s1, "reading", reading_hour=(h + 1) % 24)                          # not yet
     assert run()["reading"] == 0
     only(world.s1, "reading", quiet_start=h, quiet_end=(h + 1) % 24)              # inside quiet hours
     assert run()["reading"] == 0 and not sent(world.s1).exists()
+
+
+def test_changing_the_hour_never_fires_at_once(world):
+    device(world.s1)
+    h = local_hour(world.s1)
+    if h < 2:
+        pytest.skip("needs an earlier hour today")
+    s = only(world.s1, "reading", reading_hour=h - 1)
+    ReminderSettings.objects.filter(pk=s.pk).update(updated_at=timezone.now())   # saved after today's moment
+    assert run()["reading"] == 0                                                  # starts tomorrow
+    tomorrow = timezone.now() + timedelta(days=1)
+    assert run(tomorrow)["reading"] == 1
+
+
+def _cairo(u, hour, **kw):
+    device(u); u.timezone = "Africa/Cairo"; u.save(update_fields=["timezone"])
+    off = {f"{k}_on": False for k in ReminderSettings.KINDS}
+    return backdate(ReminderSettings.objects.update_or_create(user=u, defaults={**off, "reading_on": True, "reading_hour": hour,
+                                                                                "quiet_start": 0, "quiet_end": 0, **kw})[0], days=400)
+
+
+def utc(s):
+    return datetime.fromisoformat(s).replace(tzinfo=dt_timezone.utc)
+
+
+def test_cairo_daylight_saving_time_from_the_iana_database(world):
+    _cairo(world.s1, 20)
+    assert run(utc("2026-06-10T16:30"))["reading"] == 0                           # 19:30 Cairo summer (UTC+3)
+    assert run(utc("2026-06-10T17:05"))["reading"] == 1                           # 20:05 Cairo summer
+    assert run(utc("2026-12-10T17:05"))["reading"] == 0                           # 19:05 Cairo winter (UTC+2)
+    assert run(utc("2026-12-10T18:05"))["reading"] == 1                           # 20:05 Cairo winter
+    assert sent(world.s1).count() == 2
+
+
+def test_fall_back_repeated_hour_sends_once(world):
+    # 29 Oct 2026: Cairo goes from 24:00 back to 23:00, so 23:xx happens twice.
+    _cairo(world.s1, 23)
+    assert run(utc("2026-10-29T20:30"))["reading"] == 1                           # 23:30 +03
+    assert run(utc("2026-10-29T21:30"))["reading"] == 0                           # 23:30 +02 again: no duplicate
+    assert sent(world.s1).count() == 1
+
+
+def test_spring_forward_skipped_hour_is_not_missed(world):
+    # 24 Apr 2026: Cairo jumps from 00:00 to 01:00, so a 00:00 reminder has no wall time that day.
+    _cairo(world.s1, 0)
+    assert run(utc("2026-04-23T22:30"))["reading"] == 1                           # 01:30 +03 on the 24th: sent once
+    assert run(utc("2026-04-23T23:30"))["reading"] == 0
+
+
+def test_travel_across_the_date_line_never_duplicates(world):
+    device(world.s1)
+    world.s1.timezone = "Pacific/Honolulu"; world.s1.save(update_fields=["timezone"])
+    backdate(ReminderSettings.objects.create(user=world.s1, reading_hour=20, hifz_on=False, review_on=False, evening_on=False,
+                                             quiet_start=0, quiet_end=0), days=400)
+    t = utc("2026-11-10T06:10")                                                   # 20:10 on the 9th in Honolulu
+    assert run(t)["reading"] == 1
+    Notification.objects.filter(recipient=world.s1).update(created_at=t)          # as if sent at that moment
+    world.s1.timezone = "Pacific/Kiritimati"; world.s1.save(update_fields=["timezone"])  # now 20:10 on the 10th
+    assert run(t + timedelta(minutes=5))["reading"] == 0                           # same reminder, minutes later: not again
+    assert run(t + timedelta(days=1))["reading"] == 1                              # the next real day
+    assert sent(world.s1).count() == 2
+
+
+def test_flight_to_a_zone_where_the_hour_passed_is_caught_up(world):
+    _cairo(world.s1, 20)
+    assert run(utc("2026-11-10T17:30"))["reading"] == 0                           # 19:30 in Cairo: not yet
+    world.s1.timezone = "Asia/Dubai"; world.s1.save(update_fields=["timezone"])
+    assert run(utc("2026-11-10T18:30"))["reading"] == 1                           # 22:30 in Dubai: past 20:00, sent
 
 
 def test_hifz_only_with_an_open_memorization_task(world):
@@ -108,7 +185,7 @@ def test_evening_only_for_unfinished_tasks_due_today(world):
 def test_one_reminder_per_run_then_the_next(world):
     device(world.s1)
     h = local_hour(world.s1)
-    ReminderSettings.objects.create(user=world.s1, reading_hour=h, hifz_hour=h, review_on=False, evening_on=False, quiet_start=0, quiet_end=0)
+    backdate(ReminderSettings.objects.create(user=world.s1, reading_hour=h, hifz_hour=h, review_on=False, evening_on=False, quiet_start=0, quiet_end=0))
     task(world.s1, "hifz")
     first = run(); second = run(); third = run()
     assert sum(first.values()) == 1 and sum(second.values()) == 1 and sum(third.values()) == 0

@@ -4,6 +4,7 @@
  *  The server computes the bookable times and enforces every rule (scheduling/availability.py); this screen only
  *  edits ranges. Used by the teacher app and, with an admin API prefix, by the admin portal. */
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { AM, PM, clockOf, wallClock } from '@/lib/time';
 import { color, font } from '@/theme/tokens';
 import { api, type ApiError } from '@/api/client';
 
@@ -44,11 +45,8 @@ export function httpAvail(base: string): AvailApi {
 // Python weekday order (0 = Monday) as the server uses; shown starting from Saturday.
 export const WD = ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
 const WEEK_ORDER = [5, 6, 0, 1, 2, 3, 4];
-export const tLabel = (v: string | null) => {
-  if (!v) return '';
-  const [h, m] = v.split(':').map(Number);
-  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'ص' : 'م'}`;
-};
+/** "06:00" → «٦:٠٠ صباحًا» (lib/time). */
+export const tLabel = (v: string | null) => clockOf(v);
 const rangeLabel = (s: string | null, e: string | null) => `${tLabel(s)} — ${tLabel(e)}`;
 const STATE: Record<Segment['state'], [string, string, string]> = {
   available: ['متاح', '#E3EFE9', color.primary],
@@ -68,7 +66,7 @@ function nextDates(tz: string, n: number): string[] {
 const pyWeekday = (date: string) => (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7;
 const dayNum = (date: string) => String(Number(date.slice(8)));
 const dateLabel = (date: string) => new Intl.DateTimeFormat('ar-EG', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`));
-const timeOf = (iso: string, tz: string) => new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
+const timeOf = (iso: string, tz: string) => { const w = wallClock(iso, tz); return `${w.hour}:${w.minute}`; };
 const errOf = (e: unknown) => {
   const x = e as ApiError;
   const f = x?.fields ? Object.values(x.fields).flat()[0] : null;
@@ -120,9 +118,9 @@ export function TimePicker({ id, label, value, onChange, step }: { id: string; l
           {Array.from({ length: 60 / step }, (_, i) => i * step).map((x) => <option key={x} value={x}>{String(x).padStart(2, '0')}</option>)}
         </select>
         <div role="radiogroup" aria-label={`${label}: صباحًا أو مساءً`} dir="rtl" style={{ display: 'flex', gap: 4 }}>
-          {([[false, 'ص'], [true, 'م']] as const).map(([v, l]) => (
+          {([[false, AM], [true, PM]] as const).map(([v, l]) => (
             <button key={l} type="button" role="radio" aria-checked={pm === v} onClick={() => set(h12, m, v)}
-              style={{ minWidth: 48, minHeight: 48, borderRadius: 12, border: `1.5px solid ${pm === v ? color.primary : color.borderStrong}`, background: pm === v ? color.primary : color.card, color: pm === v ? color.ivory : color.primary, fontSize: 16, fontWeight: 800, cursor: 'pointer' }}>{l}</button>
+              style={{ minWidth: 64, minHeight: 48, padding: '0 8px', borderRadius: 12, border: `1.5px solid ${pm === v ? color.primary : color.borderStrong}`, background: pm === v ? color.primary : color.card, color: pm === v ? color.ivory : color.primary, fontSize: 16, fontWeight: 800, cursor: 'pointer' }}>{l}</button>
           ))}
         </div>
       </div>

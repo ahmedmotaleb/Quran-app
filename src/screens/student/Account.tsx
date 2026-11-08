@@ -79,10 +79,20 @@ export default function Account() {
         <h2 style={{ margin: '12px 0 0', fontSize: 14, color: color.muted, fontWeight: 700 }}>العرض</h2>
         <p style={{ margin: 0, fontSize: 15, display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="type" size={18} /> حجم الخط</p>
         <Segmented role="group" label="حجم الخط" options={[['s', 'صغير'], ['m', 'متوسط'], ['l', 'كبير']] as const} value={s.uiScale} onChange={(k) => setState({ uiScale: k })} />
-        <button onClick={() => openSheet({ kind: 'tz' })} style={{ ...rowBtn, textAlign: 'right' }}>
-          <span style={{ color: color.primary }}><Icon name="globe" size={18} /></span><span style={{ flex: 1 }}>المنطقة الزمنية</span>
-          <span style={{ fontSize: 14, fontWeight: 700 }}>{tz.label} ({tz.gmt})</span><span style={{ color: color.primary }}><Icon name="chevL" size={18} /></span>
-        </button>
+        {LIVE ? (
+          // Live: always the device's own zone (no manual choice to forget after travelling).
+          <div data-testid="device-zone" style={{ ...rowBtn, cursor: 'default' }}>
+            <span style={{ color: color.primary }}><Icon name="globe" size={18} /></span>
+            <span style={{ flex: 1 }}><span style={{ display: 'block' }}>المنطقة الزمنية</span>
+              <span style={{ display: 'block', fontSize: 12, color: color.muted }}>تلقائيًا من جهازك، وتتغير عند السفر</span></span>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>{tz.label} (<bdi dir="ltr">{tz.gmt}</bdi>)</span>
+          </div>
+        ) : (
+          <button onClick={() => openSheet({ kind: 'tz' })} style={{ ...rowBtn, textAlign: 'right' }}>
+            <span style={{ color: color.primary }}><Icon name="globe" size={18} /></span><span style={{ flex: 1 }}>المنطقة الزمنية</span>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>{tz.label} ({tz.gmt})</span><span style={{ color: color.primary }}><Icon name="chevL" size={18} /></span>
+          </button>
+        )}
       </section>
       {LIVE && role === 'teacher' && s.me?.admin_access?.active && (
         // «معلم + إدارة»: the same account opens the admin portal (its own sign-in with two-step verification).

@@ -62,6 +62,7 @@ class Command(BaseCommand):
     help = "Report push configuration and device subscriptions (read-only; no endpoints or keys)."
 
     def handle(self, **_):
+        from apps.accounts.models import User
         from apps.notifications.models import Notification, PushSubscription
 
         now = timezone.now()
@@ -84,7 +85,15 @@ class Command(BaseCommand):
                 "newest": max((s.created_at for s in subs), default=None),
             },
             "notifications_7d": {"total": recent.count(),
-                                 "to_users_with_a_device": recent.filter(recipient_id__in=with_devices).count()},
+                                 "to_users_with_a_device": recent.filter(recipient_id__in=with_devices).count(),
+                                 # Inbox only (no device turned on), by the recipient's role: counts, no names.
+                                 "inbox_only_by_role": dict(Counter(recent.exclude(recipient_id__in=with_devices)
+                                                                    .values_list("recipient__role", flat=True)))},
+            # Active accounts per role, and how many of them have at least one active device.
+            "accounts_with_device_by_role": {
+                r: {"accounts": User.objects.filter(role=r, is_active=True).count(),
+                    "with_device": User.objects.filter(role=r, is_active=True, pk__in=with_devices).count()}
+                for r in ("student", "teacher", "parent")},
         }
         # Admin «إرسال إشعار تجريبي» presses (counts only): did the owner's test reach a device?
         from apps.core.models import AuditEvent

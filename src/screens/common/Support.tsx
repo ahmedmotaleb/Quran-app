@@ -6,11 +6,12 @@ import { BackHeader, FieldError, card, inputStyle, labelStyle, muted, outlineBtn
 import { ImagePicker, Thread } from '@/components/SupportThread';
 import { go, openSheet, setState, toast, useApp } from '@/store/store';
 import type { ApiError } from '@/api/client';
+import { deviceZone } from '@/lib/time';
 import * as SP from '@/api/support';
 
 const errText = (e: unknown) => (e as ApiError)?.message || 'تعذّر تنفيذ الطلب.';
 const fieldErr = (e: unknown, k: string) => (e as ApiError)?.fields?.[k]?.[0];
-const day = (iso: string) => new Intl.DateTimeFormat('ar-EG', { day: 'numeric', month: 'short', timeZone: 'Africa/Cairo' }).format(new Date(iso));
+const day = (iso: string) => new Intl.DateTimeFormat('ar-EG', { day: 'numeric', month: 'short', timeZone: deviceZone() }).format(new Date(iso));
 const TONE: Record<SP.TicketStatus, string> = { open: color.primary, in_progress: color.primary, waiting_user: '#9A6B00', resolved: color.muted, closed: color.muted };
 
 export default function Support() {

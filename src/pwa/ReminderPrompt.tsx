@@ -1,7 +1,8 @@
-/** «فعّل تذكيرات القرآن الكريم»: a bottom sheet on the student's home (live mode) asking to turn on notifications for
- *  the daily Quran reminders. The browser's permission prompt opens only from «تفعيل الإشعارات» (a tap).
+/** «فعّل إشعارات الحلقة»: a small bottom banner on the home screen after sign-in (students, teachers, parents; live
+ *  mode) asking to turn on phone notifications, so reminders, tasks, feedback and session changes reach the phone even
+ *  when HALQA is closed. The browser's permission prompt opens only from «تفعيل الإشعارات» (a tap), never on load.
  *  - Shown only when this device is not subscribed and permission was never refused, after the home screen settles.
- *  - «ليس الآن» hides it for 7 days. A refusal (now or earlier) is never asked again: the sheet shows once how to
+ *  - «لاحقًا» hides it for 7 days. A refusal (now or earlier) is never asked again: the sheet shows once how to
  *    allow it in the device settings, then never returns.
  *  - iPhone/iPad not installed to the Home Screen: Web Push needs the installed app, so the sheet explains that first.
  *  While it is shown the install sheet steps aside (one bottom sheet at a time). */
@@ -50,7 +51,7 @@ export function ReminderPrompt() {
     setBusy(true); setErr('');
     try {
       const st = await enablePush();
-      if (st === 'on') { toast('فُعّلت تذكيرات القرآن على هذا الجهاز'); setMode(null); }
+      if (st === 'on') { toast('فُعّلت الإشعارات على هذا الجهاز'); setMode(null); }
       else if (st === 'denied') { write(DENIED_KEY, '1'); setMode('denied'); }
       else if (st === 'ios-install') setMode('ios');
       else setMode(null);
@@ -59,7 +60,7 @@ export function ReminderPrompt() {
   };
   const step = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, lineHeight: 1.6 } as const;
   const badge = { width: 30, height: 30, borderRadius: 8, background: color.sageTint, color: color.primary, display: 'grid', placeItems: 'center', flexShrink: 0 } as const;
-  const text = mode === 'ask' ? 'هنفكّرك بورد القراءة والمراجعة والحفظ في الأوقات اللي تختارها، حتى لو التطبيق مقفول.'
+  const text = mode === 'ask' ? 'استقبل تذكيرات الحفظ والمراجعة ومواعيد الحلقات حتى عندما يكون التطبيق مغلقًا.'
     : mode === 'ios' ? 'على iPhone وiPad تصل الإشعارات إلى التطبيق المثبّت فقط. ثبّت الحلقة أولًا، ثم افتحها من الشاشة الرئيسية وفعّل الإشعارات.'
     : 'رُفض إذن الإشعارات لهذا الموقع، فلن نسألك مرة أخرى. لتفعيلها لاحقًا: على Android افتح الإعدادات ← التطبيقات ← الحلقة (أو Chrome) ← الإشعارات ← السماح. على الكمبيوتر اضغط رمز القفل بجانب العنوان ← الإشعارات ← السماح.';
 
@@ -70,7 +71,7 @@ export function ReminderPrompt() {
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <span style={{ width: 48, height: 48, borderRadius: 12, background: color.sage, color: color.primary, display: 'grid', placeItems: 'center', flexShrink: 0 }}><Icon name="bell" /></span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 id="rem-prompt-title" style={{ margin: 0, fontSize: 17, fontWeight: 800, color: color.ink }}>فعّل تذكيرات القرآن الكريم</h2>
+          <h2 id="rem-prompt-title" style={{ margin: 0, fontSize: 17, fontWeight: 800, color: color.ink }}>فعّل إشعارات الحلقة</h2>
           <p style={{ margin: '4px 0 0', fontSize: 14, lineHeight: 1.7, color: color.body }}>{text}</p>
         </div>
         <button onClick={later} aria-label="إغلاق" style={{ width: 44, height: 44, margin: '-8px -8px 0 0', border: 'none', background: 'transparent', color: color.muted, display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
@@ -89,7 +90,7 @@ export function ReminderPrompt() {
           <Icon name="bell" size={18} /> تفعيل الإشعارات</button>}
         <button onClick={mode === 'denied' ? () => setMode(null) : later}
           style={{ minHeight: 48, padding: '0 18px', borderRadius: 12, border: `1px solid ${color.borderStrong}`, background: 'transparent', color: color.primary, fontSize: 15, fontWeight: 700, cursor: 'pointer', ...(mode !== 'ask' ? { flex: 1 } : {}) }}>
-          {mode === 'denied' ? 'حسنًا' : 'ليس الآن'}
+          {mode === 'denied' ? 'حسنًا' : 'لاحقًا'}
         </button>
       </div>
     </section>

@@ -11,6 +11,7 @@ Confirmations are created with transaction.on_commit, so a failed notification n
 """
 from __future__ import annotations
 
+from apps.core.timefmt import when as local_when
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -191,8 +192,7 @@ def _notify_cancelled(booking_id: int) -> None:
     from apps.notifications.services import notify
 
     b = Booking.objects.select_related("occurrence__teacher", "student").get(pk=booking_id)
-    tz = ZoneInfo(b.student.timezone or "Africa/Cairo")
-    when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+    when = local_when(b.occurrence.starts_at, b.student.timezone)
     notify(b.student, "booking_cancelled", "أُلغيت جلستك", f"مع {b.occurrence.teacher.display_name} · {when}. يمكنك حجز موعد آخر.",
            link="/sessions", dedupe=f"booking:{b.pk}:cancelled", data={"booking": b.pk})
 
@@ -201,8 +201,7 @@ def _notify_teacher(booking_id: int, kind: str, title: str) -> None:
     from apps.notifications.services import notify
 
     b = Booking.objects.select_related("occurrence__teacher", "student").get(pk=booking_id)
-    tz = ZoneInfo(b.occurrence.teacher.timezone or "Africa/Cairo")
-    when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+    when = local_when(b.occurrence.starts_at, b.occurrence.teacher.timezone)
     notify(b.occurrence.teacher, kind, title, f"{b.student.full_name} · {when}", link="/teacher/schedule",
            dedupe=f"booking:{b.pk}:{kind}", data={"booking": b.pk})
 
@@ -215,8 +214,7 @@ def notify_attendance(booking_id: int) -> None:
     b = Booking.objects.select_related("occurrence__teacher", "student").get(pk=booking_id)
     if b.attendance not in (Booking.Attendance.ABSENT,):
         return
-    tz = ZoneInfo(b.student.timezone or "Africa/Cairo")
-    when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+    when = local_when(b.occurrence.starts_at, b.student.timezone)
     notify(b.student, "attendance_absent", "سُجّل غيابك عن جلسة", f"مع {b.occurrence.teacher.display_name} · {when}", link="/sessions",
            dedupe=f"booking:{b.pk}:att:{b.attendance}", data={"booking": b.pk})
     for g in GuardianLink.objects.filter(student=b.student, status=LinkStatus.ACTIVE).select_related("guardian"):
@@ -228,8 +226,7 @@ def _notify_booked(booking_id: int) -> None:
     from apps.notifications.services import notify
 
     b = Booking.objects.select_related("occurrence__teacher", "student").get(pk=booking_id)
-    tz = ZoneInfo(b.student.timezone)
-    when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+    when = local_when(b.occurrence.starts_at, b.student.timezone)
     notify(b.student, "booking_confirmed", "تم تأكيد حجزك", f"مع {b.occurrence.teacher.display_name} · {when}", link=f"/sessions/{b.pk}", dedupe=f"booking:{b.pk}:confirmed", data={"booking": b.pk})
     notify(b.occurrence.teacher, "booking_new", "حجز جديد", f"{b.student.full_name} · {when}", link="/teacher/schedule", dedupe=f"booking:{b.pk}:teacher", data={"booking": b.pk})
 

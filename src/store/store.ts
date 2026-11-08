@@ -5,9 +5,10 @@ import {
   type Screen,
 } from '@/data/demo';
 import type {
-  Availability, Decision, Feedback, OtherSubmission, Recording, Role, Scores, Session, SurahData, SurahListItem, Student, Task, TaskStatus, TaskType, Teacher, TimedNote, TzId,
+  Availability, Decision, Feedback, OtherSubmission, Recording, Role, Scores, Session, SurahData, SurahListItem, Student, Task, TaskStatus, TaskType, Teacher, TimedNote,
 } from '@/data/types';
 import { rangeL, typeL } from '@/lib/format';
+import { deviceZone } from '@/lib/time';
 import { ayahCount, surahLabel } from '@/lib/quranIndex';
 import { ayahAudioUrl, currentReciter, fetchSurah, fetchSurahList, hasSurahAudio, loadSurahAudio, saveReciter } from '@/services/quran';
 import { ApiError } from '@/api/client';
@@ -106,7 +107,7 @@ const initial = () => ({
   sheet: null as Sheet | null,
   device: '390' as DeviceKey,
   user: { name: 'يوسف أحمد', first: 'يوسف', email: 'yousef@halqa.app', level: 'متوسط', goal: '5 أسطر يوميًا' },
-  tz: 'cairo' as TzId,
+  tz: deviceZone() as string, // IANA zone of this device (or a demo id such as 'cairo')
   uiScale: 'm' as 's' | 'm' | 'l',
   notif: { tasks: true, sessions: true, feedback: true, news: false, reminders: true } as Record<string, boolean>,
   intro: 0,

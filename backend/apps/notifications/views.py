@@ -159,7 +159,10 @@ class AdminPushTest(APIView):
         elif r["sent"] == 0:
             msg = "تعذّر إرسال الإشعار إلى أجهزة هذا المستخدم. راجع حالة الأجهزة أدناه."
         else:
-            msg = "تم إرسال الإشعار إلى جهاز واحد." if r["sent"] == 1 else f"تم إرسال الإشعار إلى {r['sent']} أجهزة."
+            # Accepted by the push service (Google, Mozilla, Apple), not proof it was shown: the phone decides that.
+            n = "جهاز واحد" if r["sent"] == 1 else f"{r['sent']} أجهزة"
+            msg = (f"قبلت خدمة الإشعارات الإرسال إلى {n}. تأكد من ظهوره على الهاتف: "
+                   "الخادم لا يستطيع تأكيد العرض (يتحكم فيه الجهاز وإعدادات الإشعارات وتوفير البطارية).")
         return Response({**r, "message": msg})
 
 

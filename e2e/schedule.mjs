@@ -36,22 +36,22 @@ await step(T.page, 'teacher adds a morning range (06:00–11:00) — no fixed ti
   await days().nth(2).click();
   await T.app.getByRole('button', { name: '+ إضافة فترة إتاحة' }).click();
   const sh = T.page.getByRole('dialog', { name: /^إضافة فترة/ });
-  await pickTime(sh, 'من', 6, 0, 'ص'); await pickTime(sh, 'إلى', 11, 0, 'ص');
+  await pickTime(sh, 'من', 6, 0, 'صباحًا'); await pickTime(sh, 'إلى', 11, 0, 'صباحًا');
   await sh.locator('#av-min').selectOption('45');
   await sh.getByRole('button', { name: 'حفظ', exact: true }).click();
   await T.page.getByText('أُضيفت الفترة').waitFor();
-  await T.app.locator('[data-range="06:00-11:00"]').getByText('6:00 ص — 11:00 ص').waitFor();
+  await T.app.locator('[data-range="06:00-11:00"]').getByText('٦:٠٠ صباحًا — ١١:٠٠ صباحًا').waitFor();
 });
 await step(T.page, 'an overlapping range is refused; a late-night range runs past midnight', async () => {
   await T.app.getByRole('button', { name: '+ إضافة فترة إتاحة' }).click();
   let sh = T.page.getByRole('dialog', { name: /^إضافة فترة/ });
-  await pickTime(sh, 'من', 10, 0, 'ص'); await pickTime(sh, 'إلى', 12, 0, 'م');
+  await pickTime(sh, 'من', 10, 0, 'صباحًا'); await pickTime(sh, 'إلى', 12, 0, 'مساءً');
   await sh.getByRole('button', { name: 'حفظ', exact: true }).click();
   await sh.getByText('تتداخل هذه الفترة', { exact: false }).waitFor();
   await sh.getByRole('button', { name: 'إلغاء', exact: true }).click();
   await T.app.getByRole('button', { name: '+ إضافة فترة إتاحة' }).click();
   sh = T.page.getByRole('dialog', { name: /^إضافة فترة/ });
-  await pickTime(sh, 'من', 11, 0, 'م'); await pickTime(sh, 'إلى', 1, 0, 'ص');
+  await pickTime(sh, 'من', 11, 0, 'مساءً'); await pickTime(sh, 'إلى', 1, 0, 'صباحًا');
   await sh.getByText('تمتد هذه الفترة بعد منتصف الليل').waitFor();
   await sh.getByRole('button', { name: 'حفظ', exact: true }).click();
   await T.app.locator('[data-range="23:00-01:00"]').getByText('تمتد إلى اليوم التالي', { exact: false }).waitFor();
@@ -59,12 +59,12 @@ await step(T.page, 'an overlapping range is refused; a late-night range runs pas
 await step(T.page, 'teacher blocks 7:00–8:00 that date only (private reason)', async () => {
   await T.app.getByRole('button', { name: 'حظر وقت', exact: true }).click();
   const sh = T.page.getByRole('dialog', { name: /^حظر وقت/ });
-  await pickTime(sh, 'من', 7, 0, 'ص'); await pickTime(sh, 'إلى', 8, 0, 'ص');
+  await pickTime(sh, 'من', 7, 0, 'صباحًا'); await pickTime(sh, 'إلى', 8, 0, 'صباحًا');
   await sh.locator('#av-reason').fill('موعد شخصي');
   await sh.getByRole('button', { name: 'حفظ', exact: true }).click();
   await T.page.getByText('حُظر الوقت').waitFor();
   const st = T.app.getByRole('region', { name: 'حالة اليوم' });
-  await st.getByText('7:00 ص — 8:00 ص').waitFor(); await st.getByText('غير متاح', { exact: true }).first().waitFor();
+  await st.getByText('٧:٠٠ صباحًا — ٨:٠٠ صباحًا').waitFor(); await st.getByText('غير متاح', { exact: true }).first().waitFor();
 });
 await T.page.screenshot({ path: out + '/t1-avail.png', fullPage: true });
 const S = await session('sara@halqa.app');
@@ -73,9 +73,9 @@ await step(S.page, 'student sees only computed free times and books 6:00 AM', as
   await S.app.getByText('الشيخ خالد العمري').click();
   await S.app.getByText('جارٍ تحميل المواعيد…').waitFor({ state: 'detached' });
   await S.app.getByRole('option').nth(2).click();
-  await S.app.getByRole('button', { name: '6:15 ص', exact: true }).waitFor();                 // 6:15 + 45 = 7:00 (block starts)
-  for (const t of ['6:30 ص', '7:30 ص', '5:45 ص']) if (await S.app.getByRole('button', { name: t, exact: true }).count()) throw new Error(`${t} offered`);
-  await S.app.getByRole('button', { name: '6:00 ص', exact: true }).click();
+  await S.app.getByRole('button', { name: '٦:١٥ صباحًا', exact: true }).waitFor();                 // 6:15 + 45 = 7:00 (block starts)
+  for (const t of ['٦:٣٠ صباحًا', '٧:٣٠ صباحًا', '٥:٤٥ صباحًا']) if (await S.app.getByRole('button', { name: t, exact: true }).count()) throw new Error(`${t} offered`);
+  await S.app.getByRole('button', { name: '٦:٠٠ صباحًا', exact: true }).click();
   await S.app.getByRole('button', { exact: true, name: 'متابعة' }).click();
   await S.app.getByRole('button', { exact: true, name: 'تأكيد الحجز' }).click();
   await S.app.getByText('تم تأكيد حجزك').waitFor();
@@ -103,7 +103,7 @@ await step(T.page, 'teacher cancels booking → student notified', async () => {
 await step(T.page, 'teacher removes the morning range', async () => {
   await T.app.getByRole('tab', { name: 'الإتاحة' }).click();
   await days().nth(2).click();
-  await T.app.getByRole('button', { name: 'حذف 6:00 ص — 11:00 ص' }).click();
+  await T.app.getByRole('button', { name: 'حذف ٦:٠٠ صباحًا — ١١:٠٠ صباحًا' }).click();
   await T.page.getByRole('dialog', { name: 'حذف الفترة؟' }).getByRole('button', { name: 'حذف', exact: true }).click();
   await T.page.getByText('حُذفت الفترة').waitFor();
   await T.app.locator('[data-range="06:00-11:00"]').waitFor({ state: 'detached' });

@@ -48,3 +48,27 @@ def test_report_shows_admin_tests_and_switched_off_devices(world, settings):
     r = report(settings, *pair())[1]
     assert r["devices"]["inactive"] == 1 and r["devices"]["last_failures"] == {"unauthorized": 1}
     assert r["admin_tests_7d"][0]["target"] == str(world.s1.pk) and r["admin_tests_7d"][0]["sent"] == 0
+
+
+def test_report_shows_who_gets_inbox_only(world, settings):
+    """The usual reason a message is "only in the app": the recipient has no device with notifications turned on."""
+    from apps.notifications.models import Notification
+
+    PushSubscription.objects.create(user=world.s1, endpoint="https://fcm.googleapis.com/fcm/send/y", p256dh="P" * 80, auth="A" * 20, device="Android")
+    for i, u in enumerate((world.s1, world.t1, world.t1, world.p1)):
+        Notification.objects.create(recipient=u, kind="admin_message", title="x", body="y", dedupe_key=f"t{i}")
+    r = report(settings, *pair())[1]
+    assert r["notifications_7d"]["to_users_with_a_device"] == 1
+    assert r["notifications_7d"]["inbox_only_by_role"] == {"teacher": 2, "parent": 1}
+    assert r["accounts_with_device_by_role"]["student"]["with_device"] == 1
+    assert r["accounts_with_device_by_role"]["teacher"] == {"accounts": 2, "with_device": 0}
+
+
+def test_delivery_logs_why_nothing_was_pushed(world, settings, caplog):
+    from apps.notifications.services import notify
+
+    settings.VAPID_PUBLIC_KEY, settings.VAPID_PRIVATE_KEY = pair()
+    with caplog.at_level("INFO", logger="apps.notifications.push"):
+        notify(world.t1, "admin_message", "x", "y", dedupe="t-log")
+    rec = [x for x in caplog.records if x.msg == "push_skipped"]
+    assert rec and rec[-1].reason == "no_device" and rec[-1].role == "teacher" and rec[-1].kind == "admin_message"

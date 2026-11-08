@@ -6,6 +6,7 @@ import { color } from '@/theme/tokens';
 import { card, muted } from '@/components/ui';
 import { api, type ApiError } from '@/api/client';
 import { toast } from '@/store/store';
+import { hourLabel } from '@/lib/time';
 
 interface R {
   reading_on: boolean; reading_hour: number; hifz_on: boolean; hifz_hour: number; review_on: boolean; review_hour: number;
@@ -18,7 +19,7 @@ const KINDS: [Kind, string, string][] = [
   ['review', 'المراجعة', 'عند وجود مراجعة مستحقة اليوم'],
   ['evening', 'تذكير آخر اليوم', 'فقط إن بقيت مهام اليوم دون إنجاز'],
 ];
-const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
+const hh = hourLabel; // 20 → «٨:٠٠ مساءً»
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 export function ReminderSettingsCard() {

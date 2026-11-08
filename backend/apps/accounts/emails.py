@@ -6,6 +6,7 @@ recordings or meeting links ever goes into these emails.
 from __future__ import annotations
 
 import logging
+from apps.core.timefmt import when as local_when
 from datetime import datetime
 from html import escape
 from zoneinfo import ZoneInfo
@@ -34,7 +35,7 @@ def send_link_email(to: str, *, subject: str, intro: str, cta: str, link: str, e
     if not email_configured():
         return False
     support = _support()
-    until = expires_at.astimezone(ZoneInfo("Africa/Cairo")).strftime("%Y-%m-%d %H:%M") if expires_at else None
+    until = local_when(expires_at, "Africa/Cairo") if expires_at else None
     notes = [x for x in (
         f"الرابط صالح حتى {until} (بتوقيت القاهرة)." if until else "",
         "يُستخدم الرابط مرة واحدة فقط، فلا تشاركه مع أحد." if one_time else "",

@@ -94,7 +94,7 @@ export default function Sheet() {
     body = (
       <div role="radiogroup" aria-label="المنطقة الزمنية" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {TZS.map((t) => {
-          const on = t.id === tz;
+          const on = t.id === tz || t.iana === tz;
           return (
             <button key={t.id} role="radio" aria-checked={on} onClick={() => { setState({ tz: t.id, sheet: null }); if (LIVE) saveTimezone(t.id); toast('تم تحديث المنطقة الزمنية؛ ستظهر المواعيد بتوقيتك', 'globe'); }}
               style={{ minHeight: 52, padding: '0 14px', borderRadius: 12, border: `1px solid ${color.border}`, background: color.card, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', color: color.ink, fontSize: 15, textAlign: 'right' }}>

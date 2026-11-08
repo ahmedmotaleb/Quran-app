@@ -170,12 +170,24 @@ def deliver(notification) -> int:
 
     from .models import PushSubscription
 
-    u = User.objects.filter(pk=notification.recipient_id).only("notify_prefs").first()
-    if u is None or not wanted(u, notification.kind):
+    u = User.objects.filter(pk=notification.recipient_id).only("notify_prefs", "role").first()
+    if u is None:
+        return 0
+    if not wanted(u, notification.kind):
+        log.info("push_skipped", extra={"reason": "preference_off", "kind": _prefix(notification.kind), "role": u.role})
         return 0  # the user turned this category off (the in-app notification is still there)
+    subs = list(PushSubscription.objects.filter(user_id=notification.recipient_id, active=True))
+    if not subs:
+        # Inbox only: this account has not turned on notifications on any device (the usual reason a message is
+        # "only in the app"). Counted in push_report; no personal data in the log.
+        log.info("push_skipped", extra={"reason": "no_device", "kind": _prefix(notification.kind), "role": u.role})
+        return 0
     payload = payload_for(notification.kind, notification.link, notification.pk)
-    return sum(send_one(sub, payload, kind=notification.kind)[0]
-               for sub in PushSubscription.objects.filter(user_id=notification.recipient_id, active=True))
+    return sum(send_one(sub, payload, kind=notification.kind)[0] for sub in subs)
+
+
+def _prefix(kind: str) -> str:
+    return next((k for k, _ in GENERIC if kind.startswith(k)), "other")
 
 
 def send_test(user) -> dict:
