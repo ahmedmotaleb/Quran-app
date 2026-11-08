@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { color } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
+import { deviceZone, fmtShortDateTime } from '@/lib/time';
 import { IMAGE_TYPES, MAX_IMAGE_BYTES, mediaUrl, type TicketMsg } from '@/api/support';
 
-const when = (iso: string) => new Intl.DateTimeFormat('ar-EG', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Africa/Cairo' }).format(new Date(iso));
+// The viewer's own zone: the device's in the app, academy time (Cairo) in the admin portal.
+const when = (iso: string) => fmtShortDateTime(iso, location.hash.startsWith('#/admin') ? 'Africa/Cairo' : deviceZone());
 
 /** A private screenshot: fetched through a short-lived signed URL, only when shown. */
 export function AttachedImage({ id }: { id: string }) {

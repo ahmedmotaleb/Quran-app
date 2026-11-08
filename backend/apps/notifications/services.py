@@ -2,6 +2,7 @@ import logging
 
 from django.db import IntegrityError, transaction
 
+from apps.core.timefmt import when as local_when
 from .models import Notification
 
 log = logging.getLogger(__name__)
@@ -48,8 +49,7 @@ def ensure_session_reminders(user) -> int:
     qs = qs.filter(student=user) if user.role == "student" else qs.filter(occurrence__teacher=user) if user.role == "teacher" else qs.none()
     made = 0
     for b in qs:
-        tz = ZoneInfo(user.timezone or "Africa/Cairo")
-        when = b.occurrence.starts_at.astimezone(tz).strftime("%Y-%m-%d %H:%M")
+        when = local_when(b.occurrence.starts_at, user.timezone)
         other = b.occurrence.teacher.display_name if user.role == "student" else b.student.full_name
         made += bool(notify(user, "session_reminder", "تذكير بجلسة قادمة", f"مع {other} · {when}", link="/sessions",
                             dedupe=f"booking:{b.pk}:reminder", data={"booking": b.pk}))

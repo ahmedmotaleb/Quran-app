@@ -1,6 +1,6 @@
-// «فعّل تذكيرات القرآن الكريم» bottom sheet on the student's home (production build with the service worker).
+// «فعّل إشعارات الحلقة» bottom banner on the home screen after sign-in (student, teacher, parent) (production build with the service worker).
 // The server's push config is answered as "ready" here (a test public key; the local server has no VAPID keys), so
-// the sheet's own behaviour is checked: it appears only after sign-in on the home screen; «ليس الآن» hides it for
+// the sheet's own behaviour is checked: it appears only after sign-in on the home screen; «لاحقًا» hides it for
 // 7 days; a refused browser permission shows the device-settings steps once and never asks again; the browser
 // permission is requested only from «تفعيل الإشعارات»; iPhone outside the Home Screen gets the install steps.
 //   node e2e/reminder-sheet.mjs <shots> [liveUrl=http://localhost:4175/]
@@ -13,7 +13,7 @@ let fails = 0;
 const step = async (p, name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await p.screenshot({ path: `${out}/remsheet-fail-${name.replace(/\W+/g, '_')}.png` }); } };
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 
-async function open({ ua, permission = 'default' } = {}) {
+async function open({ ua, permission = 'default', email = 'yousef@halqa.app' } = {}) {
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Africa/Cairo', ...(ua ? { userAgent: ua, isMobile: true, hasTouch: true } : {}) });
   await ctx.addInitScript((perm) => {
     window.__asked = 0;
@@ -28,18 +28,18 @@ async function open({ ua, permission = 'default' } = {}) {
   const page = await ctx.newPage(); page.setDefaultTimeout(12000);
   const app = page.locator('main#scr');
   await page.goto(BASE); await app.getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await pickWho(app, 'yousef@halqa.app'); await app.locator('#lg-email').fill('yousef@halqa.app'); await app.locator('#lg-pw').fill('halqa123');
+  await pickWho(app, email); await app.locator('#lg-email').fill(email); await app.locator('#lg-pw').fill('halqa123');
   await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
-  await app.getByText('السلام عليكم، يوسف').waitFor();
+  if (email.startsWith('yousef')) await app.getByText('السلام عليكم، يوسف').waitFor();
   return { ctx, page, app, sheet: page.getByTestId('reminder-sheet') };
 }
 const relogHome = async (x) => { await x.page.reload(); await x.app.getByText('السلام عليكم، يوسف').waitFor(); await x.page.waitForTimeout(3500); };
 
 let x = await open();
 await step(x.page, 'after sign-in, home shows the sheet; nothing is asked until «تفعيل الإشعارات»', async () => {
-  await x.sheet.getByRole('heading', { name: 'فعّل تذكيرات القرآن الكريم' }).waitFor();
-  await x.sheet.getByText('هنفكّرك بورد القراءة والمراجعة والحفظ في الأوقات اللي تختارها، حتى لو التطبيق مقفول.').waitFor();
-  await x.sheet.getByRole('button', { name: 'تفعيل الإشعارات' }).waitFor(); await x.sheet.getByRole('button', { name: 'ليس الآن' }).waitFor();
+  await x.sheet.getByRole('heading', { name: 'فعّل إشعارات الحلقة' }).waitFor();
+  await x.sheet.getByText('استقبل تذكيرات الحفظ والمراجعة ومواعيد الحلقات حتى عندما يكون التطبيق مغلقًا.').waitFor();
+  await x.sheet.getByRole('button', { name: 'تفعيل الإشعارات' }).waitFor(); await x.sheet.getByRole('button', { name: 'لاحقًا' }).waitFor();
   if (await x.page.evaluate(() => window.__asked)) throw new Error('permission asked without a tap');
   await x.page.screenshot({ path: out + '/reminder-sheet.png' });
 });
@@ -60,10 +60,10 @@ await step(x.page, 'refused in the browser: device-settings steps once, then nev
 await x.ctx.close();
 
 x = await open();
-await step(x.page, '«ليس الآن» hides it for 7 days', async () => {
-  await x.sheet.getByRole('button', { name: 'ليس الآن' }).click();
+await step(x.page, '«لاحقًا» hides it for 7 days', async () => {
+  await x.sheet.getByRole('button', { name: 'لاحقًا' }).click();
   await relogHome(x);
-  if (await x.sheet.count()) throw new Error('shown again right after «ليس الآن»');
+  if (await x.sheet.count()) throw new Error('shown again right after «لاحقًا»');
   const t = Number(await x.page.evaluate(() => localStorage.getItem('halqa.reminderPrompt.later')));
   if (!(Date.now() - t < 60_000)) throw new Error('later time not stored');
 });
@@ -84,6 +84,15 @@ await step(x.page, 'iPhone not installed to the Home Screen: install steps first
   if (await x.page.getByTestId('install-sheet').count()) throw new Error('two bottom sheets at once');
 });
 await x.ctx.close();
+for (const [email, who] of [['khalid@halqa.app', 'teacher'], ['parent@halqa.app', 'parent']]) {
+  x = await open({ email });
+  await step(x.page, `the ${who} is asked too, after sign-in on the home screen`, async () => {
+    await x.sheet.getByRole('heading', { name: 'فعّل إشعارات الحلقة' }).waitFor();
+    await x.sheet.getByRole('button', { name: 'تفعيل الإشعارات' }).waitFor();
+    if (await x.page.evaluate(() => window.__asked)) throw new Error('permission asked without a tap');
+  });
+  await x.ctx.close();
+}
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
 process.exitCode = fails ? 1 : 0;
 await b.close();

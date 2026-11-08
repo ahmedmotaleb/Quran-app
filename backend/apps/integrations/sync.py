@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
+from apps.core.timefmt import clock
 from datetime import timedelta
 from zoneinfo import ZoneInfo
 
@@ -181,9 +182,7 @@ DAYS = ["الإثنين", "الثلاثاء", "الأربعاء", "الخميس"
 
 
 def _when_text(local) -> str:
-    h = local.hour % 12 or 12
-    ampm = "ص" if local.hour < 12 else "م"
-    return f"يوم {DAYS[local.weekday()]} الساعة {h}:{local.minute:02d} {ampm}"
+    return f"يوم {DAYS[local.weekday()]} الساعة {clock(local.hour, local.minute)}"
 
 
 # ---- changes ----------------------------------------------------------------------------------------------------

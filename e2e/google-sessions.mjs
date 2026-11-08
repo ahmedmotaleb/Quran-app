@@ -99,7 +99,7 @@ await step(T.page, 'teacher: «تعديل الموعد» moves the same session;
   await T.page.getByText('عُدّل الموعد وأُبلغ الطالب').waitFor();
   await S.page.reload(); await S.app.getByText('السلام عليكم، يوسف').waitFor();
   await myBookings();
-  await S.app.getByText(/11:30/).first().waitFor();
+  await S.app.getByText(/١١:٣٠ مساءً/).first().waitFor();
 });
 
 execSync(process.env.SOON_CMD || 'bash e2e/ci/py.sh google_soon.py', { stdio: 'inherit' });

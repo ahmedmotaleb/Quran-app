@@ -112,7 +112,7 @@ It generates the app's signing keys, puts the private key in Secret Manager (`ha
 `VAPID_PUBLIC_KEY` on the service and the maintenance job. `/api/ready` then shows `"push":"ready"` (keys present
 **and** matching). Do not run it again unless the keys must change: rotating them (`ROTATE=1`) makes every device
 subscribe again. Each person turns it on per device in «حسابي» → «الإشعارات» → «تفعيل الإشعارات», or from the
-student's «فعّل تذكيرات القرآن الكريم» sheet. Lock-screen text is generic; details stay in the app. On iPhone and
+«فعّل إشعارات الحلقة» banner on the home screen (students, teachers and parents). Lock-screen text is generic; details stay in the app. On iPhone and
 iPad the app must be installed to the home screen (iOS 16.4 or later).
 
 **Daily Quran reminders and «اختر معلمك»** (no extra setup; sent by the hourly job below):
@@ -123,12 +123,25 @@ iPad the app must be installed to the home screen (iOS 16.4 or later).
   teacher, every `teacher_reminder_hours` (Admin → الإعدادات, default 48, 0 = off), never while one is unread;
   stops as soon as a teacher is assigned.
 
+**"Notifications only appear in the app" (diagnosis, 8 Nov 2026):** a notification is always saved in the
+inbox; it reaches the phone only if that account has turned notifications on, on that phone. `push-report` shows
+`notifications_7d.inbox_only_by_role` (messages to accounts with no device) and `accounts_with_device_by_role`;
+each skipped push is logged as `push_skipped` with `reason` `no_device` or `preference_off`. Since 8 Nov the
+«فعّل إشعارات الحلقة» banner is shown after sign-in to students, teachers and parents (before, only students were
+asked, so no teacher or parent had a device).
+
+**Times:** every time is shown in 12-hour Arabic form («٢:٣٠ مساءً») in the device's own time zone
+(`Intl.DateTimeFormat().resolvedOptions().timeZone`; Cairo's DST from the IANA database). The account's
+`timezone` follows the device at sign-in and when the app returns to the foreground; bookings are UTC instants and
+reminder hours are local wall-clock hours, so neither changes. The admin portal stays in academy time (Cairo).
+
 **Production verification checklist (push and reminders):**
 1. `curl https://<app>/api/ready` → `"push":"ready"`.
 2. Actions → Ops → `push-report`: `keys_match: true`; devices listed by family; no `failing`.
 3. Actions → Scheduled maintenance → Run workflow: the run succeeds; Cloud Logging shows `quran_reminders` with
    `sent` counts (the maintenance job has the same VAPID settings as the service).
-4. Real Android (installed PWA, Chrome): student home → «فعّل تذكيرات القرآن الكريم» → «تفعيل الإشعارات» → allow;
+4. Real Android (installed PWA, Chrome), as a student, a teacher and a parent: home screen → «فعّل إشعارات الحلقة» →
+   «تفعيل الإشعارات» → allow;
    the admin record → «الإشعارات على الأجهزة» shows the device; close the app; «إرسال إشعار تجريبي» arrives; tapping
    opens HALQA.
 5. Real iPhone (iOS 16.4+, installed from Safari «إضافة إلى الشاشة الرئيسية»): the same steps from the Home Screen app.

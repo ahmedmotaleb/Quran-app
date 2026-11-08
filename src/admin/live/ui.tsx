@@ -6,11 +6,13 @@ import { Icon } from '@/components/Icon';
 import type { ApiError, Page } from '@/api/client';
 import { card } from '../AdminTables';
 import { needsFreshOtp, toast } from '../adminStore';
+import { fmtShortDateTime } from '@/lib/time';
 
 export const errMsg = (e: unknown) => (e as ApiError)?.message || 'تعذّر تنفيذ الطلب.';
 export const date = (iso: string | null) => (iso ? new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium', timeZone: 'Africa/Cairo' }).format(new Date(iso)) : '—');
 
-export const dateTime = (iso: string, tz = 'Africa/Cairo') => new Intl.DateTimeFormat('ar-EG', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: tz }).format(new Date(iso));
+/** «ثلاثاء ١٣ أكتوبر · ٢:٣٠ مساءً»: the admin portal works in academy time (Africa/Cairo, DST from the IANA database). */
+export const dateTime = (iso: string, tz = 'Africa/Cairo') => fmtShortDateTime(iso, tz);
 export const chip = (on: boolean): CSSProperties => ({ minHeight: 40, padding: '0 14px', borderRadius: 999, border: `1px solid ${on ? color.primary : color.borderStrong}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.primary, fontWeight: 700, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap' });
 export const smallBtn = (tone: 'primary' | 'danger' | 'plain' = 'plain'): CSSProperties => ({
   minHeight: 40, padding: '0 12px', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer',

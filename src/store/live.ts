@@ -12,8 +12,8 @@ import { diag } from '@/services/diag';
 import * as E from '@/api/endpoints';
 import { ApiError, api, resetCsrf } from '@/api/client';
 import { TZS } from '@/data/demo';
-import type { Feedback, Recording, Role, Slot, TzId } from '@/data/types';
-import { dayOffset, fmtRelative, zonedToIso } from '@/lib/time';
+import type { Feedback, Recording, Role, Slot } from '@/data/types';
+import { dayOffset, deviceZone, fmtRelative, wallClock, zonedToIso } from '@/lib/time';
 import { rangeL, tzOf, typeL } from '@/lib/format';
 import { loadSurahIndex, surahLabel } from '@/lib/quranIndex';
 import { BRAND } from '@/theme/brand';
@@ -27,14 +27,27 @@ const get = () => useApp.getState();
 const iana = () => tzOf(get().tz).iana;
 const msg = (e: unknown) => (e instanceof ApiError ? e.message : 'حدث خطأ غير متوقع. حاول مرة أخرى.');
 
-const tzIdFor = (zone: string): TzId => TZS.find((t) => t.iana === zone)?.id ?? 'cairo';
 const homeFor = (r: Role) => (r === 'student' ? 'home' : r === 'teacher' ? 'tdash' : 'phome');
+
+/** The account's time zone follows the device, so the server's reminders and messages use the same local time the
+ *  student sees. Only the zone name changes: bookings are UTC instants and reminder hours are local wall-clock hours,
+ *  so neither moves. Checked at sign-in and whenever the app comes back to the foreground (after a flight). */
+let zoneSync: Promise<void> | null = null;
+export function syncZone(): Promise<void> {
+  const me = get().me; const zone = deviceZone();
+  if (get().tz !== zone) setState({ tz: zone });
+  if (!me || me.role === 'admin' || me.timezone === zone || zoneSync) return zoneSync ?? Promise.resolve();
+  zoneSync = E.updateMe({ timezone: zone }).then((u) => { applyUser(u); return loadData(); })
+    .catch(() => { /* offline: tried again next time */ }).finally(() => { zoneSync = null; });
+  return zoneSync;
+}
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && get().me) void syncZone(); });
 
 function applyUser(u: E.Me) {
   // Shown name: a teacher with «الشيخ» / «الأستاذة» (lib/names.ts); the stored name stays in `me.full_name`.
   const name = u.display_name || u.full_name || u.email;
   setState((s) => ({
-    me: u, tz: tzIdFor(u.timezone),
+    me: u, tz: deviceZone(), // times are shown in this device's zone (a traveller sees local times)
     notif: { tasks: true, sessions: true, feedback: true, news: true, reminders: true, ...(u.notify_prefs ?? {}) },
     user: { ...s.user, name, first: stripTitle(u.full_name || u.email).split(' ')[0], email: u.email, level: u.level || '—', goal: u.daily_goal || '—' },
   }));
@@ -131,6 +144,7 @@ async function restoreSession(): Promise<boolean> {
     const u = await E.me();
     if (u.role === 'admin') return false;
     applyUser(u);
+    void syncZone();
     reset(homeFor(u.role), u.role);
     // Back from Google's consent page: open «حسابي», where the Google Calendar card shows the outcome.
     if (useApp.getState().googleResult && u.role === 'teacher') go('account');
@@ -150,6 +164,7 @@ export async function login(email: string, password: string) {
     const r = await E.login(email, password, asked === 'parent' ? undefined : asked);
     resetCsrf();
     applyUser(r.user);
+    void syncZone();
     void syncPush();
     setTimeout(() => { void openFromHash(); }, 0);
     const role = r.user.role;
@@ -169,7 +184,7 @@ export async function login(email: string, password: string) {
 
 export async function register(name: string, email: string, password: string, gender: 'male' | 'female') {
   try {
-    const r = await E.register(name, email, password, Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Cairo', gender);
+    const r = await E.register(name, email, password, deviceZone(), gender);
     resetCsrf();
     applyUser(r.user);
     setState((s) => ({ signup: { ...s.signup, errors: {}, pw: '' }, ob: { ...s.ob, step: 0 } }));
@@ -245,8 +260,8 @@ export async function saveGender(gender: 'male' | 'female', done = 'حُفظ ا�
   try { applyUser(await E.updateMe({ gender })); toast(done); } catch (e) { toast(msg(e), 'alert'); }
 }
 
-export async function saveTimezone(id: TzId) {
-  const zone = TZS.find((t) => t.id === id)!.iana;
+export async function saveTimezone(id: string) {
+  const zone = TZS.find((t) => t.id === id)?.iana ?? id;
   try { applyUser(await E.updateMe({ timezone: zone })); await loadData(); } catch (e) { toast(msg(e), 'alert'); }
 }
 
@@ -270,8 +285,7 @@ export async function loadSlots(teacherId: string) {
     for (const o of list) {
       const d = dayOffset(o.starts_at, tz);
       if (d < 0 || d > 6) continue;
-      const [hh, mm] = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-        .format(new Date(o.starts_at)).split(':').map(Number);
+      const { hour: hh, minute: mm } = wallClock(o.starts_at, tz);
       days[d].push({ h: hh + mm / 60, taken: o.seats_left <= 0, occ: o.id, iso: o.starts_at, kind: KIND[o.kind] });
     }
     days.forEach((d) => d.sort((a, b) => a.h - b.h));

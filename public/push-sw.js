@@ -6,9 +6,11 @@ const SAFE_URL = (u) => (typeof u === 'string' && /^\/#\/(n\/\d+|inbox)$/.test(u
 self.addEventListener('push', (event) => {
   let d = { title: 'الحلقة', body: 'لديك إشعار جديد.', url: '/#/inbox', tag: 'halqa' };
   try { if (event.data) d = { ...d, ...event.data.json() }; } catch (e) { /* keep the generic text */ }
-  event.waitUntil(self.registration.showNotification(d.title, {
+  // Shown even when HALQA is open, in the background, closed or the phone is locked (userVisibleOnly). Whether it
+  // pops up (heads-up), rings or vibrates is up to Android: the site's notification settings and battery saving.
+  event.waitUntil(self.registration.showNotification(d.title || 'الحلقة', {
     body: d.body, icon: '/icons/icon-192.png', badge: '/icons/favicon-48.png', dir: 'rtl', lang: 'ar',
-    tag: d.tag, renotify: true, data: { url: SAFE_URL(d.url) },
+    tag: d.tag, renotify: true, vibrate: [200, 100, 200], timestamp: Date.now(), data: { url: SAFE_URL(d.url) },
   }));
 });
 

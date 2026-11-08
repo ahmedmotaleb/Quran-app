@@ -83,7 +83,7 @@ reseed; run pwa http://localhost:4173/
 # «ثبّت تطبيق الحلقة» sheet: Android install offer and choice, iPhone guidance, never when installed/desktop, cooldown.
 reseed; run install
 reseed; run push http://localhost:4175/
-# «فعّل تذكيرات القرآن الكريم» sheet (production build with the service worker).
+# «فعّل إشعارات الحلقة» sheet (production build with the service worker).
 reseed; run reminder-sheet http://localhost:4175/
 reseed; NEW_VERSION_CMD="echo '// e2e update' >> ${LIVE_DIST:-/tmp/dist-live}/sw.js" run pwa-update http://localhost:4175/
 

@@ -1,5 +1,6 @@
 /** Live platform settings (pack prompt 08): a draft form separate from the saved server state, sensitive changes
  * confirmed with the admin's password, and the audit log of every admin change. */
+import { hourLabel } from '@/lib/time';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { color, font } from '@/theme/tokens';
 import { FieldError, Switch, inputStyle, labelStyle, primaryBtn } from '@/components/ui';
@@ -168,7 +169,7 @@ function SettingsForm() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <label htmlFor="st-parent_report_hour" style={labelStyle}>{LABEL.parent_report_hour}</label>
               <select id="st-parent_report_hour" value={v.parent_report_hour} onChange={(e) => up({ parent_report_hour: Number(e.target.value) })} style={inputStyle(err.parent_report_hour)}>
-                {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>)}
+                {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hourLabel(h)}</option>)}
               </select>
             </div>
           </div>

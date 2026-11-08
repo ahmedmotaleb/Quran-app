@@ -171,7 +171,7 @@ def test_admin_test_notification(world, keys, monkeypatch):
     register(world.s1, 2, DESKTOP)
     PushSubscription.objects.filter(endpoint=sub(2)["endpoint"]).update(active=False)
     r = c.post(f"/api/v1/admin/users/{world.s1.pk}/push-test", {"title": "مخصص", "body": "نص مخصص"}, format="json")
-    assert r.status_code == 200 and r.json()["sent"] == 1 and r.json()["message"] == "تم إرسال الإشعار إلى جهاز واحد."
+    assert r.status_code == 200 and r.json()["sent"] == 1 and r.json()["message"].startswith("قبلت خدمة الإشعارات الإرسال إلى جهاز واحد.")
     [(ep, payload)] = fake.sent
     assert ep == sub(1)["endpoint"] and payload == push.TEST                      # fixed text; no arbitrary payload
     assert payload["body"] == "هذا إشعار تجريبي للتأكد من عمل الإشعارات."

@@ -1,10 +1,17 @@
 """Daily Quran reminders «تذكيرات القرآن الكريم» (owner request, 4 Nov 2026), sent by the hourly maintenance job.
 
 For each active student with at least one active push device and the «تذكيرات القرآن» preference on:
-- the chosen hour is the student's own local hour (`User.timezone`); the job runs hourly, so a reminder goes out at
-  the first run within WINDOW hours after it (a missed run catches up; later than that it is skipped for the day);
+- the chosen hour is the student's own local wall-clock hour (`User.timezone`, which follows the device, so a
+  traveller keeps "8 PM" where they are). Today's moment is computed in that IANA zone (Cairo's daylight saving
+  time included; an hour skipped by a spring-forward change is sent at the first real moment after it). The job runs
+  hourly: a reminder goes out at the first run at or after that moment and is caught up later the same local day
+  (a missed run, a flight to a zone where the hour already passed), until the quiet hours start;
+- no catch-up for a moment that passed before the student changed the settings (changing the hour never fires a
+  reminder at once); it starts the next day;
 - nothing inside quiet hours; at most ONE reminder per student per run; each kind at most once per local day
-  (the notification dedupe key `reminder:<kind>:<date>` makes repeats impossible, even across concurrent runs);
+  (the notification dedupe key `reminder:<kind>:<date>` makes repeats impossible, even across concurrent runs or
+  an hour repeated by a fall-back change), and never twice within MIN_GAP hours (a time-zone change that starts a
+  new local date sooner, e.g. crossing the date line, cannot send the same reminder again);
 - only when there is something left to do, checked at send time:
   reading  — skipped once the student opened the Mushaf today (reading position saved today);
   hifz     — only with an open memorization task (not submitted/accepted);
@@ -15,12 +22,13 @@ Students without a teacher still get the reading reminder (memorization/review n
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
+from datetime import timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from django.utils import timezone
 
-WINDOW = 2  # hours after the chosen hour in which a missed reminder is still sent
+MIN_GAP = 12  # hours: never the same kind twice within this
 OPEN = ("not_started", "in_progress", "needs_repeat")
 TEXT = {
     "reading": ("وردك اليومي", "حان وقت وردك من القرآن الكريم."),
@@ -44,13 +52,23 @@ def local_now(user, now=None) -> datetime:
     return (now or timezone.now()).astimezone(tz)
 
 
+def due_at(local: datetime, hour: int) -> datetime:
+    """Today's moment for that local hour, in the student's zone. A wall time that does not exist (skipped by a
+    spring-forward change) resolves to the transition moment; a repeated one (fall-back) to its first occurrence."""
+    wall = datetime.combine(local.date(), time(hour), tzinfo=local.tzinfo)
+    return wall.astimezone(dt_timezone.utc).astimezone(local.tzinfo)
+
+
 def due_kinds(s, local: datetime) -> list[str]:
-    """Kinds whose hour has come (within WINDOW) and that are on, outside quiet hours; earliest hour first."""
-    h = local.hour
+    """Kinds that are on and whose moment today has come, outside quiet hours; earliest hour first."""
+    if s.in_quiet(local.hour):
+        return []
+    changed = s.updated_at if s.pk else None
     out = []
     for k in s.KINDS:
         hour = getattr(s, f"{k}_hour")
-        if getattr(s, f"{k}_on") and (h - hour) % 24 < WINDOW and not s.in_quiet(h):
+        at = due_at(local, hour)
+        if getattr(s, f"{k}_on") and local >= at and not (changed and changed > at):
             out.append((hour, k))
     return [k for _, k in sorted(out)]
 
@@ -94,6 +112,8 @@ def run(now=None) -> dict:
         for kind in due_kinds(s, local):
             key = f"reminder:{kind}:{local.date().isoformat()}"
             if Notification.objects.filter(recipient=u, dedupe_key=key).exists():
+                continue
+            if Notification.objects.filter(recipient=u, kind=f"reminder_{kind}", created_at__gt=now - timedelta(hours=MIN_GAP)).exists():
                 continue
             w = what(u, kind, local)
             if w is None:
