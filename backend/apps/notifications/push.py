@@ -68,6 +68,10 @@ def wanted(user, kind: str) -> bool:
     return c is None or (user.notify_prefs or {}).get(c, True) is not False
 FALLBACK = ("الحلقة", "لديك إشعار جديد.")
 TEST = {"title": "الحلقة", "body": "هذا إشعار تجريبي للتأكد من عمل الإشعارات.", "url": "/#/inbox", "tag": "test"}
+# Every HALQA push is shown to the user, so it is sent as high urgency (RFC 8030 §5.3). Without it Google's push
+# service (FCM) treats it as normal priority: an idle Android phone (Doze, screen off) holds it until a maintenance
+# window and it can expire unseen — the phone then shows nothing although the push was "accepted".
+PUSH_HEADERS = {"Urgency": "high"}
 MAX_FAILURES = 5  # consecutive temporary failures before a device is switched off (it re-subscribes when opened)
 
 
@@ -138,7 +142,8 @@ def send_one(sub, payload: dict, *, kind: str = "") -> tuple[bool, str]:
     fam = device_family(sub.device)
     try:
         webpush(subscription_info={"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}}, data=data,
-                vapid_private_key=settings.VAPID_PRIVATE_KEY, vapid_claims={"sub": settings.VAPID_SUBJECT}, ttl=6 * 3600, timeout=4)
+                vapid_private_key=settings.VAPID_PRIVATE_KEY, vapid_claims={"sub": settings.VAPID_SUBJECT}, ttl=6 * 3600, timeout=4,
+                headers=PUSH_HEADERS)
     except WebPushException as e:
         status = getattr(e.response, "status_code", None)
         cat = failure_category(status, e)

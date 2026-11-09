@@ -132,3 +132,45 @@ def test_logout_removes_this_devices_subscription(world, keys):
     c.post("/api/v1/push/subscriptions", other, format="json")
     assert c.post("/api/v1/auth/logout", {"push_endpoint": SUB["endpoint"]}, format="json").status_code == 204
     assert list(PushSubscription.objects.values_list("endpoint", flat=True)) == [other["endpoint"]]
+
+
+def test_sent_as_high_urgency_so_idle_android_phones_show_it(world, keys, monkeypatch):
+    """Without `Urgency: high` FCM treats the push as normal priority and an idle (Doze) Android phone may never show it."""
+    import pywebpush
+
+    from apps.notifications.models import PushSubscription
+    from apps.notifications.services import notify
+
+    seen = []
+    monkeypatch.setattr(pywebpush, "webpush", lambda subscription_info, data, **kw: seen.append(kw))
+    PushSubscription.objects.create(user=world.s1, endpoint="https://fcm.googleapis.com/fcm/send/u1", p256dh="p", auth="a", device="Android")
+    notify(world.s1, "assignment_new", "x", "y", dedupe="urgency")
+    assert seen and seen[0]["headers"]["Urgency"] == "high" and seen[0]["ttl"] == 6 * 3600
+
+
+def test_real_request_carries_the_urgency_header(world, keys, monkeypatch):
+    """Through the real pywebpush encoder (only the HTTP call is replaced): the header reaches the push service."""
+    import base64
+
+    import requests
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    from apps.notifications import push
+    from apps.notifications.models import PushSubscription
+
+    k = ec.generate_private_key(ec.SECP256R1())
+    p256dh = base64.urlsafe_b64encode(k.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)).rstrip(b"=").decode()
+    sub = PushSubscription.objects.create(user=world.s1, endpoint="https://fcm.googleapis.com/fcm/send/u2", p256dh=p256dh,
+                                          auth=base64.urlsafe_b64encode(b"0123456789abcdef").rstrip(b"=").decode(), device="Android")
+    sent = {}
+
+    def post(url, data=None, headers=None, timeout=None, **kw):
+        sent.update(headers or {})
+        return type("R", (), {"status_code": 201, "text": "", "headers": {}})()
+
+    monkeypatch.setattr(requests, "post", post)
+    monkeypatch.setattr(requests.Session, "post", lambda self, *a, **kw: post(*a, **kw))
+    ok, _ = push.send_one(sub, push.TEST, kind="test")
+    h = {k.lower(): str(v) for k, v in sent.items()}
+    assert ok and h.get("urgency") == "high" and h.get("ttl") == str(6 * 3600)
