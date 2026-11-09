@@ -213,3 +213,72 @@ class MyReminders(APIView):
             raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, bad)
         obj.save()
         return Response(reminders_out(obj, request.user))
+
+
+# ---- this device («حسابي ← الإشعارات»: حالة الإشعارات على هذا الجهاز) -------------------------------------------
+SELF_TEST_SECONDS = 60
+SELF_TEST_PER_HOUR = 5
+
+
+class PushStatus(APIView):
+    """GET ?endpoint=: the signed-in account's own push diagnostics for THIS device: server readiness, whether the
+    server has this subscription (and its last delivery/failure), the account's devices, the reminder preference, time
+    zone and the last daily reminder sent. Never keys or endpoints."""
+
+    def get(self, request):
+        from .reminders import settings_for
+
+        u = request.user
+        ep = request.query_params.get("endpoint", "")
+        mine = PushSubscription.objects.filter(user=u, endpoint=ep).first() if ep else None
+        last = (Notification.objects.filter(recipient=u, kind__startswith="reminder_").order_by("-created_at").first())
+        s = settings_for(u) if u.role == "student" else None
+        return Response({
+            "server": push.readiness(),
+            "this_device": None if mine is None else {"active": mine.active, "last_success_at": mine.last_success_at,
+                                                     "last_failure": mine.last_failure, "last_failure_at": mine.last_failure_at},
+            "devices": PushSubscription.objects.filter(user=u, active=True).count(),
+            "prefs": {k: (u.notify_prefs or {}).get(k, True) is not False for k in push.PREF_KEYS},
+            "timezone": u.timezone,
+            "reminders": None if s is None else {k: {"on": getattr(s, f"{k}_on"), "hour": getattr(s, f"{k}_hour")} for k in s.KINDS}
+            | {"quiet": [s.quiet_start, s.quiet_end]},
+            "last_reminder": None if last is None else {"kind": last.kind, "at": last.created_at},
+        })
+
+
+class PushSelfTest(APIView):
+    """POST {endpoint?}: «إرسال إشعار تجريبي» to the signed-in account's own devices (this device first when given).
+    Fixed text only; rate limited (1 per minute, 5 per hour). `sent` means the push service ACCEPTED it — whether the
+    phone shows it is up to the phone."""
+
+    def post(self, request):
+        from django.core.cache import cache
+
+        u = request.user
+        if not push.configured():
+            raise ApiError("push_not_configured", "إشعارات الجوال غير جاهزة على الخادم.", 503)
+        if not cache.add(f"pushself:m:{u.pk}", 1, SELF_TEST_SECONDS):
+            raise ApiError("throttled", "أُرسل إشعار تجريبي قبل قليل. انتظر دقيقة ثم أعد المحاولة.", 429)
+        key = f"pushself:h:{u.pk}"
+        cache.add(key, 0, 3600)
+        if cache.incr(key) > SELF_TEST_PER_HOUR:
+            raise ApiError("throttled", "تجاوزت حد الإشعارات التجريبية لهذه الساعة.", 429)
+        ep = str(request.data.get("endpoint", "") or "")
+        subs = list(PushSubscription.objects.filter(user=u, active=True))
+        here = next((x for x in subs if ep and x.endpoint == ep), None)
+        results = [(x is here, *push.send_one(x, push.TEST, kind="test")) for x in subs]
+        this_ok = any(h and ok for h, ok, _ in results)
+        sent = sum(1 for _, ok, _ in results if ok)
+        failed = sorted({c for _, ok, c in results if not ok})
+        audit("push.self_test", actor=u, target=u, request=request, devices=len(subs), sent=sent, failed=failed, this_device=bool(here))
+        if not subs:
+            msg = "لا يوجد جهاز مسجّل لهذا الحساب. اضغط «ربط الجهاز بالإشعارات» أولًا."
+        elif ep and here is None:
+            msg = "هذا الجهاز غير مسجّل لهذا الحساب، فلم يُرسل إليه. اضغط «ربط الجهاز بالإشعارات»."
+        elif ep and not this_ok:
+            msg = "رفضت خدمة الإشعارات الإرسال إلى هذا الجهاز. اضغط «ربط الجهاز بالإشعارات» ثم أعد المحاولة."
+        else:
+            msg = ("قبلت خدمة الإشعارات الإرسال. إن لم يظهر الإشعار خلال دقيقة فالسبب من إعدادات الهاتف: "
+                   "الإشعارات أو توفير البطارية للحلقة أو Chrome.")
+        return Response({"devices": len(subs), "sent": sent, "failed": failed, "this_device": bool(here), "this_device_sent": this_ok,
+                         "message": msg})

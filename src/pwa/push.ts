@@ -107,3 +107,98 @@ export async function currentEndpoint(): Promise<string> {
     return (await reg?.pushManager.getSubscription())?.endpoint ?? '';
   } catch { return ''; }
 }
+
+/* ---------- «حالة الإشعارات على هذا الجهاز» (حسابي ← الإشعارات) ---------- */
+export interface PushDiag {
+  supported: { sw: boolean; push: boolean; notification: boolean };
+  permission: NotificationPermission | 'unsupported';
+  standalone: boolean;
+  sw: 'none' | 'installing' | 'active' | 'timeout';
+  controlled: boolean;                       // this page is controlled by the service worker
+  subscription: boolean;                     // this browser has a push subscription
+  subscriptionHost: string | null;           // e.g. fcm.googleapis.com (no endpoint)
+  keyMatches: boolean | null;                // the subscription was made with the server's current public key
+  server: string;                            // ready / not_configured / misconfigured / unreachable
+  publicKey: boolean;                        // the server handed out a public key
+  registered: boolean | null;                // the server has THIS subscription for this account (and it is on)
+  lastSuccessAt: string | null; lastFailure: string | null;
+  devices: number;
+  prefs: Record<string, boolean>;
+  timezone: string | null;
+  reminders: Record<string, { on: boolean; hour: number }> & { quiet?: [number, number] } | null;
+  lastReminder: { kind: string; at: string } | null;
+  promptLater: number | null; promptRefused: boolean;
+}
+type Status = { server: string; this_device: { active: boolean; last_success_at: string | null; last_failure: string } | null; devices: number;
+  prefs: Record<string, boolean>; timezone: string; reminders: PushDiag['reminders']; last_reminder: PushDiag['lastReminder'] };
+
+const ls = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
+
+/** Every link in the chain, as it really is on this device right now. Reads only; never asks for permission. */
+export async function diagnosePush(): Promise<PushDiag> {
+  const sup = { sw: typeof navigator !== 'undefined' && 'serviceWorker' in navigator, push: typeof window !== 'undefined' && 'PushManager' in window,
+    notification: typeof window !== 'undefined' && 'Notification' in window };
+  const d: PushDiag = { supported: sup, permission: sup.notification ? Notification.permission : 'unsupported', standalone: standalone(),
+    sw: 'none', controlled: false, subscription: false, subscriptionHost: null, keyMatches: null, server: 'unreachable', publicKey: false,
+    registered: null, lastSuccessAt: null, lastFailure: null, devices: 0, prefs: {}, timezone: null, reminders: null, lastReminder: null,
+    promptLater: Number(ls('halqa.reminderPrompt.later')) || null, promptRefused: !!ls('halqa.reminderPrompt.denied') };
+  let cfg: Cfg | null = null;
+  try { cfg = await config(); d.publicKey = !!cfg.public_key; } catch { /* unreachable */ }
+  let sub: PushSubscription | null = null;
+  if (sup.sw) {
+    d.controlled = !!navigator.serviceWorker.controller;
+    const r = await navigator.serviceWorker.getRegistration().catch(() => undefined);
+    if (r) {
+      d.sw = r.active ? 'active' : r.installing || r.waiting ? 'installing' : 'none';
+      if (sup.push && r.active) {
+        sub = await r.pushManager.getSubscription().catch(() => null);
+        d.subscription = !!sub;
+        if (sub) {
+          try { d.subscriptionHost = new URL(sub.endpoint).host; } catch { /* keep null */ }
+          d.keyMatches = cfg?.public_key ? b64url(sub.options?.applicationServerKey) === cfg.public_key : null;
+        }
+      }
+    }
+  }
+  try {
+    const st = await api<Status>('GET', sub ? `push/status?endpoint=${encodeURIComponent(sub.endpoint)}` : 'push/status');
+    d.server = st.server; d.devices = st.devices; d.prefs = st.prefs; d.timezone = st.timezone; d.reminders = st.reminders; d.lastReminder = st.last_reminder;
+    d.registered = sub ? !!st.this_device?.active : null;
+    d.lastSuccessAt = st.this_device?.last_success_at ?? null; d.lastFailure = st.this_device?.last_failure || null;
+  } catch { /* shown as unreachable */ }
+  return d;
+}
+
+/** «ربط الجهاز بالإشعارات»: the service worker, a subscription with the server's CURRENT key, saved on the server, and
+ *  then read back from the server. Success only when the server confirms this exact device. */
+export async function connectDevice(): Promise<void> {
+  if (!supported()) throw new PushError(isIos() && !standalone() ? 'على iPhone ثبّت الحلقة على الشاشة الرئيسية أولًا.' : 'هذا المتصفح لا يدعم إشعارات الويب.');
+  const cfg = await config().catch(() => { throw new PushError('تعذّر الوصول إلى الخادم. تحقق من الاتصال.'); });
+  if (!cfg.enabled || !cfg.public_key) throw new PushError('إشعارات الجوال غير جاهزة على الخادم.');
+  let perm = Notification.permission;
+  if (perm === 'default') perm = await Notification.requestPermission();   // only from the button
+  if (perm !== 'granted') throw new PushError('إذن الإشعارات غير ممنوح لهذا الموقع. فعّله من إعدادات الهاتف ← التطبيقات ← الحلقة أو Chrome ← الإشعارات.');
+  let reg = await navigator.serviceWorker.getRegistration().catch(() => undefined) ?? null;
+  if (!reg?.active) reg = await Promise.race([navigator.serviceWorker.ready, new Promise<null>((r) => setTimeout(() => r(null), 15000))]);
+  if (!reg) throw new PushError('لم يكتمل تثبيت خدمة التطبيق (Service Worker). أغلق الحلقة وافتحها من جديد ثم حاول مرة أخرى.');
+  let sub: PushSubscription;
+  try { sub = await subscription(reg, cfg.public_key); }
+  catch (e) {
+    const n = (e as { name?: string })?.name;
+    throw new PushError(n === 'NotAllowedError' ? 'رفض المتصفح الاشتراك: إذن الإشعارات غير ممنوح.'
+      : n === 'AbortError' ? 'تعذّر الاتصال بخدمة الإشعارات (Google). تأكد من الإنترنت ومن تحديث Chrome وخدمات Google Play.'
+      : 'تعذّر الاشتراك في خدمة الإشعارات على هذا الهاتف.');
+  }
+  try { await api('POST', 'push/subscriptions', sub.toJSON()); }
+  catch (e) { throw new PushError(e instanceof ApiError ? e.message : 'تعذّر حفظ الجهاز على الخادم.'); }
+  const back = await config(sub.endpoint).catch(() => null);
+  if (!back?.this_device) throw new PushError('لم يؤكد الخادم تسجيل هذا الجهاز. حاول مرة أخرى.');
+  try { localStorage.removeItem('halqa.reminderPrompt.denied'); } catch { /* private mode */ }
+}
+
+/** «إرسال إشعار تجريبي» to this account's devices, this device first. */
+export async function selfTest(): Promise<{ sent: number; this_device: boolean; this_device_sent: boolean; message: string }> {
+  let endpoint = '';
+  try { endpoint = (await (await navigator.serviceWorker.getRegistration())?.pushManager.getSubscription())?.endpoint ?? ''; } catch { /* none */ }
+  return api('POST', 'push/test', { endpoint });
+}
