@@ -6,7 +6,8 @@ import { Icon } from '@/components/Icon';
 import { BackButton, Spinner, card, muted } from '@/components/ui';
 import { SUR } from '@/data/demo';
 import { currentReciter, fallbackReciter, loadSurahAudio } from '@/services/quran';
-import { jumpTo, loadSurah, loadSurahList, openSheet, playAyah, setMushafRate, setReciter, stopMushaf, up, useApp } from '@/store/store';
+import { jumpTo, loadSurah, loadSurahList, openSheet, pauseMushaf, playAyah, resumeMushaf, setMushafRate, setReciter, stopMushaf, up, useApp } from '@/store/store';
+import { repLabel } from '@/lib/recitation';
 
 const stepBtn = { width: 32, height: 44, border: 'none', background: 'transparent', color: color.primary, cursor: 'pointer', display: 'grid', placeItems: 'center' } as const;
 const num = { fontFamily: font.latin, fontWeight: 700, fontSize: 14, minWidth: 20, textAlign: 'center' } as const;
@@ -16,7 +17,7 @@ export default function Mushaf() {
   const setM = (o: Partial<typeof M>) => up('m', o);
   const max = M.data?.numberOfAyahs ?? M.to;
   const name = M.data ? M.data.name : SUR[M.surah] ? 'سورة ' + SUR[M.surah][0] : '…';
-  const playL = M.playing ? 'إيقاف التلاوة' : 'تشغيل النطاق';
+  const playL = !M.playing ? 'تشغيل النطاق' : M.paused ? 'متابعة التلاوة' : 'إيقاف مؤقت';
   const pubAudio = useApp((s) => s.pub.ayah_audio);
   // Licensed source (Quran Foundation): get this surah's ayah audio list as soon as it opens, so «تشغيل» starts at
   // once (phones only allow audio started directly from a tap).
@@ -130,20 +131,27 @@ export default function Mushaf() {
 
       <div style={{ position: 'sticky', bottom: 0, background: color.card, borderTop: `1px solid ${color.border}` }}>
       <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button onClick={() => (M.playing ? stopMushaf() : playAyah(M.from, 0))} aria-label={playL} disabled={!M.data || !audioName}
+        {/* Play → pause → resume (the ayah, the place in it and the repetition count are kept); stop ends it. */}
+        <button onClick={() => (!M.playing ? playAyah(M.from, 0) : M.paused ? resumeMushaf() : pauseMushaf())} aria-label={playL} disabled={!M.data || !audioName}
           style={{ width: 52, height: 52, borderRadius: '50%', border: 'none', background: color.primary, color: color.ivory, display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0, opacity: M.data && audioName ? 1 : 0.6 }}>
-          <Icon name={M.playing ? 'pause' : 'play'} />
+          <Icon name={M.playing && !M.paused ? 'pause' : 'play'} />
         </button>
+        {M.playing && (
+          <button onClick={stopMushaf} aria-label="إيقاف التلاوة"
+            style={{ width: 44, height: 44, borderRadius: '50%', border: `1px solid ${color.borderChip}`, background: color.card, color: color.primary, display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <Icon name="x" size={18} />
+          </button>
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{playL}</p>
-          <p aria-live="polite" style={muted(12, { margin: '2px 0 0' })}>{M.playing ? `الآية ${M.cur} · ${M.cur && M.cur > M.to ? 'متابعة بعد النطاق' : M.repeat === 0 ? `التكرار ${M.rep + 1} · مستمر` : `التكرار ${M.rep + 1} من ${M.repeat}`}` : audioName ? `النطاق ${M.from}–${M.to} · ${audioName}` : 'التلاوة الصوتية غير متاحة حاليًا'}</p>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{M.playing ? (M.paused ? 'متوقفة مؤقتًا' : 'جارٍ التشغيل') : playL}</p>
+          <p aria-live="polite" data-testid="recital-status" style={muted(12, { margin: '2px 0 0' })}>{M.playing ? `الآية ${M.cur} · ${repLabel(M.rep, M.repeat)}${M.cur && M.cur > M.to ? ' · متابعة بعد النطاق' : ''}` : audioName ? `النطاق ${M.from}–${M.to} · ${audioName}` : 'التلاوة الصوتية غير متاحة حاليًا'}</p>
         </div>
-        <div role="group" aria-label="تكرار النطاق" style={{ display: 'flex', alignItems: 'center', gap: 2, border: `1px solid ${color.borderChip}`, borderRadius: 12, padding: 2 }}>
+        <div role="group" aria-label="تكرار كل آية" style={{ display: 'flex', alignItems: 'center', gap: 2, border: `1px solid ${color.borderChip}`, borderRadius: 12, padding: 2 }}>
           <span style={{ color: color.muted, padding: '0 4px' }}><Icon name="repeat" size={18} /></span>
           {[1, 3, 5, 10, 0].map((n) => {
             const on = M.repeat === n;
             return (
-              <button key={n} aria-pressed={on} aria-label={n ? `تكرار ${n} مرات` : 'تكرار مستمر'} onClick={() => setM({ repeat: n })}
+              <button key={n} aria-pressed={on} aria-label={n ? `تكرار كل آية ${n} مرات` : 'تكرار الآية باستمرار'} onClick={() => setM({ repeat: n })}
                 style={{ minWidth: 32, minHeight: 40, border: 'none', borderRadius: 10, background: on ? color.primary : 'transparent', color: on ? color.ivory : color.primary, fontFamily: font.latin, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>{n ? `×${n}` : '∞'}</button>
             );
           })}
@@ -169,7 +177,11 @@ export default function Mushaf() {
             </label>
           )}
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: color.ink, minHeight: 40, cursor: 'pointer' }}>
-            <input type="checkbox" checked={M.adv} onChange={(e) => setM({ adv: e.target.checked })} style={{ width: 20, height: 20, accentColor: color.primary }} />
+            <input type="checkbox" checked={!!M.loop} onChange={(e) => setM({ loop: e.target.checked })} style={{ width: 20, height: 20, accentColor: color.primary }} />
+            إعادة النطاق من البداية
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: color.ink, minHeight: 40, cursor: 'pointer', opacity: M.loop ? 0.5 : 1 }}>
+            <input type="checkbox" checked={M.adv} disabled={!!M.loop} onChange={(e) => setM({ adv: e.target.checked })} style={{ width: 20, height: 20, accentColor: color.primary }} />
             متابعة بعد نهاية النطاق
           </label>
         </div>
