@@ -19,7 +19,7 @@ export function replacePlayback(url: string | null | undefined) {
 export const mushafAudio: { el: HTMLAudioElement | null } = { el: null };
 export function stopMushafAudio() {
   const a = mushafAudio.el;
-  if (a) { a.onended = null; a.onerror = null; a.pause(); mushafAudio.el = null; }
+  if (a) { a.onended = null; a.onerror = null; a.onpause = null; a.onplay = null; a.pause(); mushafAudio.el = null; }
 }
 
 /* ---------- Recorder ---------- */
