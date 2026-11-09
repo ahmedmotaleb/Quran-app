@@ -12,6 +12,7 @@ import { disablePush, enablePush, PushError, pushState, type PushState } from '@
 import { GoogleCalendarCard } from '@/screens/teacher/GoogleSessions';
 import { MyRiwayatSection } from '@/screens/teacher/Riwayat';
 import { ReminderSettingsCard } from './Reminders';
+import { PushDiagnostics } from '@/pwa/PushDiagnostics';
 
 /** The admin portal may run on its own address (the admin service); ask the server where. */
 async function openAdmin() {
@@ -126,6 +127,7 @@ export default function Account() {
       {LIVE && <PhoneRow />}
       <InstallRow />
       {LIVE && <PushRow />}
+      {LIVE && <section style={{ ...card, padding: '4px 16px' }}><PushDiagnostics /></section>}
       <section style={{ ...card, padding: '4px 16px' }}>
         <button onClick={() => (LIVE ? go('support') : openSheet({ kind: 'info', title: 'المساعدة', body: 'للمساعدة في الحجز أو التسجيل، تواصل مع فريق الدعم عبر halqa.app.eg@gmail.com. نرد عادة خلال يوم عمل.' }))}
           style={{ ...rowBtn, borderBottom: `1px solid ${color.divider}` }}><Icon name="help" size={18} /><span style={{ flex: 1, textAlign: 'right' }}>{LIVE ? 'الدعم والمساعدة' : 'المساعدة'}</span><Icon name="chevL" size={18} /></button>

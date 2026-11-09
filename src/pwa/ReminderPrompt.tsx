@@ -11,7 +11,7 @@ import { color } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
 import { primaryBtn } from '@/components/ui';
 import { toast } from '@/store/store';
-import { PushError, enablePush, pushState } from './push';
+import { PushError, connectDevice, enablePush, pushState } from './push';
 
 const LATER_KEY = 'halqa.reminderPrompt.later';
 const DENIED_KEY = 'halqa.reminderPrompt.denied';
@@ -24,23 +24,32 @@ let shown = false; const subs = new Set<() => void>();
 const setShown = (v: boolean) => { if (shown !== v) { shown = v; subs.forEach((f) => f()); } };
 export const useReminderPromptShown = () => useSyncExternalStore((f) => { subs.add(f); return () => subs.delete(f); }, () => shown, () => false);
 
-type Mode = 'ask' | 'ios' | 'denied' | null;
+type Mode = 'ask' | 'connect' | 'ios' | 'denied' | null;
 
 export function ReminderPrompt() {
   const [mode, setMode] = useState<Mode>(null);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
   useEffect(() => {
-    if (read(DENIED_KEY) || Date.now() - Number(read(LATER_KEY) || 0) < COOLDOWN_DAYS * 86_400_000) return;
-    let on = true;
-    // After the home screen settles, never on top of the first paint.
-    const t = setTimeout(() => {
+    const perm = typeof Notification !== 'undefined' ? Notification.permission : 'default';
+    // A refusal remembered on this device counts only while the browser still refuses: allowed later in the phone's
+    // settings (Android → Apps → HALQA → Notifications), the flag is cleared and the banner may show again.
+    if (read(DENIED_KEY) && perm !== 'denied') { try { localStorage.removeItem(DENIED_KEY); } catch { /* private mode */ } }
+    if (read(DENIED_KEY)) return;
+    // Allowed but not connected is a broken state rather than a choice: «لاحقًا» hides it for one day, not seven.
+    if (Date.now() - Number(read(LATER_KEY) || 0) < (perm === 'granted' ? 1 : COOLDOWN_DAYS) * 86_400_000) return;
+    let on = true; let tries = 0;
+    const check = () => {
       pushState().then((st) => {
         if (!on) return;
-        if (st === 'off') setMode('ask');
+        if (st === 'off') setMode(Notification.permission === 'granted' ? 'connect' : 'ask');
         else if (st === 'ios-install') setMode('ios');
-        else if (st === 'denied') write(DENIED_KEY, '1'); // refused earlier: never ask
+        else if (st === 'denied') write(DENIED_KEY, '1'); // refused: never ask again
+        // The service worker may still be installing on the first open: look again once it had time.
+        else if (st === 'unsupported' && 'serviceWorker' in navigator && 'PushManager' in window && tries++ < 2) t = setTimeout(check, 8000);
       }).catch(() => {});
-    }, 1500);
+    };
+    // After the home screen settles, never on top of the first paint.
+    let t = setTimeout(check, 1500);
     return () => { on = false; clearTimeout(t); };
   }, []);
   useEffect(() => { setShown(!!mode); return () => setShown(false); }, [mode]);
@@ -49,6 +58,12 @@ export function ReminderPrompt() {
   const later = () => { write(LATER_KEY, String(Date.now())); setMode(null); };
   const enable = async () => {
     setBusy(true); setErr('');
+    if (mode === 'connect') {
+      try { await connectDevice(); toast('رُبط هذا الجهاز بالإشعارات'); setMode(null); }
+      catch (e) { setErr(e instanceof PushError ? e.message : 'تعذّر ربط الجهاز. حاول من «حسابي ← الإشعارات».'); }
+      finally { setBusy(false); }
+      return;
+    }
     try {
       const st = await enablePush();
       if (st === 'on') { toast('فُعّلت الإشعارات على هذا الجهاز'); setMode(null); }
@@ -60,7 +75,8 @@ export function ReminderPrompt() {
   };
   const step = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, lineHeight: 1.6 } as const;
   const badge = { width: 30, height: 30, borderRadius: 8, background: color.sageTint, color: color.primary, display: 'grid', placeItems: 'center', flexShrink: 0 } as const;
-  const text = mode === 'ask' ? 'استقبل تذكيرات الحفظ والمراجعة ومواعيد الحلقات حتى عندما يكون التطبيق مغلقًا.'
+  const text = mode === 'connect' ? 'إشعارات الهاتف مسموحة، لكن هذا الجهاز غير متصل بخدمة الإشعارات.'
+    : mode === 'ask' ? 'استقبل تذكيرات الحفظ والمراجعة ومواعيد الحلقات حتى عندما يكون التطبيق مغلقًا.'
     : mode === 'ios' ? 'على iPhone وiPad تصل الإشعارات إلى التطبيق المثبّت فقط. ثبّت الحلقة أولًا، ثم افتحها من الشاشة الرئيسية وفعّل الإشعارات.'
     : 'رُفض إذن الإشعارات لهذا الموقع، فلن نسألك مرة أخرى. لتفعيلها لاحقًا: على Android افتح الإعدادات ← التطبيقات ← الحلقة (أو Chrome) ← الإشعارات ← السماح. على الكمبيوتر اضغط رمز القفل بجانب العنوان ← الإشعارات ← السماح.';
 
@@ -86,10 +102,10 @@ export function ReminderPrompt() {
       )}
       {err && <p role="alert" style={{ margin: 0, color: color.dangerInk, fontSize: 14 }}>{err}</p>}
       <div style={{ display: 'flex', gap: 8 }}>
-        {mode === 'ask' && <button onClick={() => void enable()} disabled={busy} aria-busy={busy} style={primaryBtn(48, 15, { flex: 1, borderRadius: 12, opacity: busy ? 0.7 : 1 })}>
-          <Icon name="bell" size={18} /> تفعيل الإشعارات</button>}
+        {(mode === 'ask' || mode === 'connect') && <button onClick={() => void enable()} disabled={busy} aria-busy={busy} style={primaryBtn(48, 15, { flex: 1, borderRadius: 12, opacity: busy ? 0.7 : 1 })}>
+          <Icon name="bell" size={18} /> {mode === 'connect' ? 'ربط الجهاز بالإشعارات' : 'تفعيل الإشعارات'}</button>}
         <button onClick={mode === 'denied' ? () => setMode(null) : later}
-          style={{ minHeight: 48, padding: '0 18px', borderRadius: 12, border: `1px solid ${color.borderStrong}`, background: 'transparent', color: color.primary, fontSize: 15, fontWeight: 700, cursor: 'pointer', ...(mode !== 'ask' ? { flex: 1 } : {}) }}>
+          style={{ minHeight: 48, padding: '0 18px', borderRadius: 12, border: `1px solid ${color.borderStrong}`, background: 'transparent', color: color.primary, fontSize: 15, fontWeight: 700, cursor: 'pointer', ...(mode !== 'ask' && mode !== 'connect' ? { flex: 1 } : {}) }}>
           {mode === 'denied' ? 'حسنًا' : 'لاحقًا'}
         </button>
       </div>
