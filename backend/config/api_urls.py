@@ -182,6 +182,8 @@ urlpatterns = [
     path("me/reminders", notifications.MyReminders.as_view()),
     path("push/config", notifications.PushConfig.as_view()),
     path("push/subscriptions", notifications.PushSubscriptions.as_view()),
+    path("push/status", notifications.PushStatus.as_view()),
+    path("push/test", notifications.PushSelfTest.as_view()),
     path("admin/users/<int:pk>/push-devices", notifications.AdminPushDevices.as_view()),
     path("admin/users/<int:pk>/push-test", notifications.AdminPushTest.as_view()),
 ]
