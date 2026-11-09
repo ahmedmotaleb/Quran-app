@@ -18,13 +18,15 @@ async function open({ ua, permission = 'default', email = 'yousef@halqa.app', st
   await ctx.addInitScript((perm) => {
     window.__asked = 0;
     if (window.Notification) {
-      Object.defineProperty(Notification, 'permission', { get: () => window.__perm ?? perm, configurable: true });
-      Notification.requestPermission = async () => { window.__asked++; window.__perm = 'denied'; return 'denied'; };
+      // Like a real browser, a refusal persists across reloads (kept in this test origin's storage).
+      Object.defineProperty(Notification, 'permission', { get: () => localStorage.getItem('e2e.perm') ?? perm, configurable: true });
+      Notification.requestPermission = async () => { window.__asked++; localStorage.setItem('e2e.perm', 'denied'); return 'denied'; };
     }
   }, permission);
   if (stale) await ctx.addInitScript(() => { if (!sessionStorage.getItem('x')) { sessionStorage.setItem('x', '1'); localStorage.setItem('halqa.reminderPrompt.denied', '1'); } });
   // iPhone Safari outside the Home Screen has no Web Push (no PushManager), as on a real device.
   if (ua === IPHONE) await ctx.addInitScript(() => { delete window.PushManager; });
+  await ctx.route('**/api/v1/push/status*', async (r) => { const res = await r.fetch(); const j = await res.json(); return r.fulfill({ response: res, json: { ...j, server: 'ready' } }); });
   await ctx.route('**/api/v1/push/config*', (r) => r.fulfill({ json: { enabled: true, status: 'ready', public_key: KEY, this_device: false, this_device_inactive: false, devices: 0 } }));
   const page = await ctx.newPage(); page.setDefaultTimeout(12000);
   const app = page.locator('main#scr');
