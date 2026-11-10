@@ -84,3 +84,16 @@ def test_report_counts_push_outcomes_by_role(world, settings):
     Notification.objects.create(recipient=world.admin, kind="admin_teacher_request", title="x", dedupe_key="o3", push_status="failed")
     r = report(settings, *pair())[1]
     assert r["push_outcome_7d"] == {"student": {"sent": 1}, "teacher": {"no_device": 1}, "admin": {"failed": 1}}
+
+
+def test_report_lists_devices_and_self_tests_without_secrets(world, settings):
+    from apps.core.audit import audit
+
+    PushSubscription.objects.create(user=world.s1, endpoint="https://fcm.googleapis.com/fcm/send/secret-row", p256dh="P" * 80, auth="A" * 20,
+                                    device="Mozilla/5.0 (Linux; Android 14) Chrome/130 Mobile")
+    audit("push.self_test", actor=world.s1, target=world.s1, devices=1, sent=1, failed=[], this_device=True)
+    raw, r = report(settings, *pair())
+    row = r["device_rows"][0]
+    assert row["user"] == world.s1.pk and row["role"] == "student" and row["family"] == "android" and row["last_success"] is None
+    assert r["self_tests_7d"][0]["this_device"] is True and r["self_tests_7d"][0]["sent"] == 1
+    assert "secret-row" not in raw and "P" * 80 not in raw

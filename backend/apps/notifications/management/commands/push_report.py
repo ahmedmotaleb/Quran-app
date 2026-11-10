@@ -104,6 +104,17 @@ class Command(BaseCommand):
         report["admin_tests_7d"] = [
             {"at": e.created_at, "target": e.target_id, **{k: e.data.get(k) for k in ("devices", "sent", "failed")}}
             for e in AuditEvent.objects.filter(action="admin.push_test", created_at__gte=week)[:10]]
+        # «إرسال إشعار تجريبي» from «حسابي» (the account's own devices): the account id, how many devices, how many the
+        # push service accepted, and whether the phone that pressed it was among them.
+        report["self_tests_7d"] = [
+            {"at": e.created_at, "user": e.target_id, **{k: e.data.get(k) for k in ("devices", "sent", "failed", "this_device")}}
+            for e in AuditEvent.objects.filter(action="push.self_test", created_at__gte=week)[:10]]
+        # One line per device (no endpoint or keys): whose it is (account id and role), when it was connected, and
+        # its last accepted send / failure — so "accepted but not shown" can be traced to one phone.
+        report["device_rows"] = [
+            {"user": x.user_id, "role": x.user.role, "family": device_family(x.device), "active": x.active, "created": x.created_at,
+             "last_success": x.last_success_at, "last_failure": x.last_failure or None}
+            for x in PushSubscription.objects.select_related("user").order_by("-created_at")[:20]]
         log.warning("push_report", extra={"report": json.dumps(report, default=str)})
         self.stdout.write(json.dumps(report, default=str, ensure_ascii=False))
 
