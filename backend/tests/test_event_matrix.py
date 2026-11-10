@@ -289,7 +289,7 @@ def test_retry_succeeds_and_never_repeats_a_device_that_accepted(team, monkeypat
     push.retry_pending(timezone.now() + timedelta(minutes=10))
     n.refresh_from_db()
     assert n.push_status == "sent" and len(ph.sent) == 2                         # only phone 2 the second time
-    assert len({json.dumps(p) for _, p in ph.sent}) == 1
+    assert len({json.dumps({k: v for k, v in p.items() if k != 'r'}) for _, p in ph.sent}) == 1   # same notice (r is per device)
 
 
 def test_pending_left_by_a_crash_is_sent_by_the_hourly_job(team, monkeypatch):

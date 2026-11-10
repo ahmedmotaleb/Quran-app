@@ -51,3 +51,30 @@ def test_self_test_reports_a_refused_device(world, keys, monkeypatch):  # noqa: 
     r = client_for(world.s1).post("/api/v1/push/test", {"endpoint": EP}, format="json").json()
     assert r["this_device_sent"] is False and "رفضت" in r["message"]
     assert not PushSubscription.objects.filter(endpoint=EP).exists()      # gone: removed, the app re-connects
+
+
+def test_delivery_receipt_from_the_phone(world, keys, monkeypatch):  # noqa: F811
+    """The service worker reports that the push arrived and was displayed (or refused), with the signed token from the
+    payload; no session; a forged token changes nothing."""
+    from rest_framework.test import APIClient
+
+    fake = FakePush(monkeypatch)
+    s = sub(world.s1)
+    client_for(world.s1).post("/api/v1/push/test", {"endpoint": EP}, format="json")
+    token = fake.sent[-1][1]["r"]
+    anon = APIClient()
+    assert anon.post("/api/v1/push/receipt", {"r": "forged", "ok": True}, format="json").status_code == 204
+    s.refresh_from_db()
+    assert s.last_receipt_at is None
+    assert anon.post("/api/v1/push/receipt", {"r": token, "ok": True, "shown": True}, format="json").status_code == 204
+    s.refresh_from_db()
+    assert s.last_receipt == "shown" and s.last_receipt_at is not None
+    st = client_for(world.s1).get("/api/v1/push/status", {"endpoint": EP}).json()["this_device"]
+    assert st["last_receipt"] == "shown" and st["last_receipt_at"]
+    anon.post("/api/v1/push/receipt", {"r": token, "ok": False, "error": "TypeError<script>"}, format="json")
+    s.refresh_from_db()
+    assert s.last_receipt == "error:TypeErrorscript"
+    # another account's device is never touched by this token
+    other = sub(world.s2, ep="https://fcm.googleapis.com/fcm/send/other-phone")
+    other.refresh_from_db()
+    assert other.last_receipt_at is None

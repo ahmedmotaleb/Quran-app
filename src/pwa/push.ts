@@ -122,6 +122,7 @@ export interface PushDiag {
   publicKey: boolean;                        // the server handed out a public key
   registered: boolean | null;                // the server has THIS subscription for this account (and it is on)
   lastSuccessAt: string | null; lastFailure: string | null;
+  lastReceiptAt: string | null; lastReceipt: string | null;   // the phone's own report: the push arrived / was displayed
   devices: number;
   prefs: Record<string, boolean>;
   timezone: string | null;
@@ -129,7 +130,7 @@ export interface PushDiag {
   lastReminder: { kind: string; at: string } | null;
   promptLater: number | null; promptRefused: boolean;
 }
-type Status = { server: string; this_device: { active: boolean; last_success_at: string | null; last_failure: string } | null; devices: number;
+type Status = { server: string; this_device: { active: boolean; last_success_at: string | null; last_failure: string; last_receipt_at?: string | null; last_receipt?: string } | null; devices: number;
   prefs: Record<string, boolean>; timezone: string; reminders: PushDiag['reminders']; last_reminder: PushDiag['lastReminder'] };
 
 const ls = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -140,7 +141,7 @@ export async function diagnosePush(): Promise<PushDiag> {
     notification: typeof window !== 'undefined' && 'Notification' in window };
   const d: PushDiag = { supported: sup, permission: sup.notification ? Notification.permission : 'unsupported', standalone: standalone(),
     sw: 'none', controlled: false, subscription: false, subscriptionHost: null, keyMatches: null, server: 'unreachable', publicKey: false,
-    registered: null, lastSuccessAt: null, lastFailure: null, devices: 0, prefs: {}, timezone: null, reminders: null, lastReminder: null,
+    registered: null, lastSuccessAt: null, lastFailure: null, lastReceiptAt: null, lastReceipt: null, devices: 0, prefs: {}, timezone: null, reminders: null, lastReminder: null,
     promptLater: Number(ls('halqa.reminderPrompt.later')) || null, promptRefused: !!ls('halqa.reminderPrompt.denied') };
   let cfg: Cfg | null = null;
   try { cfg = await config(); d.publicKey = !!cfg.public_key; } catch { /* unreachable */ }
@@ -165,6 +166,7 @@ export async function diagnosePush(): Promise<PushDiag> {
     d.server = st.server; d.devices = st.devices; d.prefs = st.prefs; d.timezone = st.timezone; d.reminders = st.reminders; d.lastReminder = st.last_reminder;
     d.registered = sub ? !!st.this_device?.active : null;
     d.lastSuccessAt = st.this_device?.last_success_at ?? null; d.lastFailure = st.this_device?.last_failure || null;
+    d.lastReceiptAt = st.this_device?.last_receipt_at ?? null; d.lastReceipt = st.this_device?.last_receipt || null;
   } catch { /* shown as unreachable */ }
   return d;
 }
@@ -204,4 +206,21 @@ export async function selfTest(): Promise<{ sent: number; this_device: boolean; 
   let endpoint = '';
   try { endpoint = (await (await navigator.serviceWorker.getRegistration('/'))?.pushManager.getSubscription())?.endpoint ?? ''; } catch { /* none */ }
   return api('POST', 'push/test', { endpoint });
+}
+
+/** After a test push: wait for THIS phone's service worker to report that the push arrived (push/receipt).
+ *  'shown' / 'not_listed' / 'error:<name>' — or null when nothing arrived within the wait. */
+export async function awaitReceipt(since: number, waitMs = 25000): Promise<string | null> {
+  const end = Date.now() + waitMs;
+  while (Date.now() < end) {
+    await new Promise((r) => setTimeout(r, 2500));
+    try {
+      const ep = (await (await navigator.serviceWorker.getRegistration('/'))?.pushManager.getSubscription())?.endpoint;
+      if (!ep) return null;
+      const st = await api<Status>('GET', `push/status?endpoint=${encodeURIComponent(ep)}`);
+      const at = st.this_device?.last_receipt_at ? Date.parse(st.this_device.last_receipt_at) : 0;
+      if (at >= since - 2000) return st.this_device?.last_receipt || 'shown';
+    } catch { /* keep waiting */ }
+  }
+  return null;
 }

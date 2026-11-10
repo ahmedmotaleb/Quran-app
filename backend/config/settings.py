@@ -217,6 +217,7 @@ REST_FRAMEWORK = {
         "upload": env("THROTTLE_UPLOAD", "20/hour"),
         "quran_audio": env("THROTTLE_QURAN_AUDIO", "120/min"),
         "support": env("THROTTLE_SUPPORT", "20/hour"),
+        "push_receipt": env("THROTTLE_PUSH_RECEIPT", "120/min"),  # delivery receipts from phones' service workers (per IP)
         "diag": env("THROTTLE_DIAG", "60/hour"),  # client diagnostics (recording on real phones)  # new tickets and replies, per user
     },
     "EXCEPTION_HANDLER": "apps.core.exceptions.api_exception_handler",
