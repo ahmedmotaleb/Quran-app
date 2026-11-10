@@ -1,7 +1,9 @@
 /* Web Push handlers, imported by the generated service worker (vite.config.ts → workbox.importScripts).
    The server sends only generic text (no names, scores, Quran ranges, notes or links to recordings) and, for a tap,
    only `/#/n/<id>`: the app opens that notification after checking the signed-in account. */
-const SAFE_URL = (u) => (typeof u === 'string' && /^\/#\/(n\/\d+|inbox)$/.test(u) ? u : '/#/inbox');
+// The learners' app opens a notification by id; administrators' notices open an admin portal section (the portal
+// checks the admin session and permission again). Anything else falls back to the inbox.
+const SAFE_URL = (u) => (typeof u === 'string' && (/^\/#\/(n\/\d+|inbox)$/.test(u) || /^\/admin\/#\/admin\/[A-Za-z]+$/.test(u)) ? u : '/#/inbox');
 
 self.addEventListener('push', (event) => {
   let d = { title: 'الحلقة', body: 'لديك إشعار جديد.', url: '/#/inbox', tag: 'halqa' };
@@ -21,7 +23,9 @@ self.addEventListener('notificationclick', (event) => {
   const url = new URL(path, self.location.origin).href;
   event.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const w = wins.find((c) => { const u = new URL(c.url); return u.origin === self.location.origin && !u.pathname.startsWith('/admin'); });
+    const admin = path.startsWith('/admin/');
+    // The same kind of window: the admin portal for admin notices, the learners' app otherwise.
+    const w = wins.find((c) => { const u = new URL(c.url); return u.origin === self.location.origin && u.pathname.startsWith('/admin') === admin; });
     if (!w) return self.clients.openWindow(url);
     try { await w.focus(); } catch (e) { /* not focusable: still navigate */ }
     try { if (w.navigate) { await w.navigate(url); return; } } catch (e) { /* uncontrolled window: ask it instead */ }

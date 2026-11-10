@@ -14,11 +14,24 @@ class Notification(models.Model):
     dedupe_key = models.CharField(max_length=120)
     read_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Phone delivery (outbox): set after the transaction that created the notification commits.
+    #   pending   — waiting to be sent (also what a crash between commit and send leaves; the hourly job sends it)
+    #   sent      — the push service accepted it for every target device (not proof Android displayed it)
+    #   no_device — the recipient has no active device: inbox only
+    #   pref_off  — the recipient switched this category off
+    #   retry     — a temporary failure (network, 5xx, 429): retried by the hourly job, at most PUSH_ATTEMPTS times
+    #   failed    — refused by the push service, or still failing after PUSH_ATTEMPTS
+    #   off       — push is not configured on the server
+    push_status = models.CharField(max_length=10, blank=True, default="")
+    push_attempts = models.PositiveSmallIntegerField(default=0)
+    push_at = models.DateTimeField(null=True, blank=True)
+    push_error = models.CharField(max_length=20, blank=True, default="")
+    push_targets = models.JSONField(default=list, blank=True)  # device ids still to send to (a retry never repeats a success)
 
     class Meta:
         ordering = ["-created_at"]
         constraints = [models.UniqueConstraint(fields=["recipient", "dedupe_key"], name="notification_dedupe")]
-        indexes = [models.Index(fields=["recipient", "read_at"])]
+        indexes = [models.Index(fields=["recipient", "read_at"]), models.Index(fields=["push_status"])]
 
 
 class PushSubscription(models.Model):

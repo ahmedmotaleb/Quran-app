@@ -147,7 +147,7 @@ export async function diagnosePush(): Promise<PushDiag> {
   let sub: PushSubscription | null = null;
   if (sup.sw) {
     d.controlled = !!navigator.serviceWorker.controller;
-    const r = await navigator.serviceWorker.getRegistration().catch(() => undefined);
+    const r = await navigator.serviceWorker.getRegistration('/').catch(() => undefined);
     if (r) {
       d.sw = r.active ? 'active' : r.installing || r.waiting ? 'installing' : 'none';
       if (sup.push && r.active) {
@@ -178,7 +178,10 @@ export async function connectDevice(): Promise<void> {
   let perm = Notification.permission;
   if (perm === 'default') perm = await Notification.requestPermission();   // only from the button
   if (perm !== 'granted') throw new PushError('إذن الإشعارات غير ممنوح لهذا الموقع. فعّله من إعدادات الهاتف ← التطبيقات ← الحلقة أو Chrome ← الإشعارات.');
-  let reg = await navigator.serviceWorker.getRegistration().catch(() => undefined) ?? null;
+  let reg = await navigator.serviceWorker.getRegistration('/').catch(() => undefined) ?? null;
+  // The admin portal (/admin/) does not register the app's service worker itself: register it here (same file, scope /)
+  // so administrators can receive pushes even if they never opened the learners' app on this device.
+  if (!reg) reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => null);
   if (!reg?.active) reg = await Promise.race([navigator.serviceWorker.ready, new Promise<null>((r) => setTimeout(() => r(null), 15000))]);
   if (!reg) throw new PushError('لم يكتمل تثبيت خدمة التطبيق (Service Worker). أغلق الحلقة وافتحها من جديد ثم حاول مرة أخرى.');
   let sub: PushSubscription;
@@ -199,6 +202,6 @@ export async function connectDevice(): Promise<void> {
 /** «إرسال إشعار تجريبي» to this account's devices, this device first. */
 export async function selfTest(): Promise<{ sent: number; this_device: boolean; this_device_sent: boolean; message: string }> {
   let endpoint = '';
-  try { endpoint = (await (await navigator.serviceWorker.getRegistration())?.pushManager.getSubscription())?.endpoint ?? ''; } catch { /* none */ }
+  try { endpoint = (await (await navigator.serviceWorker.getRegistration('/'))?.pushManager.getSubscription())?.endpoint ?? ''; } catch { /* none */ }
   return api('POST', 'push/test', { endpoint });
 }

@@ -18,6 +18,6 @@ class AccountsConfig(AppConfig):
 
                 from .teacher_requests import on_assigned
 
-                transaction.on_commit(lambda: on_assigned(instance.student, instance.teacher))
+                transaction.on_commit(lambda: on_assigned(instance.student, instance.teacher, instance.pk))
 
         post_save.connect(assigned, sender=TeacherAssignment, dispatch_uid="teacher_request_on_assigned")

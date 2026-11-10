@@ -46,7 +46,12 @@ export function open(n: Note, role: string | null) {
   if (n.kind === 'submission_new') return tab('treviews');
   // Daily Quran reminders: the Mushaf, or the task they are about (below); «اختر معلمك» and request updates: home.
   if (d.screen === 'mushaf') return go('mushaf', {});
-  if (n.kind.startsWith('teacher_pick') || n.kind.startsWith('teacher_request')) return tab('home');
+  if (n.kind.startsWith('teacher_pick') || n.kind.startsWith('teacher_request') || n.kind === 'teacher_assigned') return tab('home');
+  // Teachers: a new student → «الطلاب»; approval of the account → today's board.
+  if (n.kind === 'student_assigned') return role === 'teacher' && d.student ? go('tstudent', { id: String(d.student) }) : tab('tstudents');
+  if (n.kind === 'teacher_approved' || n.kind === 'teacher_unapproved') return tab('tdash');
+  // Parents: the linked child's follow-up (the screen checks the link again).
+  if (n.kind === 'child_feedback') return tab('phome');
   if (n.kind === 'correction_new') return go('mistakes');
   if (n.kind === 'feedback_new' && d.assignment) return go('feedback', { id: String(d.assignment) });
   if (d.assignment) return go('task', { id: String(d.assignment) });

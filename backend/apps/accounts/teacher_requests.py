@@ -116,7 +116,19 @@ class MyTeacherRequest(APIView):
             raise ApiError("duplicate_request", "لديك طلب قيد المراجعة بالفعل.", 409) from None
         audit("student.teacher_requested", actor=u, target=r, request=request, teacher=teacher.pk if teacher else None,
               suggested=bool(d["suggested_name"]))
+        notify_admins_new(r)
         return Response(out(r), status=201)
+
+
+def notify_admins_new(r: TeacherRequest) -> None:
+    """A new «اختر معلمك» request: the administrators who may assign teachers (only they see the student's name)."""
+    from apps.accounts.admin_access import admins_with
+    from apps.notifications.services import after_commit
+
+    who = r.teacher.display_name if r.teacher_id else f"اقتراح: {r.suggested_name}"
+    for a in admins_with("teachers.assign"):
+        after_commit(a, "admin_teacher_request", "طلب اختيار معلم جديد", f"{r.student.full_name} · {who}", link="/admin",
+                     dedupe=f"teacher_request:{r.pk}:admin:{a.pk}", data={"teacher_request": r.pk, "admin_section": "teacherRequests"})
 
 
 # ---- Admin -------------------------------------------------------------------------------------------------------
@@ -184,22 +196,39 @@ class AdminTeacherRequestDecide(APIView):
                 if not TeacherAssignment.objects.filter(teacher=teacher, student=r.student, active=True).exists():
                     a = TeacherAssignment.objects.create(teacher=teacher, student=r.student, created_by=request.user)
                     audit("admin.teacher_assigned", actor=request.user, target=a, request=request, via="teacher_request")
-                on_assigned(r.student, teacher)  # other open requests closed, reminders cleared
+                on_assigned(r.student, teacher, tell=False)  # other open requests closed, reminders cleared (the new link tells the teacher)
             audit("admin.teacher_request_decided", actor=request.user, target=r, request=request, decision=d["action"],
                   teacher=d.get("teacher"))
         r.refresh_from_db()
         return Response(out(r, admin=True))
 
 
-def on_assigned(student, teacher) -> None:
-    """A teacher was assigned (any path): close the open request as ASSIGNED and clear the «اختر معلمك» reminders."""
+def on_assigned(student, teacher, assignment_id: int | None = None, tell: bool = True) -> None:
+    """A teacher was assigned (any path: «اختر معلمك» review, the student record, a bulk action). Closes the open
+    request as ASSIGNED, clears the «اختر معلمك» reminders, and tells both people: the student «تم تعيين معلمك» (once —
+    through the request when there was one) and the teacher «طالب جديد»."""
     from apps.notifications.models import Notification
+    from apps.notifications.services import after_commit
 
+    told = False
     for r in TeacherRequest.objects.filter(student=student, status__in=OPEN):
         r.status, r.assigned_teacher = S.ASSIGNED, teacher
         r.decided_at = r.decided_at or timezone.now()
         r.save(update_fields=["status", "assigned_teacher", "decided_at", "updated_at"])
         _notify(r, "تم تعيين معلمك", f"معلمك: {teacher.display_name}.")
+        told = True
+    # Assigned through the review just now (AdminTeacherRequestDecide already told the student).
+    told = told or TeacherRequest.objects.filter(student=student, status=S.ASSIGNED, assigned_teacher=teacher,
+                                                 decided_at__gte=timezone.now() - timedelta(minutes=5)).exists()
+    if not tell:
+        Notification.objects.filter(recipient=student, kind__startswith="teacher_pick", read_at__isnull=True).update(read_at=timezone.now())
+        return
+    key = f"assignment:{assignment_id or f'{student.pk}-{teacher.pk}'}"
+    if not told:
+        after_commit(student, "teacher_assigned", "تم تعيين معلمك", f"معلمك: {teacher.display_name}.", link="/circles",
+                     dedupe=f"{key}:student", data={"screen": "home"})
+    after_commit(teacher, "student_assigned", "طالب جديد", f"انضم {student.full_name} إلى طلابك.", link="/teacher/students",
+                 dedupe=f"{key}:teacher", data={"student": student.pk, "screen": "students"})
     Notification.objects.filter(recipient=student, kind__startswith="teacher_pick", read_at__isnull=True).update(read_at=timezone.now())
 
 

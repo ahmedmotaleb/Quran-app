@@ -161,6 +161,8 @@ def cancel(*, booking_id: int, by, reason: str = "", now: datetime | None = None
         b.save(update_fields=["status", "cancelled_at", "cancelled_by", "cancel_reason", "updated_at"])
         if not is_owner and reason != "rescheduled":
             transaction.on_commit(lambda: _notify_cancelled(b.pk))
+            if not is_teacher:  # cancelled by the administration: the teacher is affected too
+                transaction.on_commit(lambda: _notify_teacher(b.pk, "booking_cancelled_by_admin", "ألغت الإدارة حجزًا في جدولك"))
         from .makeup import booking_cancelled
         from .waitlist import seat_freed
 
@@ -248,9 +250,19 @@ def cancel_occurrence(*, occurrence_id: int, by, reason: str, now: datetime | No
         o.save(update_fields=["status", "updated_at"])
         for bid in ids:
             transaction.on_commit(lambda bid=bid: _notify_cancelled(bid))
+        if o.teacher_id != by.pk:  # the administration cancelled the teacher's session
+            transaction.on_commit(lambda pk=o.pk: _notify_teacher_session_cancelled(pk))
         # A Google-backed session: delete its Calendar event (attendees told) once the cancellation is committed.
         transaction.on_commit(lambda pk=o.pk: _cancel_google(pk))
     return o, len(ids)
+
+
+def _notify_teacher_session_cancelled(occurrence_id: int) -> None:
+    from apps.notifications.services import notify
+
+    o = SessionOccurrence.objects.select_related("teacher").get(pk=occurrence_id)
+    notify(o.teacher, "session_cancelled_by_admin", "ألغت الإدارة إحدى جلساتك", local_when(o.starts_at, o.teacher.timezone),
+           link="/teacher/schedule", dedupe=f"occurrence:{o.pk}:cancelled:teacher", data={"occurrence": o.pk})
 
 
 def _cancel_google(occurrence_id: int) -> None:

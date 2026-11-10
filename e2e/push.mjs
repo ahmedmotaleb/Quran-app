@@ -94,6 +94,26 @@ await step('a push asking for an outside or unknown link is reduced to the inbox
   }
   if (url !== '/#/inbox') throw new Error(`unsafe url kept: ${url}`);
 });
+await step('an administrator notice keeps its admin-portal section; a look-alike is reduced to the inbox', async () => {
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('ServiceWorker.enable');
+  const reg = await new Promise((resolve) => {
+    cdp.on('ServiceWorker.workerRegistrationUpdated', ({ registrations }) => { const r = registrations.find((x) => !x.isDeleted); if (r) resolve(r); });
+  });
+  const send = (url, tag) => cdp.send('ServiceWorker.deliverPushMessage', { origin: new URL(LIVE).origin, registrationId: reg.registrationId,
+    data: JSON.stringify({ title: 'الحلقة · الإدارة', body: 'طلب اختيار معلم جديد بانتظار المراجعة.', url, tag }) });
+  await send('/admin/#/admin/teacherRequests', 'admin-a');
+  await send('/admin/#/admin/x?steal=1', 'admin-b');
+  const get = async (tag) => {
+    for (let i = 0; i < 40; i++) {
+      const u = await page.evaluate(async (t) => { const r = await navigator.serviceWorker.ready; const n = (await r.getNotifications({ tag: t }))[0]; return n ? n.data.url : null; }, tag);
+      if (u) return u; await page.waitForTimeout(250);
+    }
+    return null;
+  };
+  if ((await get('admin-a')) !== '/admin/#/admin/teacherRequests') throw new Error('admin section lost');
+  if ((await get('admin-b')) !== '/#/inbox') throw new Error('unsafe admin url kept');
+});
 await step('opening HALQA from a notification link lands on the right screen', async () => {
   await page.goto(LIVE + '#/inbox'); await app.getByRole('heading', { name: 'الإشعارات', exact: true }).waitFor();
   await page.goto(LIVE + '#/n/999999');   // not this account's notification: the inbox, nothing else

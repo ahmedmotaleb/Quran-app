@@ -53,6 +53,7 @@ import { pageTitle } from '@/theme/brand';
 import { Logo } from '@/components/Logo';
 import { promptInstall, useInstall } from '@/pwa/install';
 import { AdminSidebar, AdminTopBar, NAV } from './AdminNav';
+import { PushDiagnostics } from '@/pwa/PushDiagnostics';
 
 /** Back to the learners' app. The portal may run on its own address (the admin service), so ask the server where. */
 const toApp = async () => {
@@ -319,6 +320,11 @@ function OverviewLive({ c }: { c: LiveCounts }) {
   const shown = kpis.filter((k) => canSection(k.go));
   return (
     <>
+      {/* Administrators' own phone/computer: new requests and approvals reach it as pushes; tapping opens the section. */}
+      <details data-testid="admin-push" style={{ ...card, padding: '10px 18px' }}>
+        <summary style={{ cursor: 'pointer', minHeight: 40, display: 'flex', alignItems: 'center', fontWeight: 800 }}>إشعارات لوحة الإدارة على هذا الجهاز</summary>
+        <PushDiagnostics title="الطلبات الجديدة (اختيار معلم، معلم بانتظار الاعتماد…) تصل إلى هذا الجهاز كإشعار" />
+      </details>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14 }}>
         {shown.map((k) => (
           <button key={k.l} onClick={() => goSection(k.go)} style={{ ...card, padding: 18, textAlign: 'right', cursor: 'pointer', color: color.ink }}>

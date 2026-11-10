@@ -10,7 +10,7 @@ from django.core.management import call_command
 
 from apps.notifications.models import PushSubscription
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("commit_now")]
 b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()  # noqa: E731
 
 
@@ -54,6 +54,7 @@ def test_report_shows_who_gets_inbox_only(world, settings):
     """The usual reason a message is "only in the app": the recipient has no device with notifications turned on."""
     from apps.notifications.models import Notification
 
+    Notification.objects.all().delete()  # the world's teacher links already notified people
     PushSubscription.objects.create(user=world.s1, endpoint="https://fcm.googleapis.com/fcm/send/y", p256dh="P" * 80, auth="A" * 20, device="Android")
     for i, u in enumerate((world.s1, world.t1, world.t1, world.p1)):
         Notification.objects.create(recipient=u, kind="admin_message", title="x", body="y", dedupe_key=f"t{i}")
@@ -72,3 +73,14 @@ def test_delivery_logs_why_nothing_was_pushed(world, settings, caplog):
         notify(world.t1, "admin_message", "x", "y", dedupe="t-log")
     rec = [x for x in caplog.records if x.msg == "push_skipped"]
     assert rec and rec[-1].reason == "no_device" and rec[-1].role == "teacher" and rec[-1].kind == "admin_message"
+
+
+def test_report_counts_push_outcomes_by_role(world, settings):
+    from apps.notifications.models import Notification
+
+    Notification.objects.all().delete()
+    Notification.objects.create(recipient=world.s1, kind="assignment_new", title="x", dedupe_key="o1", push_status="sent")
+    Notification.objects.create(recipient=world.t1, kind="submission_new", title="x", dedupe_key="o2", push_status="no_device")
+    Notification.objects.create(recipient=world.admin, kind="admin_teacher_request", title="x", dedupe_key="o3", push_status="failed")
+    r = report(settings, *pair())[1]
+    assert r["push_outcome_7d"] == {"student": {"sent": 1}, "teacher": {"no_device": 1}, "admin": {"failed": 1}}

@@ -8,7 +8,7 @@ from apps.notifications.services import notify
 
 from .conftest import client_for
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("commit_now")]
 SUB = {"endpoint": "https://push.example.test/abc", "keys": {"p256dh": "BPk3", "auth": "a1"}}
 
 

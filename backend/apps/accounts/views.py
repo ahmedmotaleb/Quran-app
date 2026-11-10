@@ -358,10 +358,15 @@ class PasswordResetView(APIView):
             password_validation.validate_password(pw, user)
         except Exception as e:
             raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"password": [arabic_password_error(e)]})
+        first = not user.has_usable_password()   # an invited account setting its password for the first time
         user.set_password(pw)
         user.save(update_fields=["password"])
         AuthToken.objects.filter(user=user, revoked_at__isnull=True).update(revoked_at=timezone.now())
         audit("auth.password_reset", actor=user, target=user, request=request)
+        if first and user.role == Role.TEACHER and not getattr(getattr(user, "teacher_profile", None), "approved_at", None):
+            from .teacher_onboarding import notify_admins_teacher_ready
+
+            notify_admins_teacher_ready(user)
         return Response({"message": "تم تعيين كلمة المرور. سجّل الدخول من جديد."})
 
 
@@ -657,6 +662,9 @@ class AdminTeacherApproval(APIView):
             t.status = AccountStatus.ACTIVE
             t.save(update_fields=["status"])
         audit("admin.teacher_approval", actor=request.user, target=t, request=request, approved=approve, reason=reason, riwayat_confirmed=confirmed)
+        from .teacher_onboarding import notify_teacher_approval
+
+        notify_teacher_approval(t, approve, reason)
         return Response(AdminUserSerializer(_admin_users().get(pk=pk), context={"request": request}).data)
 
 

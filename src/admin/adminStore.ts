@@ -51,9 +51,17 @@ export function canSection(sec: Section): boolean {
   const need = SECTION_PERM[sec];
   return !need || need.some(can);
 }
+// A tapped admin notice while this portal is already open: the service worker asks this window to go to the section.
+if (typeof navigator !== 'undefined' && navigator.serviceWorker) {
+  navigator.serviceWorker.addEventListener('message', (e: MessageEvent) => {
+    const d = e.data as { type?: string; url?: string } | null;
+    if (d?.type === 'halqa:navigate' && typeof d.url === 'string' && /^\/admin\/#\/admin\/[A-Za-z]+$/.test(d.url)) window.location.hash = d.url.slice('/admin/'.length);
+  });
+}
+
 /** `#/admin/<section>?…` → the section (list filters after `?` belong to that section's screen). */
 export function sectionFromHash(): Section | null {
-  const m = window.location.hash.match(/^#\/admin\/([a-z]+)/);
+  const m = window.location.hash.match(/^#\/admin\/([A-Za-z]+)/);
   return m && SECTIONS.includes(m[1] as Section) ? (m[1] as Section) : null;
 }
 

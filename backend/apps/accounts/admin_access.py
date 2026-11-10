@@ -154,6 +154,12 @@ def admin_users():
                     | Q(role=Role.TEACHER, admin_profile__is_active=True)).distinct())
 
 
+def admins_with(perm: str) -> list:
+    """Administrators who should receive a notice that needs `perm` to act on (and to see the student's name): active
+    admin accounts and teachers with active admin access whose permissions include it. Others never get it."""
+    return [a for a in admin_users().select_related("admin_profile") if perm in perms_of(a)]
+
+
 def perms_of(user) -> frozenset[str]:
     prof = profile_of(user)
     if prof is None or not prof.is_active:

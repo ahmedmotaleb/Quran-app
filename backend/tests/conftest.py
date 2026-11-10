@@ -56,3 +56,14 @@ def _clear_cache():
     from django.core.cache import cache
     cache.clear()
     yield
+
+
+@pytest.fixture
+def commit_now(monkeypatch):
+    """For tests of push delivery itself: the test runs inside one transaction that never commits, so a callback
+    registered with transaction.on_commit would never run. This treats each callback as committed at once (what
+    happens outside a transaction). Rollback behaviour is tested separately without it (test_event_matrix.py)."""
+    from django.db import transaction
+
+    monkeypatch.setattr(transaction, "on_commit", lambda fn, using=None, robust=False: fn())
+
