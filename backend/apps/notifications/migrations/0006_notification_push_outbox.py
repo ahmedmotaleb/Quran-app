@@ -10,5 +10,5 @@ class Migration(migrations.Migration):
         migrations.AddField("notification", "push_at", models.DateTimeField(blank=True, null=True)),
         migrations.AddField("notification", "push_error", models.CharField(blank=True, default="", max_length=20)),
         migrations.AddField("notification", "push_targets", models.JSONField(blank=True, default=list)),
-        migrations.AddIndex("notification", models.Index(fields=["push_status"], name="notificatio_push_st_idx")),
+        migrations.AddIndex("notification", models.Index(fields=["push_status"], name="notificatio_push_st_d62c89_idx")),
     ]
