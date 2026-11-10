@@ -135,6 +135,32 @@ asked, so no teacher or parent had a device).
 `timezone` follows the device at sign-in and when the app returns to the foreground; bookings are UTC instants and
 reminder hours are local wall-clock hours, so neither changes. The admin portal stays in academy time (Cairo).
 
+**Event notifications (10 Nov 2026).** Every event creates the in-app notice inside the business transaction and
+sends the push only AFTER it commits (never for a rolled-back action). Each notice records its phone delivery in
+`push_status`: `sent` (accepted by the push service; Android display not verifiable), `no_device` (inbox only),
+`pref_off`, `retry` (temporary failure; the hourly `push_retry` step tries again, 3 attempts in total, within 6 h),
+`failed`, `off` (push not configured). `push-report` shows `push_outcome_7d` by role and accounts with a device by
+role.
+
+| Event | Recipients |
+|---|---|
+| Student requests a teacher («اختر معلمك») | administrators with `teachers.assign` (opens «طلبات اختيار المعلم») |
+| Request approved / teacher unavailable | the student |
+| Teacher assigned (any path) | the student (once) and the assigned teacher |
+| Invited teacher finished account setup | administrators with `teachers.approve` (opens «المعلمون») |
+| Teacher approved / approval withdrawn | the teacher |
+| Session booked | the student and the teacher |
+| Booking or session cancelled by the teacher/administration | the students; the teacher too when the administration did it |
+| Student moved a booking | the teacher |
+| Homework / correction | the student |
+| Recitation submitted | the teacher |
+| Teacher feedback | the student, and verified parents (generic text) |
+| Excuse request | the teacher; the decision → the student, verified parents, and the teacher when an administrator decided |
+| Absences / automatic suspension | the student, verified parents, administrators with `users.suspend` |
+
+Administrators connect their own phone or computer on the admin portal's overview («إشعارات لوحة الإدارة على هذا
+الجهاز» → «ربط الجهاز بالإشعارات»); learners do it in «حسابي». A tap opens the admin section or the notification.
+
 **Production verification checklist (push and reminders):**
 1. `curl https://<app>/api/ready` → `"push":"ready"`.
 2. Actions → Ops → `push-report`: `keys_match: true`; devices listed by family; no `failing`.

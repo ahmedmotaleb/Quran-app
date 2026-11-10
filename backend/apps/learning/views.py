@@ -209,6 +209,7 @@ class FeedbackCreate(APIView):
             student, title, sid = s.student, a.title, s.pk
             transaction.on_commit(lambda: notify(student, "feedback_new", "وصل تقييم معلمك", title, link=f"/feedback/{sid}", dedupe=f"feedback:{sid}",
                                                          data={"submission": sid, "assignment": a.pk}))
+            transaction.on_commit(lambda: _tell_guardians_feedback(student, sid))
         audit("feedback.created", actor=request.user, target=fb, request=request, decision=fb.decision)
         return Response(services.submission_out(_submissions(request.user).get(pk=s.pk), request.user, request), status=201)
 
@@ -277,3 +278,15 @@ class LessonComplete(APIView):
             raise NOT_FOUND
         LessonCompletion.objects.get_or_create(student=request.user, lesson=l)
         return Response({"id": l.id, "completed": True})
+
+
+def _tell_guardians_feedback(student, submission_id: int) -> None:
+    """Linked parents (verified links only) learn that the teacher evaluated their child's recitation. The text names
+    the child only; scores and notes stay in the app, behind the parent's own access checks."""
+    from apps.accounts.models import GuardianLink, LinkStatus
+
+    first = (student.full_name or "").split(" ")[0]
+    for g in GuardianLink.objects.filter(student=student, status=LinkStatus.ACTIVE).select_related("guardian"):
+        notify(g.guardian, "child_feedback", f"تقييم جديد لـ {first}", "قيّم المعلم تلاوة جديدة. التفاصيل في متابعة ابنك.", link="/parent",
+               dedupe=f"feedback:{submission_id}:g{g.guardian_id}", data={"child": student.pk})
+

@@ -14,16 +14,27 @@ def notify(recipient, kind: str, title: str, body: str = "", *, link: str = "", 
     try:
         with transaction.atomic():
             n = Notification.objects.create(recipient=recipient, kind=kind, title=title, body=body[:500], link=link,
-                                            dedupe_key=dedupe, data=data or {})
+                                            dedupe_key=dedupe, data=data or {}, push_status="pending")
     except IntegrityError:
-        return None
+        return None  # the same event was already notified (dedupe): no second push either
     except Exception:  # noqa: BLE001
         log.exception("notification_failed", extra={"kind": kind})
         return None
+    # The phone is told only once the surrounding transaction has COMMITTED (never for an action that rolls back).
+    # Outside a transaction this runs at once. A crash before it runs leaves the notice `pending` for the hourly job.
+    transaction.on_commit(lambda: _push(n.pk))
+    return n
+
+
+def _push(pk: int) -> None:
     from .push import deliver
 
-    deliver(n)  # optional phone delivery; generic text only, never raises
-    return n
+    n = Notification.objects.filter(pk=pk, push_status="pending").first()
+    if n is not None:
+        try:
+            deliver(n)  # generic text only; never raises
+        except Exception:  # noqa: BLE001
+            log.exception("push_dispatch_failed")
 
 
 def after_commit(recipient, kind: str, title: str, body: str = "", **kw) -> None:

@@ -15,7 +15,7 @@ from .conftest import client_for, occurrence
 from .test_admins import staff, with_mfa
 from .test_push import FakePush, key_pair
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("commit_now")]
 ANDROID = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36"
 DESKTOP = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130.0 Safari/537.36"
 

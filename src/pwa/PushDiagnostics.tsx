@@ -2,12 +2,12 @@
  *  browser support, permission, service worker, push subscription (host only), whether the server has this exact
  *  device for this account, the server's readiness, preferences, reminder times and the last daily reminder sent.
  *  No keys or endpoints are shown. «ربط الجهاز بالإشعارات» repairs the subscription (success only after the server
- *  confirms it); «إرسال إشعار تجريبي» sends a real push to this account's devices. */
+ *  confirms it); «إرسال إشعار تجريبي» sends a real push to this account's devices. Used in the learners' «حسابي»
+ *  (every role) and on the admin portal's overview (administrators), so it imports nothing from either app's store. */
 import { useEffect, useState } from 'react';
 import { color } from '@/theme/tokens';
 import { outlineBtn, primaryBtn } from '@/components/ui';
 import { ApiError } from '@/api/client';
-import { toast } from '@/store/store';
 import { deviceZone, fmtShortDateTime, hourLabel } from '@/lib/time';
 import { PushError, connectDevice, diagnosePush, selfTest, type PushDiag } from './push';
 
@@ -42,7 +42,7 @@ function rows(d: PushDiag): Row[] {
   return r;
 }
 
-export function PushDiagnostics() {
+export function PushDiagnostics({ title = 'حالة الإشعارات على هذا الجهاز' }: { title?: string } = {}) {
   const [d, setD] = useState<PushDiag | null>(null);
   const [busy, setBusy] = useState<'connect' | 'test' | null>(null);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -52,7 +52,7 @@ export function PushDiagnostics() {
   const broken = d.permission === 'granted' && (!d.subscription || d.registered === false || d.keyMatches === false);
   const connect = async () => {
     setBusy('connect'); setMsg(null);
-    try { await connectDevice(); setMsg({ text: 'رُبط هذا الجهاز وأكّد الخادم تسجيله.', ok: true }); toast('رُبط هذا الجهاز بالإشعارات'); }
+    try { await connectDevice(); setMsg({ text: 'رُبط هذا الجهاز وأكّد الخادم تسجيله.', ok: true }); }
     catch (e) { setMsg({ text: e instanceof PushError ? e.message : 'تعذّر ربط الجهاز.', ok: false }); }
     finally { setBusy(null); void load(); }
   };
@@ -64,7 +64,7 @@ export function PushDiagnostics() {
   };
   return (
     <section aria-labelledby="pd-h" data-testid="push-diagnostics" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 0 12px' }}>
-      <h3 id="pd-h" style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>حالة الإشعارات على هذا الجهاز</h3>
+      <h3 id="pd-h" style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>{title}</h3>
       {broken && <p role="alert" style={{ margin: 0, padding: '8px 10px', borderRadius: 10, background: color.warnBg, color: color.warnInk, fontSize: 14, lineHeight: 1.7 }}>
         إشعارات الهاتف مسموحة، لكن هذا الجهاز غير متصل بخدمة الإشعارات.</p>}
       <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 10px', fontSize: 13 }}>

@@ -40,8 +40,9 @@ def test_assignment_submission_feedback_chain(world, run_commits):
     assert kinds(world.t1) == ["submission_new"]
     run_commits(lambda: t1.post(f"/api/v1/submissions/{sub['id']}/feedback", FB, format="json"))
     assert sorted(kinds(world.s1)) == ["assignment_new", "feedback_new"]
-    # Unrelated people get nothing.
-    for u in (world.s2, world.t2, world.p1, world.admin):
+    # The linked parent learns that the child was evaluated (generic, no scores); unrelated people get nothing.
+    assert kinds(world.p1) == ["child_feedback"]
+    for u in (world.s2, world.t2, world.admin):
         assert kinds(u) == []
 
 

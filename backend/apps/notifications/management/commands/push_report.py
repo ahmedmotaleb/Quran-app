@@ -89,6 +89,9 @@ class Command(BaseCommand):
                                  # Inbox only (no device turned on), by the recipient's role: counts, no names.
                                  "inbox_only_by_role": dict(Counter(recent.exclude(recipient_id__in=with_devices)
                                                                     .values_list("recipient__role", flat=True)))},
+            # Phone delivery of each notice (outbox, since 10 Nov 2026), by recipient role:
+            #   sent = accepted by the push service · no_device = inbox only · pref_off · retry/pending · failed · off
+            "push_outcome_7d": _outcomes(recent),
             # Active accounts per role, and how many of them have at least one active device.
             "accounts_with_device_by_role": {
                 r: {"accounts": User.objects.filter(role=r, is_active=True).count(),
@@ -103,3 +106,13 @@ class Command(BaseCommand):
             for e in AuditEvent.objects.filter(action="admin.push_test", created_at__gte=week)[:10]]
         log.warning("push_report", extra={"report": json.dumps(report, default=str)})
         self.stdout.write(json.dumps(report, default=str, ensure_ascii=False))
+
+
+def _outcomes(qs) -> dict:
+    from django.db.models import Count
+
+    out: dict = {}
+    for row in qs.values("recipient__role", "push_status").annotate(n=Count("id")):
+        out.setdefault(row["recipient__role"], {})[row["push_status"] or "before_outbox"] = row["n"]
+    return out
+

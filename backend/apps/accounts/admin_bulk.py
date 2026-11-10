@@ -144,6 +144,9 @@ def _approve(on: bool):
             raise Skip("unchanged", "معتمد بالفعل." if on else "غير معتمد بالفعل.")
         prof.approved_at = timezone.now() if on else None
         prof.save(update_fields=["approved_at"])
+        from .teacher_onboarding import notify_teacher_approval
+
+        notify_teacher_approval(u, on, reason)
         if on:
             from .riwayat import verify_pending
 

@@ -124,3 +124,29 @@ def migrate_open_invitations(apply: bool, out) -> dict:
         audit("ops.teacher_invitation_migrated", target=user, invitation=inv.pk, emailed=sent)
         out(f"invitation {inv.pk}: created user {user.pk}, setup email {'sent' if sent else 'FAILED'}")
     return stats
+
+
+# ---- notices about teacher approval ------------------------------------------------------------------------------
+def notify_teacher_approval(t, approved: bool, reason: str = "") -> None:
+    """The teacher is told when the administration approves the account (students can now find and book them) or
+    withdraws the approval. Sent after the change commits."""
+    from apps.notifications.services import after_commit
+
+    from django.utils import timezone
+
+    if approved:
+        after_commit(t, "teacher_approved", "تم اعتماد حسابك كمعلم", "يظهر حسابك الآن للطلاب ويمكنهم الحجز معك.", link="/teacher",
+                     dedupe=f"teacher_approval:{t.pk}:on:{timezone.now():%Y%m%d%H%M}", data={"screen": "tdash"})
+    else:
+        after_commit(t, "teacher_unapproved", "سُحب اعتماد حسابك", reason or "تواصل مع الإدارة لمعرفة التفاصيل.", link="/teacher",
+                     dedupe=f"teacher_approval:{t.pk}:off:{timezone.now():%Y%m%d%H%M}", data={"screen": "tdash"})
+
+
+def notify_admins_teacher_ready(t) -> None:
+    """A teacher finished setting up the account and waits for approval: administrators who may approve teachers."""
+    from apps.accounts.admin_access import admins_with
+    from apps.notifications.services import after_commit
+
+    for a in admins_with("teachers.approve"):
+        after_commit(a, "admin_teacher_pending", "معلم بانتظار الاعتماد", f"{t.full_name} أكمل إعداد حسابه.", link="/admin",
+                     dedupe=f"teacher_ready:{t.pk}:admin:{a.pk}", data={"teacher": t.pk, "admin_section": "teachers"})
