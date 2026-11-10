@@ -51,6 +51,11 @@ class PushSubscription(models.Model):
     active = models.BooleanField(default=True)
     last_failure = models.CharField(max_length=20, blank=True)
     last_failure_at = models.DateTimeField(null=True, blank=True)
+    # Delivery receipt from the phone's service worker (push/receipt): the push ARRIVED on the device, and whether
+    # Android displayed it ("shown") or refused ("error:<name>"). Empty = no receipt yet (old app version, or the push
+    # never reached the phone).
+    last_receipt_at = models.DateTimeField(null=True, blank=True)
+    last_receipt = models.CharField(max_length=60, blank=True, default="")
 
 
 class ReminderSettings(models.Model):

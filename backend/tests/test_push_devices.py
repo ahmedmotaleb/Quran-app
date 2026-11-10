@@ -153,7 +153,7 @@ def test_lock_screen_text_is_generic_for_every_event(world, keys, monkeypatch, k
     text = json.dumps(payload, ensure_ascii=False)
     n = Notification.objects.get(recipient=world.s1, kind=kind)
     assert payload["title"] == "الحلقة" and payload["url"] == f"/#/n/{n.pk}"          # the app opens it after sign-in
-    assert set(payload) == {"title", "body", "url", "tag"}
+    assert set(payload) == {"title", "body", "url", "tag", "r"}   # r: the signed delivery-receipt token (no personal data)
     for leak in ("الملك", "الدرجة", "ملاحظة", "r2.example", world.s1.full_name):
         assert leak not in text
 
@@ -173,7 +173,7 @@ def test_admin_test_notification(world, keys, monkeypatch):
     r = c.post(f"/api/v1/admin/users/{world.s1.pk}/push-test", {"title": "مخصص", "body": "نص مخصص"}, format="json")
     assert r.status_code == 200 and r.json()["sent"] == 1 and r.json()["message"].startswith("قبلت خدمة الإشعارات الإرسال إلى جهاز واحد.")
     [(ep, payload)] = fake.sent
-    assert ep == sub(1)["endpoint"] and payload == push.TEST                      # fixed text; no arbitrary payload
+    assert ep == sub(1)["endpoint"] and {k: v for k, v in payload.items() if k != "r"} == push.TEST   # fixed text; no arbitrary payload (r: receipt token)
     assert payload["body"] == "هذا إشعار تجريبي للتأكد من عمل الإشعارات."
     ev = AuditEvent.objects.filter(action="admin.push_test").latest("id")
     assert ev.data["sent"] == 1 and "endpoint" not in json.dumps(ev.data)

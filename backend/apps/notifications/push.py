@@ -149,6 +149,25 @@ def device_family(ua: str) -> str:
     return fam(ua)
 
 
+RECEIPT_SALT = "halqa.push.receipt"
+RECEIPT_MAX_AGE = 24 * 3600
+
+
+def receipt_token(sub_id: int) -> str:
+    from django.core import signing
+
+    return signing.dumps(sub_id, salt=RECEIPT_SALT, compress=True)
+
+
+def receipt_sub(token: str) -> int | None:
+    from django.core import signing
+
+    try:
+        return int(signing.loads(str(token), salt=RECEIPT_SALT, max_age=RECEIPT_MAX_AGE))
+    except Exception:  # noqa: BLE001 — forged, expired or malformed
+        return None
+
+
 def send_one(sub, payload: dict, *, kind: str = "") -> tuple[bool, str]:
     """Deliver to one device. Returns (delivered, failure category or ""). Keeps the row's state: success time,
     failure category and time; removes it when the push service says it is gone; switches it off when it can never
@@ -157,7 +176,9 @@ def send_one(sub, payload: dict, *, kind: str = "") -> tuple[bool, str]:
 
     from .models import PushSubscription
 
-    data = json.dumps(payload, ensure_ascii=False)
+    # `r`: a signed, short-lived receipt token for THIS device, so its service worker can report that the push arrived
+    # and whether Android displayed it (views.PushReceipt). It identifies nothing outside this server.
+    data = json.dumps({**payload, "r": receipt_token(sub.pk)}, ensure_ascii=False)
     fam = device_family(sub.device)
     try:
         webpush(subscription_info={"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}}, data=data,

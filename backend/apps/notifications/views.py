@@ -236,7 +236,8 @@ class PushStatus(APIView):
         return Response({
             "server": push.readiness(),
             "this_device": None if mine is None else {"active": mine.active, "last_success_at": mine.last_success_at,
-                                                     "last_failure": mine.last_failure, "last_failure_at": mine.last_failure_at},
+                                                     "last_failure": mine.last_failure, "last_failure_at": mine.last_failure_at,
+                                                     "last_receipt_at": mine.last_receipt_at, "last_receipt": mine.last_receipt},
             "devices": PushSubscription.objects.filter(user=u, active=True).count(),
             "prefs": {k: (u.notify_prefs or {}).get(k, True) is not False for k in push.PREF_KEYS},
             "timezone": u.timezone,
@@ -282,3 +283,28 @@ class PushSelfTest(APIView):
                    "الإشعارات أو توفير البطارية للحلقة أو Chrome.")
         return Response({"devices": len(subs), "sent": sent, "failed": failed, "this_device": bool(here), "this_device_sent": this_ok,
                          "message": msg})
+
+
+
+class PushReceipt(APIView):
+    """POST {r, ok, shown, error}: the phone's service worker reports that a push ARRIVED and whether the notification
+    was displayed. No session is needed (a service worker may run with the app closed and signed out): the signed token
+    from the push payload names the device. Stores only a time and a short outcome on that device's row."""
+
+    authentication_classes: list = []
+    permission_classes: list = []
+    throttle_scope = "push_receipt"
+
+    def post(self, request):
+        import re
+
+        sid = push.receipt_sub(request.data.get("r", ""))
+        if sid is None:
+            return Response(status=204)  # nothing to say to a forged or expired token
+        if request.data.get("ok") is True:
+            out = "shown" if request.data.get("shown") is not False else "not_listed"
+        else:
+            out = "error:" + re.sub(r"[^A-Za-z0-9_ .:-]", "", str(request.data.get("error", "")))[:40]
+        PushSubscription.objects.filter(pk=sid).update(last_receipt_at=timezone.now(), last_receipt=out)
+        push.log.info("push_receipt", extra={"outcome": out.split(":")[0]})
+        return Response(status=204)

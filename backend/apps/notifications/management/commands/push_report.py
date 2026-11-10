@@ -113,7 +113,8 @@ class Command(BaseCommand):
         # its last accepted send / failure — so "accepted but not shown" can be traced to one phone.
         report["device_rows"] = [
             {"user": x.user_id, "role": x.user.role, "family": device_family(x.device), "active": x.active, "created": x.created_at,
-             "last_success": x.last_success_at, "last_failure": x.last_failure or None}
+             "last_success": x.last_success_at, "last_failure": x.last_failure or None,
+             "last_receipt_at": x.last_receipt_at, "last_receipt": x.last_receipt or None}
             for x in PushSubscription.objects.select_related("user").order_by("-created_at")[:20]]
         log.warning("push_report", extra={"report": json.dumps(report, default=str)})
         self.stdout.write(json.dumps(report, default=str, ensure_ascii=False))
