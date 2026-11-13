@@ -13,6 +13,7 @@ import { GoogleCalendarCard } from '@/screens/teacher/GoogleSessions';
 import { MyRiwayatSection } from '@/screens/teacher/Riwayat';
 import { ReminderSettingsCard } from './Reminders';
 import { PushDiagnostics } from '@/pwa/PushDiagnostics';
+import { AdhkarSettingsCard } from '@/screens/common/Adhkar';
 
 /** The admin portal may run on its own address (the admin service); ask the server where. */
 async function openAdmin() {
@@ -122,6 +123,15 @@ export default function Account() {
         </section>
       )}
       {LIVE && role === 'student' && s.notif.reminders !== false && <ReminderSettingsCard />}
+      {LIVE && (
+        <button onClick={() => go('adhkar', {})} data-testid="open-adhkar" style={{ minHeight: 60, padding: '0 16px', borderRadius: 16, border: `1px solid ${color.border}`, background: color.card, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', cursor: 'pointer', color: color.ink }}>
+          <span style={{ color: color.primary }}><Icon name="book" /></span>
+          <span style={{ flex: 1 }}><span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>الأذكار والأدعية</span>
+            <span style={{ display: 'block', fontSize: 12, color: color.muted }}>من القرآن الكريم والسنة الصحيحة، مع المصدر</span></span>
+          <span style={{ color: color.primary }}><Icon name="chevL" /></span>
+        </button>
+      )}
+      {LIVE && <AdhkarSettingsCard />}
       {LIVE && role === 'teacher' && <MyRiwayatSection />}
       {LIVE && role === 'teacher' && <GoogleCalendarCard />}
       {LIVE && <PhoneRow />}

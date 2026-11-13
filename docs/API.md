@@ -551,3 +551,64 @@ and the admin are asked to «أضف القراءات والروايات».
   - `teacher_pick` «اختر معلمك», or `teacher_pick_pending` «طلبك قيد المراجعة» while a request is pending or approved.
   - In-app (and push to the student's devices if «تذكيرات القرآن واختيار المعلم» is on). Never on login.
 
+
+## Adhkar «الأذكار والأدعية» (owner request, 13 Nov 2026)
+
+Content rule: Quran and authentic Sunnah only (hadith graded صحيح or حسن), each entry with its source. Nothing is
+shown or sent until an administrator approves it. Quranic text is never typed: the server copies it from the active
+verified Quran source (Tanzil import) by surah and ayah numbers.
+
+**Readers (every role, signed in):**
+- `GET adhkar?category=&q=&favorites=1` → `{categories: [{key,label,count}], results: [Dhikr]}`.
+  - Only approved, enabled entries.
+  - `q` ignores Arabic diacritics.
+- `GET adhkar/<id>` → one Dhikr (404 if not approved or disabled).
+- `POST | DELETE adhkar/<id>/favorite` → `{favorite}`.
+- `GET | PUT me/adhkar-settings` → `{enabled, interval_hours (0 off | 1 | 2 | 3 | 4), window_start, window_end,
+  morning_on, morning_hour, evening_on, evening_hour, sleep_on, sleep_hour, quran_dua_on, sunnah_dua_on, quiet_start,
+  quiet_end, timezone}`.
+  - Hours are 0–23 in the account's IANA `timezone` (defaults to Africa/Cairo).
+  - Defaults: on, every 2 hours from 08:00 to 22:00, morning 07:00, evening 17:00, sleep 22:00, quiet hours 23:00–06:00.
+  - Turning these off never affects learning or administrative notifications.
+- **Dhikr fields:** `id, category, category_label, text, source_type (quran|hadith), source` («البقرة: ٢٠١» /
+  «صحيح مسلم (٢٦٩١) · صحيح»), `repetition` (null unless the source states a number), `time_of_day, time_label, surah,
+  ayah_from, ayah_to, hadith_collection, hadith_number, grading, grading_label, graded_by, reference_url, favorite`.
+
+**Administration** (permissions `adhkar.view`, `adhkar.manage`, `adhkar.approve`; the «إدارة المحتوى» preset has
+view and manage; owners have all):
+- `GET admin/adhkar?status=&category=&source=&q=&page=` → paginated (100 per page) `{counts, categories, rows}`.
+- `POST admin/adhkar` creates a **pending** entry.
+  - Quran: `{source_type: "quran", category, surah, ayah_from, ayah_to}`. Text comes from the verified source;
+    `400` if those ayahs do not exist; `409` if they are already in the library.
+  - Hadith: `{source_type: "hadith", category, text, hadith_collection, hadith_number, grading (sahih|hasan),
+    graded_by?, reference_url?}`.
+  - Optional for both: `repetition`, `time_of_day (any|morning|evening|sleep|waking)`.
+- `PATCH admin/adhkar/<id>`: a change to the text or source sends the entry back to pending.
+- `POST admin/adhkar/<id>/review {decision: approve|reject, note}` (`adhkar.approve`). Rejecting requires a note.
+- `POST admin/adhkar/<id>/enable {enabled}`.
+- `POST admin/adhkar/seed-quran`: adds the proposed Quranic references (about 90 whole-ayah duas, istighfar,
+  tasbih, and verses on the virtue of the Quran) as pending.
+  - Idempotent.
+  - Returns `{created, existing, missing}`.
+- `POST admin/adhkar/<id>/test`: sends that approved entry to the admin's own devices (once per 30 s).
+- `GET admin/adhkar/stats`: last 7 days.
+  - Notices and accounts reached, and counts by `push_status`.
+  - Most-sent entries.
+  - The latest 30 failed deliveries (role, status, error, attempts).
+  - Library counts.
+- Every create, edit, review and enable is written to the audit log (`adhkar.*`).
+
+**Sending** (`adhkar_reminders` step of the hourly job `run_scheduled`, minute 23):
+- Who: active accounts with an active push device and adhkar on.
+- Time: each account's own time zone. DST-safe: a skipped hour runs at the transition, and a repeated hour cannot
+  send twice.
+- Morning, evening and sleep: once a day from entries of that time, caught up for 3 hours after the chosen hour.
+- Periodic: every N hours inside the window, from the general categories plus Quranic/prophetic duas when those are on.
+- Never in quiet hours. At most one adhkar notice per account per run.
+- Each slot (`morning:<date>`, `p:<date>:<HH>`) is used once per account, enforced by a unique row.
+- Rotation: the entry this account has gone longest without, so no repeats until the eligible set is exhausted.
+- With no approved entries for a slot, nothing is sent.
+- Notice kind `adhkar_<category>`: the title is «الحلقة | …»; the body is the text (shortened at a word) plus the
+  source.
+  - Tapping opens `#/n/<id>`, which opens the entry.
+  - Excluded from the learning inbox and its unread count.

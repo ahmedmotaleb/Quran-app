@@ -67,6 +67,8 @@ reseed; QIRAAT_CMD="bash e2e/ci/py.sh qiraat_teacher.py" run qiraat
 reseed; LONE_CMD="bash e2e/ci/py.sh lone_student.py" run teacher-request
 # Daily Quran reminders: settings in «حسابي» (quiet hours), a reminder opens the Mushaf.
 reseed; NOTE_CMD="bash e2e/ci/py.sh reminder_note.py" run reminders
+# «الأذكار والأدعية»: admin review gate (verified Quran text), Sunnah source fields, student library/favorites/settings, tap.
+reseed; NOTE_CMD="bash e2e/ci/py.sh adhkar_notice.py" run adhkar
 reseed; SETUP_CMD="cd backend && ${PYTHON:-python} manage.py shell < ../e2e/ci/waitlist_setup.py 2>/dev/null" run waitlist
 reseed; run circle-members
 reseed; SETUP_CMD="bash e2e/ci/py.sh delete_setup.py" run account-delete http://localhost:5176/

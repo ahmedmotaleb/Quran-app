@@ -98,6 +98,7 @@ INSTALLED_APPS = [
     "apps.notifications",
     "apps.support",
     "apps.integrations",
+    "apps.adhkar",
 ]
 
 MIDDLEWARE = [

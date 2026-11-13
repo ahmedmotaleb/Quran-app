@@ -49,6 +49,7 @@ GENERIC = [
     ("makeup", ("الحلقة", "مُنحت لك جلسة تعويضية.")),
     ("circle", ("الحلقة", "تحديث على حلقتك.")),
     ("admin_message", ("الحلقة", "رسالة جديدة من إدارة الحلقة.")),
+    ("adhkar", ("الحلقة | ذكر الله", "ذكر جديد في الأذكار والأدعية.")),
     ("admin_teacher_request", ("الحلقة · الإدارة", "طلب اختيار معلم جديد بانتظار المراجعة.")),
     ("admin_teacher_pending", ("الحلقة · الإدارة", "معلم جديد بانتظار الاعتماد.")),
     ("admin_access", ("الحلقة · الإدارة", "تحديث على صلاحياتك في لوحة الإدارة.")),
@@ -65,6 +66,7 @@ CATEGORY = [("assignment", "tasks"), ("review_due", "tasks"), ("correction", "ta
             ("submission", "tasks"), ("session_reminder", "sessions"), ("session_cancelled", "sessions"), ("booking", "sessions"), ("waitlist", "sessions"),
             ("makeup", "sessions"), ("circle", "sessions"), ("feedback", "feedback"), ("weekly_report", "news"), ("admin_message", "news"),
             ("reminder", "reminders"), ("teacher_pick", "reminders")]
+# Adhkar have their own on/off («تفعيل الأذكار», apps.adhkar.Preferences); never mixed with learning/admin notices.
 PREF_KEYS = ("tasks", "sessions", "feedback", "news", "reminders")
 
 
@@ -257,7 +259,11 @@ def deliver(notification) -> int:
         log.info("push_skipped", extra={"reason": "no_device", "kind": _prefix(n.kind), "role": u.role})
         save("no_device", attempt=False)
         return 0
-    payload = payload_for(n.kind, n.link, n.pk, admin_section=_admin_section(n, u.role))
+    if n.kind.startswith("adhkar_"):
+        # A dhikr/dua: its verified text and source are the point of the notice and contain nothing personal.
+        payload = {"title": n.title[:80], "body": n.body[:300], "url": f"/#/n/{n.pk}", "tag": f"adhkar-{n.pk}"}
+    else:
+        payload = payload_for(n.kind, n.link, n.pk, admin_section=_admin_section(n, u.role))
     ok, again, last = 0, [], ""
     for sub in subs:
         good, cat = send_one(sub, payload, kind=n.kind)

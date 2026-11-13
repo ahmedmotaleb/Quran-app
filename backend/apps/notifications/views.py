@@ -21,7 +21,7 @@ class NotificationList(generics.ListAPIView):
         from .services import ensure_session_reminders
 
         ensure_session_reminders(self.request.user)
-        qs = Notification.objects.filter(recipient=self.request.user).order_by("-created_at", "-id")
+        qs = Notification.objects.filter(recipient=self.request.user).exclude(kind__startswith="adhkar_").order_by("-created_at", "-id")
         if self.request.query_params.get("unread") == "1":
             qs = qs.filter(read_at__isnull=True)
         return qs
@@ -41,7 +41,7 @@ class UnreadCount(APIView):
         from .services import ensure_session_reminders
 
         ensure_session_reminders(request.user)
-        return Response({"unread": Notification.objects.filter(recipient=request.user, read_at__isnull=True).count()})
+        return Response({"unread": Notification.objects.filter(recipient=request.user, read_at__isnull=True).exclude(kind__startswith="adhkar_").count()})
 
 
 class NotificationRead(APIView):

@@ -42,6 +42,34 @@ browser and run each row. Write ✅ or ❌, plus the device and OS version.
 | 10 | Mushaf: text is right-to-left with correct ayah markers; «تشغيل النطاق» plays the recitation (Quran.com), repeat and speed work, audio stops when leaving the Mushaf | | | | |
 | 11 | After the next deploy: "يتوفر إصدار جديد" appears; "حدّث الآن" updates (and waits if a recording is in progress) | | | | |
 
+### Adhkar reminders «الأذكار والأدعية» on Android — OWNER ACTION REQUIRED (not tested on a real device)
+
+Emulated browsers passed the automated checks (e2e/adhkar.mjs, e2e/push-persist.mjs). Those checks are **not** proof
+of delivery on a phone.
+
+**Before you start**
+1. In the admin portal («مكتبة الأذكار»), approve at least a few entries.
+2. Use the production address, installed to the home screen, signed in as a test student.
+
+| # | Check | Result (✅/❌, phone model, Android version, Chrome version) |
+| --- | --- | --- |
+| A1 | «حسابي» → «إعدادات الأذكار والتنبيهات» shows your time zone; set «كل ساعة» and a window that includes the next hour | |
+| A2 | Close the app completely (swipe it away). At minute ~25 of the next hour an adhkar notice arrives with the text and its source | |
+| A3 | Tap the notice: HALQA opens on that entry with the full text, the source, and the counter if the source gives one | |
+| A4 | Set the quiet hours to cover the current hour: no adhkar notice arrives that hour; a learning notice (e.g. a teacher's feedback) still arrives | |
+| A5 | Turn «تفعيل الأذكار» off: no adhkar notices; learning notices still arrive | |
+| A6 | Sign out and back in: notices keep arriving with no «فعّل الإشعارات» prompt | |
+| A7 | Battery saver on, phone idle 1 hour: record whether the notice arrived on time, late, or not at all | |
+| A8 | Admin: «إشعار تجريبي لأجهزتي» on an approved entry reaches the admin's phone | |
+
+**Background delivery is not guaranteed on every Android device.** Doze, battery optimisation and some
+manufacturers' app killers (Xiaomi, Huawei, Oppo, Samsung «sleeping apps») can delay or drop web push notices. If
+A2 or A7 fails, check these:
+- Chrome must not be in Settings → Battery → «sleeping apps» or «restricted».
+- Notifications for Chrome / the installed app must be allowed.
+- «الإرسال والإحصاءات» shows whether the push service accepted the notice. If it says «وصل إلى الخدمة», the phone
+  delayed or dropped it.
+
 ## Real-device findings
 
 ### Testing on a phone you do not have (recording diagnostics)

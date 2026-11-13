@@ -54,6 +54,9 @@ PERMISSIONS: dict[str, str] = {
     "courses.manage": "إدارة الدورات والتسجيل فيها",
     "lessons.manage": "إدارة الدروس",
     "quizzes.manage": "إدارة الاختبارات والأسئلة",
+    "adhkar.view": "عرض مكتبة الأذكار وإحصاءاتها",
+    "adhkar.manage": "إضافة الأذكار وتعديلها وتفعيلها",
+    "adhkar.approve": "اعتماد الأذكار ومراجعة مصادرها",
     # Communication
     "notifications.send": "إرسال رسائل داخل التطبيق",
     "invitations.send": "إرسال الدعوات وروابط الإعداد",
@@ -88,7 +91,7 @@ PRESETS: dict[str, frozenset[str]] = {
     "support": frozenset({
         "users.view", "users.view_contact", "users.suspend", "parents.view", "parents.link_child", "teachers.view",
         "bookings.view", "invitations.send", "support.view", "support.manage"}),
-    "content": frozenset({"courses.view", "courses.manage", "lessons.manage", "quizzes.manage"}),
+    "content": frozenset({"courses.view", "courses.manage", "lessons.manage", "quizzes.manage", "adhkar.view", "adhkar.manage"}),
     "sessions": frozenset({
         "sessions.view", "sessions.manage", "bookings.view", "bookings.manage", "circles.view", "circles.manage",
         "attendance.manage", "excuses.review", "users.view", "teachers.view"}),

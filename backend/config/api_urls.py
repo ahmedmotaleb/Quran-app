@@ -2,6 +2,7 @@ from django.urls import include, path
 
 from apps.assessments import admin_views as assess_admin
 from apps.core import admin_views as core_admin
+from apps.adhkar import views as adhkar
 from apps.core import diagnostics, kpi
 from apps.integrations import views as gcal
 from apps.support import views as support
@@ -186,6 +187,18 @@ urlpatterns = [
     path("push/test", notifications.PushSelfTest.as_view()),
     path("push/receipt", notifications.PushReceipt.as_view()),
     path("push/rotate", notifications.PushRotate.as_view()),
+    # «الأذكار والأدعية»
+    path("adhkar", adhkar.AdhkarList.as_view()),
+    path("adhkar/<int:pk>", adhkar.AdhkarDetail.as_view()),
+    path("adhkar/<int:pk>/favorite", adhkar.AdhkarFavorite.as_view()),
+    path("me/adhkar-settings", adhkar.MyAdhkarSettings.as_view()),
+    path("admin/adhkar", adhkar.AdminAdhkar.as_view()),
+    path("admin/adhkar/seed-quran", adhkar.AdminAdhkarSeed.as_view()),
+    path("admin/adhkar/stats", adhkar.AdminAdhkarStats.as_view()),
+    path("admin/adhkar/<int:pk>", adhkar.AdminDhikr.as_view()),
+    path("admin/adhkar/<int:pk>/review", adhkar.AdminDhikrReview.as_view()),
+    path("admin/adhkar/<int:pk>/enable", adhkar.AdminDhikrEnable.as_view()),
+    path("admin/adhkar/<int:pk>/test", adhkar.AdminDhikrTest.as_view()),
     path("admin/users/<int:pk>/push-devices", notifications.AdminPushDevices.as_view()),
     path("admin/users/<int:pk>/push-test", notifications.AdminPushTest.as_view()),
 ]
