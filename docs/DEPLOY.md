@@ -181,7 +181,8 @@ Administrators connect their own phone or computer on the admin portal's overvie
 ## 6b. Hourly maintenance job
 
 Every deploy also updates a Cloud Run **job** `halqa-tasks` (same image and settings as the service) that runs
-`python manage.py run_scheduled`: session reminders, daily Quran reminders, «اختر معلمك» reminders, due review
+`python manage.py run_scheduled`: session reminders, daily Quran reminders, «اختر معلمك» reminders, adhkar reminders
+(«الأذكار والأدعية»; hour granularity, each account's own time zone), due review
 tasks, and removal of abandoned uploads. The
 GitHub workflow **Scheduled maintenance** starts it at minute 23 of every hour; a failed step fails the run, so
 GitHub emails the repository owner. Run it by hand from **Actions → Scheduled maintenance → Run workflow**.

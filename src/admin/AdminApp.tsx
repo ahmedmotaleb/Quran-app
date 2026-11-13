@@ -19,8 +19,9 @@ const TeacherRequestsLive = lazy(() => import('./live/TeacherRequests'));
 const AdminsLive = lazy(() => import('./live/Admins'));
 const ReportsLive = lazy(() => import('./live/Reports'));
 const SupportLive = lazy(() => import('./live/Support'));
+const AdhkarLive = lazy(() => import('./live/Adhkar'));
 const LIVE_OTHER: Partial<Record<Section, () => JSX.Element>> = {
-  settings: () => <SettingsLive />, admins: () => <AdminsLive />, excuses: () => <ExcusesLive />, teacherRequests: () => <TeacherRequestsLive />, reports: () => <ReportsLive />, support: () => <SupportLive />, circles: () => <CirclesLive />, bookings: () => <BookingsLive />, lectures: () => <CoursesLive />, quizzes: () => <QuizzesLive />,
+  settings: () => <SettingsLive />, admins: () => <AdminsLive />, excuses: () => <ExcusesLive />, teacherRequests: () => <TeacherRequestsLive />, reports: () => <ReportsLive />, support: () => <SupportLive />, adhkar: () => <AdhkarLive />, circles: () => <CirclesLive />, bookings: () => <BookingsLive />, lectures: () => <CoursesLive />, quizzes: () => <QuizzesLive />,
 };
 
 /** Sections that run on the real API in live mode; the rest still show demo data (labelled). */
@@ -168,6 +169,7 @@ const TITLES: Record<Section, string> = {
   excuses: 'طلبات اعتذار الطلاب: يقرر المعلم أو الإدارة، ويُعتمد أول قرار',
   teacherRequests: 'طلبات الطلاب لاختيار معلم: الطلب لا يعيّن المعلم؛ تراجع الإدارة الإتاحة ثم تؤكد التعيين',
   support: 'طلبات الدعم من الطلاب والمعلمين وأولياء الأمور؛ الملاحظات الداخلية لا يراها صاحب الطلب',
+  adhkar: 'إدارة مكتبة الأذكار: لا يُنشر ذكر ولا يُرسل إلا بعد اعتماده ومع مصدره',
   reports: 'مؤشرات الأكاديمية وعبء عمل المعلمين، بأرقام فعلية وتعريف كل رقم',
 };
 

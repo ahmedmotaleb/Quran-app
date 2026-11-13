@@ -14,7 +14,7 @@ import { date, errMsg, Modal, OtpField, ReasonDialog, smallBtn } from './ui';
 
 const GROUPS: [string, string[]][] = [
   ['الأشخاص', ['users', 'teachers', 'parents']], ['الجدولة والحضور', ['bookings', 'sessions', 'circles', 'attendance', 'excuses']],
-  ['التعلّم', ['assignments', 'submissions', 'feedback']], ['المحتوى', ['courses', 'lessons', 'quizzes']],
+  ['التعلّم', ['assignments', 'submissions', 'feedback']], ['المحتوى', ['courses', 'lessons', 'quizzes', 'adhkar']],
   ['التواصل', ['notifications', 'invitations']], ['التقارير', ['analytics', 'exports']], ['النظام', ['settings', 'audit', 'admins', 'security']],
 ];
 const PRESET_ORDER = ['academic_manager', 'support', 'content', 'sessions', 'read_only', 'custom'];

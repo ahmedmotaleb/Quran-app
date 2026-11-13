@@ -42,6 +42,7 @@ export function InboxBell() {
 /** Where a notification leads (the inbox, and a tapped phone notification: `#/n/<id>`). */
 export function open(n: Note, role: string | null) {
   const d = n.data || {};
+  if (n.kind.startsWith('adhkar_') && d.dhikr) return go('adhkar', { id: String(d.dhikr) });
   if (n.kind.startsWith('support') && d.ticket) return go('support', { id: String(d.ticket) });
   if (n.kind === 'submission_new') return tab('treviews');
   // Daily Quran reminders: the Mushaf, or the task they are about (below); «اختر معلمك» and request updates: home.
