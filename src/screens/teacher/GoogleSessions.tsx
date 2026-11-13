@@ -1,5 +1,7 @@
-/** Google Calendar + Meet for teachers (owner request 24 Oct): connect the teacher's own Google Calendar once, then
- *  «+ إنشاء جلسة» creates the HALQA session, its Calendar event and a Google Meet automatically (no pasted links).
+/** «+ إنشاء جلسة» for teachers. The session is created in HALQA on its own (owner P0, 13 Nov 2026): it is saved,
+ *  the student booked and told, and it appears in «المواعيد» at once. Google Calendar + Meet is optional: when the
+ *  teacher connected Google, the event and Meet link are added; if Google fails, the session stays and the teacher can
+ *  retry or paste a meeting link.
  *  Tokens never reach the app: the server keeps them; the app only sees the connection state and a masked email. */
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { color } from '@/theme/tokens';
@@ -10,6 +12,8 @@ import * as E from '@/api/endpoints';
 import { openSheet, setState, toast, useApp } from '@/store/store';
 import { refreshSchedule } from '@/store/live';
 import { tzOf } from '@/lib/format';
+import { clockOf } from '@/lib/time';
+import type { ReactNode } from 'react';
 
 const TOPICS: [E.SessionTopic, string][] = [['hifz', 'حفظ'], ['review', 'مراجعة'], ['tajweed', 'تجويد'], ['test', 'اختبار'], ['other', 'أخرى']];
 const RESULT: Record<string, string> = {
@@ -83,8 +87,8 @@ function CreateSessionForm({ onClose }: { onClose: () => void }) {
   const [students, setStudents] = useState<{ id: number; name: string }[]>([]); const [circles, setCircles] = useState<{ id: number; name: string }[]>([]);
   const [v, setV] = useState({ who: '', topic: 'hifz' as E.SessionTopic, date: '', time: '19:00', minutes: 45, title: '', prep_note: '' });
   const [errs, setErrs] = useState<Record<string, string | undefined>>({}); const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<{ id: number; msg: string } | null>(null);
-  const key = useRef(newKey()); // one request id per form: a double tap or a retry never makes a second event
+  const key = useRef(newKey()); // one request id per form: a double tap or a retry never makes a second session
+  const sending = useRef(false); // a second tap while the first request is still on its way does nothing
   useEffect(() => {
     E.googleStatus().then(setGs).catch(() => setGs(null));
     E.teacherStudents().then((p) => setStudents(p.results.map((x) => ({ id: x.id, name: x.full_name })))).catch(() => {});
@@ -92,36 +96,39 @@ function CreateSessionForm({ onClose }: { onClose: () => void }) {
     const d = new Date(Date.now() + 86_400_000);
     setV((x) => ({ ...x, date: new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d) }));
   }, [tz]);
-  const done = (s: E.ApiTeacherSession, ok: string) => { toast(ok); void refreshSchedule(); onClose(); void s; };
+  /** The session exists from here on; the Google part only adds to the message. */
+  const created = (s: E.ApiTeacherSession) => {
+    const who = s.with?.kind === 'circle' ? 'أُبلغ أعضاء الحلقة' : 'أُبلغ الطالب';
+    const g = s.google;
+    if (!g) toast(`تم إنشاء الجلسة و${who}.`);
+    else if (g.sync_status === 'ready') toast(`تم إنشاء الجلسة و${who}، ورابط Google Meet جاهز.`);
+    else if (g.sync_status === 'pending') toast(`تم إنشاء الجلسة و${who}. جارٍ تجهيز رابط Google Meet.`);
+    else toast(`تم إنشاء الجلسة و${who}. تعذّر إنشاء رابط Google Meet: ${g.error_message || 'أعد المحاولة من الجلسة أو أضف رابطًا يدويًا.'}`, 'alert');
+    void refreshSchedule();
+    onClose();
+  };
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (sending.current) return;
     const local: Record<string, string | undefined> = { who: v.who ? undefined : 'اختر طالبًا أو حلقة.', date: v.date ? undefined : 'اختر التاريخ.', time: v.time ? undefined : 'اختر الوقت.' };
     if (Object.values(local).some(Boolean)) return setErrs(local);
     const [kind, id] = v.who.split(':');
-    setBusy(true); setErrs({}); setFailed(null);
+    sending.current = true; setBusy(true); setErrs({});
     try {
-      const s = await E.createTeacherSession({ ...(kind === 'c' ? { circle: +id } : { student: +id }), topic: v.topic, date: v.date, time: v.time, minutes: v.minutes, title: v.title, prep_note: v.prep_note }, key.current);
-      done(s, s.status === 'pending' ? 'جارٍ تجهيز Google Meet… ستظهر الجلسة للطالب عند جاهزيتها.' : 'أُنشئت الجلسة وأُرسلت الدعوة');
+      created(await E.createTeacherSession({ ...(kind === 'c' ? { circle: +id } : { student: +id }), topic: v.topic, date: v.date, time: v.time, minutes: v.minutes, title: v.title, prep_note: v.prep_note }, key.current));
     } catch (x) {
-      const a = x as ApiError; const sid = Number(a.fields?.session?.[0] ?? 0);
-      if (sid) setFailed({ id: sid, msg: a.message }); // the session exists, waiting for Google: offer a retry
-      else setErrs({ form: a.message, time: a.field?.('time') ?? undefined, who: a.field?.('student') ?? a.field?.('circle') ?? undefined, minutes: a.field?.('minutes') ?? undefined });
-    } finally { setBusy(false); }
-  };
-  const retry = async () => {
-    if (!failed) return;
-    setBusy(true);
-    try { done(await E.retryTeacherSession(failed.id), 'أُنشئت الجلسة وأُرسلت الدعوة'); } catch (x) { setFailed({ ...failed, msg: errText(x) }); } finally { setBusy(false); }
+      const a = x as ApiError;
+      setErrs({ form: a.message || 'تعذّر إنشاء الجلسة. تحقق من الاتصال وحاول مرة أخرى.', time: a.field?.('time') ?? undefined,
+        who: a.field?.('student') ?? a.field?.('circle') ?? undefined, minutes: a.field?.('minutes') ?? undefined });
+    } finally { sending.current = false; setBusy(false); }
   };
   const lbl = { ...labelStyle, display: 'flex', flexDirection: 'column' as const, gap: 6 };
-  const needsGoogle = gs && gs.configured && gs.status !== 'active';
+  const googleOn = !!gs && gs.configured && gs.status === 'active';
   return (
     <div role="dialog" aria-modal="true" aria-label="إنشاء جلسة" style={{ position: 'fixed', inset: 0, background: 'rgba(20,33,31,.45)', zIndex: 60, display: 'grid', placeItems: 'end center' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
       <form onSubmit={submit} noValidate style={{ background: color.ivory, width: '100%', maxWidth: 520, maxHeight: '92dvh', overflowY: 'auto', borderRadius: '20px 20px 0 0', padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800 }}>إنشاء جلسة</h2>
-        {needsGoogle && <p role="alert" style={{ margin: 0, fontSize: 14, color: color.dangerInk, fontWeight: 700 }}>
-          {gs!.status === 'reconnect_required' ? 'يجب إعادة ربط Google Calendar قبل إنشاء الجلسة.' : 'اربط Google Calendar من «حسابي» أولًا لإنشاء الجلسة.'}</p>}
         <label style={lbl}>الطالب أو الحلقة
           <select value={v.who} onChange={(e) => setV({ ...v, who: e.target.value })} style={inputStyle(errs.who)} aria-invalid={!!errs.who}>
             <option value="">اختر…</option>
@@ -138,6 +145,7 @@ function CreateSessionForm({ onClose }: { onClose: () => void }) {
           <label style={{ ...lbl, flex: 1 }}>التاريخ<input type="date" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} style={inputStyle(errs.date, true)} /></label>
           <label style={{ ...lbl, flex: 1 }}>الوقت<input type="time" value={v.time} onChange={(e) => setV({ ...v, time: e.target.value })} style={inputStyle(errs.time, true)} /></label>
         </div>
+        {v.time && <p style={muted(13, { margin: 0 })}>الموعد: <strong>{clockOf(v.time)}</strong> بتوقيت جهازك ({tz})</p>}
         <FieldError msg={errs.date ?? errs.time} />
         <label style={lbl}>المدة
           <select value={v.minutes} onChange={(e) => setV({ ...v, minutes: +e.target.value })} style={inputStyle(errs.minutes)}>
@@ -149,22 +157,20 @@ function CreateSessionForm({ onClose }: { onClose: () => void }) {
           <textarea value={v.prep_note} maxLength={500} rows={2} onChange={(e) => setV({ ...v, prep_note: e.target.value })} style={{ ...inputStyle(), minHeight: 64, padding: 10 }} />
           <span style={muted(12)}>تظهر للطالب في الحلقة فقط، ولا تُرسل إلى Google.</span>
         </label>
-        <p style={muted(12)}>التوقيت: {tz}. يُنشأ رابط Google Meet تلقائيًا وتصل الطالب دعوة على بريده وإشعار في الحلقة.</p>
-        <FieldError msg={errs.form} />
-        {failed && <div role="alert" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={{ color: color.dangerInk, fontWeight: 700, fontSize: 14 }}>{failed.msg}</span>
-          <button type="button" onClick={retry} disabled={busy} style={smallBtn('primary')}>أعد المحاولة</button>
-        </div>}
-        {!failed && <button type="submit" disabled={busy || !!needsGoogle} aria-busy={busy} style={primaryBtn(52, 16)}>{busy ? 'جارٍ إنشاء الجلسة و Google Meet…' : 'إنشاء الجلسة'}</button>}
+        <p style={muted(12)}>{googleOn
+          ? 'يصل الطالب إشعار في الحلقة، ويُضاف رابط Google Meet ودعوة على بريده تلقائيًا.'
+          : 'يصل الطالب إشعار في الحلقة. يمكنك إضافة رابط الاجتماع من الجلسة بعد إنشائها، أو ربط Google Calendar من «حسابي» لإنشاء رابط Google Meet تلقائيًا (اختياري).'}</p>
+        {errs.form && <p role="alert" style={{ margin: 0, fontSize: 14, fontWeight: 700, color: color.dangerInk }}>{errs.form}</p>}
+        <button type="submit" disabled={busy} aria-busy={busy} style={primaryBtn(52, 16)}>{busy ? 'جارٍ إنشاء الجلسة…' : 'إنشاء الجلسة'}</button>
         <button type="button" onClick={onClose} disabled={busy} style={{ ...smallBtn(), justifyContent: 'center' }}>إغلاق</button>
       </form>
     </div>
   );
 }
 
-/* ---------------- one Google-backed session in «الجلسات» ---------------- */
-export function GoogleSessionActions({ o }: { o: E.ApiTeacherOcc }) {
-  const g = o.google!; const tz = tzOf(useApp((s) => s.tz)).iana;
+/* ---------------- one teacher-created session in «الجلسات» (with or without Google) ---------------- */
+export function GoogleSessionActions({ o, link }: { o: E.ApiTeacherOcc; link?: ReactNode }) {
+  const g = o.google ?? null; const tz = tzOf(useApp((s) => s.tz)).iana;
   const [edit, setEdit] = useState(false); const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
   const local = new Date(o.starts_at);
   const [v, setV] = useState({ date: new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(local),
@@ -175,19 +181,23 @@ export function GoogleSessionActions({ o }: { o: E.ApiTeacherOcc }) {
     try { await fn(); toast(ok); setEdit(false); await refreshSchedule(); } catch (e) { setErr(errText(e)); } finally { setBusy(false); }
   };
   const cancel = () => openSheet({ kind: 'confirm', title: 'إلغاء الجلسة؟', ok: 'إلغاء الجلسة', danger: true,
-    body: 'يُلغى الحجز ويصل الطالب إشعار، ويُحذف الحدث من Google Calendar مع إبلاغ المدعوين. يبقى سجل الجلسة في الحلقة.',
+    body: g ? 'يُلغى الحجز ويصل الطالب إشعار، ويُحذف الحدث من Google Calendar مع إبلاغ المدعوين. يبقى سجل الجلسة في الحلقة.'
+      : 'يُلغى الحجز ويصل الطالب إشعار. يبقى سجل الجلسة في الحلقة.',
     onOk: () => { setState({ sheet: null }); void run(() => E.cancelTeacherSession(o.id, 'ألغى المعلم الجلسة'), 'أُلغيت الجلسة'); } });
   const ended = new Date(o.ends_at).getTime() < Date.now();
-  const badge = g.sync_status === 'ready' ? ['Google Meet جاهز ✓', color.primary] : g.sync_status === 'pending' ? ['جارٍ تجهيز Google Meet…', color.warnInk]
+  const meetOk = g?.sync_status === 'ready' && o.meeting_provider === 'google_meet';
+  const badge = !g ? null : g.sync_status === 'ready' ? ['Google Meet جاهز ✓', color.primary] : g.sync_status === 'pending' ? ['جارٍ تجهيز Google Meet…', color.warnInk]
     : g.sync_status === 'reconnect_required' ? ['يجب إعادة ربط Google Calendar', color.dangerInk] : g.sync_status === 'cancelled' ? ['أُلغي في Google Calendar', color.muted] : ['تعذّر إنشاء Google Meet', color.dangerInk];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <span role="status" style={{ fontSize: 13, fontWeight: 700, color: badge[1], display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="video" size={18} /> {badge[0]}</span>
-      {g.error_message && g.sync_status !== 'ready' && <span style={muted(12)}>{g.error_message}</span>}
+      {badge && <span role="status" style={{ fontSize: 13, fontWeight: 700, color: badge[1], display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="video" size={18} /> {badge[0]}</span>}
+      {g?.error_message && g.sync_status !== 'ready' && <span style={muted(12)}>{g.error_message}</span>}
+      {/* Without a working Google Meet the teacher sets the meeting link by hand. */}
+      {!ended && o.status !== 'cancelled' && !meetOk && link}
       {!ended && o.status !== 'cancelled' && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {o.meeting_url && <a href={o.meeting_url} target="_blank" rel="noopener noreferrer" style={smallBtn('primary')}>فتح Google Meet</a>}
-        {g.calendar_url && <a href={g.calendar_url} target="_blank" rel="noopener noreferrer" style={smallBtn()}>فتح في Google Calendar</a>}
-        {(g.sync_status === 'failed' || g.sync_status === 'pending') && <button disabled={busy} onClick={() => run(() => E.retryTeacherSession(o.id), 'أُنشئت الجلسة وأُرسلت الدعوة')} style={smallBtn('primary')}>أعد المحاولة</button>}
+        {meetOk && o.meeting_url && <a href={o.meeting_url} target="_blank" rel="noopener noreferrer" style={smallBtn('primary')}>فتح Google Meet</a>}
+        {g?.calendar_url && <a href={g.calendar_url} target="_blank" rel="noopener noreferrer" style={smallBtn()}>فتح في Google Calendar</a>}
+        {g && (g.sync_status === 'failed' || g.sync_status === 'pending' || g.sync_status === 'reconnect_required') && <button disabled={busy} onClick={() => run(() => E.retryTeacherSession(o.id), 'أُعيدت محاولة إنشاء رابط Google Meet')} style={smallBtn('primary')}>إنشاء رابط Google Meet</button>}
         <button disabled={busy} onClick={() => setEdit(!edit)} style={smallBtn()}>تعديل الموعد</button>
         <button disabled={busy} onClick={cancel} style={smallBtn('danger')}>إلغاء الجلسة</button>
       </div>}

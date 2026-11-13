@@ -258,7 +258,9 @@ class TeacherOccurrenceMeeting(APIView):
                 raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
             if o.status == SessionOccurrence.Status.CANCELLED or o.ends_at <= timezone.now():
                 raise ApiError("closed", "انتهت هذه الجلسة أو أُلغيت.", 409)
-            if hasattr(o, "google_event"):
+            # A working Google Meet is never replaced by hand; if Google failed, the teacher may paste a link instead.
+            ev = getattr(o, "google_event", None)
+            if ev is not None and ev.sync_status == "ready" and o.meeting_provider == "google_meet":
                 raise ApiError("google_managed", "رابط Google Meet لهذه الجلسة يُنشأ تلقائيًا ولا يُعدَّل يدويًا.", 409)
             o.meeting_url, o.meeting_provider = url, provider
             o.save(update_fields=["meeting_url", "meeting_provider", "updated_at"])

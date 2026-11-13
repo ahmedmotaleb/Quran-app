@@ -158,7 +158,20 @@ def try_create(ev_id: int) -> GoogleEvent:
 
 
 def _publish(occ: SessionOccurrence, ev: GoogleEvent) -> None:
-    """The Meet exists: the session becomes visible, students are booked and notified (after commit)."""
+    """The Meet exists. A session created in HALQA first (scheduled, booked and notified already) only gets the link
+    — unless the teacher already set one by hand — and its students are told the link is ready. An older pending
+    session becomes visible, students are booked and notified (after commit)."""
+    if occ.status == O.SCHEDULED:
+        if not occ.meeting_url:
+            occ.meeting_url, occ.meeting_provider = ev.meet_url, "google_meet"
+            occ.save(update_fields=["meeting_url", "meeting_provider", "updated_at"])
+        audit("session.google_ready", actor=None, target=occ, teacher=ev.teacher_id)
+        from apps.notifications.services import after_commit
+
+        for b in occ.bookings.filter(status=Booking.Status.CONFIRMED).select_related("student"):
+            after_commit(b.student, "booking_link_ready", "رابط الجلسة جاهز", "أُضيف رابط Google Meet إلى جلستك.", link="/sessions",
+                         dedupe=f"gcal-link:{occ.pk}:{b.student_id}", data={"booking": b.pk, "occurrence": occ.pk})
+        return
     occ.status, occ.meeting_url, occ.meeting_provider = O.SCHEDULED, ev.meet_url, "google_meet"
     occ.save(update_fields=["status", "meeting_url", "meeting_provider", "updated_at"])
     if occ.circle_id:
@@ -272,8 +285,10 @@ def run_due(now=None) -> dict:
     Google did not accept, and keep invite lists in step with circle membership."""
     now = now or timezone.now()
     out = {"created": 0, "still_pending": 0, "cancelled": 0, "attendees": 0, "errors": 0}
+    # Older sessions waited (PENDING) for Google; since 13 Nov 2026 sessions are scheduled at once and only their Meet
+    # link waits — both are retried here.
     retry = GoogleEvent.objects.filter(sync_status__in=[S.PENDING, S.FAILED], attempts__lt=MAX_ATTEMPTS, occurrence__starts_at__gt=now,
-                                       occurrence__status=O.PENDING)
+                                       occurrence__status__in=[O.PENDING, O.SCHEDULED])
     for ev in retry.order_by("occurrence__starts_at")[:50]:
         ev = try_create(ev.pk)
         out["created" if ev.sync_status == S.READY else "still_pending"] += 1

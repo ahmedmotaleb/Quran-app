@@ -7,6 +7,7 @@ browser, the logs or the audit trail.
 """
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -15,6 +16,7 @@ from django.conf import settings
 from django.core import signing
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.http import HttpResponseRedirect
 from django.utils import timezone
 from rest_framework import serializers
@@ -26,11 +28,14 @@ from apps.accounts.models import AccountStatus, Role, User
 from apps.accounts.permissions import IsAdminRole, IsTeacher, assigned_student_ids
 from apps.core.audit import audit
 from apps.core.exceptions import ApiError
+from apps.core.timefmt import when as local_when
 from apps.scheduling.models import Circle, SessionOccurrence
 
 from . import crypto, google, sync
 from .google import GoogleError
 from .models import GoogleCalendarConnection, GoogleEvent
+
+log = logging.getLogger(__name__)
 
 STATE_SALT = "halqa.google.oauth"
 STATE_AGE = 600
@@ -165,8 +170,10 @@ def _start(teacher, d) -> datetime:
 
 def session_out(occ: SessionOccurrence) -> dict:
     ev = getattr(occ, "google_event", None)
+    b = None if occ.circle_id or (ev and ev.student_id) else occ.bookings.filter(status="confirmed").select_related("student").first()
     who = ({"kind": "circle", "id": occ.circle_id, "name": occ.circle.name} if occ.circle_id
-           else {"kind": "student", "id": ev.student_id, "name": ev.student.full_name} if ev and ev.student_id else None)
+           else {"kind": "student", "id": ev.student_id, "name": ev.student.full_name} if ev and ev.student_id
+           else {"kind": "student", "id": b.student_id, "name": b.student.full_name} if b else None)
     return {"id": occ.pk, "status": occ.status, "topic": occ.topic, "topic_label": occ.get_topic_display() if occ.topic else "",
             "title": occ.title, "prep_note": occ.prep_note, "starts_at": occ.starts_at.isoformat(), "ends_at": occ.ends_at.isoformat(),
             "minutes": int((occ.ends_at - occ.starts_at).total_seconds() // 60), "with": who,
@@ -188,16 +195,22 @@ def google_out(ev: GoogleEvent | None, *, teacher_view: bool = False) -> dict | 
 
 
 def _own_session(request, pk) -> SessionOccurrence:
-    occ = SessionOccurrence.objects.select_related("circle").filter(pk=pk, teacher=request.user, google_event__isnull=False).first()
+    """A session this teacher created with «إنشاء جلسة» (with or without Google)."""
+    occ = (SessionOccurrence.objects.select_related("circle").filter(pk=pk, teacher=request.user)
+           .filter(Q(google_event__isnull=False) | ~Q(creation_key="")).first())
     if occ is None:
         raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
     return occ
 
 
 class TeacherSessions(APIView):
-    """POST «إنشاء الجلسة»: one session for a linked student or one of the teacher's circles, with its Google
-    Calendar event and Meet. Header Idempotency-Key (or body `request_id`): a repeated submit returns the same
-    session and never creates a second event. 201 when ready; 202 while Google is still finishing."""
+    """POST «إنشاء الجلسة»: one session for a linked student or one of the teacher's published circles.
+
+    The session is saved in HALQA FIRST and on its own: it is scheduled at once, the student (or the circle's active
+    members) booked and notified, and it appears in the teacher's schedule. Google Calendar/Meet is optional and comes
+    after the commit: when the teacher has connected Google, the event and Meet link are requested; if Google fails
+    the session stays (the teacher can retry, or add a meeting link by hand). Header Idempotency-Key (or body
+    `request_id`): a repeated submit returns the same session — never a second one. Always 201 with the session id."""
 
     permission_classes = [IsTeacher]
 
@@ -205,18 +218,12 @@ class TeacherSessions(APIView):
         key = str(request.headers.get("Idempotency-Key") or request.data.get("request_id") or "")[:64]
         if len(key) < 8:
             raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"request_id": ["معرّف الطلب مطلوب."]})
-        prior = GoogleEvent.objects.filter(teacher=request.user, creation_key=key).select_related("occurrence").first()
-        if prior is not None:  # double click, timeout retry, platform retry
-            if prior.sync_status not in (GoogleEvent.Sync.READY, GoogleEvent.Sync.CANCELLED):
-                prior = sync.try_create(prior.pk)
-            return self._answer(prior.occurrence)
+        prior = _prior(request.user, key)
+        if prior is not None:  # double tap, timeout retry, platform retry
+            return self._answer(prior)
         s = SessionIn(data=request.data)
         s.is_valid(raise_exception=True)
         d = s.validated_data
-        try:
-            sync.connection_for(request.user)
-        except GoogleError as e:
-            raise sync.api_error(e) from None
         student = circle = None
         if bool(d.get("student")) == bool(d.get("circle")):
             raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"student": ["اختر طالبًا أو حلقة."]})
@@ -230,35 +237,89 @@ class TeacherSessions(APIView):
             if circle is None:
                 raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"circle": ["الحلقة غير موجودة أو غير منشورة."]})
         start = _start(request.user, d)
+        google_on = _google_connected(request.user)
         try:
             with transaction.atomic():
                 occ = SessionOccurrence.objects.create(
                     teacher=request.user, starts_at=start, ends_at=start + timedelta(minutes=d["minutes"]),
                     kind=SessionOccurrence.Kind.GROUP if circle else SessionOccurrence.Kind.INDIVIDUAL,
-                    capacity=circle.capacity if circle else 1, circle=circle, status=SessionOccurrence.Status.PENDING,
-                    topic=d["topic"], title=d["title"].strip(), prep_note=d["prep_note"].strip())
-                ev = GoogleEvent.objects.create(occurrence=occ, teacher=request.user, student=student, creation_key=key)
+                    capacity=circle.capacity if circle else 1, circle=circle, status=SessionOccurrence.Status.SCHEDULED,
+                    topic=d["topic"], title=d["title"].strip(), prep_note=d["prep_note"].strip(), creation_key=key)
+                booked = _book_and_notify(occ, student)
+                if google_on:  # the Google part is only queued here; it runs after the session is committed
+                    GoogleEvent.objects.create(occurrence=occ, teacher=request.user, student=student, creation_key=key)
         except IntegrityError as e:
-            if "google_event_once_per_request" in str(e):
-                return self._answer(GoogleEvent.objects.get(teacher=request.user, creation_key=key).occurrence)
-            raise ApiError("overlap", "يتعارض هذا الموعد مع جلسة أخرى لديك.", 409) from None
-        audit("session.created", actor=request.user, target=occ, request=request, topic=d["topic"],
-              circle=circle.pk if circle else None, student=student.pk if student else None)
-        sync.try_create(ev.pk)
-        occ.refresh_from_db()
-        return self._answer(occ)
+            again = _prior(request.user, key)
+            if again is not None:  # the same request committed a moment ago (two taps at once)
+                return self._answer(again)
+            if "teacher_no_overlapping_sessions" in str(e):
+                raise ApiError("overlap", "يتعارض هذا الموعد مع جلسة أخرى لديك.", 409, {"time": ["لديك جلسة أخرى في هذا الوقت."]}) from None
+            raise
+        audit("session.created", actor=request.user, target=occ, request=request, topic=d["topic"], google=google_on,
+              circle=circle.pk if circle else None, student=student.pk if student else None, booked=booked)
+        if google_on:
+            _try_google(occ)
+        return self._answer(occ, created=True)
 
     @staticmethod
-    def _answer(occ):
+    def _answer(occ, created: bool = False):
         occ = SessionOccurrence.objects.select_related("circle", "google_event", "google_event__student").get(pk=occ.pk)
-        ev = occ.google_event
-        out = session_out(occ)
-        if ev.sync_status == GoogleEvent.Sync.READY:
-            return Response(out, status=201)
-        if ev.sync_status == GoogleEvent.Sync.PENDING:
-            return Response(out, status=202)  # Google is still preparing the Meet; nobody has been notified yet
-        raise ApiError(f"google_{ev.last_error or 'failed'}", sync.message(ev.last_error), 409 if ev.sync_status == GoogleEvent.Sync.RECONNECT else 502,
-                       {"session": [str(occ.pk)]})
+        return Response(session_out(occ), status=201 if created else 200)
+
+
+def _prior(teacher, key: str):
+    occ = SessionOccurrence.objects.filter(teacher=teacher, creation_key=key).first()
+    if occ is None:  # sessions created before 13 Nov 2026 kept the request id on their Google event
+        ev = GoogleEvent.objects.filter(teacher=teacher, creation_key=key).select_related("occurrence").first()
+        occ = ev.occurrence if ev else None
+    return occ
+
+
+def _google_connected(teacher) -> bool:
+    """Google Calendar is optional: True only when the server is configured AND this teacher's connection works."""
+    try:
+        sync.connection_for(teacher)
+        return True
+    except GoogleError:
+        return False
+    except Exception:  # noqa: BLE001 — never let the optional part block creating the session
+        log.exception("google_connection_check_failed")
+        return False
+
+
+def _try_google(occ) -> None:
+    """After the session is committed: create its Google event and Meet. Any failure is recorded on the event
+    (retry later) and never undoes the session."""
+    ev = GoogleEvent.objects.filter(occurrence=occ).first()
+    if ev is None:
+        return
+    try:
+        sync.try_create(ev.pk)
+    except Exception:  # noqa: BLE001
+        log.exception("google_event_create_crashed", extra={"occurrence": occ.pk})
+        GoogleEvent.objects.filter(pk=ev.pk, sync_status=GoogleEvent.Sync.PENDING).update(sync_status=GoogleEvent.Sync.FAILED, last_error="unexpected")
+
+
+def _book_and_notify(occ, student) -> int:
+    """Inside the creation transaction: book the student (or the circle's active members) and queue their
+    notifications for after the commit. Returns how many are booked."""
+    from apps.notifications.services import after_commit
+    from apps.scheduling.models import Booking
+
+    if occ.circle_id:
+        from apps.scheduling.membership import sync_circle
+
+        sync_circle(occ.circle)  # books active members with the circle's usual capacity and clash rules
+    elif student is not None:
+        Booking.objects.get_or_create(occurrence=occ, student=student, status=Booking.Status.CONFIRMED,
+                                      defaults={"idempotency_key": f"tsession-{occ.pk}"})
+    kind = occ.get_topic_display() if occ.topic else ""
+    n = 0
+    for b in occ.bookings.filter(status=Booking.Status.CONFIRMED).select_related("student"):
+        after_commit(b.student, "booking_created", f"تم حجز جلسة {kind}".strip(), local_when(occ.starts_at, b.student.timezone),
+                     link="/sessions", dedupe=f"session:{occ.pk}:{b.student_id}", data={"booking": b.pk, "occurrence": occ.pk})
+        n += 1
+    return n
 
 
 class TeacherSessionDetail(APIView):
@@ -334,13 +395,23 @@ class TeacherSessionCancel(APIView):
 
 
 class TeacherSessionRetry(APIView):
-    """POST «أعد المحاولة»: finish a session whose Google event or Meet could not be created yet."""
+    """POST «أعد المحاولة»: (re)create the Google event and Meet of an existing session. The session itself already
+    exists; without a working Google connection this says so and changes nothing."""
 
     permission_classes = [IsTeacher]
 
     def post(self, request, pk):
         occ = _own_session(request, pk)
-        sync.try_create(occ.google_event.pk)
+        if occ.status == SessionOccurrence.Status.CANCELLED:
+            raise ApiError("closed", "أُلغيت هذه الجلسة.", 409)
+        if not _google_connected(request.user):
+            raise ApiError("google_not_connected", "اربط Google Calendar من «حسابي» لإنشاء رابط Google Meet، أو أضف رابط الاجتماع يدويًا.", 409)
+        ev = GoogleEvent.objects.filter(occurrence=occ).first()
+        if ev is None:
+            b = occ.bookings.filter(status="confirmed").first()
+            GoogleEvent.objects.create(occurrence=occ, teacher=request.user, student_id=None if occ.circle_id else (b.student_id if b else None),
+                                       creation_key=f"retry-{occ.pk}")
+        _try_google(occ)
         return TeacherSessions._answer(occ)
 
 
