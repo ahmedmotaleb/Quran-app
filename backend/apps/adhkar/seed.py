@@ -10,6 +10,9 @@ administrator from the cited collection (number + Sahih/Hasan grading), or impor
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 # category → [(surah, ayah_from, ayah_to), …]
 QURAN_REFERENCES: dict[str, list[tuple[int, int, int]]] = {
     "quran_dua": [
@@ -74,3 +77,31 @@ def seed_quran(actor=None) -> dict:
                                  status=Dhikr.Status.PENDING, origin="quran_reference", created_by=actor)
             out["created"] += 1
     return out
+
+
+SUNNAH_FILE = Path(__file__).parent / "data" / "sunnah_adhkar.json"
+
+
+def seed_sunnah(actor=None) -> dict:
+    """Create the Sunnah entries of data/sunnah_adhkar.json that do not exist yet (idempotent), pending review.
+    That file is built by sunnah_build.py: every text is copied verbatim from the hadith dataset, graded صحيح/حسن."""
+    from .models import Dhikr
+
+    out = {"created": 0, "existing": 0}
+    for e in json.loads(SUNNAH_FILE.read_text())["entries"]:
+        if Dhikr.objects.filter(source_type="hadith", hadith_collection=e["hadith_collection"], hadith_number=e["hadith_number"], text=e["text"]).exists():
+            out["existing"] += 1
+            continue
+        Dhikr.objects.create(source_type="hadith", status=Dhikr.Status.PENDING, origin="sunnah_dataset", created_by=actor, **e)
+        out["created"] += 1
+    return out
+
+
+def approve_library(note: str) -> int:
+    """Approve the PENDING entries added by seed_quran / seed_sunnah (never ones an admin rejected or added)."""
+    from django.utils import timezone
+
+    from .models import Dhikr
+
+    return Dhikr.objects.filter(status=Dhikr.Status.PENDING, origin__in=["quran_reference", "sunnah_dataset"]).update(
+        status=Dhikr.Status.APPROVED, reviewed_at=timezone.now(), review_note=note[:300], updated_at=timezone.now())

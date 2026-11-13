@@ -265,13 +265,16 @@ class AdminDhikrEnable(APIView):
 
 
 class AdminAdhkarSeed(APIView):
-    """POST: add the proposed Quranic references (text from the verified Quran), all «بانتظار المراجعة»."""
+    """POST: add the proposed Quranic references (text from the verified Quran) and the Sunnah entries copied verbatim
+    from the hadith dataset (seed.seed_sunnah), all «بانتظار المراجعة»."""
 
     permission_classes = [IsAdminRole]
     admin_perm = "adhkar.manage"
 
     def post(self, request):
         r = seed.seed_quran(actor=request.user)
+        h = seed.seed_sunnah(actor=request.user)
+        r = {**r, "created": r["created"] + h["created"], "existing": r["existing"] + h["existing"], "sunnah_created": h["created"]}
         audit("adhkar.quran_references_seeded", actor=request.user, target=request.user, request=request, created=r["created"], missing=len(r["missing"]))
         return Response(r)
 

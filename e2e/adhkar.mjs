@@ -22,8 +22,8 @@ await step(A, 'admin: «مكتبة الأذكار» adds the proposed verses for
   await A.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' }).getByRole('button', { name: /^مكتبة الأذكار/ }).click();
   const sec = A.getByTestId('admin-adhkar');
   await sec.getByText('لا توجد أذكار هنا', { exact: false }).waitFor();
-  await sec.getByRole('button', { name: 'إضافة الآيات المقترحة' }).click();
-  await A.getByText(/أُضيفت \d+ آية للمراجعة/).waitFor();
+  await sec.getByRole('button', { name: 'إضافة المحتوى الموثّق' }).click();
+  await A.getByText(/أُضيف \d+ ذكر للمراجعة/).waitFor();
   await sec.locator('[data-dhikr]').first().waitFor();
   if ((await sec.locator('[data-dhikr]').count()) < 20) throw new Error('too few proposed verses');
   await sec.locator('[data-dhikr]').first().getByText('بانتظار المراجعة').waitFor();
