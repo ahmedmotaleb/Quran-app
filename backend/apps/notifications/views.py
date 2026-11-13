@@ -308,3 +308,30 @@ class PushReceipt(APIView):
         PushSubscription.objects.filter(pk=sid).update(last_receipt_at=timezone.now(), last_receipt=out)
         push.log.info("push_receipt", extra={"outcome": out.split(":")[0]})
         return Response(status=204)
+
+
+class PushRotate(APIView):
+    """POST {old: {endpoint, keys}, new: {endpoint, keys}} from the phone's service worker when the browser replaced
+    the push subscription by itself (`pushsubscriptionchange`), possibly with the app closed and no session. The old
+    subscription's endpoint AND its keys must match a stored device (proof that the caller held it); that device row
+    is moved to the new subscription for the same account. Never creates a device; unknown or mismatched: no change."""
+
+    authentication_classes: list = []
+    permission_classes: list = []
+    throttle_scope = "push_receipt"
+
+    def post(self, request):
+        d = request.data if isinstance(request.data, dict) else {}
+        old, new = d.get("old") or {}, d.get("new") or {}
+        ok, nk = old.get("keys") or {}, new.get("keys") or {}
+        ep = str(new.get("endpoint", ""))
+        if not (ep.startswith("https://") and len(ep) <= 1000 and nk.get("p256dh") and nk.get("auth")):
+            return Response(status=204)
+        row = PushSubscription.objects.filter(endpoint=str(old.get("endpoint", "")), p256dh=str(ok.get("p256dh", "")), auth=str(ok.get("auth", ""))).first()
+        if row is None or (row.endpoint != ep and PushSubscription.objects.filter(endpoint=ep).exists()):
+            return Response(status=204)
+        PushSubscription.objects.filter(pk=row.pk).update(endpoint=ep, p256dh=str(nk["p256dh"])[:200], auth=str(nk["auth"])[:100],
+                                                          active=True, failures=0, last_failure="", last_failure_at=None)
+        push.log.info("push_subscription_rotated", extra={"family": push.device_family(row.device)})
+        return Response(status=204)
+

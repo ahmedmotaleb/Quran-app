@@ -240,12 +240,13 @@ if (typeof window !== 'undefined') {
 }
 
 export async function logout() {
-  // This device stops receiving the account's phone notifications (the browser subscription is dropped too).
-  // Only THIS device: the server removes the subscription with this endpoint; other devices keep theirs.
+  // This device stops receiving THIS account's phone notifications: the server removes its record of this device
+  // (other devices keep theirs). The browser's subscription is KEPT (owner report 13 Nov 2026: dropping it made the
+  // app ask again after every sign-in); the next account to sign in here is registered silently.
   let endpoint = '';
   try {
     const sub = 'serviceWorker' in navigator ? await (await navigator.serviceWorker.getRegistration())?.pushManager?.getSubscription() : null;
-    if (sub) { endpoint = sub.endpoint; await sub.unsubscribe().catch(() => {}); }
+    if (sub) endpoint = sub.endpoint;
   } catch { /* no push on this device */ }
   try { await E.logout(endpoint); } catch { /* signing out locally regardless */ }
   resetCsrf();

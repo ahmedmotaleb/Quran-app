@@ -4,7 +4,7 @@ import { LIVE, api } from '@/api/client';
 import { REC_TYPES } from './media';
 
 export type DiagEvent = 'mic_denied' | 'recorder_unsupported' | 'recorder_error' | 'recording_empty' | 'recording_ok'
-  | 'upload_failed' | 'submit_failed' | 'submit_ok';
+  | 'upload_failed' | 'submit_failed' | 'submit_ok' | 'push_restore';
 
 const supported = () => {
   try {
