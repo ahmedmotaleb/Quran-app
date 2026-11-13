@@ -38,18 +38,52 @@ async function subscription(reg: ServiceWorkerRegistration, publicKey: string): 
   return sub ?? reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) });
 }
 
+/* Permission and subscription are different things (owner report 13 Nov 2026: the app asked again after every
+ * reopen / sign-in). The browser permission is asked ONCE, from a tap. After that, as long as it stays «granted»:
+ *  - the subscription is restored silently on every start and sign-in (subscribe() never prompts once granted);
+ *  - an existing subscription is reused (never a duplicate); one made for older server keys is replaced;
+ *  - the server is told about this device for the signed-in account when it does not have it yet.
+ * The only thing that stops this is the person turning notifications off on this device («إيقاف الإشعارات على هذا
+ * الجهاز»), remembered in OPT_OUT. A refused permission is never asked again (the app shows the settings steps). */
+const OPT_OUT = 'halqa.push.optout';
+const optedOut = () => { try { return localStorage.getItem(OPT_OUT) === '1'; } catch { return false; } };
+const setOptOut = (on: boolean) => { try { if (on) localStorage.setItem(OPT_OUT, '1'); else localStorage.removeItem(OPT_OUT); } catch { /* private mode */ } };
+
+export type RestoreOutcome = 'on' | 'opted-out' | 'not-granted' | 'denied' | 'server-off' | 'unsupported' | 'no-sw' | 'subscribe-failed' | 'save-failed';
+let restoring: Promise<RestoreOutcome> | null = null;
+
+/** Make sure this device is subscribed and known to the server for the signed-in account, WITHOUT ever asking. One run
+ *  at a time (start-up, sign-in and the banner share it). */
+export function restorePush(): Promise<RestoreOutcome> {
+  restoring ??= (async (): Promise<RestoreOutcome> => {
+    if (!supported()) return 'unsupported';
+    if (Notification.permission === 'denied') return 'denied';
+    if (Notification.permission !== 'granted') return 'not-granted';
+    if (optedOut()) return 'opted-out';
+    const cfg = await config().catch(() => null);
+    if (!cfg) return 'save-failed';
+    if (!cfg.enabled || !cfg.public_key) return 'server-off';
+    const reg = await registration();
+    if (!reg) return 'no-sw';
+    let sub: PushSubscription;
+    try { sub = await subscription(reg, cfg.public_key); } catch { return 'subscribe-failed'; }
+    try {
+      if ((await config(sub.endpoint)).this_device) return 'on';
+      await api('POST', 'push/subscriptions', sub.toJSON());
+      return (await config(sub.endpoint)).this_device ? 'on' : 'save-failed';
+    } catch { return 'save-failed'; }
+  })().finally(() => { setTimeout(() => { restoring = null; }, 0); });
+  return restoring;
+}
+
 export async function pushState(): Promise<PushState> {
   if (!supported()) return isIos() && !standalone() ? 'ios-install' : 'unsupported';
   const cfg = await config();
   if (!cfg.enabled || !cfg.public_key) return 'server-off';
   if (Notification.permission === 'denied') return 'denied';
-  const reg = await registration();
-  if (!reg) return 'unsupported';
-  const sub = await reg.pushManager.getSubscription();
-  if (!sub || Notification.permission !== 'granted') return 'off';
-  if ((await config(sub.endpoint)).this_device && b64url(sub.options?.applicationServerKey) === cfg.public_key) return 'on';
-  // Granted, but the server does not have this device (or switched it off, or the keys changed): register it again.
-  try { await register(reg, cfg.public_key); return 'on'; } catch { return 'off'; }
+  if (Notification.permission !== 'granted') return 'off';
+  const r = await restorePush();
+  return r === 'on' ? 'on' : r === 'no-sw' ? 'unsupported' : 'off';
 }
 
 async function register(reg: ServiceWorkerRegistration, publicKey: string) {
@@ -67,7 +101,9 @@ export async function enablePush(): Promise<PushState> {
   }
   const cfg = await config();
   if (!cfg.enabled || !cfg.public_key) return 'server-off';
-  const perm = await Notification.requestPermission();   // only ever called from the button
+  setOptOut(false);
+  // Only ever called from the button, and only while the browser has not decided yet: once granted it is never asked.
+  const perm = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
   if (perm === 'denied') return 'denied';
   if (perm !== 'granted') throw new PushError('لم يُمنح الإذن. اضغط «تفعيل الإشعارات» مرة أخرى واختر «السماح».');
   const reg = await registration();
@@ -82,6 +118,7 @@ export async function enablePush(): Promise<PushState> {
 }
 
 export async function disablePush(): Promise<PushState> {
+  setOptOut(true);  // the person turned it off on this device: start-up and sign-in must not turn it back on
   const reg = await registration();
   const sub = reg ? await reg.pushManager.getSubscription() : null;
   if (sub) {
@@ -91,12 +128,15 @@ export async function disablePush(): Promise<PushState> {
   return 'off';
 }
 
-/** On app start/sign-in: if this device already allowed notifications, make sure the server has it for the signed-in
- *  account (a new sign-in, a server-side clean-up, rotated keys). Never asks for permission. */
-export async function syncPush(): Promise<void> {
+/** On app start/sign-in: restore this device for the signed-in account (never asks). The outcome is reported once per
+ *  start to the server's client diagnostics (no endpoint or keys), so a phone that keeps losing it can be traced. */
+export async function syncPush(): Promise<RestoreOutcome | null> {
   try {
-    if (supported() && Notification.permission === 'granted') await pushState();
-  } catch { /* the account screen shows the state */ }
+    if (!supported()) return null;
+    const r = await restorePush();
+    void import('@/services/diag').then(({ diag }) => diag('push_restore', { step: r, code: Notification.permission })).catch(() => {});
+    return r;
+  } catch { return null; }
 }
 
 /** This device's endpoint, so signing out removes only this device's subscription. */
@@ -180,6 +220,7 @@ export async function connectDevice(): Promise<void> {
   let perm = Notification.permission;
   if (perm === 'default') perm = await Notification.requestPermission();   // only from the button
   if (perm !== 'granted') throw new PushError('إذن الإشعارات غير ممنوح لهذا الموقع. فعّله من إعدادات الهاتف ← التطبيقات ← الحلقة أو Chrome ← الإشعارات.');
+  setOptOut(false);
   let reg = await navigator.serviceWorker.getRegistration('/').catch(() => undefined) ?? null;
   // The admin portal (/admin/) does not register the app's service worker itself: register it here (same file, scope /)
   // so administrators can receive pushes even if they never opened the learners' app on this device.

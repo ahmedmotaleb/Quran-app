@@ -85,6 +85,7 @@ reseed; run install
 reseed; run push http://localhost:4175/
 # «فعّل إشعارات الحلقة» sheet (production build with the service worker).
 reseed; run reminder-sheet http://localhost:4175/
+reseed; run push-persist http://localhost:4175/
 reseed; NEW_VERSION_CMD="echo '// e2e update' >> ${LIVE_DIST:-/tmp/dist-live}/sw.js" run pwa-update http://localhost:4175/
 
 {

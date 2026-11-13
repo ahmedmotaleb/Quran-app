@@ -11,7 +11,7 @@ import { color } from '@/theme/tokens';
 import { Icon } from '@/components/Icon';
 import { primaryBtn } from '@/components/ui';
 import { toast } from '@/store/store';
-import { PushError, connectDevice, enablePush, pushState } from './push';
+import { PushError, connectDevice, enablePush, pushState, restorePush } from './push';
 
 const LATER_KEY = 'halqa.reminderPrompt.later';
 const DENIED_KEY = 'halqa.reminderPrompt.denied';
@@ -35,21 +35,31 @@ export function ReminderPrompt() {
     // settings (Android → Apps → HALQA → Notifications), the flag is cleared and the banner may show again.
     if (read(DENIED_KEY) && perm !== 'denied') { try { localStorage.removeItem(DENIED_KEY); } catch { /* private mode */ } }
     if (read(DENIED_KEY)) return;
-    // Allowed but not connected is a broken state rather than a choice: «لاحقًا» hides it for one day, not seven.
-    if (Date.now() - Number(read(LATER_KEY) || 0) < (perm === 'granted' ? 1 : COOLDOWN_DAYS) * 86_400_000) return;
+    const cooling = (days: number) => Date.now() - Number(read(LATER_KEY) || 0) < days * 86_400_000;
     let on = true; let tries = 0;
-    const check = () => {
-      pushState().then((st) => {
+    const check = async () => {
+      try {
+        const p = Notification.permission;
+        if (p === 'denied') { write(DENIED_KEY, '1'); return; }      // refused: never ask again
+        if (p === 'granted') {
+          // Already allowed: restore silently. Nothing is shown when it works, nor when the person turned
+          // notifications off on this device; the banner appears only if restoring really failed.
+          const r = await restorePush();
+          if (!on) return;
+          if (r === 'no-sw' && tries++ < 2) { t = setTimeout(() => void check(), 8000); return; }  // first open: worker still installing
+          if ((r === 'subscribe-failed' || r === 'save-failed') && !cooling(1)) setMode('connect');
+          return;
+        }
+        if (cooling(COOLDOWN_DAYS)) return;                          // «لاحقًا»: not again for 7 days
+        const st = await pushState();
         if (!on) return;
-        if (st === 'off') setMode(Notification.permission === 'granted' ? 'connect' : 'ask');
+        if (st === 'off') setMode('ask');
         else if (st === 'ios-install') setMode('ios');
-        else if (st === 'denied') write(DENIED_KEY, '1'); // refused: never ask again
-        // The service worker may still be installing on the first open: look again once it had time.
-        else if (st === 'unsupported' && 'serviceWorker' in navigator && 'PushManager' in window && tries++ < 2) t = setTimeout(check, 8000);
-      }).catch(() => {});
+        else if (st === 'unsupported' && 'serviceWorker' in navigator && 'PushManager' in window && tries++ < 2) t = setTimeout(() => void check(), 8000);
+      } catch { /* offline: nothing to show */ }
     };
     // After the home screen settles, never on top of the first paint.
-    let t = setTimeout(check, 1500);
+    let t = setTimeout(() => void check(), 1500);
     return () => { on = false; clearTimeout(t); };
   }, []);
   useEffect(() => { setShown(!!mode); return () => setShown(false); }, [mode]);

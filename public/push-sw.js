@@ -33,6 +33,24 @@ self.addEventListener('push', (event) => {
   })());
 });
 
+/* The browser replaced this device's push subscription by itself (keys expired, push service change): subscribe again
+   with the same server key and move the server's record to the new one, proving it with the old keys — no session
+   needed, so it also works while the app is closed. If anything is missing, the app repairs it at its next start. */
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil((async () => {
+    const old = event.oldSubscription;
+    let fresh = event.newSubscription;
+    try {
+      if (!fresh && old && old.options && old.options.applicationServerKey) {
+        fresh = await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: old.options.applicationServerKey });
+      }
+      if (!old || !fresh) return;
+      await fetch('/api/v1/push/rotate', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ old: old.toJSON(), new: fresh.toJSON() }), keepalive: true });
+    } catch (e) { /* the app re-registers on its next start */ }
+  })());
+});
+
 /* A tap: focus an open HALQA window and take it to the notification, or open HALQA there. */
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();

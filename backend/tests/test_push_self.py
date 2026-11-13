@@ -78,3 +78,75 @@ def test_delivery_receipt_from_the_phone(world, keys, monkeypatch):  # noqa: F81
     other = sub(world.s2, ep="https://fcm.googleapis.com/fcm/send/other-phone")
     other.refresh_from_db()
     assert other.last_receipt_at is None
+
+
+# ---- persistent registration (owner report 13 Nov 2026: the app asked again after every reopen / sign-in) ---------
+def test_browser_renewed_subscription_moves_the_device_without_a_session(world, keys, monkeypatch):  # noqa: F811
+    """pushsubscriptionchange: the service worker proves it held the old subscription (endpoint + keys) and the
+    server moves that device to the new one, same account. Mismatches change nothing; nothing is created."""
+    from rest_framework.test import APIClient
+
+    s = sub(world.s1)
+    anon = APIClient()
+    new = {"endpoint": "https://fcm.googleapis.com/fcm/send/renewed", "keys": {"p256dh": "P2", "auth": "A2"}}
+    # wrong keys for the old endpoint: refused silently
+    assert anon.post("/api/v1/push/rotate", {"old": {"endpoint": EP, "keys": {"p256dh": "x", "auth": "a"}}, "new": new}, format="json").status_code == 204
+    assert PushSubscription.objects.get(pk=s.pk).endpoint == EP
+    # unknown old endpoint: nothing created
+    anon.post("/api/v1/push/rotate", {"old": {"endpoint": "https://fcm.googleapis.com/fcm/send/nope", "keys": {"p256dh": "p", "auth": "a"}}, "new": new}, format="json")
+    assert PushSubscription.objects.count() == 1
+    # the real old subscription: moved, same account, switched (back) on
+    PushSubscription.objects.filter(pk=s.pk).update(active=False, failures=3, last_failure="network")
+    anon.post("/api/v1/push/rotate", {"old": {"endpoint": EP, "keys": {"p256dh": "p", "auth": "a"}}, "new": new}, format="json")
+    s.refresh_from_db()
+    assert (s.endpoint, s.p256dh, s.auth, s.user_id, s.active, s.failures) == (new["endpoint"], "P2", "A2", world.s1.pk, True, 0)
+    assert PushSubscription.objects.count() == 1
+
+
+def test_one_phone_shared_by_two_accounts_gets_only_the_signed_in_accounts_notices(world, keys, monkeypatch):  # noqa: F811
+    """Signing in with another account on the same phone moves this device to that account (the endpoint is unique);
+    the previous account's notices no longer reach it. Signing out removes the device from the server only."""
+    fake = FakePush(monkeypatch)
+    body = {"endpoint": EP, "keys": {"p256dh": "p" * 20, "auth": "a" * 10}}
+    assert client_for(world.s1).post("/api/v1/push/subscriptions", body, format="json").status_code == 201
+    assert client_for(world.t1).post("/api/v1/push/subscriptions", body, format="json").status_code == 201   # same phone, other account
+    assert PushSubscription.objects.count() == 1 and PushSubscription.objects.get().user_id == world.t1.pk
+    from apps.notifications.services import notify
+
+    with django_commit():
+        notify(world.s1, "assignment_new", "x", dedupe="shared-1")
+        notify(world.t1, "submission_new", "x", dedupe="shared-2")
+    assert [p["tag"] for _, p in fake.sent] == ["submission"]          # only the signed-in account's notice
+    # signing out keeps nothing for that account on the server; signing in again (permission still granted) re-registers
+    assert client_for(world.t1).post("/api/v1/auth/logout", {"push_endpoint": EP}, format="json").status_code == 204
+    assert not PushSubscription.objects.exists()
+    assert client_for(world.t1).post("/api/v1/push/subscriptions", body, format="json").status_code == 201
+    assert PushSubscription.objects.get().user_id == world.t1.pk
+
+
+def test_start_up_restore_outcome_is_logged_without_personal_data(world, caplog):
+    c = client_for(world.s1)
+    with caplog.at_level("INFO", logger="halqa.client"):
+        r = c.post("/api/v1/client-diagnostics", {"event": "push_restore", "step": "on", "code": "granted"}, format="json")
+    assert r.status_code == 204
+    rec = [x for x in caplog.records if getattr(x, "event", "") == "push_restore"]
+    assert rec and rec[-1].step == "on" and rec[-1].levelname == "INFO"
+
+
+class django_commit:
+    """Run on_commit callbacks at the end of the block (the test transaction never commits)."""
+
+    def __enter__(self):
+        from django.db import transaction
+
+        self._cb = []
+        self._orig = transaction.on_commit
+        transaction.on_commit = lambda fn, using=None, robust=False: self._cb.append(fn)
+        return self
+
+    def __exit__(self, *exc):
+        from django.db import transaction
+
+        transaction.on_commit = self._orig
+        while self._cb:
+            self._cb.pop(0)()

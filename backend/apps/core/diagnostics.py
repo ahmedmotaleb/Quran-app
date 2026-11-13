@@ -15,8 +15,9 @@ from rest_framework.views import APIView
 log = logging.getLogger("halqa.client")
 
 EVENTS = {"mic_denied", "recorder_unsupported", "recorder_error", "recording_empty", "recording_ok",
-          "upload_failed", "submit_failed", "submit_ok"}
-FAILURES = EVENTS - {"recording_ok", "submit_ok"}
+          "upload_failed", "submit_failed", "submit_ok",
+          "push_restore"}  # phone notifications restored at start-up / sign-in; `step` = the outcome, `code` = permission
+FAILURES = EVENTS - {"recording_ok", "submit_ok", "push_restore"}
 _TOKEN = re.compile(r"[^A-Za-z0-9\u0600-\u06FF _:./;=,()+\-]")  # app error texts are Arabic
 
 
