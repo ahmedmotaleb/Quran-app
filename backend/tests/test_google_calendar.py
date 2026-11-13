@@ -70,10 +70,16 @@ def create(teacher, key="req-0001", **kw):
 
 
 # 1 -----------------------------------------------------------------------------------------------------------------
-def test_teacher_without_google_cannot_create(world, g):
-    r = create(world.t1, student=world.s1.pk)
-    assert r.status_code == 409 and r.json()["code"] == "google_not_connected"
-    assert not SessionOccurrence.objects.filter(teacher=world.t1).exists() and not g.calls
+def test_teacher_without_google_still_creates_the_session(world, g, django_capture_on_commit_callbacks):
+    """Owner report 13 Nov 2026: «إنشاء الجلسة» failed for teachers without Google. Google is optional now."""
+    with django_capture_on_commit_callbacks(execute=True):
+        r = create(world.t1, student=world.s1.pk)
+    assert r.status_code == 201, r.json()
+    occ = SessionOccurrence.objects.get(teacher=world.t1)
+    assert r.json()["id"] == occ.pk and occ.status == "scheduled" and r.json()["google"] is None and not g.calls
+    assert Booking.objects.filter(occurrence=occ, student=world.s1, status="confirmed").exists()
+    assert Notification.objects.filter(recipient=world.s1, kind="booking_created").count() == 1
+    assert not GoogleEvent.objects.exists()
 
 
 # 2 -----------------------------------------------------------------------------------------------------------------
@@ -144,7 +150,7 @@ def test_create_event_with_meet_and_student_invite(world, g, django_capture_on_c
     assert ev.sync_status == "ready" and ev.conference_id and ev.html_link
     assert Booking.objects.filter(occurrence=occ, student=world.s1, status="confirmed").exists()
     n = Notification.objects.get(recipient=world.s1, kind="booking_created")
-    assert n.title == "تم حجز جلسة حفظ" and n.body.startswith("يوم ") and "meet.google" not in n.body
+    assert n.title == "تم حجز جلسة حفظ" and ("مساءً" in n.body or "صباحًا" in n.body) and "meet.google" not in n.body  # 12-hour, local
     from apps.notifications.push import payload_for
 
     assert "meet.google" not in json.dumps(payload_for("booking_created", "/sessions"))
@@ -184,10 +190,13 @@ def test_meet_still_pending_keeps_session_hidden_then_job_finishes(world, g, mon
 
     monkeypatch.setattr(fake, "handle", never_ready)
     r = create(world.t1, student=world.s1.pk)
-    assert r.status_code == 202 and r.json()["status"] == "pending" and not Booking.objects.exists()
+    # The session exists and the student is booked at once; only the Meet link waits.
+    assert r.status_code == 201 and r.json()["status"] == "scheduled" and r.json()["google"]["sync_status"] == "pending"
+    assert Booking.objects.count() == 1 and SessionOccurrence.objects.get().meeting_url == ""
     state["ready"] = True
     sync.run_due()
-    assert SessionOccurrence.objects.get().status == "scheduled" and Booking.objects.count() == 1
+    occ = SessionOccurrence.objects.get()
+    assert occ.status == "scheduled" and occ.meeting_url.startswith("https://meet.google.com/") and Booking.objects.count() == 1
 
 
 # 10 ----------------------------------------------------------------------------------------------------------------
@@ -250,12 +259,14 @@ def test_revoked_refresh_token_needs_reconnect(world, g):
     connect(world.t1)
     g.fail.append((lambda m, u, d: u.endswith("/token"), 400, {"error": "invalid_grant"}))
     r = create(world.t1, student=world.s1.pk)
-    assert r.status_code == 409 and r.json()["message"] == "يجب إعادة ربط Google Calendar قبل إنشاء الجلسة."
+    # The session stands; Google says the calendar must be reconnected (shown to the teacher, Meet can be retried).
+    assert r.status_code == 201 and r.json()["google"]["sync_status"] == "reconnect_required"
+    assert r.json()["google"]["error_message"] == "يجب إعادة ربط Google Calendar قبل إنشاء الجلسة."
     assert GoogleCalendarConnection.objects.get().status == "reconnect_required"
     occ = SessionOccurrence.objects.get()
-    assert occ.status == "pending" and not Booking.objects.filter(occurrence=occ).exists()  # student not told
-    assert not Notification.objects.filter(recipient=world.s1).exists()
-    assert create(world.t1, key="req-new-1", student=world.s1.pk, **when(days=6)).json()["code"] == "google_reconnect_required"
+    assert occ.status == "scheduled" and Booking.objects.filter(occurrence=occ).exists()
+    r2 = create(world.t1, key="req-new-1", student=world.s1.pk, **when(days=6))   # now without Google at all
+    assert r2.status_code == 201 and r2.json()["google"] is None
     st = client_for(world.t1).get("/api/v1/teacher/integrations/google/status").json()
     assert st["status"] == "reconnect_required"
 
@@ -274,11 +285,12 @@ def test_google_errors_are_clean_and_retry_safe(world, g, status, code):
     connect(world.t1)
     g.fail.append((lambda m, u, d: m == "POST" and u.endswith("/events"), status, {"error": {"errors": [{"reason": "x"}], "message": "internal detail"}}))
     r = create(world.t1, student=world.s1.pk)
-    assert r.status_code == 502 and r.json()["code"] == code and "internal detail" not in json.dumps(r.json())
-    assert r.json()["message"] in (sync.GENERIC, sync.MESSAGES["forbidden"])
+    # Google's failure never undoes the session: 201, scheduled, booked; the Google part says what went wrong.
+    assert r.status_code == 201 and r.json()["google"]["error"] == code.replace("google_", "") and "internal detail" not in json.dumps(r.json())
+    assert r.json()["google"]["error_message"] in (sync.GENERIC, sync.MESSAGES["forbidden"])
     occ = SessionOccurrence.objects.get()
     ev = GoogleEvent.objects.get()
-    assert occ.status == "pending" and ev.sync_status == "failed" and not Booking.objects.exists()
+    assert occ.status == "scheduled" and ev.sync_status == "failed" and Booking.objects.count() == 1
     first_id, first_req = ev.event_id, ev.request_id
     # A retry (teacher «أعد المحاولة», a repeated submit, or the hourly job) reuses the same ids.
     sync.run_due()
@@ -310,11 +322,13 @@ def test_double_submit_and_lost_answer_never_duplicate(world, g):
     google._send = lose_answer
     try:
         r = create(world.t2, key="key-t2-001", student=world.s2.pk)
-        assert r.status_code == 502
-        r = create(world.t2, key="key-t2-001", student=world.s2.pk)  # the app retries the same request
+        assert r.status_code == 201 and r.json()["google"]["sync_status"] == "failed"
+        r = create(world.t2, key="key-t2-001", student=world.s2.pk)  # the app retries the same request: same session
+        assert r.status_code == 200 and SessionOccurrence.objects.filter(teacher=world.t2).count() == 1
+        r = client_for(world.t2).post(f"/api/v1/teacher/sessions/{r.json()['id']}/retry")   # «أعد المحاولة»
     finally:
         google._send = real
-    assert r.status_code == 201 and GoogleEvent.objects.filter(teacher=world.t2).count() == 1
+    assert r.status_code == 200 and r.json()["google"]["sync_status"] == "ready" and GoogleEvent.objects.filter(teacher=world.t2).count() == 1
     assert len(fake._events()) == 2  # one event per session at "Google", never a copy
     from django.db import IntegrityError
 
@@ -374,14 +388,16 @@ def test_meet_url_only_inside_join_window_and_only_for_the_booked_student(world,
     assert client_for(world.t2).get(f"/api/v1/teacher/sessions/{occ_id}").status_code == 404
 
 
-def test_pending_session_is_invisible_to_students_and_slots(world, g):
+def test_session_with_google_down_is_visible_and_a_link_can_be_pasted(world, g):
     connect(world.t1)
     g.fail.append((lambda m, u, d: m == "POST" and u.endswith("/events"), 503, {}))
-    create(world.t1, student=world.s1.pk)
-    assert client_for(world.s1).get("/api/v1/bookings").json() in ([], {"count": 0, "next": None, "previous": None, "results": []}) or \
-        not client_for(world.s1).get("/api/v1/bookings").json().get("results")
-    slots = client_for(world.s1).get(f"/api/v1/teachers/{world.t1.pk}/slots").json()
-    assert SessionOccurrence.objects.get().pk not in [s["id"] for s in (slots.get("results") if isinstance(slots, dict) else slots)]
+    occ_id = create(world.t1, student=world.s1.pk).json()["id"]
+    b = client_for(world.s1).get("/api/v1/bookings").json()
+    rows = b.get("results") if isinstance(b, dict) else b
+    assert [x for x in rows if x.get("occurrence", {}).get("id", x.get("occurrence")) == occ_id or x.get("id")]   # the student sees it
+    # Google failed: the teacher may paste a meeting link instead (a working Google Meet is never replaced, below).
+    r = client_for(world.t1).put(f"/api/v1/teacher/occurrences/{occ_id}/meeting", {"url": "https://zoom.us/j/123456789"}, format="json")
+    assert r.status_code == 200, r.json()
 
 
 def test_pasted_link_cannot_replace_google_meet(world, g):
@@ -399,7 +415,8 @@ def test_disconnect_revokes_and_blocks_new_sessions_but_keeps_existing(world, g)
     conn = GoogleCalendarConnection.objects.get()
     assert conn.encrypted_refresh_token == "" and conn.revoked_at
     assert SessionOccurrence.objects.get(pk=occ_id).meeting_url  # existing link stays usable
-    assert create(world.t1, key="after-disc-1", student=world.s1.pk, **when(days=5)).json()["code"] == "google_not_connected"
+    after = create(world.t1, key="after-disc-1", student=world.s1.pk, **when(days=5))
+    assert after.status_code == 201 and after.json()["google"] is None   # new sessions work without Google
 
 
 def test_admin_resync_and_view_without_tokens(world, g):
@@ -407,7 +424,7 @@ def test_admin_resync_and_view_without_tokens(world, g):
     g.fail.append((lambda m, u, d: m == "POST" and u.endswith("/events"), 503, {}))
     r = create(world.t1, student=world.s1.pk)
     occ_id = SessionOccurrence.objects.get().pk
-    assert r.json()["fields"]["session"] == [str(occ_id)]  # the teacher's app can offer «أعد المحاولة» for it
+    assert r.json()["id"] == occ_id and r.json()["google"]["sync_status"] == "failed"  # the app offers «أعد المحاولة»
     a = client_for(world.admin)
     v = a.get(f"/api/v1/admin/sessions/{occ_id}/google").json()
     assert v["sync_status"] == "failed" and "…" in v["event_id"] and "refresh" not in json.dumps(v)

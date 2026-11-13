@@ -797,7 +797,7 @@ function ScheduleLive() {
   const s = useApp(); const SD = s.sched; const tz = tzOf(s.tz).iana; const occ = s.tsched ?? [];
   const now = Date.now();
   // Booked sessions, and every Google-backed session the teacher created (also while its Meet is being prepared).
-  const booked = occ.filter((o) => (o.bookings.length || o.google) && new Date(o.ends_at).getTime() > now - 7 * 86_400_000);
+  const booked = occ.filter((o) => (o.bookings.length || o.google || o.topic) && new Date(o.ends_at).getTime() > now - 7 * 86_400_000);
   return (
     <div style={{ padding: '4px 16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <h1 style={{ margin: '12px 0 0', fontSize: 24, fontWeight: 800 }}>المواعيد</h1>
@@ -811,8 +811,10 @@ function ScheduleLive() {
           return (
             <div key={o.id} style={{ ...card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
               <span style={{ fontSize: 15, fontWeight: 700 }}>{dayLabel(o.starts_at, tz)} · {fmtTime(o.starts_at, tz)} <span style={{ fontWeight: 500, color: color.muted, fontSize: 13 }}>· {o.kind === 'group' ? 'جماعية' : 'فردية'}{o.topic ? ` · جلسة ${TOPIC_LABEL[o.topic] ?? ''}` : ''}</span></span>
-              {o.google && <span style={{ fontSize: 14 }}>{o.circle_name ?? o.google.student_name}{o.title ? ` · ${o.title}` : ''}</span>}
-              {o.google ? <GoogleSessionActions o={o} /> : new Date(o.ends_at).getTime() > now && <MeetingLink occ={o.id} url={o.meeting_url} />}
+              {(o.google || o.topic) && <span style={{ fontSize: 14 }}>{o.circle_name ?? o.google?.student_name ?? o.bookings[0]?.student_name}{o.title ? ` · ${o.title}` : ''}</span>}
+              {/* Teacher-created sessions (with or without Google): link, reschedule and cancel; others: the link only. */}
+              {o.google || o.topic ? <GoogleSessionActions o={o} link={<MeetingLink occ={o.id} url={o.meeting_url} />} />
+                : new Date(o.ends_at).getTime() > now && <MeetingLink occ={o.id} url={o.meeting_url} />}
               {o.bookings.map((b) => (
                 <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${color.divider}`, paddingTop: 8 }}>
                   <span style={{ fontSize: 14 }}><strong>{b.student_name}</strong>{b.assignment_title ? ` · ${b.assignment_title}` : ''}</span>

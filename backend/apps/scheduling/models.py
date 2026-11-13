@@ -121,12 +121,15 @@ class SessionOccurrence(TimeStamped):
     topic = models.CharField(max_length=10, choices=Topic.choices, blank=True)  # set on teacher-created sessions
     title = models.CharField(max_length=120, blank=True)
     prep_note = models.CharField(max_length=500, blank=True)  # shown to the booked students in HALQA, never sent to Google
+    # «إنشاء جلسة» by the teacher: the form's request id, so a double tap or a retry returns the same session.
+    creation_key = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         ordering = ["starts_at"]
         constraints = [
             models.CheckConstraint(condition=Q(ends_at__gt=F("starts_at")), name="occurrence_positive_length"),
             models.CheckConstraint(condition=Q(capacity__gte=1, capacity__lte=40), name="occurrence_capacity_range"),
+            models.UniqueConstraint(fields=["teacher", "creation_key"], condition=~Q(creation_key=""), name="session_once_per_request"),
             ExclusionConstraint(
                 name="teacher_no_overlapping_sessions",
                 expressions=[(TsTzRange("starts_at", "ends_at"), RangeOperators.OVERLAPS), ("teacher", RangeOperators.EQUAL)],

@@ -28,11 +28,35 @@ let meet = '';
 const T = await session('teacher@halqa.app', 'مرحبًا، الشيخ عبدالرحمن السالم');
 const sched = async () => { await T.page.getByRole('navigation').getByRole('button', { exact: true, name: 'المواعيد' }).click(); await T.app.getByRole('tab', { name: 'الجلسات' }).click(); };
 
-await step(T.page, 'teacher: without Google the form says to connect first', async () => {
+// Owner P0 (13 Nov 2026): a teacher WITHOUT Google Calendar could not create a session. Google is optional now.
+const day3 = cairo(new Date(Date.now() + 3 * 86_400_000));
+await step(T.page, 'teacher WITHOUT Google: a session is created (one, even on a double tap), shown at once, Arabic 12-hour time', async () => {
   await sched();
   await T.app.getByRole('button', { name: 'إنشاء جلسة' }).click();
-  await T.page.getByText('اربط Google Calendar من «حسابي» أولًا لإنشاء الجلسة.').waitFor();
-  await T.page.getByRole('button', { name: 'إغلاق' }).click();
+  const f = T.page.getByRole('dialog', { name: 'إنشاء جلسة' });
+  await f.getByText('ربط Google Calendar من «حسابي» لإنشاء رابط Google Meet تلقائيًا (اختياري)', { exact: false }).waitFor();
+  await f.getByLabel('الطالب أو الحلقة').selectOption({ label: 'يوسف أحمد' });
+  await f.getByRole('radio', { name: 'تجويد' }).click();
+  await f.getByLabel('التاريخ').fill(day3); await f.getByLabel('الوقت').fill('20:30');
+  await f.getByText('٨:٣٠ مساءً', { exact: false }).waitFor();                       // 12-hour preview, device time zone
+  const posts = [];
+  T.page.on('request', (q) => { if (q.url().endsWith('/api/v1/teacher/sessions') && q.method() === 'POST') posts.push(q.headers()['idempotency-key']); });
+  const resp = T.page.waitForResponse((r) => r.url().endsWith('/api/v1/teacher/sessions') && r.request().method() === 'POST');
+  const btn = f.getByRole('button', { name: 'إنشاء الجلسة' });
+  await btn.click(); await btn.click({ force: true }).catch(() => {});                 // a double tap
+  const r = await resp; const body = await r.json();
+  if (r.status() !== 201 || body.google !== null || !body.id || body.status !== 'scheduled') throw new Error(`${r.status()} ${JSON.stringify(body).slice(0, 200)}`);
+  await T.page.getByText('تم إنشاء الجلسة وأُبلغ الطالب.').waitFor();
+  await T.page.waitForTimeout(600);
+  if (new Set(posts).size !== 1) throw new Error('more than one session request: ' + posts.length);
+  const card = T.app.locator('div', { has: T.page.getByText('جلسة تجويد') }).filter({ has: T.page.getByRole('button', { name: 'إلغاء الجلسة' }) }).last();
+  await card.getByText('يوسف أحمد').first().waitFor();
+  await card.getByText('٨:٣٠ مساءً', { exact: false }).waitFor();
+  await card.getByRole('button', { name: 'أضف الرابط' }).waitFor();                    // no Google: the teacher can paste a link
+  // Clean up so the Google steps below start from an empty schedule for this student.
+  await card.getByRole('button', { name: 'إلغاء الجلسة' }).click();
+  await T.page.getByRole('button', { name: 'إلغاء الجلسة' }).last().click();
+  await T.page.getByText('أُلغيت الجلسة').waitFor();
 });
 
 await step(T.page, 'teacher: «ربط Google Calendar» → consent → «Google Calendar متصل» (masked email)', async () => {
@@ -62,7 +86,7 @@ await step(T.page, 'teacher: create a «حفظ» session for Yousef — Google M
   if (r.status() !== 201 || body.google?.sync_status !== 'ready' || !r.request().headers()['idempotency-key']) throw new Error(`${r.status()} ${JSON.stringify(body).slice(0, 200)}`);
   meet = body.meeting_url;
   if (!/^https:\/\/meet\.google\.com\/[a-z0-9]{3}-[a-z0-9]{4}-[a-z0-9]{3}$/.test(meet)) throw new Error('meet ' + meet);
-  await T.page.getByText('أُنشئت الجلسة وأُرسلت الدعوة').waitFor();
+  await T.page.getByText('تم إنشاء الجلسة وأُبلغ الطالب، ورابط Google Meet جاهز.').waitFor();
   await T.app.getByText('Google Meet جاهز ✓').first().waitFor();
   const link = T.app.getByRole('link', { name: 'فتح Google Meet' }).first();
   if ((await link.getAttribute('href')) !== meet) throw new Error('teacher link differs');
