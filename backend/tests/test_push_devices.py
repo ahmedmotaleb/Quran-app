@@ -149,9 +149,14 @@ def test_lock_screen_text_is_generic_for_every_event(world, keys, monkeypatch, k
     register(world.s1, 1)
     secret = "خطأ في سورة الملك آية 5 — الدرجة 3/5 — ملاحظة خاصة https://r2.example/rec.webm"
     notify(world.s1, kind, f"عنوان {secret}", secret, link=link, dedupe=f"priv-{kind}")
-    [(_, payload)] = fake.sent
-    text = json.dumps(payload, ensure_ascii=False)
     n = Notification.objects.get(recipient=world.s1, kind=kind)
+    # This notification's pushes only (failed intermittently in 2 of 6 full runs on 14 Nov 2026, never alone): exactly
+    # one, and on failure everything that was sent is shown, so the next occurrence says why.
+    mine = [p for _, p in fake.sent if p.get("url") == f"/#/n/{n.pk}"]
+    assert len(mine) == 1, {"sent": fake.sent, "push_status": n.push_status, "push_error": n.push_error,
+                            "devices": list(PushSubscription.objects.filter(user=world.s1).values("active", "failures"))}
+    payload = mine[0]
+    text = json.dumps(payload, ensure_ascii=False)
     assert payload["title"] == "الحلقة" and payload["url"] == f"/#/n/{n.pk}"          # the app opens it after sign-in
     assert set(payload) == {"title", "body", "url", "tag", "r"}   # r: the signed delivery-receipt token (no personal data)
     for leak in ("الملك", "الدرجة", "ملاحظة", "r2.example", world.s1.full_name):
