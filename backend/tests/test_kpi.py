@@ -45,7 +45,7 @@ def data(world):
     BookingExcuse.objects.create(booking=b, student=s3, reason="x", status="approved")  # absent but excused-approved
     book(past[2], world.s1)  # attendance not marked yet
     book(occurrence(world.t2, in_hours=-30), world.s2, "absent")
-    soon = occurrence(world.t1, in_hours=20, capacity=2)
+    soon = occurrence(world.t1, in_hours=26, capacity=2)  # > 24 h: never inside today’s range, whatever the hour in Cairo
     book(soon, world.s1)
     occurrence(world.t1, in_hours=30)  # empty, free slot
     submit(world.t1, world.s1, hours_ago=10, reviewed_after=4)
