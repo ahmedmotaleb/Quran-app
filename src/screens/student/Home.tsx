@@ -1,5 +1,6 @@
 import { color } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
+import { JoinButton } from '@/components/JoinButton';
 import { Badge, ProgressBar, card, iconTile, muted, primaryBtn } from '@/components/ui';
 import { TODAY_LABEL } from '@/data/demo';
 import { dateKey, fmtDay } from '@/lib/time';
@@ -141,9 +142,13 @@ export default function Home() {
             </div>
             <p style={{ margin: '10px 0 2px', fontSize: 19, fontWeight: 700, position: 'relative' }}>{next.teacherName}</p>
             <p style={{ margin: 0, fontSize: 15, color: '#E5EDE4', position: 'relative' }}>{next.when} · {next.dur} دقيقة</p>
-            <p style={{ margin: '2px 0 14px', fontSize: 13, color: color.liveSub, position: 'relative' }}>{next.tzL}</p>
-            <div style={{ display: 'flex', gap: 8, marginTop: 'auto', position: 'relative' }}>
-              {next.isToday && (
+            <p style={{ margin: '2px 0 14px', fontSize: 13, color: color.liveSub, position: 'relative' }}>{next.tzL}{next.platform ? ` · ${next.platform}` : ''}</p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 'auto', position: 'relative', alignItems: 'flex-start' }}>
+              {s.liveMode && (
+                <JoinButton booking={Number(next.id)} canJoin={!!next.canJoin} hasLink={!!next.hasLink} light
+                  reason={`يُفتح الدخول قبل الموعد بـ ${s.pub.join_minutes} دقيقة`} />
+              )}
+              {!s.liveMode && next.isToday && (
                 <button onClick={() => go('live', { id: next.id })} style={primaryBtn(52, 16, { flex: 1, background: color.ivory, color: color.primary, fontWeight: 800 })}>
                   <Icon name="video" /> {s.liveMode ? 'الدخول للجلسة' : 'ادخل غرفة الانتظار'}
                 </button>

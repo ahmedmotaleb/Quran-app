@@ -27,7 +27,7 @@ from .permissions import IsAdminRole
 class TeacherIn(serializers.Serializer):
     full_name = serializers.CharField(min_length=2, max_length=120)
     email = serializers.EmailField()
-    gender = serializers.ChoiceField(choices=["male", "female", ""], required=False, default="")  # «الشيخ» / «الأستاذة»
+    gender = serializers.ChoiceField(choices=["male", "female", ""], required=False, default="")  # «الأستاذ» / «الأستاذة»
 
 
 def check_email(email: str) -> None:

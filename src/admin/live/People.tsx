@@ -228,7 +228,7 @@ function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => voi
     const x: Record<string, string> = {};
     if (f.name.trim().length < 2) x.name = 'اكتب الاسم الكامل.';
     if (!/^\S+@\S+\.\S+$/.test(email)) x.email = 'صيغة البريد الإلكتروني غير صحيحة.';
-    if (role === 'teacher' && !f.gender) x.gender = 'اختر اللقب: الشيخ أو الأستاذة.';
+    if (role === 'teacher' && !f.gender) x.gender = 'اختر اللقب: الأستاذ أو الأستاذة.';
     if (role === 'student' && !f.gender) x.gender = 'اختر: ذكر أو أنثى.';
     if (Object.keys(x).length) return setErr(x);
     setBusy(true); setErr({});
@@ -268,9 +268,9 @@ function AddDialog({ role, onClose, onDone }: { role: A.Role; onClose: () => voi
           {role === 'teacher' && <>
             <label htmlFor="ad-g" style={labelStyle}>اللقب</label>
             <select id="ad-g" value={f.gender} onChange={(e) => setF({ ...f, gender: e.target.value as '' | 'male' | 'female' })} aria-invalid={!!err.gender} style={inputStyle(err.gender)}>
-              <option value="">— اختر —</option><option value="male">الشيخ (معلم)</option><option value="female">الأستاذة (معلمة)</option>
+              <option value="">— اختر —</option><option value="male">الأستاذ (معلم)</option><option value="female">الأستاذة (معلمة)</option>
             </select>
-            <span style={{ fontSize: 12, color: color.muted }}>يُكتب الاسم دون لقب؛ تعرضه حَلْقة تلقائيًا «الشيخ …» أو «الأستاذة …».</span>
+            <span style={{ fontSize: 12, color: color.muted }}>يُكتب الاسم دون لقب؛ تعرضه حَلْقة تلقائيًا «الأستاذ …» أو «الأستاذة …».</span>
             <FieldError msg={err.gender} />
           </>}
           <label htmlFor="ad-e" style={labelStyle}>البريد الإلكتروني</label>
@@ -428,10 +428,10 @@ function PersonPanel({ id, onClose, onChanged, onDeleted }: { id: number; onClos
               </select>}
             </span>)}
             {u.role === 'teacher' && row('اللقب', <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              {u.gender ? (u.gender === 'male' ? 'الشيخ' : 'الأستاذة') : <span style={{ color: color.dangerInk, fontWeight: 700 }}>غير محدد (يظهر الاسم دون لقب)</span>}
+              {u.gender ? (u.gender === 'male' ? 'الأستاذ' : 'الأستاذة') : <span style={{ color: color.dangerInk, fontWeight: 700 }}>غير محدد (يظهر الاسم دون لقب)</span>}
               {can('users.edit') && <select aria-label="تغيير اللقب" value={u.gender ?? ''} disabled={busy}
                 onChange={(e) => act(() => A.updatePerson(u.id, { gender: e.target.value as '' | 'male' | 'female' }), 'حُفظ اللقب')} style={{ minHeight: 36, borderRadius: 8 }}>
-                <option value="">غير محدد</option><option value="male">الشيخ</option><option value="female">الأستاذة</option>
+                <option value="">غير محدد</option><option value="male">الأستاذ</option><option value="female">الأستاذة</option>
               </select>}
             </span>)}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>

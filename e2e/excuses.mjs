@@ -34,7 +34,7 @@ await step(S.page, 'student books a session (server)', async () => {
   const me = await native(S.page, 'yousef@halqa.app');
   const H = { Authorization: `Bearer ${me.token}` };
   const teachers = (await (await S.page.request.get(BASE + 'api/v1/teachers', { headers: H })).json()).results;
-  const t = teachers.find((x) => x.display_name === 'الشيخ عبدالرحمن السالم');
+  const t = teachers.find((x) => x.display_name === 'الأستاذ عبدالرحمن السالم');
   const slots = await (await S.page.request.get(BASE + `api/v1/teachers/${t.id}/slots`, { headers: H })).json();
   const slot = (slots.results ?? slots).find((x) => new Date(x.starts_at).getTime() > Date.now() + 26 * 3600_000 && x.seats_left > 0);
   const r = await S.page.request.post(BASE + 'api/v1/bookings', { headers: { ...H, 'Idempotency-Key': 'e2e-excuse-' + Date.now() }, data: { occurrence: slot.id } });
@@ -44,7 +44,7 @@ await step(S.page, 'student books a session (server)', async () => {
 await step(S.page, 'no «إلغاء الحجز»; «طلب اعتذار» → «الاعتذار قيد المراجعة»', async () => {
   await S.page.getByRole('button', { exact: true, name: 'الجلسات' }).click();
   await S.app.getByRole('tab', { name: 'حجوزاتي' }).click();
-  await S.app.getByText('الشيخ عبدالرحمن السالم · فردية').first().click();
+  await S.app.getByText('الأستاذ عبدالرحمن السالم · فردية').first().click();
   if (await S.app.getByRole('button', { exact: true, name: 'إلغاء الحجز' }).count()) throw new Error('cancel button shown to the student');
   await S.app.getByRole('button', { exact: true, name: 'طلب اعتذار' }).click();
   const d = S.page.getByRole('dialog', { name: 'طلب اعتذار عن الجلسة' });
@@ -57,7 +57,7 @@ await step(S.page, 'no «إلغاء الحجز»; «طلب اعتذار» → «
 });
 const T = await session('teacher@halqa.app');
 await step(T.page, 'teacher sees «طلبات الاعتذار» and accepts', async () => {
-  await T.app.getByText('مرحبًا، الشيخ عبدالرحمن السالم').waitFor();
+  await T.app.getByText('مرحبًا، الأستاذ عبدالرحمن السالم').waitFor();
   await T.page.getByRole('navigation').getByRole('button', { exact: true, name: 'المواعيد' }).click();
   const panel = T.app.getByRole('region', { name: 'طلبات الاعتذار' });
   await panel.getByText('يوسف أحمد').waitFor(); await panel.getByText('السبب: ظرف عائلي طارئ').waitFor();
@@ -73,7 +73,7 @@ await step(S.page, 'student sees «تم قبول الاعتذار» and «غاب
   await S.page.reload(); await S.app.getByText('السلام عليكم، يوسف').waitFor();
   await S.page.getByRole('button', { exact: true, name: 'الجلسات' }).click();
   await S.app.getByRole('tab', { name: 'حجوزاتي' }).click();
-  await S.app.getByText('الشيخ عبدالرحمن السالم · فردية').first().click();
+  await S.app.getByText('الأستاذ عبدالرحمن السالم · فردية').first().click();
   await S.app.getByText('تم قبول الاعتذار').waitFor();
   await S.app.getByText('غاب بعذر').waitFor();
 });
@@ -82,7 +82,7 @@ await S.page.screenshot({ path: out + '/excuse-accepted.png' });
 // ---- C. the admin decides pending requests in «طلبات الاعتذار» ---------------------------------------------
 await step(S.page, 'admin accepts one excuse and rejects another; rows disappear and the badge updates', async () => {
   const me = await native(S.page, 'yousef@halqa.app'); const H = { Authorization: `Bearer ${me.token}` };
-  const t = (await (await S.page.request.get(BASE + 'api/v1/teachers', { headers: H })).json()).results.find((x) => x.display_name === 'الشيخ عبدالرحمن السالم');
+  const t = (await (await S.page.request.get(BASE + 'api/v1/teachers', { headers: H })).json()).results.find((x) => x.display_name === 'الأستاذ عبدالرحمن السالم');
   const slots = await (await S.page.request.get(BASE + `api/v1/teachers/${t.id}/slots`, { headers: H })).json();
   // Start times are computed every 15 minutes, so neighbours overlap: take times at least two hours apart.
   const free = [];
@@ -138,7 +138,7 @@ async function adminDecides(ap) {
 // ---- B. third unexcused absence ---------------------------------------------------------------
 if (process.env.ABS_CMD) execSync(process.env.ABS_CMD, { stdio: 'inherit' });
 await step(T.page, 'teacher marks the third session «غائب» → the student is suspended', async () => {
-  await T.page.reload(); await T.app.getByText('مرحبًا، الشيخ عبدالرحمن السالم').waitFor();
+  await T.page.reload(); await T.app.getByText('مرحبًا، الأستاذ عبدالرحمن السالم').waitFor();
   await T.page.getByRole('navigation').getByRole('button', { exact: true, name: 'المواعيد' }).click();
   const group = T.app.getByRole('radiogroup', { name: 'حضور سارة أحمد' });
   const unmarked = group.filter({ hasNot: T.page.locator('[aria-checked=true]') }).first();

@@ -30,7 +30,7 @@ const step = async (p, name, fn) => { try { await fn(); console.log('OK  ', name
 const T = await learner('teacher@halqa.app');
 // Slow the teacher's content list on purpose: choices made before it arrives must survive (a race CI once caught).
 await T.page.route('**/api/v1/teacher/content', async (r) => { await new Promise((ok) => setTimeout(ok, 1500)); await r.continue(); });
-await T.app.getByText('مرحبًا، الشيخ عبدالرحمن السالم').waitFor();
+await T.app.getByText('مرحبًا، الأستاذ عبدالرحمن السالم').waitFor();
 const open = async () => { await T.page.goto(BASE + '#/'); await T.app.getByRole('button', { name: /محاضرة أو اختبار/ }).click(); await T.app.getByRole('heading', { name: 'إنشاء محتوى' }).waitFor(); };
 await step(T.page, 'no sample banner; the review rule is shown', async () => {
   await open();

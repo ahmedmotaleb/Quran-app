@@ -30,7 +30,7 @@ const rowBtn = { width: '100%', minHeight: 52, border: 'none', background: 'tran
 export default function Account() {
   const s = useApp(); const role = s.role;
   const live = s.liveMode;
-  const name = live ? s.user.name : role === 'teacher' ? 'الشيخ عبدالرحمن السالم' : role === 'parent' ? 'أحمد العلي' : s.user.name;
+  const name = live ? s.user.name : role === 'teacher' ? 'الأستاذ عبدالرحمن السالم' : role === 'parent' ? 'أحمد العلي' : s.user.name;
   const email = live ? s.user.email : role === 'teacher' ? 'teacher@halqa.app' : role === 'parent' ? 'parent@halqa.app' : s.user.email;
   // Live: the teachers who assigned this student's tasks.
   // The ONE active teacher, from the server's assignment (not from old tasks, which keep their own teacher's name).
@@ -56,7 +56,7 @@ export default function Account() {
       {role === 'student' && (
         <section style={{ ...card, padding: '4px 16px' }}>
           <h2 style={{ margin: '12px 0 4px', fontSize: 14, color: color.muted, fontWeight: 700 }}>التعلّم</h2>
-          {([['المستوى', s.user.level], ['الهدف اليومي', s.user.goal], ['المعلم المرتبط', live ? myTeachers : 'الشيخ عبدالرحمن السالم']] as const).map(([k, v], i) => (
+          {([['المستوى', s.user.level], ['الهدف اليومي', s.user.goal], ['المعلم المرتبط', live ? myTeachers : 'الأستاذ عبدالرحمن السالم']] as const).map(([k, v], i) => (
             <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i < 2 ? `1px solid ${color.divider}` : 'none' }}>
               <span style={{ fontSize: 15 }}>{k}</span><span style={{ fontSize: 15, fontWeight: 700 }}>{v}</span>
             </div>
@@ -118,7 +118,7 @@ export default function Account() {
         <section style={{ ...card, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h2 style={{ margin: 0, fontSize: 14, color: color.muted, fontWeight: 700 }}>اللقب الظاهر للطلاب وأولياء الأمور</h2>
           {!s.me?.gender && <p style={{ margin: 0, fontSize: 13, color: color.warnInk }}>اختر لقبك؛ يظهر اسمك حاليًا دون لقب.</p>}
-          <Segmented role="group" label="اللقب" options={[['male', 'الشيخ'], ['female', 'الأستاذة']] as const}
+          <Segmented role="group" label="اللقب" options={[['male', 'الأستاذ'], ['female', 'الأستاذة']] as const}
             value={(s.me?.gender || '') as 'male' | 'female'} onChange={(g) => void saveGender(g)} />
           <p style={{ margin: 0, fontSize: 12, color: color.muted }}>يُعرض اسمك «{s.user.name}». لا يُضاف اللقب إلى اسمك المحفوظ.</p>
         </section>

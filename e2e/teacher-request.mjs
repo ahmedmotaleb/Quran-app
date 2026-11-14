@@ -27,8 +27,8 @@ await step(L.page, 'a student without a teacher sees «اختر معلمك», se
   await list.getByRole('listitem').first().waitFor();
   await L.card.getByRole('searchbox', { name: 'ابحث باسم المعلم' }).fill('خالد');
   if ((await list.getByRole('listitem').count()) !== 1) throw new Error('search did not narrow to one teacher');
-  await list.getByRole('listitem').filter({ hasText: 'الشيخ خالد العمري' }).click();      // with the title
-  await L.card.getByRole('button', { name: 'اطلب الشيخ خالد العمري' }).click();
+  await list.getByRole('listitem').filter({ hasText: 'الأستاذ خالد العمري' }).click();      // with the title
+  await L.card.getByRole('button', { name: 'اطلب الأستاذ خالد العمري' }).click();
   await L.page.getByText('أُرسل طلبك إلى الإدارة للمراجعة').waitFor();
   await L.card.getByRole('heading', { name: 'طلبك قيد المراجعة' }).waitFor();
   await L.card.getByText('بانتظار المراجعة', { exact: false }).waitFor();
@@ -46,10 +46,10 @@ await step(L.page, 'a second pending request is refused by the server', async ()
 const L2 = await student('lone2@halqa.app');
 await step(L2.page, 'a teacher not in the list can be suggested by name', async () => {
   await L2.card.getByText('لم تجد معلمك؟ اقترحه بالاسم').click();
-  await L2.card.getByRole('textbox', { name: 'اسم المعلم المقترح' }).fill('الشيخ محمود الحصري');
+  await L2.card.getByRole('textbox', { name: 'اسم المعلم المقترح' }).fill('الأستاذ محمود الحصري');
   await L2.card.getByRole('button', { name: 'إرسال الاقتراح' }).click();
   await L2.card.getByRole('heading', { name: 'طلبك قيد المراجعة' }).waitFor();
-  await L2.card.getByText('الشيخ محمود الحصري', { exact: false }).waitFor();
+  await L2.card.getByText('الأستاذ محمود الحصري', { exact: false }).waitFor();
 });
 await step(L2.page, 'the dashboard reminder can be dismissed (hidden for 48 hours)', async () => {
   await L2.card.getByRole('button', { name: 'إخفاء «اختر معلمك» لمدة يومين' }).click();
@@ -65,18 +65,18 @@ await step(A, 'admin reviews «طلبات اختيار المعلم» and assign
   await A.getByRole('button', { name: 'دخول' }).click(); await A.getByText(/بيانات حقيقية/).waitFor();
   await A.getByRole('navigation', { name: 'التنقل في لوحة الإدارة' }).getByRole('button', { name: /^طلبات اختيار المعلم/ }).click();
   const row = A.locator('[data-request]', { hasText: 'طالب بلا معلم' }).first();
-  await row.getByText('الشيخ خالد العمري').waitFor(); await row.getByText('بانتظار المراجعة').waitFor();
-  await A.locator('[data-request]', { hasText: 'الشيخ محمود الحصري' }).getByText('ليس في القائمة', { exact: false }).waitFor();
+  await row.getByText('الأستاذ خالد العمري').waitFor(); await row.getByText('بانتظار المراجعة').waitFor();
+  await A.locator('[data-request]', { hasText: 'الأستاذ محمود الحصري' }).getByText('ليس في القائمة', { exact: false }).waitFor();
   await row.getByRole('button', { name: 'تعيين المعلم' }).click();
   const d = A.getByRole('dialog').last();
-  await d.getByRole('combobox').selectOption({ label: 'الشيخ خالد العمري' }).catch(async () => {
+  await d.getByRole('combobox').selectOption({ label: 'الأستاذ خالد العمري' }).catch(async () => {
     const v = await d.locator('option', { hasText: 'خالد العمري' }).getAttribute('value'); await d.getByRole('combobox').selectOption(v);
   });
   await d.getByRole('button', { name: 'تعيين المعلم' }).click();
   await A.getByText('عُيّن المعلم وأُبلغ الطالب').waitFor();
   await A.getByRole('tab', { name: 'تم تعيين المعلم' }).click();
   const done = A.locator('[data-request]', { hasText: 'طالب بلا معلم' }).first();
-  await done.getByText('عُيّن: الشيخ خالد العمري').waitFor();
+  await done.getByText('عُيّن: الأستاذ خالد العمري').waitFor();
   await done.getByRole('button', { name: /سجل الإشعارات/ }).click();
   await done.getByText('تم تعيين معلمك', { exact: false }).waitFor();
   await A.screenshot({ path: out + '/treq-admin.png' });

@@ -69,7 +69,7 @@ class MeSerializer(serializers.ModelSerializer):
         return bool(prof and prof.approved_at)
 
     def validate_full_name(self, v):
-        # A teacher's title is shown, never stored (display.py): «الشيخ أحمد» is saved as «أحمد».
+        # A teacher's title is shown, never stored (display.py): «الأستاذ أحمد» is saved as «أحمد».
         from .display import strip_title
 
         return strip_title(v) if self.instance is not None and self.instance.role == "teacher" else v

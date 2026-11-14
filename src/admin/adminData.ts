@@ -38,10 +38,10 @@ export const LEVELS = ['مبتدئ', 'متوسط', 'متقدم'];
 export const TOPICS = ['التجويد', 'الحفظ والمراجعة', 'آداب التلاوة', 'علوم القرآن'];
 
 const SEED: AdminUser[] = [
-  { id: 1, name: 'يوسف أحمد', role: 'طالب', email: 'yousef@halqa.app', teacher: 'الشيخ عبدالرحمن السالم', parent: 'أحمد العلي', children: [], st: 'active', level: 'متوسط', age: 14, joined: 'مارس 2026' },
+  { id: 1, name: 'يوسف أحمد', role: 'طالب', email: 'yousef@halqa.app', teacher: 'الأستاذ عبدالرحمن السالم', parent: 'أحمد العلي', children: [], st: 'active', level: 'متوسط', age: 14, joined: 'مارس 2026' },
   { id: 2, name: 'سارة أحمد', role: 'طالبة', email: 'sara@halqa.app', teacher: 'الأستاذة مريم القحطاني', parent: 'أحمد العلي', children: [], st: 'active', level: 'مبتدئ', age: 10, joined: 'مارس 2026' },
   { id: 3, name: 'أحمد العلي', role: 'ولي أمر', email: 'parent@halqa.app', teacher: null, parent: null, children: ['يوسف أحمد', 'سارة أحمد'], st: 'active', joined: 'مارس 2026' },
-  { id: 4, name: 'عمر الحربي', role: 'طالب', email: 'omar@halqa.app', teacher: 'الشيخ عبدالرحمن السالم', parent: null, children: [], st: 'active', level: 'متوسط', age: 16, joined: 'مايو 2026' },
+  { id: 4, name: 'عمر الحربي', role: 'طالب', email: 'omar@halqa.app', teacher: 'الأستاذ عبدالرحمن السالم', parent: null, children: [], st: 'active', level: 'متوسط', age: 16, joined: 'مايو 2026' },
   { id: 5, name: 'منى الشهري', role: 'طالبة', email: 'mona@halqa.app', teacher: null, parent: null, children: [], st: 'pending', level: 'مبتدئ', age: 12, joined: 'أكتوبر 2026' },
   { id: 6, name: 'سلمان القرشي', role: 'ولي أمر', email: 'salman@halqa.app', teacher: null, parent: null, children: [], st: 'pending', joined: 'أكتوبر 2026' },
   { id: 7, name: 'هالة الدوسري', role: 'ولي أمر', email: 'hala@halqa.app', teacher: null, parent: null, children: [], st: 'active', joined: 'أغسطس 2026' },
@@ -71,24 +71,24 @@ function generate(): AdminUser[] {
 export const initialUsers = () => [...SEED, ...generate()];
 
 export const initialTeachers = (): AdminTeacher[] => [
-  { id: 1, name: 'الشيخ عبدالرحمن السالم', spec: 'حفظ وتجويد', email: 'teacher@halqa.app', types: 'فردية · جماعية', st: 'active' },
+  { id: 1, name: 'الأستاذ عبدالرحمن السالم', spec: 'حفظ وتجويد', email: 'teacher@halqa.app', types: 'فردية · جماعية', st: 'active' },
   { id: 2, name: 'الأستاذة مريم القحطاني', spec: 'تحفيظ الأطفال', email: 'maryam@halqa.app', types: 'فردية', st: 'active' },
-  { id: 3, name: 'الشيخ خالد العمري', spec: 'تجويد متقدم', email: 'khalid@halqa.app', types: 'فردية · جماعية', st: 'active' },
+  { id: 3, name: 'الأستاذ خالد العمري', spec: 'تجويد متقدم', email: 'khalid@halqa.app', types: 'فردية · جماعية', st: 'active' },
   { id: 5, name: 'الأستاذة هدى الزهراني', spec: 'مراجعة وتثبيت', email: 'huda@halqa.app', types: 'جماعية', st: 'active' },
-  { id: 4, name: 'الشيخ ماجد الغامدي', spec: 'قراءات', email: 'majed@halqa.app', types: 'فردية', st: 'pending' },
+  { id: 4, name: 'الأستاذ ماجد الغامدي', spec: 'قراءات', email: 'majed@halqa.app', types: 'فردية', st: 'pending' },
 ];
 
 export const initialContent = (): AdminContent[] => [
-  { id: 1, name: 'مقدمة في أحكام النون الساكنة', by: 'الشيخ عبدالرحمن السالم', k: 'محاضرة فيديو', kind: 'lecture', topic: 'التجويد', level: 'مبتدئ', st: 'pending' },
+  { id: 1, name: 'مقدمة في أحكام النون الساكنة', by: 'الأستاذ عبدالرحمن السالم', k: 'محاضرة فيديو', kind: 'lecture', topic: 'التجويد', level: 'مبتدئ', st: 'pending' },
   { id: 3, name: 'آداب حامل القرآن', by: 'الأستاذة هدى الزهراني', k: 'محاضرة صوتية', kind: 'lecture', topic: 'آداب التلاوة', level: 'جميع المستويات', st: 'active' },
-  { id: 4, name: 'نزول القرآن وجمعه', by: 'الشيخ خالد العمري', k: 'محاضرة فيديو', kind: 'lecture', topic: 'علوم القرآن', level: 'متوسط', st: 'active' },
-  { id: 5, name: 'الإظهار الحلقي: أمثلة تطبيقية', by: 'الشيخ عبدالرحمن السالم', k: 'محاضرة فيديو', kind: 'lecture', topic: 'التجويد', level: 'مبتدئ', st: 'active' },
-  { id: 6, name: 'المدود وأنواعها', by: 'الشيخ خالد العمري', k: 'محاضرة فيديو', kind: 'lecture', topic: 'التجويد', level: 'متوسط', st: 'active' },
+  { id: 4, name: 'نزول القرآن وجمعه', by: 'الأستاذ خالد العمري', k: 'محاضرة فيديو', kind: 'lecture', topic: 'علوم القرآن', level: 'متوسط', st: 'active' },
+  { id: 5, name: 'الإظهار الحلقي: أمثلة تطبيقية', by: 'الأستاذ عبدالرحمن السالم', k: 'محاضرة فيديو', kind: 'lecture', topic: 'التجويد', level: 'مبتدئ', st: 'active' },
+  { id: 6, name: 'المدود وأنواعها', by: 'الأستاذ خالد العمري', k: 'محاضرة فيديو', kind: 'lecture', topic: 'التجويد', level: 'متوسط', st: 'active' },
   { id: 7, name: 'كيف تراجع حفظك بانتظام', by: 'الأستاذة هدى الزهراني', k: 'محاضرة صوتية', kind: 'lecture', topic: 'الحفظ والمراجعة', level: 'جميع المستويات', st: 'active' },
-  { id: 2, name: 'اختبار المدود', by: 'الشيخ خالد العمري', k: 'اختبار · 10 أسئلة', kind: 'quiz', topic: 'التجويد', level: 'متوسط', st: 'pending' },
-  { id: 8, name: 'اختبار أحكام النون الساكنة والتنوين', by: 'الشيخ عبدالرحمن السالم', k: 'اختبار · 5 أسئلة · تلاوة', kind: 'quiz', topic: 'التجويد', level: 'مبتدئ', st: 'active' },
-  { id: 9, name: 'اختبار تلاوة: سورة النبأ 1–16', by: 'الشيخ عبدالرحمن السالم', k: 'اختبار · سؤال تلاوة', kind: 'quiz', topic: 'الحفظ والمراجعة', level: 'متوسط', st: 'active' },
-  { id: 10, name: 'اختبار مخارج الحروف', by: 'الشيخ خالد العمري', k: 'اختبار · 8 أسئلة', kind: 'quiz', topic: 'التجويد', level: 'متقدم', st: 'off' },
+  { id: 2, name: 'اختبار المدود', by: 'الأستاذ خالد العمري', k: 'اختبار · 10 أسئلة', kind: 'quiz', topic: 'التجويد', level: 'متوسط', st: 'pending' },
+  { id: 8, name: 'اختبار أحكام النون الساكنة والتنوين', by: 'الأستاذ عبدالرحمن السالم', k: 'اختبار · 5 أسئلة · تلاوة', kind: 'quiz', topic: 'التجويد', level: 'مبتدئ', st: 'active' },
+  { id: 9, name: 'اختبار تلاوة: سورة النبأ 1–16', by: 'الأستاذ عبدالرحمن السالم', k: 'اختبار · سؤال تلاوة', kind: 'quiz', topic: 'الحفظ والمراجعة', level: 'متوسط', st: 'active' },
+  { id: 10, name: 'اختبار مخارج الحروف', by: 'الأستاذ خالد العمري', k: 'اختبار · 8 أسئلة', kind: 'quiz', topic: 'التجويد', level: 'متقدم', st: 'off' },
 ];
 
 export const initialSubs = (): AdminSub[] => [
@@ -100,11 +100,11 @@ export const initialSubs = (): AdminSub[] => [
 ];
 
 export const initialCircles = (): AdminCircle[] => [
-  { id: 1, name: 'حلقة المراجعة المسائية', teacher: 'الشيخ عبدالرحمن السالم', schedule: 'الأحد والثلاثاء · 8:00 م', level: 'متوسط', members: 6, capacity: 8, st: 'active' },
+  { id: 1, name: 'حلقة المراجعة المسائية', teacher: 'الأستاذ عبدالرحمن السالم', schedule: 'الأحد والثلاثاء · 8:00 م', level: 'متوسط', members: 6, capacity: 8, st: 'active' },
   { id: 2, name: 'حلقة جزء عمّ للأطفال', teacher: 'الأستاذة مريم القحطاني', schedule: 'السبت والإثنين · 4:00 م', level: 'مبتدئ', members: 10, capacity: 10, st: 'full' },
   { id: 3, name: 'تثبيت جزء تبارك', teacher: 'الأستاذة هدى الزهراني', schedule: 'الأربعاء · 7:00 م', level: 'متوسط', members: 9, capacity: 12, st: 'active' },
-  { id: 4, name: 'تطبيقات التجويد المتقدم', teacher: 'الشيخ خالد العمري', schedule: 'الخميس · 9:00 م', level: 'متقدم', members: 4, capacity: 8, st: 'active' },
-  { id: 5, name: 'حلقة الفجر', teacher: 'الشيخ عبدالرحمن السالم', schedule: 'يوميًا · 5:30 ص', level: 'جميع المستويات', members: 0, capacity: 15, st: 'draft' },
+  { id: 4, name: 'تطبيقات التجويد المتقدم', teacher: 'الأستاذ خالد العمري', schedule: 'الخميس · 9:00 م', level: 'متقدم', members: 4, capacity: 8, st: 'active' },
+  { id: 5, name: 'حلقة الفجر', teacher: 'الأستاذ عبدالرحمن السالم', schedule: 'يوميًا · 5:30 ص', level: 'جميع المستويات', members: 0, capacity: 15, st: 'draft' },
 ];
 
 /** bookings across the platform; times shown in Cairo time. */
@@ -112,9 +112,9 @@ export function initialBookings(): AdminBooking[] {
   const days = ['الأحد 11 أكتوبر', 'الإثنين 12 أكتوبر', 'الثلاثاء 13 أكتوبر', 'الأربعاء 14 أكتوبر', 'الخميس 15 أكتوبر', 'السبت 10 أكتوبر', 'الخميس 8 أكتوبر'];
   const hours = ['4:00 م', '5:00 م', '6:30 م', '8:00 م', '9:00 م'];
   const fixed: AdminBooking[] = [
-    { id: 1, student: 'يوسف أحمد', teacher: 'الشيخ عبدالرحمن السالم', when: 'الأحد 11 أكتوبر · 5:00 م', type: 'فردية · 45 دقيقة', st: 'confirmed' },
-    { id: 2, student: 'يوسف أحمد', teacher: 'الشيخ خالد العمري', when: 'الثلاثاء 13 أكتوبر · 6:30 م', type: 'فردية · 45 دقيقة', st: 'confirmed' },
-    { id: 3, student: 'يوسف أحمد', teacher: 'الشيخ عبدالرحمن السالم', when: 'الخميس 8 أكتوبر · 5:00 م', type: 'فردية · 45 دقيقة', st: 'completed' },
+    { id: 1, student: 'يوسف أحمد', teacher: 'الأستاذ عبدالرحمن السالم', when: 'الأحد 11 أكتوبر · 5:00 م', type: 'فردية · 45 دقيقة', st: 'confirmed' },
+    { id: 2, student: 'يوسف أحمد', teacher: 'الأستاذ خالد العمري', when: 'الثلاثاء 13 أكتوبر · 6:30 م', type: 'فردية · 45 دقيقة', st: 'confirmed' },
+    { id: 3, student: 'يوسف أحمد', teacher: 'الأستاذ عبدالرحمن السالم', when: 'الخميس 8 أكتوبر · 5:00 م', type: 'فردية · 45 دقيقة', st: 'completed' },
   ];
   const out = [...fixed];
   for (let i = 0; i < 42; i++) {

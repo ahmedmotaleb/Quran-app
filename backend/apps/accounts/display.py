@@ -1,8 +1,8 @@
-"""How a person's name is shown (owner request, 25 October 2026): every teacher's name carries the Arabic title —
-«الشيخ» for a man, «الأستاذة» for a woman — wherever it is shown or sent (screens, notifications, exports).
+"""How a person's name is shown (owner requests, 25 October and 14 November 2026). Every teacher's name carries the
+Arabic title, «الأستاذ» for a man (never «الشيخ»), «الأستاذة» for a woman — wherever it is shown or sent (screens, notifications, exports).
 
 The title is presentation only: `full_name` is never changed and editable fields always carry the plain name. Titles
-someone already typed into a teacher's name («الشيخ …», «الأستاذة …», «الشيخ …», «أ. …») are removed before the
+someone already typed into a teacher's name («الشيخ …», «الأستاذ …», «الأستاذة …», «أ. …») are removed before the
 correct one is added, so a title is never doubled. Students, parents and admin-only accounts are shown as they are.
 A teacher whose gender is not set yet is shown with the plain name (never a guessed title).
 
@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import re
 
-TITLE = {"male": "الشيخ", "female": "الأستاذة"}
-# Titles to remove from the start of a stored teacher name (repeated: «الشيخ الشيخ أحمد»).
+TITLE = {"male": "الأستاذ", "female": "الأستاذة"}
+# Titles to remove from the start of a stored teacher name (repeated: «الأستاذ الأستاذ أحمد», or an old «الشيخ»).
 _LEADING = re.compile(r"^\s*(?:(?:ال)?أستاذة?|(?:ال)?استاذة?|(?:ال)?شيخة?|أ\s*[./]|أ/)\s*", re.UNICODE)
 
 
@@ -27,7 +27,7 @@ def strip_title(name: str) -> str:
 
 
 def teacher_name(full_name: str, gender: str) -> str:
-    """«الشيخ أحمد محمد» / «الأستاذة مريم أحمد»; the stored name (unchanged) when the gender is not set."""
+    """«الأستاذ أحمد محمد» / «الأستاذة مريم أحمد»; the stored name (unchanged) when the gender is not set."""
     t = TITLE.get(gender or "")
     return f"{t} {strip_title(full_name)}" if t else (full_name or "").strip()
 

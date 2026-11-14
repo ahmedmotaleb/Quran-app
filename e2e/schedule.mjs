@@ -18,7 +18,7 @@ async function session(email) {
 }
 const step = async (p, name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await p.screenshot({ path: `${out}/fail-${name.replace(/\W+/g, '_')}.png` }); } };
 const T = await session('khalid@halqa.app');
-await T.app.getByText('مرحبًا، الشيخ خالد العمري').waitFor();
+await T.app.getByText('مرحبًا، الأستاذ خالد العمري').waitFor();
 // Availability as time ranges anywhere in the day (owner request, 25 Oct 2026): the teacher adds a morning range on
 // the day after tomorrow, an overlap is refused, a part of the day is blocked; the student sees only the computed free
 // times and books one; the teacher sees the session apart from the ranges, cancels it, and removes the range.
@@ -70,7 +70,7 @@ await T.page.screenshot({ path: out + '/t1-avail.png', fullPage: true });
 const S = await session('sara@halqa.app');
 await step(S.page, 'student sees only computed free times and books 6:00 AM', async () => {
   await S.page.getByRole('navigation').getByRole('button', { exact: true, name: 'الجلسات' }).click();
-  await S.app.getByText('الشيخ خالد العمري').click();
+  await S.app.getByText('الأستاذ خالد العمري').click();
   await S.app.getByText('جارٍ تحميل المواعيد…').waitFor({ state: 'detached' });
   await S.app.getByRole('option').nth(2).click();
   await S.app.getByRole('button', { name: '٦:١٥ صباحًا', exact: true }).waitFor();                 // 6:15 + 45 = 7:00 (block starts)
@@ -81,7 +81,7 @@ await step(S.page, 'student sees only computed free times and books 6:00 AM', as
   await S.app.getByText('تم تأكيد حجزك').waitFor();
 });
 await step(T.page, 'teacher sees the session apart from the ranges', async () => {
-  await T.page.reload(); await T.app.getByText('مرحبًا، الشيخ خالد العمري').waitFor();
+  await T.page.reload(); await T.app.getByText('مرحبًا، الأستاذ خالد العمري').waitFor();
   await T.page.getByRole('navigation').getByRole('button', { exact: true, name: 'المواعيد' }).click();
   await T.app.getByRole('tab', { name: 'الجلسات' }).click();
   await T.app.getByText('سارة أحمد', { exact: true }).waitFor();

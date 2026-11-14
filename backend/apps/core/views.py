@@ -66,6 +66,11 @@ def ready(request):
         from apps.quran.models import QuranSource
 
         features["quran_text"] = "imported" if QuranSource.objects.filter(is_active=True).exists() else "not_imported"
+    from apps.scheduling import alarm
+
+    # 15-minute session reminders: "alarm" = Cloud Tasks wakes the server at T−15 (deploy/gcp-reminders.sh);
+    # "fallback" = only while someone has the app open, plus the hourly job (may be late or missed).
+    features["session_reminders"] = "alarm" if alarm.configured() else "fallback"
     return Response({"status": "ok" if ok else "unavailable", "checks": checks, "features": features}, status=200 if ok else 503)
 
 

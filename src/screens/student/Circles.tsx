@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { color, font } from '@/theme/tokens';
 import type { Session, Slot } from '@/data/types';
 import { Icon } from '@/components/Icon';
+import { JoinButton } from '@/components/JoinButton';
 import {
   Avatar, BackHeader, Badge, Chips, FieldError, KVCard, SearchInput, card, iconTile, inputStyle, labelStyle, listBtn, muted, outlineBtn, primaryBtn,
 } from '@/components/ui';
@@ -178,14 +179,18 @@ function BookingsTab() {
       )}
       <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>القادمة</h2>
       {upcoming.map((x) => (
-        <button key={x.id} onClick={() => go('session', { id: x.id })} style={listBtn}>
-          <span style={iconTile(48, color.sage)}><Icon name="cal" /></span>
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: 'block', fontSize: 16, fontWeight: 700 }}>{x.when}</span>
-            <span style={{ display: 'block', fontSize: 14, color: color.body, marginTop: 2 }}>{x.teacherName} · {x.type}</span>
-          </span>
-          <Badge kind={x.status} size="sm" style={{ padding: '4px 10px' }} />
-        </button>
+        <div key={x.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button onClick={() => go('session', { id: x.id })} style={listBtn}>
+            <span style={iconTile(48, color.sage)}><Icon name="cal" /></span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: 16, fontWeight: 700 }}>{x.when}</span>
+              <span style={{ display: 'block', fontSize: 14, color: color.body, marginTop: 2 }}>{x.teacherName} · {x.type}{x.platform ? ` · ${x.platform}` : ''}</span>
+            </span>
+            <Badge kind={x.status} size="sm" style={{ padding: '4px 10px' }} />
+          </button>
+          {/* «انضم إلى الجلسة» right on the card once the join window is open */}
+          {s.liveMode && x.isToday && <JoinButton booking={Number(x.id)} canJoin hasLink={!!x.hasLink} size={48} />}
+        </div>
       ))}
       <h2 style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 700, color: color.muted }}>السابقة والملغاة</h2>
       {past.map((x) => (
@@ -430,6 +435,7 @@ export function SessionDetails() {
           ['التاريخ والوقت', <span style={{ textAlign: 'left' }}><span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>{x.dateFull} · {x.timeL}</span><span style={{ display: 'block', fontSize: 12, color: color.muted }}>{x.tzL}</span></span>],
           ...(x0.topic ? [['نوع الجلسة', `جلسة ${TOPIC[x0.topic] ?? ''}${x0.title ? ` — ${x0.title}` : ''}`] as [string, string]] : []),
           ['النوع والمدة', `${x.type} · ${x.dur} دقيقة`],
+          ...(x0.platform ? [['منصة الاجتماع', x0.platform] as [string, string]] : []),
           ['مهمة الجلسة', x.taskL],
           ...(att ? [['الحضور', att] as [string, string]] : []),
         ]} />
@@ -445,8 +451,9 @@ export function SessionDetails() {
         {x.status === 'cancelled' && <p role="status" style={{ margin: 0, fontSize: 14, color: color.dangerInk, background: color.dangerBg, padding: 12, borderRadius: 12, display: 'flex', gap: 6 }}><Icon name="x" size={18} /> أُلغي هذا الحجز وأُعيد الموعد إلى المتاح.</p>}
         {x.active && (
           <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {x.isToday && <button onClick={() => go('live', { id: x.id })} style={primaryBtn()}><Icon name="video" /> {s.liveMode ? 'الدخول للجلسة' : 'ادخل غرفة الانتظار'}</button>}
-            {x.notToday && <p style={muted(13, { textAlign: 'center' })}>سيظهر زر الدخول قبل الموعد بـ {s.pub.join_minutes} دقيقة.</p>}
+            {s.liveMode ? <JoinButton booking={Number(x.id)} canJoin={!!x0.canJoin} hasLink={!!x0.hasLink} reason={`يُفتح الدخول قبل الموعد بـ ${s.pub.join_minutes} دقيقة`} />
+              : x.isToday && <button onClick={() => go('live', { id: x.id })} style={primaryBtn()}><Icon name="video" /> ادخل غرفة الانتظار</button>}
+            {!s.liveMode && x.notToday && <p style={muted(13, { textAlign: 'center' })}>سيظهر زر الدخول قبل الموعد بـ {s.pub.join_minutes} دقيقة.</p>}
             {s.liveMode && x0.startsAt && <button onClick={() => addToCalendar(x0)} style={outlineBtn(46, 14)}><Icon name="cal" size={18} /> إضافة إلى التقويم</button>}
             <div style={{ display: 'flex', gap: 10 }}>
               {/* A session the teacher created (with its Google invite) is moved by the teacher, not rebooked by the student. */}

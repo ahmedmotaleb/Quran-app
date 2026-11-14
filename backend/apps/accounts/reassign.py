@@ -25,7 +25,7 @@ from .models import AccountStatus, Role, TeacherAssignment, User
 
 
 def teacher_title(t: User) -> str:
-    """«الأستاذ فلان» / «الأستاذة فلانة»; no title when the gender is not set (never «الشيخ» by default)."""
+    """«الأستاذ فلان» / «الأستاذة فلانة»; no title when the gender is not set (never «الشيخ»)."""
     name = t.full_name.strip()
     return f"الأستاذة {name}" if t.gender == "female" else f"الأستاذ {name}" if t.gender == "male" else name
 

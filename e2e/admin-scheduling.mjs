@@ -27,7 +27,7 @@ await page.getByRole('button', { name: 'دخول' }).click(); await page.getByTe
 await step('create a circle (draft)', async () => {
   await nav('الحلقات'); await page.getByRole('button', { name: 'حلقة جديدة' }).click();
   await dialog().locator('#ci-n').fill(CN);
-  await dialog().locator('#ci-t').selectOption({ label: 'الشيخ خالد العمري' });
+  await dialog().locator('#ci-t').selectOption({ label: 'الأستاذ خالد العمري' });
   await dialog().locator('#ci-c').fill('3'); await dialog().getByRole('button', { name: 'حفظ' }).click();
   await dialog().getByText('لا توجد جلسات بعد').waitFor();
 });
@@ -47,14 +47,14 @@ let student = ''; let occId = 0;
 await step('draft circle is hidden from students', async () => {
   student = await tokenFor('yousef@halqa.app');
   const teachers = (await api('GET', 'teachers', student)).body.results;
-  const khalid = teachers.find((t) => t.display_name === 'الشيخ خالد العمري');
+  const khalid = teachers.find((t) => t.display_name === 'الأستاذ خالد العمري');
   const slots = (await api('GET', `teachers/${khalid.id}/slots`, student)).body;
   if (slots.some((s) => s.circle_name === CN)) throw new Error('draft circle visible');
 });
 await step('publish; the student sees and books a group seat', async () => {
   await dialog().getByRole('button', { name: 'نشر' }).click(); await dialog().getByText('منشورة').waitFor();
   const teachers = (await api('GET', 'teachers', student)).body.results;
-  const khalid = teachers.find((t) => t.display_name === 'الشيخ خالد العمري');
+  const khalid = teachers.find((t) => t.display_name === 'الأستاذ خالد العمري');
   const slot = (await api('GET', `teachers/${khalid.id}/slots`, student)).body.find((s) => s.circle_name === CN);
   if (!slot || slot.seats_left !== 3) throw new Error('published circle session not offered');
   occId = slot.id;
@@ -73,7 +73,7 @@ await step('the student is notified and the seat is free again', async () => {
   const n = (await api('GET', 'notifications', student)).body; const items = n.results ?? n;
   if (!items.some((x) => x.kind === 'booking_cancelled')) throw new Error('no cancellation notice');
   const teachers = (await api('GET', 'teachers', student)).body.results;
-  const khalid = teachers.find((t) => t.display_name === 'الشيخ خالد العمري');
+  const khalid = teachers.find((t) => t.display_name === 'الأستاذ خالد العمري');
   const slot = (await api('GET', `teachers/${khalid.id}/slots`, student)).body.find((s) => s.id === occId);
   if (slot.seats_left !== 3) throw new Error(`seats_left ${slot.seats_left}`);
 });

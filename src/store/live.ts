@@ -48,7 +48,7 @@ if (typeof document !== 'undefined') {
 }
 
 function applyUser(u: E.Me) {
-  // Shown name: a teacher with «الشيخ» / «الأستاذة» (lib/names.ts); the stored name stays in `me.full_name`.
+  // Shown name: a teacher with «الأستاذ» / «الأستاذة» (lib/names.ts); the stored name stays in `me.full_name`.
   const name = u.display_name || u.full_name || u.email;
   setState((s) => ({
     me: u, tz: deviceZone(), // times are shown in this device's zone (a traveller sees local times)
@@ -278,7 +278,7 @@ export async function logout() {
   setState({ me: null, pendingRecs: [], tasks: [], sessions: [], fb: {}, recs: {}, avail: {}, reviews: null, students: [], teachers: [], parent: null, tsched: null, subs: [], lessons: null, lessonCur: null, tests: null, lq: null, grading: null });
 }
 
-/** The account's gender: a teacher's title («الشيخ» / «الأستاذة», shown everywhere from the next request) or a
+/** The account's gender: a teacher's title («الأستاذ» / «الأستاذة», shown everywhere from the next request) or a
  *  student's own profile field. */
 export async function saveGender(gender: 'male' | 'female', done = 'حُفظ اللقب') {
   try { applyUser(await E.updateMe({ gender })); toast(done); } catch (e) { toast(msg(e), 'alert'); }

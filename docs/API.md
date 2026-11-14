@@ -411,11 +411,11 @@ Admin access: view `teachers.view`, change `sessions.manage`. Audit: `teacher.av
 
 ## Teacher titles (owner request, 25 Oct 2026)
 
-Every teacher's name is shown with its Arabic title — «الشيخ» (male) / «الأستاذة» (female) — wherever it appears:
+Every teacher's name is shown with its Arabic title — «الأستاذ» (male) / «الأستاذة» (female) — wherever it appears:
 screens, notifications, exports, admin tables. It is presentation only:
 - `User.gender` (`male` / `female` / empty) decides the title; empty → the plain name (no guessed title).
 - `full_name` is stored plain. Titles typed into a teacher's name are removed on save (`PATCH me`, admin edit,
-  teacher creation), and removed again when shown (`الشيخ/الأستاذة/أستاذ/الشيخ/الشيخة/أ.` at the start), so a title
+  teacher creation), and removed again when shown (`الأستاذ/الأستاذة/أستاذ/الأستاذ/الأستاذة/أ.` at the start), so a title
   is never doubled.
 - One formatter on each side: `apps/accounts/display.py` (`User.display_name`; used for `teacher_name`, `teacher.name`,
   notification texts, exports) and `src/lib/names.ts` (`formatTeacherName`, `nameOf`) for raw user objects in the app.
@@ -649,7 +649,7 @@ view and manage; owners have all):
 | Previous teacher | `student_moved` | «تحديث قائمة الطلاب» | «تم نقل الطالب/الطالبة … إلى معلم آخر.» |
 
 - Teacher titles follow the teacher's gender: الأستاذ or الأستاذة. With no gender set, the name is shown with no
-  title. «الشيخ» is never used in these notices.
+  title. «الأستاذ» is never used in these notices.
 - Assigning the teacher the student already has changes nothing and notifies no one.
 - These three kinds carry the wording above on the phone (push), not the generic text.
 - Tasks, recordings, evaluations, attendance and memorization progress are never changed or deleted.
@@ -678,3 +678,59 @@ when `assignment_rev` changes. It checks:
 - It keeps the newest assignment active.
 - It ends the others with `end_reason="repair_duplicate"`; nothing is deleted.
 - Each repair is written to the audit log as `data.teacher_assignment_repaired`, with both teachers.
+
+## Meeting links, «انضم إلى الجلسة» and 15-minute reminders (owner request, 14 Nov 2026)
+
+**Meeting links** (`PUT teacher/occurrences/<id>/meeting {url}`)
+- The server normalizes the link (`apps/scheduling/meeting.normalize`; the app mirrors it in `src/lib/meeting.ts`,
+  applied when the field loses focus and on save):
+  - spaces, invisible characters and wrapping quotes are removed;
+  - a missing protocol gets `https://` (once), and `http://` becomes `https://`;
+  - the host, path, meeting ID and query are kept;
+  - any other scheme (`javascript:`, `data:`, `ftp:` …) is refused.
+- It then checks the link (`provider_for`): Google Meet, Zoom, Microsoft Teams or Jitsi only, no host or sign-in
+  links, no `user:password@`, standard port.
+- The normalized link is stored in `SessionOccurrence.meeting_url`.
+- Example: `meet.google.com/mes-bjhv-zzf` is stored as `https://meet.google.com/mes-bjhv-zzf`.
+
+**Joining**
+- Student: `POST bookings/<id>/join` returns `{url, provider, provider_label}`.
+  - Only the booked student, only inside the join window (`AppSettings.join_minutes` before the start, until the end).
+  - Everyone else gets 404.
+  - Booking lists carry `has_meeting_link`, `can_join` and `meeting_provider` (the platform's name), never the URL.
+- Teacher: their own session's `meeting_url` (`teacher/occurrences`).
+- App: one «انضم إلى الجلسة» button (`src/components/JoinButton.tsx`).
+  - Student: home card, upcoming list, session details, the join screen, and the reminder's destination.
+  - Teacher: «جلسات اليوم», «المواعيد» sessions.
+  - It opens the link in a new browsing context. On Android the Meet, Zoom or Teams app takes it when installed.
+  - It is disabled, with the reason, when there is no link or the window is not open.
+
+**15-minute reminder** (`apps/scheduling/reminders.py`)
+- Kind `session_soon`, title «الحلقة | تذكير بالجلسة», body «حلقتك هتبدأ بعد 15 دقيقة. استعد للانضمام إلى الجلسة.».
+- Sent to every student with a confirmed booking and to the teacher, in-app plus Web Push, through the outbox:
+  - push after commit;
+  - `push_status`, `push_attempts` and `push_error` recorded;
+  - hourly retry of temporary failures.
+- `push_status="sent"` means the push service accepted it, not that the phone displayed it; the device receipt is
+  separate.
+- Tapping it opens the student's session (`live`) or the teacher's «المواعيد».
+- **Due:** sessions that are SCHEDULED, have a confirmed booking, and start within 15 minutes (plus 45 s), not yet
+  started.
+  - The dedupe key includes the start time, so one reminder per person, session and time.
+  - A moved session is reminded for its new time only; cancelled or completed sessions never are.
+  - Booked or created less than 15 minutes ahead: reminded at once («بعد N دقائق»).
+- Times are UTC instants, so Cairo DST changes (and each person's own zone) do not move the reminder.
+- **Who triggers it:** a Google Cloud Tasks one-shot task at T−15 per session and start time (`alarm.py`), created
+  when a session is created or moved or a booking is confirmed. It calls `POST internal/session-reminders` with the
+  `X-Halqa-Task` secret (404 without it).
+- **Safety nets:**
+  - the unread-count poll (at most one check a minute across all open apps);
+  - the hourly job, which also re-arms alarms for booked sessions in the next 2 hours.
+- `GET /api/ready` reports `features.session_reminders`:
+  - `alarm`: configured (`deploy/gcp-reminders.sh`);
+  - `fallback`: app poll and hourly job only.
+- Reschedule and cancellation notices to both sides are unchanged (`booking_rescheduled`, `booking_cancelled`,
+  `session_cancelled*`).
+
+**Teacher titles:** «الأستاذ» for men, «الأستاذة» for women, everywhere (`display.py`, `names.ts`). An old typed
+«الشيخ» is removed before the title is added.

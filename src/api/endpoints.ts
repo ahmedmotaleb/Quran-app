@@ -43,7 +43,7 @@ export interface ApiSlot { id: number | string; minutes?: number; teacher: numbe
 export interface ApiBooking {
   id: number; occurrence: ApiSlot; student: number; student_name: string; status: 'confirmed' | 'cancelled'; assignment: number | null;
   note: string; attendance: string; cancelled_at: string | null; cancel_reason: string; created_at: string; can_join: boolean;
-  has_meeting_link: boolean; excuse: ApiExcuse | null; excuse_deadline: string; can_excuse: boolean;
+  has_meeting_link: boolean; meeting_provider?: string; excuse: ApiExcuse | null; excuse_deadline: string; can_excuse: boolean;
 }
 /** A student's excuse for a booking. `reason`/`teacher_response` are absent for parents (status only). */
 export interface ApiExcuse {
@@ -286,7 +286,7 @@ export function toSession(b: ApiBooking): Session {
   return {
     id: String(b.id), t: String(o.teacher), teacherName: o.teacher_name, h: 0, type: o.kind === 'group' ? 'جماعية' : 'فردية', dur: minutes,
     status: b.status === 'cancelled' ? 'cancelled' : past ? 'completed' : 'confirmed',
-    task: b.assignment ? String(b.assignment) : null, note: b.note, startsAt: o.starts_at, endsAt: o.ends_at, canJoin: b.can_join, hasLink: b.has_meeting_link, attendance: b.attendance,
+    task: b.assignment ? String(b.assignment) : null, note: b.note, startsAt: o.starts_at, endsAt: o.ends_at, canJoin: b.can_join, hasLink: b.has_meeting_link, platform: b.meeting_provider || '', attendance: b.attendance,
     topic: o.topic || '', title: o.title || '', prepNote: o.prep_note || '',
     excuse: b.excuse, canExcuse: b.can_excuse, excuseDeadline: b.excuse_deadline,
   };

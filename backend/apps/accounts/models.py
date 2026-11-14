@@ -56,7 +56,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     email = models.EmailField(max_length=254, unique=True)  # always stored lowercase (see save)
     full_name = models.CharField(max_length=120)
-    # Used for the teacher's title («الشيخ» / «الأستاذة», display.py). Empty = not set: the name is shown without a
+    # Used for the teacher's title («الأستاذ» / «الأستاذة», display.py). Empty = not set: the name is shown without a
     # title rather than guessed. Never part of full_name.
     gender = models.CharField(max_length=6, choices=[("male", "ذكر"), ("female", "أنثى")], blank=True, default="")
     role = models.CharField(max_length=16, choices=Role.choices, default=Role.STUDENT)
@@ -91,7 +91,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     @property
     def display_name(self) -> str:
-        """The name as shown: teachers with «الشيخ» / «الأستاذة» (display.py); full_name itself never changes."""
+        """The name as shown: teachers with «الأستاذ» / «الأستاذة» (display.py); full_name itself never changes."""
         from .display import display_name
 
         return display_name(self)

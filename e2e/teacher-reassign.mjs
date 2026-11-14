@@ -84,7 +84,7 @@ await step(S.page, 'notifications: the student, Teacher B and Teacher A each get
   await inbox(TA, 'تحديث قائمة الطلاب', 'تم نقل الطالب يوسف أحمد إلى معلم آخر.');
   const n = sql("select count(*) from notifications_notification where kind in ('teacher_assigned','student_assigned','student_moved')");
   if (n !== '3') throw new Error(`expected 3 notification rows, got ${n}`);
-  if (sql("select count(*) from notifications_notification where body like '%الشيخ%' and kind in ('teacher_assigned','student_assigned','student_moved')") !== '0') throw new Error('«الشيخ» used');
+  if (sql("select count(*) from notifications_notification where body like '%الشيخ%' and kind in ('teacher_assigned','student_assigned','student_moved')") !== '0') throw new Error('«الأستاذ» used');
 });
 await step(S.page, 'restart: after closing and reopening the app the server still says Teacher B', async () => {
   await S.page.goto(BASE); await S.page.reload();
