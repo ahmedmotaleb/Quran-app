@@ -46,7 +46,7 @@ function Library() {
   };
   const seed = () => act(async () => {
     const r = await AD.adminSeed();
-    toast(`أُضيفت ${r.created} آية للمراجعة${r.existing ? ` (${r.existing} موجودة)` : ''}${r.missing.length ? `؛ تعذّر ${r.missing.length}` : ''}`);
+    toast(`أُضيف ${r.created} ذكر للمراجعة${r.existing ? ` (${r.existing} موجودة)` : ''}${r.missing.length ? `؛ تعذّر ${r.missing.length}` : ''}`);
   }, '');
   const c = data?.counts ?? {};
   return (
@@ -67,11 +67,11 @@ function Library() {
           <option value="">القرآن والسنة</option><option value="quran">القرآن الكريم</option><option value="hadith">السنة النبوية</option>
         </select>
         {manage && <button onClick={() => setEdit('new')} style={{ ...smallBtn('primary'), minHeight: 44 }}>إضافة ذكر</button>}
-        {manage && <button disabled={busy} onClick={() => void seed()} style={{ ...smallBtn(), minHeight: 44 }}>إضافة الآيات المقترحة</button>}
+        {manage && <button disabled={busy} onClick={() => void seed()} style={{ ...smallBtn(), minHeight: 44 }}>إضافة المحتوى الموثّق</button>}
       </div>
       {err ? <p role="alert" style={{ color: color.danger, margin: 0 }}>{err}</p>
         : !data ? <p role="status" style={{ color: color.muted, margin: 0 }}>جارٍ التحميل…</p>
-        : !data.rows.length ? <p style={{ ...card, padding: 18, margin: 0, color: color.muted }}>لا توجد أذكار هنا.{manage && tab === 'pending' && !data.count ? ' استخدم «إضافة الآيات المقترحة» لإضافة آيات من النص القرآني المعتمد للمراجعة.' : ''}</p>
+        : !data.rows.length ? <p style={{ ...card, padding: 18, margin: 0, color: color.muted }}>لا توجد أذكار هنا.{manage && tab === 'pending' && !data.count ? ' استخدم «إضافة المحتوى الموثّق»: آيات من النص القرآني المعتمد، وأحاديث صحيحة منقولة حرفيًا من مصادرها، للمراجعة.' : ''}</p>
         : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {data.count > data.rows.length && <p style={{ margin: 0, fontSize: 13, color: color.muted }}>يُعرض أول {data.rows.length} من {data.count}. استخدم البحث أو الفئة لتضييق القائمة.</p>}
           {data.rows.map((d) => (
@@ -86,7 +86,7 @@ function Library() {
               <p style={{ margin: 0, fontSize: 13 }}><strong>المصدر:</strong> {d.source_type === 'quran' ? 'القرآن الكريم · ' : ''}{d.source}
                 {d.reference_url && <> · <a href={d.reference_url} target="_blank" rel="noopener noreferrer">المرجع</a></>}</p>
               <p style={{ margin: 0, fontSize: 12, color: color.muted }}>
-                {d.origin === 'quran_reference' ? 'من الآيات المقترحة' : `أضافه ${d.created_by ?? '—'}`} · {dateTime(d.created_at)}
+                {d.origin === 'quran_reference' ? 'من الآيات المقترحة' : d.origin === 'sunnah_dataset' ? 'منقول حرفيًا من مجموعة الحديث المفتوحة' : `أضافه ${d.created_by ?? '—'}`} · {dateTime(d.created_at)}
                 {d.reviewed_by && d.reviewed_at && <> · راجعه {d.reviewed_by} في {dateTime(d.reviewed_at)}</>}
                 {d.review_note && <> · سبب: {d.review_note}</>}
               </p>

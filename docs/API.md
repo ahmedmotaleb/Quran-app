@@ -586,8 +586,21 @@ view and manage; owners have all):
 - `PATCH admin/adhkar/<id>`: a change to the text or source sends the entry back to pending.
 - `POST admin/adhkar/<id>/review {decision: approve|reject, note}` (`adhkar.approve`). Rejecting requires a note.
 - `POST admin/adhkar/<id>/enable {enabled}`.
-- `POST admin/adhkar/seed-quran`: adds the proposed Quranic references (about 90 whole-ayah duas, istighfar,
-  tasbih, and verses on the virtue of the Quran) as pending.
+- `POST admin/adhkar/seed-quran` («إضافة المحتوى الموثّق») adds, as pending:
+  - the proposed Quranic references: about 90 whole-ayah duas, istighfar, tasbih, and verses on the virtue of the
+    Quran;
+  - the Sunnah entries in `apps/adhkar/data/sunnah_adhkar.json` (36): morning, evening, sleep, waking, istighfar,
+    tasbih, salawat, prophetic duas, and hadiths on the virtue of the Quran.
+- **How the Sunnah file is built** (`python -m apps.adhkar.sunnah_build <dir>`, run by a developer):
+  - Source: the public-domain hadith dataset github.com/fawazahmed0/hadith-api (Unlicense).
+  - Each text is copied verbatim from the narration, between search markers (`sunnah_refs.py`), diacritics included.
+  - Bukhari and Muslim are graded صحيح. The Sunan need al-Albani's grade in the dataset to be Sahih or Hasan.
+  - Refused automatically: a span containing a narrator's words, a corrupted character, or a marker not found.
+  - Muslim numbers follow Fuad Abdul-Baqi's numbering.
+- **Ops `adhkar-library`** (production) runs `load_adhkar_library`, which adds both lists.
+  - With `apply` ticked, it also approves the pending entries that came from them.
+  - Entries an admin rejected or added are never changed.
+  - Idempotent.
   - Idempotent.
   - Returns `{created, existing, missing}`.
 - `POST admin/adhkar/<id>/test`: sends that approved entry to the admin's own devices (once per 30 s).

@@ -262,3 +262,44 @@ def test_source_label_names_the_surah_and_never_leaves_it_blank(world, quran):
     Surah.objects.filter(source=quran, number=2).update(name_ar="")                        # an import without names
     assert services.source_label(d) == "سورة ٢: ٢٠١"
     assert services.source_label(hadith()) == "صحيح البخاري (١) · صحيح"
+
+
+# ---- the verified library (owner request: «حط اذكار في المكتبه») ------------------------------------------------------
+def test_sunnah_file_is_sourced_graded_and_clean():
+    import re
+
+    data = json.loads(seed.SUNNAH_FILE.read_text())
+    assert "verbatim" in data["source"] and len(data["entries"]) >= 30
+    seen = set()
+    for e in data["entries"]:
+        assert e["grading"] in ("sahih", "hasan") and e["hadith_collection"] and e["hadith_number"].isdigit()
+        assert e["graded_by"] or e["hadith_collection"] in ("صحيح البخاري", "صحيح مسلم")      # Sunan: al-Albani's grade
+        assert e["reference_url"].startswith("https://sunnah.com/")
+        assert "�" not in e["text"] and not re.search(r"(^| )(وَ?قَالَ|حَدَّثَ|زَادَ) ", e["text"])  # no narrator's words
+        assert e["category"] in Dhikr.Category.values and e["time_of_day"] in Dhikr.Time.values
+        assert (e["hadith_collection"], e["hadith_number"], e["text"]) not in seen
+        seen.add((e["hadith_collection"], e["hadith_number"], e["text"]))
+    cats = {e["category"] for e in data["entries"]}
+    assert {"morning", "evening", "sleep", "sunnah_dua", "istighfar"} <= cats
+
+
+def test_load_library_adds_pending_then_approves_only_its_own_entries(world, quran):
+    from django.core.management import call_command
+
+    mine = hadith(text="نص أضافه مشرف", status="pending", origin="admin")
+    rejected_text = json.loads(seed.SUNNAH_FILE.read_text())["entries"][0]
+    call_command("load_adhkar_library")
+    n = Dhikr.objects.filter(origin__in=["quran_reference", "sunnah_dataset"]).count()
+    assert n == sum(len(v) for v in seed.QURAN_REFERENCES.values()) + len(json.loads(seed.SUNNAH_FILE.read_text())["entries"])
+    assert not Dhikr.objects.filter(origin="sunnah_dataset").exclude(status="pending").exists()     # pending until approved
+    Dhikr.objects.filter(origin="sunnah_dataset", text=rejected_text["text"]).update(status="rejected", review_note="x")
+    call_command("load_adhkar_library", "--approve")
+    assert Dhikr.objects.filter(origin="sunnah_dataset", text=rejected_text["text"]).get().status == "rejected"  # a rejection stands
+    mine.refresh_from_db()
+    assert mine.status == "pending"                                                              # an admin's entry is untouched
+    assert Dhikr.objects.filter(origin__in=["quran_reference", "sunnah_dataset"], status="approved").count() == n - 1
+    assert Dhikr.objects.count() == n + 1                                                        # idempotent: nothing duplicated
+    call_command("load_adhkar_library", "--approve")
+    assert Dhikr.objects.count() == n + 1
+    r = client_for(world.s1).get("/api/v1/adhkar?category=morning").json()["results"]
+    assert r and all(x["source_type"] == "hadith" and ("· صحيح" in x["source"] or "· حسن" in x["source"]) for x in r)
