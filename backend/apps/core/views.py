@@ -128,3 +128,23 @@ def api_500(request):
     from django.views.defaults import server_error
 
     return _json_error(request, 500, "server_error", "", lambda: server_error(request))
+
+
+FINGERPRINT = __import__("re").compile(r"^([0-9A-F]{2}:){31}[0-9A-F]{2}$")
+
+
+def assetlinks(request):
+    """Digital Asset Links for the Android app (android/, a Trusted Web Activity): lets the app open HALQA
+    full-screen in Chrome and verifies its App Links. Lists only well-formed SHA-256 fingerprints from
+    ANDROID_CERT_SHA256 (deploy/android-keystore.sh prints the value). Without one: 404, never a guess."""
+    from django.conf import settings
+    from django.http import Http404, JsonResponse
+
+    prints = [p for p in settings.ANDROID_CERT_SHA256 if FINGERPRINT.match(p)]
+    if not prints:
+        raise Http404
+    r = JsonResponse([{"relation": ["delegate_permission/common.handle_all_urls"],
+                       "target": {"namespace": "android_app", "package_name": settings.ANDROID_PACKAGE,
+                                  "sha256_cert_fingerprints": prints}}], safe=False)
+    r["Cache-Control"] = "public, max-age=3600"
+    return r
