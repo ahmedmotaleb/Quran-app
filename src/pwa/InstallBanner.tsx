@@ -1,6 +1,10 @@
 /** «ثبّت تطبيق الحلقة»: a bottom sheet on the main screens of a phone browser, above the tab bar and the safe area.
- *  - Android (Chrome, Edge, Samsung Internet…): shown only once the browser has offered installation
- *    (`beforeinstallprompt`); «تثبيت التطبيق» opens the browser's real install dialog.
+ *  - Google Chrome on Android: shown once Chrome has offered installation (`beforeinstallprompt`); «تثبيت التطبيق»
+ *    opens Chrome's own install dialog, which installs a WebAPK minted and signed by Google. Nothing is downloaded.
+ *  - Other Android browsers (Samsung Internet, Edge, Opera, Brave, Mi…): they build their own install package, which
+ *    Google Play Protect can block as «built for an older version of Android» (owner report 14 Nov 2026). The sheet
+ *    explains that and offers «فتح في Chrome» first. The browser's own install stays available as a second,
+ *    clearly labelled option. Play Protect is never bypassed.
  *  - iPhone/iPad: no install dialog exists, so the sheet explains Share → «إضافة إلى الشاشة الرئيسية».
  *  - Never when running installed (standalone / Home Screen), after the browser reported the install, on a desktop
  *    browser, or within 7 days of «لاحقًا» (or a cancelled install dialog).
@@ -11,7 +15,7 @@ import { Icon } from '@/components/Icon';
 import { primaryBtn } from '@/components/ui';
 import { toast } from '@/store/store';
 import { useReminderPromptShown } from './ReminderPrompt';
-import { hasInstallPrompt, isAndroid, isIos, isStandalone, onInstallChange, promptInstall, wasInstalled } from './install';
+import { androidNotChrome, chromeIntentUrl, hasInstallPrompt, isAndroid, isIos, isStandalone, noteInstall, onInstallChange, promptInstall, wasInstalled } from './install';
 
 const LATER_KEY = 'halqa.install.later';
 const OLD_KEY = 'halqa.install.dismissed'; // the previous top strip's «hide» time: still respected
@@ -29,9 +33,10 @@ function rememberLater() { try { localStorage.setItem(LATER_KEY, String(Date.now
 const inAppBrowser = () => /FBAN|FBAV|Instagram|Line\//i.test(navigator.userAgent);
 const phone = () => isAndroid() || isIos() || /Mobi/i.test(navigator.userAgent);
 
-type Mode = 'prompt' | 'ios' | null;
+type Mode = 'prompt' | 'ios' | 'chrome' | 'chrome+own' | null;   // chrome+own: the other browser also offers its own install
 function mode(): Mode {
   if (typeof window === 'undefined' || isStandalone() || wasInstalled() || !phone()) return null;
+  if (androidNotChrome()) return hasInstallPrompt() ? 'chrome+own' : 'chrome';
   if (hasInstallPrompt()) return 'prompt';
   if (isIos() && !inAppBrowser()) return 'ios';
   return null;
@@ -53,6 +58,8 @@ export function InstallBanner() {
     } catch { later(); } finally { setBusy(false); }
   };
   const ios = m === 'ios';
+  const chrome = m === 'chrome' || m === 'chrome+own';
+  const installHere = async () => { noteInstall('other_browser'); await install(); };
   const step = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, lineHeight: 1.6 } as const;
   const badge = { width: 30, height: 30, borderRadius: 8, background: color.sageTint, color: color.primary, display: 'grid', placeItems: 'center', flexShrink: 0 } as const;
 
@@ -66,6 +73,7 @@ export function InstallBanner() {
           <h2 id="install-title" style={{ margin: 0, fontSize: 17, fontWeight: 800, color: color.ink }}>ثبّت تطبيق الحلقة</h2>
           <p style={{ margin: '4px 0 0', fontSize: 14, lineHeight: 1.7, color: color.body }}>
             {ios ? 'لتثبيت الحلقة على جهازك، اضغط زر المشاركة ثم اختر «إضافة إلى الشاشة الرئيسية».'
+              : chrome ? 'ثبّت الحلقة من متصفح Google Chrome: افتحها فيه ثم اضغط «تثبيت التطبيق». المتصفحات الأخرى تُنشئ التطبيق بإعدادات Android قديمة فيظهر تحذير Google Play Protect.'
               : 'ثبّت التطبيق على جهازك للوصول بشكل أسرع واستقبال الإشعارات بسهولة.'}
           </p>
         </div>
@@ -80,8 +88,20 @@ export function InstallBanner() {
           <li style={step}><span style={badge}><Icon name="addSquare" size={18} /></span>٢. اختر «إضافة إلى الشاشة الرئيسية» ثم «إضافة»</li>
         </ol>
       )}
+      {m === 'chrome+own' && (
+        <button onClick={() => void installHere()} disabled={busy} data-testid="install-here"
+          style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.muted, fontSize: 13, textDecoration: 'underline', cursor: 'pointer', textAlign: 'right', padding: 0 }}>
+          التثبيت من هذا المتصفح على أي حال (قد يظهر تحذير Play Protect)
+        </button>
+      )}
       <div style={{ display: 'flex', gap: 8 }}>
-        {!ios && (
+        {chrome && (
+          <a href={chromeIntentUrl()} onClick={() => noteInstall('chrome_offered')} data-testid="open-in-chrome"
+            style={{ ...primaryBtn(48, 15, { flex: 1, borderRadius: 12 }), textDecoration: 'none' }}>
+            <Icon name="globe" size={18} /> فتح في Chrome
+          </a>
+        )}
+        {!ios && !chrome && (
           <button onClick={install} disabled={busy} aria-busy={busy} style={primaryBtn(48, 15, { flex: 1, borderRadius: 12, opacity: busy ? 0.7 : 1 })}>
             <Icon name="download" size={18} /> تثبيت التطبيق
           </button>

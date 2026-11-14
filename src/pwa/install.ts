@@ -14,6 +14,37 @@ export const isStandalone = () =>
   typeof window !== 'undefined' &&
   (window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true);
 
+/** Which browser this is (Android). Only Google Chrome installs a PWA as a WebAPK minted and signed by Google;
+ *  other Chromium browsers (Edge, Opera, Brave, Yandex, Mi, Huawei…) build their own install package, which Play
+ *  Protect can flag («built for an older version of Android»): owner report 14 Nov 2026. */
+export type BrowserFamily = 'chrome' | 'samsung' | 'edge' | 'opera' | 'brave' | 'yandex' | 'vivaldi' | 'mi' | 'huawei' | 'firefox'
+  | 'duckduckgo' | 'webview' | 'inapp' | 'safari' | 'other';
+export function browserFamily(ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''): BrowserFamily {
+  if (/FBAN|FBAV|Instagram|Line\/|Snapchat|TikTok|musical_ly/i.test(ua)) return 'inapp';
+  if (/; wv\)/.test(ua)) return 'webview';
+  if (/SamsungBrowser/i.test(ua)) return 'samsung';
+  if (/EdgA\//.test(ua) || /Edg\//.test(ua)) return 'edge';
+  if (/OPR\/|OPT\/|Opera/.test(ua)) return 'opera';
+  if (/YaBrowser|YaSearchBrowser/.test(ua)) return 'yandex';
+  if (/Vivaldi/.test(ua)) return 'vivaldi';
+  if (/MiuiBrowser|XiaoMi/i.test(ua)) return 'mi';
+  if (/HuaweiBrowser|HONORBrowser/i.test(ua)) return 'huawei';
+  if (/DuckDuckGo/i.test(ua)) return 'duckduckgo';
+  if (/Firefox|FxiOS/.test(ua)) return 'firefox';
+  if (typeof navigator !== 'undefined' && 'brave' in navigator) return 'brave';
+  if (/CriOS/.test(ua)) return 'safari';                 // Chrome on iOS installs through Safari's Add to Home Screen
+  if (/Chrome\/\d/.test(ua)) return 'chrome';
+  if (/Safari/.test(ua)) return 'safari';
+  return 'other';
+}
+/** Android, but not Google Chrome: recommend installing from Chrome (see browserFamily). */
+export const androidNotChrome = () => isAndroid() && browserFamily() !== 'chrome';
+/** Opens this same page in Google Chrome on Android (a standard intent link; nothing is downloaded). */
+export function chromeIntentUrl(href = typeof location !== 'undefined' ? location.href : ''): string {
+  const u = new URL(href);
+  return `intent://${u.host}${u.pathname}${u.search}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(u.href)};end`;
+}
+
 export const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 export const isAndroid = () => /android/i.test(navigator.userAgent);
 
@@ -42,13 +73,14 @@ export type InstallHow = 'prompt' | 'ios' | 'android' | null;
 export function useInstall(): InstallHow {
   return useSyncExternalStore(
     (f) => { subs.add(f); return () => subs.delete(f); },
-    () => (isStandalone() ? null : deferred ? 'prompt' : installedHere ? null : isIos() ? 'ios' : isAndroid() ? 'android' : null),
+    () => (isStandalone() ? null : installedHere ? null : androidNotChrome() ? 'android'   // install from Chrome (WebAPK by Google)
+      : deferred ? 'prompt' : isIos() ? 'ios' : isAndroid() ? 'android' : null),
   );
 }
 
 export const INSTALL_STEPS: Record<'ios' | 'android', { title: string; body: string }> = {
   ios: { title: 'ثبّت الحلقة على iPhone', body: 'افتح الرابط في Safari، ثم اضغط زر المشاركة (المربع والسهم) أسفل الشاشة، واختر «إضافة إلى الشاشة الرئيسية»، ثم «إضافة».' },
-  android: { title: 'ثبّت الحلقة على جوالك', body: 'افتح الرابط في متصفح Chrome (إن فتحته من واتساب أو فيسبوك، اختر «الفتح في Chrome» أولًا)، ثم اضغط القائمة ⋮ أعلى الشاشة واختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».' },
+  android: { title: 'ثبّت الحلقة على جوالك', body: 'ثبّت الحلقة من متصفح Google Chrome: اضغط «فتح في Chrome»، ثم «تثبيت التطبيق». التثبيت من متصفحات أخرى قد يُظهر تحذير Google Play Protect لأن تلك المتصفحات تُنشئ التطبيق بإعدادات Android قديمة. إن لم يظهر زر التثبيت في Chrome: القائمة ⋮ ← «تثبيت التطبيق».' },
 };
 
 /** Opens the browser's real install dialog (only from a tap). The event can be used once; Chrome sends a new one
@@ -60,7 +92,13 @@ export async function promptInstall(): Promise<boolean> {
   await ev.prompt();
   const { outcome } = await ev.userChoice;
   if (outcome === 'accepted') markInstalled(); else emit();
+  noteInstall(outcome);
   return outcome === 'accepted';
+}
+/** Install attempts reach the server's client diagnostics with the browser family only (Ops → client-diagnostics):
+ *  which browser produced a Play Protect warning is then known, not guessed. Never blocks anything. */
+export function noteInstall(step: string) {
+  void import('@/services/diag').then((m) => m.diag('install', { step: `${browserFamily()}:${step}` })).catch(() => {});
 }
 export const hasInstallPrompt = () => !!deferred;
 export const onInstallChange = (f: () => void) => { subs.add(f); return () => { subs.delete(f); }; };

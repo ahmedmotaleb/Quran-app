@@ -16,8 +16,9 @@ log = logging.getLogger("halqa.client")
 
 EVENTS = {"mic_denied", "recorder_unsupported", "recorder_error", "recording_empty", "recording_ok",
           "upload_failed", "submit_failed", "submit_ok",
-          "push_restore"}  # phone notifications restored at start-up / sign-in; `step` = the outcome, `code` = permission
-FAILURES = EVENTS - {"recording_ok", "submit_ok", "push_restore"}
+          "push_restore",  # phone notifications restored at start-up / sign-in; `step` = the outcome, `code` = permission
+          "install"}       # «تثبيت التطبيق»: `step` = "<browser family>:<accepted|dismissed|chrome_offered|other_browser>"
+FAILURES = EVENTS - {"recording_ok", "submit_ok", "push_restore", "install"}
 _TOKEN = re.compile(r"[^A-Za-z0-9\u0600-\u06FF _:./;=,()+\-]")  # app error texts are Arabic
 
 
@@ -30,8 +31,9 @@ def device(ua: str) -> str:
     os_ = next((name for key, name in (("iPhone", "iPhone"), ("iPad", "iPad"), ("Android", "Android"), ("Windows", "Windows"),
                                          ("Mac OS", "Mac"), ("Linux", "Linux")) if key in ua), "other")
     m = re.search(r"OS (\d+)[_.](\d+)", ua) if os_ in ("iPhone", "iPad") else re.search(r"Android (\d+)", ua)
-    br = next((name for key, name in (("CriOS", "Chrome-iOS"), ("FxiOS", "Firefox-iOS"), ("SamsungBrowser", "Samsung"),
-                                       ("Edg", "Edge"), ("Firefox", "Firefox"), ("Chrome/", "Chrome"), ("Safari", "Safari")) if key in ua), "other")
+    br = next((name for key, name in (("CriOS", "Chrome-iOS"), ("FxiOS", "Firefox-iOS"), ("; wv)", "WebView"), ("SamsungBrowser", "Samsung"),
+                                       ("Edg", "Edge"), ("OPR/", "Opera"), ("YaBrowser", "Yandex"), ("MiuiBrowser", "Mi"),
+                                       ("HuaweiBrowser", "Huawei"), ("Firefox", "Firefox"), ("Chrome/", "Chrome"), ("Safari", "Safari")) if key in ua), "other")
     return f"{br} {os_}{' ' + '.'.join(g for g in m.groups() if g) if m else ''}"
 
 

@@ -3,7 +3,7 @@ import { Icon } from '@/components/Icon';
 import { BackButton, FieldError, Segmented, Switch, card, dangerOutlineBtn, inputStyle, labelStyle, outlineBtn, primaryBtn } from '@/components/ui';
 import { tzOf } from '@/lib/format';
 import { go, logout, openSheet, setState, toast, up, useApp } from '@/store/store';
-import { INSTALL_STEPS, promptInstall, useInstall } from '@/pwa/install';
+import { INSTALL_STEPS, androidNotChrome, chromeIntentUrl, noteInstall, promptInstall, useInstall } from '@/pwa/install';
 import { LIVE, type ApiError } from '@/api/client';
 import { saveGender } from '@/store/live';
 import * as E from '@/api/endpoints';
@@ -224,6 +224,12 @@ function InstallRow() {
   if (!how) return null;
   const click = async () => {
     if (how === 'prompt') { if (await promptInstall()) toast('ثُبّت التطبيق على جهازك'); return; }
+    // Android but not Google Chrome: install from Chrome (a WebAPK signed by Google; other browsers' packages can be
+    // blocked by Play Protect). The button opens this page in Chrome; nothing is downloaded.
+    if (how === 'android' && androidNotChrome()) {
+      openSheet({ kind: 'confirm', ...INSTALL_STEPS.android, ok: 'فتح في Chrome', onOk: () => { noteInstall('chrome_offered'); window.location.href = chromeIntentUrl(); } });
+      return;
+    }
     openSheet({ kind: 'info', ...INSTALL_STEPS[how] });
   };
   return (
