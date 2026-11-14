@@ -1,0 +1,11 @@
+// HALQA Android: a Trusted Web Activity (TWA) — the installed app opens https://<HALQA host>/ full-screen in the
+// user's Chrome (same code, sign-in, push and audio as the PWA). See docs/ANDROID.md.
+pluginManagement {
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories { google(); mavenCentral() }
+}
+rootProject.name = "halqa-android"
+include ":app"

@@ -13,7 +13,13 @@ const UA = {
   android: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',
   iphone: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
   desktop: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0',
+  // Other Android browsers: they build their own install package, which Play Protect can block (owner report 14 Nov 2026).
+  edge: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 EdgA/130.0.0.0',
+  samsung: 'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0.0.0 Mobile Safari/537.36',
+  opera: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 OPR/85.0.0.0',
 };
+// Installing must never download a file or fetch an APK (any step).
+const apk = { downloads: 0, requests: [] };
 const DAY = 86_400_000;
 
 /** A page as `kind` (android | iphone | desktop); `standalone` = running installed; `storage` = local state before load. */
@@ -30,7 +36,9 @@ async function open(kind, { standalone = false, storage = {}, width = 390 } = {}
     window.__perm = 0;
     if (window.Notification) window.Notification.requestPermission = async () => { window.__perm++; return 'default'; };
   }, { standalone, storage, ios: kind === 'iphone' });
+  ctx.on('request', (r) => { if (/\.apk(\?|$)/i.test(new URL(r.url()).pathname)) apk.requests.push(r.url()); });
   const page = await ctx.newPage(); page.setDefaultTimeout(8000);
+  page.on('download', () => { apk.downloads++; });
   await page.goto(BASE);
   await page.locator('main#scr').getByRole('button', { exact: true, name: 'تخطَّ' }).click();   // intro → sign-in (a main screen)
   await page.locator('#lg-email').waitFor();
@@ -149,6 +157,34 @@ await step(null, '12. RTL at 320 px: no sideways scroll, ≥44 px targets, above
   await ctx.close();
 });
 
+
+for (const kind of ['edge', 'samsung', 'opera']) {
+  await step(null, `13. Android ${kind}: «فتح في Chrome» (an intent link to the same page, nothing downloaded) with the reason`, async () => {
+    const { ctx, page } = await open(kind);
+    const s = sheet(page); await s.waitFor();                                   // shown without the browser's own offer
+    await s.getByText('المتصفحات الأخرى تُنشئ التطبيق بإعدادات Android قديمة', { exact: false }).waitFor();
+    const href = await s.getByTestId('open-in-chrome').getAttribute('href');
+    const u = new URL(page.url());
+    if (!href.startsWith(`intent://${u.host}/`) || !href.includes('scheme=https') || !href.includes('package=com.android.chrome'))
+      throw new Error('intent ' + href);
+    if (await s.getByRole('button', { name: 'تثبيت التطبيق', exact: true }).count()) throw new Error('native install offered as the main button');
+    if (await s.getByTestId('install-here').count()) throw new Error('secondary install shown without a browser offer');
+    if (kind === 'edge') await page.screenshot({ path: out + '/install-edge.png' });
+    await ctx.close();
+  });
+}
+await step(null, '14. Android Edge with its own offer: a clearly labelled secondary «التثبيت من هذا المتصفح» still uses the browser dialog', async () => {
+  const { ctx, page } = await open('edge');
+  await offer(page, 'dismissed');
+  const s = sheet(page); await s.getByTestId('install-here').waitFor();
+  await s.getByText('قد يظهر تحذير Play Protect', { exact: false }).waitFor();
+  await s.getByTestId('install-here').click();
+  await page.waitForFunction(() => window.__prompted === 1);
+  await ctx.close();
+});
+await step(null, '15. no download and no APK request in any of the above', async () => {
+  if (apk.downloads || apk.requests.length) throw new Error(JSON.stringify(apk));
+});
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
 process.exitCode = fails ? 1 : 0;
 await b.close();

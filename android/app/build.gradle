@@ -1,0 +1,65 @@
+// Versions (owner request, 14 Nov 2026): target/compile SDK 36 (Android 16), the level Google Play requires for
+// new apps and updates from 31 Aug 2026; minimum SDK 24 (Android 7). AGP 8.13.0 / Gradle 8.14.3 / Java 17.
+import groovy.json.JsonSlurper
+
+plugins { id "com.android.application" }
+
+def pkg = new JsonSlurper().parse(file("../../package.json"))
+// The site the app opens (and verifies with Digital Asset Links). CI passes -Phalqa.host=… (repository variable
+// HALQA_APP_HOST); the default is the production Cloud Run address.
+def host = (project.findProperty("halqa.host") ?: "halqa-835293468002.europe-west1.run.app").toString()
+def appUrl = "https://" + host + "/"
+
+android {
+    namespace "app.halqa.quran"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "app.halqa.quran"
+        minSdk 24
+        targetSdk 36
+        // Every published build needs a higher versionCode: CI passes its run number.
+        versionCode((project.findProperty("halqa.versionCode") ?: "1").toInteger())
+        versionName pkg.version
+        manifestPlaceholders = [hostName: host, launchUrl: appUrl]
+        resValue "string", "app_url", appUrl
+        resValue "string", "asset_statements",
+            "[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://${host}\"}}]"
+    }
+
+    // Release signing ONLY from the owner's keystore (CI secrets; never in the repository). Without it a release
+    // build fails rather than producing an unsigned or debug-signed "release".
+    def ks = System.getenv("HALQA_KEYSTORE_FILE")
+    signingConfigs {
+        if (ks) {
+            release {
+                storeFile file(ks)
+                storePassword System.getenv("HALQA_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("HALQA_KEY_ALIAS")
+                keyPassword System.getenv("HALQA_KEY_PASSWORD")
+                enableV1Signing false   // minSdk 24: APK Signature Scheme v2/v3 only
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (ks) signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    buildFeatures { resValues true }
+    lint { abortOnError true; checkReleaseBuilds true }
+}
+
+dependencies {
+    // Google's Trusted Web Activity helper: launcher, Chrome check, notification delegation (Android 13+ permission).
+    implementation "com.google.androidbrowserhelper:androidbrowserhelper:2.5.0"
+}

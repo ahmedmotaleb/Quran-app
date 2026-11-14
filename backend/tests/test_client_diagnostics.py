@@ -46,3 +46,21 @@ def test_device_family():
     assert device(IPHONE) == "Safari iPhone 17.4"
     assert device("Mozilla/5.0 (Linux; Android 14; SM-A146P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0 Mobile Safari/537.36") == "Chrome Android 14"
     assert device("") == "other other"
+
+
+def test_install_attempts_are_recorded_with_the_browser_family(world, caplog):
+    """«تثبيت التطبيق» (owner report 14 Nov 2026: a Play Protect warning): which browser was used is logged."""
+    import logging
+
+    from apps.core.diagnostics import device
+
+    caplog.set_level(logging.INFO, logger="halqa.client")
+    ua = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 EdgA/130.0.0.0"
+    r = client_for(world.s1).post("/api/v1/client-diagnostics", {"event": "install", "step": "edge:chrome_offered"}, format="json",
+                                  HTTP_USER_AGENT=ua)
+    assert r.status_code == 204
+    rec = next(x for x in caplog.records if getattr(x, "event", "") == "install")
+    assert rec.levelname == "INFO" and rec.step == "edge:chrome_offered" and rec.device == "Edge Android 14"
+    assert device("Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36 OPR/80.0").startswith("Opera")
+    assert device("Mozilla/5.0 (Linux; Android 13; wv) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36").startswith("WebView")
+    assert device("Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/131.0 Mobile Safari/537.36") == "Chrome Android 15"

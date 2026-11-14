@@ -91,8 +91,8 @@ one-time Cloud Shell setup; `.github/workflows/deploy-cloudrun.yml` deploys ever
 ## Installable app (PWA)
 
 The mobile app is a Progressive Web App: the same build is a website and an app people install
-from the browser — no app store. (The earlier Capacitor/Android project was removed; it is in git
-history if a store build is ever needed.)
+from the browser — no app store. An APK or Play listing, when needed, is the Trusted Web Activity in `android/`
+(targetSdk 36; signed only with the owner's key): see docs/ANDROID.md.
 
 - **Install:** Android/desktop Chrome or Edge offer "Install"; the app also shows
   «ثبّت التطبيق على جهازك» in the account screen. iPhone/iPad: Safari → Share → «إضافة إلى الشاشة الرئيسية».
