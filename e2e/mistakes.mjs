@@ -21,7 +21,7 @@ async function session(email, hello) {
 const step = async (p, name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await p.screenshot({ path: `${out}/mistakes-fail-${name.replace(/\W+/g, '_')}.png` }); } };
 const nav = (x, name) => x.page.getByRole('navigation').getByRole('button', { exact: true, name }).click();
 
-const T = await session('teacher@halqa.app', 'مرحبًا، الشيخ عبدالرحمن السالم');
+const T = await session('teacher@halqa.app', 'مرحبًا، الأستاذ عبدالرحمن السالم');
 await step(T.page, 'teacher records a mistake for a student (validation first)', async () => {
   await nav(T, 'الطلاب');
   await T.app.getByRole('button', { name: /يوسف أحمد/ }).first().click();

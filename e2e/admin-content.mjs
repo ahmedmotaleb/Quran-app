@@ -21,7 +21,7 @@ await page.getByRole('button', { name: 'دخول' }).click(); await page.getByTe
 
 await step('create a restricted course with a text lesson', async () => {
   await nav('المحاضرات'); await page.getByRole('button', { name: 'دورة جديدة' }).click();
-  await dialog().locator('#co-t').fill(CT); await dialog().locator('#co-tc').selectOption({ label: 'الشيخ عبدالرحمن السالم' });
+  await dialog().locator('#co-t').fill(CT); await dialog().locator('#co-tc').selectOption({ label: 'الأستاذ عبدالرحمن السالم' });
   await dialog().locator('#co-tp').selectOption('tajweed'); await dialog().getByRole('checkbox').check();
   await dialog().getByRole('button', { name: 'حفظ' }).click(); await dialog().getByText('لا توجد دروس بعد.').waitFor();
   await dialog().getByRole('button', { name: 'إضافة درس' }).click();

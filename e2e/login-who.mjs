@@ -50,7 +50,7 @@ await step(x.page, 'teacher: «تسجيل دخول المعلم», no student si
   await x.app.locator('#lg-email').waitFor(); await x.app.locator('#lg-pw').waitFor();
   await x.page.screenshot({ path: `${out}/login-teacher.png` });
   await signIn(x, 'teacher@halqa.app');
-  await x.app.getByText('مرحبًا، الشيخ عبدالرحمن السالم').first().waitFor();
+  await x.app.getByText('مرحبًا، الأستاذ عبدالرحمن السالم').first().waitFor();
   await x.page.getByRole('navigation').getByRole('button', { exact: true, name: 'الطلاب' }).waitFor();   // teacher tabs
 });
 await step(x.page, 'signing out returns to the teacher sign-in', async () => {

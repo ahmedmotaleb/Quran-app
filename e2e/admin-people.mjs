@@ -84,12 +84,12 @@ await step('suspend needs a reason; reactivate; both persist', async () => {
 });
 await step('link the student to a teacher and a parent; both persist', async () => {
   await dialog().getByRole('button', { name: 'ربط بمعلم' }).click();
-  await dialog().getByRole('button', { name: /الشيخ خالد العمري/ }).click();
-  await dialog().getByText('الشيخ خالد العمري').waitFor();
+  await dialog().getByRole('button', { name: /الأستاذ خالد العمري/ }).click();
+  await dialog().getByText('الأستاذ خالد العمري').waitFor();
   await dialog().getByRole('button', { name: 'ربط بولي أمر' }).click();
   await dialog().getByRole('button', { name: /أحمد العلي/ }).click();
   await reopen('الطلاب', SN2);
-  await dialog().getByText('الشيخ خالد العمري').waitFor(); await dialog().getByText('أحمد العلي').waitFor();
+  await dialog().getByText('الأستاذ خالد العمري').waitFor(); await dialog().getByText('أحمد العلي').waitFor();
 });
 await step('the parent sees the new child; unlink from the parent side persists', async () => {
   await page.keyboard.press('Escape'); await nav('أولياء الأمور'); await openPerson('أحمد العلي');
@@ -100,11 +100,11 @@ await step('the parent sees the new child; unlink from the parent side persists'
   if (await dialog().getByText(SN2).count()) throw new Error('child still linked');
 });
 await step('withdraw and restore a teacher approval', async () => {
-  await page.keyboard.press('Escape'); await nav('المعلمون'); await openPerson('الشيخ خالد العمري');
+  await page.keyboard.press('Escape'); await nav('المعلمون'); await openPerson('الأستاذ خالد العمري');
   await dialog().getByRole('button', { name: 'سحب الاعتماد' }).click();
   await dialog().locator('#rs').fill('مراجعة الملف'); await dialog().getByRole('button', { name: 'سحب الاعتماد' }).click();
-  await reopen('المعلمون', 'الشيخ خالد العمري'); await dialog().getByRole('button', { name: 'اعتماد المعلم' }).click();
-  await reopen('المعلمون', 'الشيخ خالد العمري'); await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
+  await reopen('المعلمون', 'الأستاذ خالد العمري'); await dialog().getByRole('button', { name: 'اعتماد المعلم' }).click();
+  await reopen('المعلمون', 'الأستاذ خالد العمري'); await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
 });
 await step('link a parent who has no account yet: search by email → create the parent and link', async () => {
   await reopen('الطلاب', SN2);
@@ -123,7 +123,7 @@ await step('create a teacher: account now, setup email, password from the link, 
   await page.getByRole('button', { name: 'إضافة / دعوة معلم' }).click();
   await dialog().locator('#ad-n').fill(TN); await dialog().locator('#ad-e').fill(`teach+${stamp}@example.com`);
   await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال رابط الإعداد' }).click();
-  await dialog().getByText('اختر اللقب: الشيخ أو الأستاذة.').waitFor();          // the title is required for a teacher
+  await dialog().getByText('اختر اللقب: الأستاذ أو الأستاذة.').waitFor();          // the title is required for a teacher
   await dialog().locator('#ad-g').selectOption('male');
   await dialog().getByRole('button', { name: 'إنشاء الحساب وإرسال رابط الإعداد' }).click();
   await dialog().getByText(`تم إرسال رابط الإعداد إلى`, { exact: false }).waitFor();
@@ -134,7 +134,7 @@ await step('create a teacher: account now, setup email, password from the link, 
   const c3 = await b.newContext(); const p3 = await c3.newPage(); await p3.goto(invite.replace(/^https?:\/\/[^/]+\//, BASE));
   await p3.locator('#sp-pw').fill('E2e-Teacher-2026!'); await p3.locator('#sp-pw2').fill('E2e-Teacher-2026!');
   await p3.getByRole('button', { name: 'حفظ كلمة المرور' }).click(); await p3.getByText('تم إعداد حسابك بنجاح').waitFor(); await c3.close();
-  await settledReload(); await nav('المعلمون'); await openPerson(`الشيخ ${TN}`);
+  await settledReload(); await nav('المعلمون'); await openPerson(`الأستاذ ${TN}`);
   await dialog().getByRole('button', { name: 'اعتماد المعلم' }).click();  // account setup ≠ approval
   await dialog().getByRole('button', { name: 'سحب الاعتماد' }).waitFor();
 });

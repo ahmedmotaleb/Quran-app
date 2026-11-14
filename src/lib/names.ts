@@ -1,13 +1,13 @@
 /** How a person's name is shown (owner request, 25 October 2026): every teacher's name carries the Arabic title —
- *  «الشيخ» for a man, «الأستاذة» for a woman. The same rule runs on the server (backend/apps/accounts/display.py),
+ *  «الأستاذ» for a man, «الأستاذة» for a woman. The same rule runs on the server (backend/apps/accounts/display.py),
  *  which already sends display fields (`teacher_name`, `display_name`, notifications) formatted; this file covers
  *  names the app holds as raw user objects. The stored name is never changed: editable fields use `full_name`.
- *  Titles already typed into a teacher's name are removed first (never «الشيخ الشيخ …»). Students, parents and
+ *  Titles already typed into a teacher's name are removed first (never «الأستاذ الأستاذ …»). Students, parents and
  *  admin-only accounts are shown as they are; a teacher whose gender is not set is shown without a guessed title. */
 export type Gender = 'male' | 'female' | '' | null | undefined;
 type Person = { full_name: string; role?: string; gender?: Gender; status?: string; display_name?: string };
 
-const TITLE: Record<string, string> = { male: 'الشيخ', female: 'الأستاذة' };
+const TITLE: Record<string, string> = { male: 'الأستاذ', female: 'الأستاذة' };
 const LEADING = /^\s*(?:(?:ال)?أستاذة?|(?:ال)?استاذة?|(?:ال)?شيخة?|أ\s*[./]|أ\/)\s*/u;
 
 export function stripTitle(name: string): string {
@@ -19,7 +19,7 @@ export function stripTitle(name: string): string {
   }
 }
 
-/** «الشيخ أحمد محمد» / «الأستاذة مريم أحمد»; the plain stored name when the gender is not set. */
+/** «الأستاذ أحمد محمد» / «الأستاذة مريم أحمد»; the plain stored name when the gender is not set. */
 export function formatTeacherName(t: { full_name: string; gender?: Gender }): string {
   const title = TITLE[t.gender ?? ''];
   return title ? `${title} ${stripTitle(t.full_name)}` : (t.full_name ?? '').trim();

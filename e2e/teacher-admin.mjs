@@ -1,5 +1,5 @@
 // Teacher + admin on the same account (owner request, 24 October 2026), end to end:
-//  1. The owner grants «الشيخ عبدالرحمن السالم» admin access from «الإدارة والصلاحيات» (search, preset,
+//  1. The owner grants «الأستاذ عبدالرحمن السالم» admin access from «الإدارة والصلاحيات» (search, preset,
 //     confirmation with the current authenticator code); the list shows «معلم + إدارة».
 //  2. The teacher opens «لوحة الإدارة» from «حسابي», signs in to the portal (password + authenticator), sees the
 //     portal, and returns with «العودة إلى حساب المعلم» to the teacher app, still signed in as the teacher.
@@ -31,7 +31,7 @@ const portalLogin = async (p, email, secret) => {
   await p.getByRole('button', { name: 'دخول' }).click();
   await p.locator('#ad-otp').fill(totp(secret)); await p.getByRole('button', { name: 'تحقق ودخول' }).click();
 };
-const row = () => A.getByRole('listitem').filter({ hasText: 'الشيخ عبدالرحمن السالم' });
+const row = () => A.getByRole('listitem').filter({ hasText: 'الأستاذ عبدالرحمن السالم' });
 
 await step(A, 'owner grants a teacher admin access (search, preset, confirm with code)', async () => {
   await A.goto(BASE + 'admin/'); await portalLogin(A, 'admin@halqa.app', OWNER);
@@ -40,7 +40,7 @@ await step(A, 'owner grants a teacher admin access (search, preset, confirm with
   await A.getByRole('button', { name: 'منح صلاحيات إدارة لمعلم' }).click();
   const d = A.getByRole('dialog', { name: 'منح صلاحيات إدارة لمعلم' });
   await d.locator('#gt-q').fill('عبدالرحمن');
-  await d.getByRole('option', { name: /الشيخ عبدالرحمن السالم/ }).click();
+  await d.getByRole('option', { name: /الأستاذ عبدالرحمن السالم/ }).click();
   await d.locator('#gt-p').selectOption('academic_manager');
   await d.getByRole('button', { name: 'متابعة' }).click();
   const c = A.getByRole('dialog', { name: 'منح صلاحيات إدارة' });
@@ -58,13 +58,13 @@ await step(T, 'teacher opens «لوحة الإدارة», signs in, and returns 
   if (await skip.count()) await skip.click();
   await pickWho(T, 'teacher@halqa.app'); await T.locator('#lg-email').fill('teacher@halqa.app'); await T.locator('#lg-pw').fill('halqa123');
   await T.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).click();
-  await T.getByText('مرحبًا، الشيخ عبدالرحمن السالم').waitFor();
+  await T.getByText('مرحبًا، الأستاذ عبدالرحمن السالم').waitFor();
   await T.getByRole('navigation').getByRole('button', { exact: true, name: 'حسابي' }).click();
   await T.getByText('حساب معلم').waitFor();
   await T.getByRole('button', { name: /لوحة الإدارة/ }).click();
   await T.waitForURL(/\/admin\//);
   await portalLogin(T, 'teacher@halqa.app', TEACHER);
-  await T.getByText(/الشيخ عبدالرحمن السالم · بيانات حقيقية/).waitFor({ timeout: 15000 }).catch(async () => {
+  await T.getByText(/الأستاذ عبدالرحمن السالم · بيانات حقيقية/).waitFor({ timeout: 15000 }).catch(async () => {
     // narrow layout: the header badge may wrap; the excuses section is part of academic_manager
     await T.getByText('بيانات حقيقية', { exact: false }).first().waitFor();
   });
@@ -72,7 +72,7 @@ await step(T, 'teacher opens «لوحة الإدارة», signs in, and returns 
   const back = T.getByRole('button', { name: '← العودة إلى حساب المعلم' });
   if (!(await back.isVisible())) await T.getByRole('button', { name: /القائمة|فتح القائمة/ }).first().click();
   await back.click();
-  await T.getByText('مرحبًا، الشيخ عبدالرحمن السالم').waitFor();
+  await T.getByText('مرحبًا، الأستاذ عبدالرحمن السالم').waitFor();
 });
 
 await step(A, 'owner removes admin access: the portal session ends, the teacher account stays', async () => {
@@ -89,7 +89,7 @@ await step(A, 'owner removes admin access: the portal session ends, the teacher 
   await T.getByRole('button', { name: 'دخول' }).click();
   await T.getByText('هذا الحساب لا يملك صلاحية الدخول إلى لوحة الإدارة.').waitFor();
   await T.goto(BASE);
-  await T.getByText('مرحبًا، الشيخ عبدالرحمن السالم').waitFor();   // the teacher app session is untouched
+  await T.getByText('مرحبًا، الأستاذ عبدالرحمن السالم').waitFor();   // the teacher app session is untouched
   await T.getByRole('navigation').getByRole('button', { exact: true, name: 'حسابي' }).click();
   await T.getByText('حساب معلم').waitFor();
   if (await T.getByRole('button', { name: /لوحة الإدارة/ }).count()) throw new Error('«لوحة الإدارة» still shown');

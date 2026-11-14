@@ -31,6 +31,7 @@ class BookingSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.full_name", read_only=True)
     can_join = serializers.SerializerMethodField()
     has_meeting_link = serializers.SerializerMethodField()
+    meeting_provider = serializers.SerializerMethodField()   # the platform's name for the card; the link itself only via join
     excuse = serializers.SerializerMethodField()
     excuse_deadline = serializers.SerializerMethodField()
     can_excuse = serializers.SerializerMethodField()
@@ -38,7 +39,7 @@ class BookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = ["id", "occurrence", "student", "student_name", "status", "assignment", "note", "attendance", "cancelled_at", "cancel_reason",
-                  "rescheduled_from", "created_at", "can_join", "has_meeting_link", "excuse", "excuse_deadline", "can_excuse"]
+                  "rescheduled_from", "created_at", "can_join", "has_meeting_link", "meeting_provider", "excuse", "excuse_deadline", "can_excuse"]
 
     def _user(self):
         return self.context["request"].user if "request" in self.context else None
@@ -74,6 +75,11 @@ class BookingSerializer(serializers.ModelSerializer):
 
     def get_has_meeting_link(self, b):
         return bool(b.occurrence.meeting_url)
+
+    def get_meeting_provider(self, b):
+        from .meeting import LABELS
+
+        return LABELS.get(b.occurrence.meeting_provider, "") if b.occurrence.meeting_url else ""
 
 
 class SlotTarget(serializers.Field):

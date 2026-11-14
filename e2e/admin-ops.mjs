@@ -45,13 +45,13 @@ await step('2. move two students to another teacher (one teacher per student: «
   await run('تعيين معلم', async (d) => {
     await d.locator('button[type=submit]').click();
     await d.getByText('أكمل: المعلم.').waitFor();
-    await d.getByLabel('المعلم').selectOption({ label: 'الشيخ خالد العمري' });
+    await d.getByLabel('المعلم').selectOption({ label: 'الأستاذ خالد العمري' });
     await d.getByLabel('إنهاء ارتباطهم بمعلميهم الحاليين').check();
   });
   await page.getByText(/تم تنفيذ الإجراء على/).first().waitFor();
   await settle();
   const row = page.getByRole('row').filter({ hasText: 'سارة أحمد' });
-  await row.getByText('الشيخ خالد العمري', { exact: false }).waitFor();
+  await row.getByText('الأستاذ خالد العمري', { exact: false }).waitFor();
   if (await row.getByText('عبدالرحمن السالم', { exact: false }).count()) throw new Error('previous teacher still listed');
 });
 await step('3. add both to a course; already-enrolled are skipped, not failed', async () => {

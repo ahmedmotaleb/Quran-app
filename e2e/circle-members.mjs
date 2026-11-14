@@ -25,7 +25,7 @@ const pyDay = ((new Date().getDay() + 2) % 7 + 6) % 7; // two days ahead, Python
 await step('create, schedule and publish a circle for 2 students', async () => {
   await nav('الحلقات'); await page.getByRole('button', { name: 'حلقة جديدة' }).click();
   await dialog().locator('#ci-n').fill(CN);
-  await dialog().locator('#ci-t').selectOption({ label: 'الشيخ خالد العمري' });
+  await dialog().locator('#ci-t').selectOption({ label: 'الأستاذ خالد العمري' });
   await dialog().locator('#ci-c').fill('2'); await dialog().getByRole('button', { name: 'حفظ' }).click();
   await dialog().getByText('لا توجد جلسات بعد').waitFor();
   await dialog().getByRole('button', { name: 'جدولة جلسات' }).click();

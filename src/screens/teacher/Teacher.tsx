@@ -1,4 +1,6 @@
 import { CreateSessionButton, GoogleSessionActions } from './GoogleSessions';
+import { JoinButton } from '@/components/JoinButton';
+import { MeetingLinkError, meetingProvider, normalizeMeetingUrl } from '@/lib/meeting';
 import { color, font } from '@/theme/tokens';
 import { Icon, type IconName } from '@/components/Icon';
 import {
@@ -183,7 +185,7 @@ export function TeacherDash() {
       <header style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 56 }}>
         <img src="/assets/halqa-mark.png" alt={BRAND.ar} style={{ width: 38, height: 38, objectFit: 'contain' }} />
         <div style={{ flex: 1 }}>
-          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800 }}>مرحبًا، {live ? name : 'الشيخ عبدالرحمن'}</h1>
+          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800 }}>مرحبًا، {live ? name : 'الأستاذ عبدالرحمن'}</h1>
           <p style={muted(13)}>{live ? fmtDay(new Date().toISOString(), tzOf(tz).iana) : TODAY_LABEL.replace(' 2026', '')} · {tzLabel(tz)}</p>
         </div>
         {live && <InboxBell />}
@@ -779,13 +781,16 @@ function TodayLive() {
       <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>جلسات اليوم</h2>
       {today.length === 0 && <p style={muted(14)}>لا توجد جلسات محجوزة اليوم.</p>}
       {today.map((o) => (
-        <button key={o.id} onClick={() => { up('sched', { tab: 'sessions' }); tab('tschedule'); }} style={{ ...card, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', cursor: 'pointer', color: color.ink }}>
-          <span style={{ minWidth: 64, textAlign: 'center', fontSize: 16, fontWeight: 800 }}>{fmtTime(o.starts_at, tz)}</span>
-          <span style={{ flex: 1, minWidth: 0, borderRight: `1px solid ${color.divider}`, paddingRight: 12 }}>
-            <span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>{o.bookings.map((b) => b.student_name).join('، ')}</span>
-            <span style={{ display: 'block', fontSize: 12, color: color.muted, marginTop: 2 }}>{o.kind === 'group' ? 'جماعية' : 'فردية'} · {o.bookings[0].assignment_title || 'بدون مهمة محددة'}</span>
-          </span>
-        </button>
+        <div key={o.id} style={{ ...card, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <button onClick={() => { up('sched', { tab: 'sessions' }); tab('tschedule'); }} style={{ border: 'none', background: 'transparent', padding: 0, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'right', cursor: 'pointer', color: color.ink, minHeight: 44 }}>
+            <span style={{ minWidth: 64, textAlign: 'center', fontSize: 16, fontWeight: 800 }}>{fmtTime(o.starts_at, tz)}</span>
+            <span style={{ flex: 1, minWidth: 0, borderRight: `1px solid ${color.divider}`, paddingRight: 12 }}>
+              <span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>{o.title || o.bookings.map((b) => b.student_name).join('، ')}</span>
+              <span style={{ display: 'block', fontSize: 12, color: color.muted, marginTop: 2 }}>{o.title ? `${o.bookings.map((b) => b.student_name).join('، ')} · ` : ''}{o.kind === 'group' ? 'جماعية' : 'فردية'} · {o.bookings[0].assignment_title || 'بدون مهمة محددة'}{o.meeting_url ? ` · ${meetingProvider(o.meeting_url)?.label ?? ''}` : ''}</span>
+            </span>
+          </button>
+          {new Date(o.ends_at).getTime() > Date.now() && <JoinButton url={o.meeting_url} size={46} />}
+        </div>
       ))}
     </section>
   );
@@ -851,26 +856,34 @@ function MeetingLink({ occ, url }: { occ: number; url: string }) {
   const [edit, setEdit] = useState(false); const [v, setV] = useState(url); const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const id = `ml-${occ}`;
+  // «meet.google.com/abc-defg-hij» → «https://meet.google.com/abc-defg-hij» when leaving the field and on save
+  // (the server normalizes and checks again, and stores its own result).
+  const tidy = (raw: string): string | null => {
+    try { const n = normalizeMeetingUrl(raw); setV(n); return n; } catch (e) { setErr(e instanceof MeetingLinkError ? e.message : 'الرابط غير صالح.'); return null; }
+  };
   const save = async (next: string) => {
-    setBusy(true); const e = await saveMeetingLink(occ, next); setBusy(false);
+    const n = next ? tidy(next) : '';
+    if (n === null) return;
+    if (n && !meetingProvider(n)) { setErr('الروابط المقبولة: Google Meet أو Zoom أو Jitsi أو Microsoft Teams.'); return; }
+    setBusy(true); const e = await saveMeetingLink(occ, n); setBusy(false);
     setErr(e); if (!e) setEdit(false);
   };
   if (!edit) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: url ? color.primary : color.warnInk, display: 'flex', gap: 6, alignItems: 'center' }}>
-        <Icon name="video" size={18} /> {url ? 'رابط الجلسة جاهز' : 'أضف رابط الجلسة ليتمكن الطالب من الدخول'}
+        <Icon name="video" size={18} /> {url ? `رابط ${meetingProvider(url)?.label ?? 'الجلسة'} جاهز` : 'أضف رابط الجلسة ليتمكن الطالب من الدخول'}
       </span>
-      {url && <a href={url} target="_blank" rel="noopener noreferrer" style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', background: color.primary, color: color.ivory, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>افتح</a>}
+      {url && <span style={{ flexBasis: '100%', display: 'flex' }}><JoinButton url={url} size={48} /></span>}
       <button onClick={() => { setV(url); setErr(null); setEdit(true); }} style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: `1px solid ${color.borderStrong}`, background: color.card, color: color.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>{url ? 'تغيير' : 'أضف الرابط'}</button>
     </div>
   );
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <label htmlFor={id} style={{ fontSize: 13, fontWeight: 700 }}>رابط الدعوة للمشاركين</label>
-      <input id={id} dir="ltr" inputMode="url" value={v} onChange={(e) => setV(e.target.value)} placeholder="https://meet.google.com/…" aria-invalid={!!err} aria-describedby={err ? id + '-err' : undefined}
+      <input id={id} dir="ltr" inputMode="url" value={v} onChange={(e) => { setV(e.target.value); setErr(null); }} onBlur={() => { if (v.trim()) tidy(v); }} placeholder="meet.google.com/abc-defg-hij" aria-invalid={!!err} aria-describedby={err ? id + '-err' : undefined}
         style={{ minHeight: 44, borderRadius: 10, border: `1.5px solid ${err ? color.dangerInk : color.borderStrong}`, padding: '0 10px', fontSize: 15 }} />
       {err && <span id={id + '-err'} role="alert" style={{ fontSize: 13, color: color.dangerInk }}>{err}</span>}
-      <span style={muted(12)}>Google Meet أو Zoom أو Jitsi أو Teams. لا تلصق رابط المضيف.</span>
+      <span style={muted(12)}>Google Meet أو Zoom أو Jitsi أو Teams (يُضاف https:// تلقائيًا). لا تلصق رابط المضيف.</span>
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={() => save(v)} disabled={busy || !v.trim()} style={primaryBtn(40, 13, { padding: '0 14px', borderRadius: 10, flex: 'none' })}>حفظ</button>
         {url && <button onClick={() => save('')} disabled={busy} style={{ minHeight: 40, padding: '0 12px', borderRadius: 10, border: `1px solid ${color.dangerInk}`, background: 'transparent', color: color.dangerInk, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>إزالة</button>}

@@ -90,7 +90,7 @@ def test_only_existing_active_teachers_and_once(world, owner):
 
 
 def test_candidate_search_by_name_email_phone_excludes_admins(world, owner):
-    world.t2.full_name, world.t2.phone = "الشيخ يوسف", "+201001234567"
+    world.t2.full_name, world.t2.phone = "الأستاذ يوسف", "+201001234567"
     world.t2.save()
     grant(owner, world.t1)
     c = client_for(owner)

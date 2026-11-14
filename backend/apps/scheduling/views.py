@@ -243,15 +243,17 @@ class TeacherOccurrenceMeeting(APIView):
     permission_classes = [IsTeacher]
 
     def put(self, request, pk):
-        from .meeting import InvalidMeetingLink, provider_for
+        from .meeting import InvalidMeetingLink, normalize, provider_for
 
-        url = str(request.data.get("url", "")).strip()
-        provider = ""
-        if url:
+        url, provider = str(request.data.get("url", "")), ""
+        if url.strip():
             try:
+                url = normalize(url)                # «meet.google.com/abc-defg-hij» → «https://meet.google.com/abc-defg-hij»
                 provider = provider_for(url)
             except InvalidMeetingLink as e:
                 raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"url": [str(e)]}) from None
+        else:
+            url = ""
         with transaction.atomic():
             o = SessionOccurrence.objects.select_for_update().filter(pk=pk, teacher=request.user).first()
             if o is None:
@@ -365,3 +367,25 @@ class TeacherExcuses(APIView):
         if st != "all":
             qs = qs.filter(status=st)
         return Response({"results": _excuse_rows(qs)})
+
+
+class InternalSessionReminders(APIView):
+    """POST, called by the Cloud Tasks alarm at T−15 (alarm.py) with the shared secret header X-Halqa-Task.
+    Sends whatever reminders are due now (reminders.send_due re-reads the sessions). No user session involved."""
+
+    authentication_classes: list = []
+    permission_classes: list = []
+    throttle_classes: list = []
+
+    def post(self, request):
+        import hmac
+
+        from django.conf import settings
+
+        from .reminders import send_due
+
+        secret = getattr(settings, "REMINDER_TASKS_SECRET", "")
+        given = request.headers.get("X-Halqa-Task", "")
+        if not secret or not hmac.compare_digest(given.encode(), secret.encode()):
+            raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
+        return Response({"sent": send_due()})

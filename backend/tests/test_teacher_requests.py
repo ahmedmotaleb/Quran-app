@@ -38,13 +38,13 @@ def test_student_requests_a_listed_teacher_once(world, lone, django_capture_on_c
 def test_suggest_a_teacher_not_listed_and_validation(world, lone):
     c = client_for(lone)
     assert c.post(MINE, {}, format="json").status_code == 400
-    assert c.post(MINE, {"teacher": world.t1.pk, "suggested_name": "الشيخ فلان"}, format="json").status_code == 400  # one or the other
+    assert c.post(MINE, {"teacher": world.t1.pk, "suggested_name": "الأستاذ فلان"}, format="json").status_code == 400  # one or the other
     assert c.post(MINE, {"suggested_name": "ab"}, format="json").status_code == 400
     TeacherProfile.objects.filter(user=world.t2).update(approved_at=None)
     assert "غير متاح" in str(c.post(MINE, {"teacher": world.t2.pk}, format="json").json()["fields"])     # unapproved teacher
     assert c.post(MINE, {"teacher": world.s2.pk}, format="json").status_code == 400                     # not a teacher
-    r = c.post(MINE, {"suggested_name": "الشيخ محمود الحصري"}, format="json")
-    assert r.status_code == 201 and r.json()["teacher"] is None and r.json()["suggested_name"] == "الشيخ محمود الحصري"
+    r = c.post(MINE, {"suggested_name": "الأستاذ محمود الحصري"}, format="json")
+    assert r.status_code == 201 and r.json()["teacher"] is None and r.json()["suggested_name"] == "الأستاذ محمود الحصري"
 
 
 def test_only_students_without_a_teacher(world):

@@ -48,7 +48,7 @@ export interface Session {
   id: string; t: string; day?: number; past?: string; h: number; type: string; dur: number;
   status: SessionStatus; task: string | null; note?: string; summary?: string;
   /** Live mode: real instants from the server (demo sessions use day/h). */
-  teacherName?: string; startsAt?: string; endsAt?: string; canJoin?: boolean; hasLink?: boolean; attendance?: string;
+  teacherName?: string; startsAt?: string; endsAt?: string; canJoin?: boolean; hasLink?: boolean; platform?: string; attendance?: string;
   /** The student's excuse for this session (students never cancel; they ask to be excused). */
   excuse?: { status: 'pending' | 'approved' | 'rejected'; reason?: string; teacher_response?: string } | null;
   canExcuse?: boolean; excuseDeadline?: string;

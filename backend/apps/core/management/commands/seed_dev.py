@@ -14,7 +14,7 @@ from apps.scheduling.models import AvailabilityRule
 
 PEOPLE = [
     ("admin@halqa.app", "مدير المنصة", Role.ADMIN),
-    # Teachers' names are stored plain; the app shows them as «الشيخ …» (accounts/display.py, gender below).
+    # Teachers' names are stored plain; the app shows them as «الأستاذ …» (accounts/display.py, gender below).
     ("teacher@halqa.app", "عبدالرحمن السالم", Role.TEACHER),
     ("khalid@halqa.app", "خالد العمري", Role.TEACHER),
     ("yousef@halqa.app", "يوسف أحمد", Role.STUDENT),

@@ -12,7 +12,7 @@ import { go, tab, useApp } from '@/store/store';
 export interface Note { id: number; kind: string; title: string; body: string; data: Record<string, number | string>; read_at: string | null; created_at: string }
 const ICON: Record<string, IconName> = {
   assignment_new: 'plan', review_due: 'repeat', submission_new: 'mic', feedback_new: 'award', booking_confirmed: 'cal', booking_new: 'cal',
-  booking_cancelled: 'cal', booking_cancelled_by_student: 'cal', booking_rescheduled: 'cal', session_reminder: 'clock',
+  booking_cancelled: 'cal', booking_cancelled_by_student: 'cal', booking_rescheduled: 'cal', session_reminder: 'clock', session_soon: 'video',
   attendance_absent: 'alert', child_absent: 'alert', lesson_published: 'layers', quiz_published: 'plan',
 };
 
@@ -47,6 +47,8 @@ export function InboxBell() {
 export function open(n: Note, role: string | null) {
   const d = n.data || {};
   if (n.kind.startsWith('adhkar_') && d.dhikr) return go('adhkar', { id: String(d.dhikr) });
+  // 15-minute session reminder: the student's session screen (with «انضم إلى الجلسة»), the teacher's «المواعيد».
+  if (n.kind === 'session_soon') return role === 'student' && d.booking ? go('live', { id: String(d.booking) }) : tab('tschedule');
   if (n.kind.startsWith('support') && d.ticket) return go('support', { id: String(d.ticket) });
   if (n.kind === 'submission_new') return tab('treviews');
   // Daily Quran reminders: the Mushaf, or the task they are about (below); «اختر معلمك» and request updates: home.

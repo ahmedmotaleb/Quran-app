@@ -25,6 +25,7 @@ from apps.media import views as media
 from apps.notifications import views as notifications
 from apps.quran import views as quran
 from apps.scheduling import admin_views as sched_admin
+from apps.scheduling import views as scheduling_views
 from apps.scheduling import views as scheduling
 from apps.scheduling import waitlist_views
 
@@ -186,6 +187,7 @@ urlpatterns = [
     path("push/status", notifications.PushStatus.as_view()),
     path("push/test", notifications.PushSelfTest.as_view()),
     path("push/receipt", notifications.PushReceipt.as_view()),
+    path("internal/session-reminders", scheduling_views.InternalSessionReminders.as_view()),
     path("push/rotate", notifications.PushRotate.as_view()),
     # «الأذكار والأدعية»
     path("adhkar", adhkar.AdhkarList.as_view()),

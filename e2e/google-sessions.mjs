@@ -25,7 +25,7 @@ const cairo = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo'
 const day2 = cairo(new Date(Date.now() + 2 * 86_400_000));
 let meet = '';
 
-const T = await session('teacher@halqa.app', 'مرحبًا، الشيخ عبدالرحمن السالم');
+const T = await session('teacher@halqa.app', 'مرحبًا، الأستاذ عبدالرحمن السالم');
 const sched = async () => { await T.page.getByRole('navigation').getByRole('button', { exact: true, name: 'المواعيد' }).click(); await T.app.getByRole('tab', { name: 'الجلسات' }).click(); };
 
 // Owner P0 (13 Nov 2026): a teacher WITHOUT Google Calendar could not create a session. Google is optional now.
@@ -101,13 +101,14 @@ const myBookings = async () => {
 };
 const openSession = async () => {
   await myBookings();
-  await S.app.getByRole('button', { name: /الشيخ عبدالرحمن السالم · فردية/ }).first().click();
+  await S.app.getByRole('button', { name: /الأستاذ عبدالرحمن السالم · فردية/ }).first().click();
 };
-await step(S.page, 'student: the session appears as «جلسة حفظ», with the preparation note; no join button yet', async () => {
+await step(S.page, 'student: the session appears as «جلسة حفظ», with the preparation note; «انضم إلى الجلسة» disabled until the window', async () => {
   await openSession();
   await S.app.getByText('جلسة حفظ — سورة الملك').waitFor();
   await S.app.getByText('للتحضير: راجع الآيات 1–10 قبل الجلسة').waitFor();
-  await S.app.getByText(/سيظهر زر الدخول قبل الموعد بـ \d+ دقيقة/).waitFor();
+  await S.app.getByText(/يُفتح الدخول قبل الموعد بـ \d+ دقيقة/).first().waitFor();     // «انضم إلى الجلسة» shown, disabled, with the reason
+  if (!(await S.app.getByTestId('join-session').first().isDisabled())) throw new Error('join enabled before the window');
   await S.app.getByRole('button', { name: 'إضافة إلى التقويم' }).waitFor();
   if (await S.app.getByRole('button', { name: 'إعادة الجدولة' }).count()) throw new Error('student can rebook a teacher-created session');
   const html = await S.page.content(); if (html.includes(meet)) throw new Error('Meet URL visible before the join window');
@@ -127,26 +128,24 @@ await step(T.page, 'teacher: «تعديل الموعد» moves the same session;
 });
 
 execSync(process.env.SOON_CMD || 'bash e2e/ci/py.sh google_soon.py', { stdio: 'inherit' });
-await step(S.page, 'student: inside the join window «دخول الجلسة» opens the SAME Google Meet', async () => {
+await step(S.page, 'student: inside the join window «انضم إلى الجلسة» opens the SAME Google Meet in one tap', async () => {
   await S.page.reload(); await S.app.getByText('السلام عليكم، يوسف').waitFor();
-  await S.app.getByRole('button', { name: 'الدخول للجلسة' }).first().click();
-  await S.app.getByText('جلسة حفظ — سورة الملك').waitFor();
   const popup = S.ctx.waitForEvent('page');
-  await S.app.getByRole('button', { name: 'دخول الجلسة' }).click();
+  await S.app.getByTestId('join-session').first().click();
   const p = await popup; await p.waitForLoadState();
   if (p.url() !== meet) throw new Error(`opened ${p.url()} instead of ${meet}`);
 });
 await S.page.screenshot({ path: out + '/google-student.png', fullPage: true });
 
 await step(T.page, 'teacher cancels: the student sees the cancellation', async () => {
-  await T.page.reload(); await T.app.getByText('مرحبًا، الشيخ عبدالرحمن السالم').waitFor(); await sched();
+  await T.page.reload(); await T.app.getByText('مرحبًا، الأستاذ عبدالرحمن السالم').waitFor(); await sched();
   await T.app.getByRole('button', { name: 'إلغاء الجلسة' }).first().click();
   await T.page.getByRole('button', { name: 'إلغاء الجلسة' }).last().click();
   await T.page.getByText('أُلغيت الجلسة').first().waitFor();
   await S.page.reload(); await S.app.getByText('السلام عليكم، يوسف').waitFor();
   await myBookings();
   await S.app.getByText('السابقة والملغاة').waitFor();
-  await S.app.getByRole('button', { name: /الشيخ عبدالرحمن السالم/ }).first().click();
+  await S.app.getByRole('button', { name: /الأستاذ عبدالرحمن السالم/ }).first().click();
   await S.app.getByText('أُلغي هذا الحجز', { exact: false }).waitFor();
 });
 

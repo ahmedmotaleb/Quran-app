@@ -1,4 +1,4 @@
-"""Teacher titles (owner request, 25 Oct 2026): «الشيخ» / «الأستاذة» before every teacher's name wherever it is shown;
+"""Teacher titles (owner request, 25 Oct 2026): «الأستاذ» / «الأستاذة» before every teacher's name wherever it is shown;
 the stored name never changes; never doubled; students, parents and admins as they are."""
 import pytest
 
@@ -13,16 +13,17 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.mark.parametrize("name,gender,shown", [
-    ("أحمد محمد", "male", "الشيخ أحمد محمد"),
-    ("محمد علي", "male", "الشيخ محمد علي"),
+    ("أحمد محمد", "male", "الأستاذ أحمد محمد"),
+    ("محمد علي", "male", "الأستاذ محمد علي"),
     ("مريم أحمد", "female", "الأستاذة مريم أحمد"),
     ("سارة محمود", "female", "الأستاذة سارة محمود"),
-    ("الشيخ أحمد محمد", "male", "الشيخ أحمد محمد"),             # never doubled
+    ("الأستاذ أحمد محمد", "male", "الأستاذ أحمد محمد"),             # never doubled
+    ("الشيخ أحمد محمد", "male", "الأستاذ أحمد محمد"),               # an old typed «الشيخ» becomes «الأستاذ» (owner, 14 Nov 2026)
     ("الأستاذة الأستاذة مريم أحمد", "female", "الأستاذة مريم أحمد"),
     ("الشيخ مريم علي", "female", "الأستاذة مريم علي"),            # a wrong stored title is corrected
-    ("الشيخ عبدالرحمن السالم", "male", "الشيخ عبدالرحمن السالم"),
+    ("الأستاذ عبدالرحمن السالم", "male", "الأستاذ عبدالرحمن السالم"),
     ("أ. هدى الزهراني", "female", "الأستاذة هدى الزهراني"),
-    ("  أحمد   ", "male", "الشيخ أحمد"),
+    ("  أحمد   ", "male", "الأستاذ أحمد"),
     ("أحمد محمد", "", "أحمد محمد"),                                 # gender not set: no guessed title
 ])
 def test_formatter(name, gender, shown):
@@ -30,7 +31,7 @@ def test_formatter(name, gender, shown):
 
 
 def test_title_alone_is_not_stripped_to_nothing():
-    assert strip_title("الشيخ") == "الشيخ"
+    assert strip_title("الأستاذ") == "الأستاذ" and strip_title("الشيخ") == "الشيخ"
 
 
 def test_only_teachers_get_a_title(world):
@@ -40,7 +41,7 @@ def test_only_teachers_get_a_title(world):
         u.save()
         assert display_name(u) == "أحمد محمد"
     world.t1.full_name, world.t1.gender = "أحمد محمد", "male"
-    assert display_name(world.t1) == "الشيخ أحمد محمد"
+    assert display_name(world.t1) == "الأستاذ أحمد محمد"
     world.t1.status = "deleted"
     assert display_name(world.t1) == "أحمد محمد"
 
@@ -55,7 +56,7 @@ def _teachers(world):
 def test_api_display_fields_and_clean_stored_names(world, django_capture_on_commit_callbacks):
     _teachers(world)
     names = {t["id"]: t for t in client_for(world.s1).get("/api/v1/teachers").json()["results"]}
-    assert names[world.t1.pk]["display_name"] == "الشيخ أحمد محمد" and names[world.t1.pk]["full_name"] == "أحمد محمد"
+    assert names[world.t1.pk]["display_name"] == "الأستاذ أحمد محمد" and names[world.t1.pk]["full_name"] == "أحمد محمد"
     assert names[world.t2.pk]["display_name"] == "الأستاذة مريم علي"
     o = occurrence(world.t2, in_hours=48)
     with django_capture_on_commit_callbacks(execute=True):
@@ -64,24 +65,24 @@ def test_api_display_fields_and_clean_stored_names(world, django_capture_on_comm
     assert row["occurrence"]["teacher_name"] == "الأستاذة مريم علي" and row["student_name"] == world.s1.full_name
     n = Notification.objects.get(recipient=world.s1, kind="booking_confirmed")
     assert "مع الأستاذة مريم علي" in n.body
-    assert "الشيخ" not in Notification.objects.get(recipient=world.t2, kind="booking_new").body   # the student's name, untitled
+    assert not any(t in Notification.objects.get(recipient=world.t2, kind="booking_new").body for t in ("الأستاذ", "الشيخ"))   # the student's name, untitled
     me = client_for(world.t1).get("/api/v1/me").json()
-    assert me["full_name"] == "أحمد محمد" and me["display_name"] == "الشيخ أحمد محمد" and me["gender"] == "male"
+    assert me["full_name"] == "أحمد محمد" and me["display_name"] == "الأستاذ أحمد محمد" and me["gender"] == "male"
     assert client_for(world.s1).get("/api/v1/me").json()["display_name"] == world.s1.full_name
     slot = client_for(world.s1).get(f"/api/v1/teachers/{world.t2.pk}/slots").json()
     assert all(x["teacher_name"] == "الأستاذة مريم علي" for x in slot)
 
 
 def test_titles_are_never_stored(world):
-    r = client_for(world.t1).patch("/api/v1/me", {"full_name": "الشيخ أحمد محمد", "gender": "male"}, format="json")
-    assert r.status_code == 200 and r.json()["full_name"] == "أحمد محمد" and r.json()["display_name"] == "الشيخ أحمد محمد"
+    r = client_for(world.t1).patch("/api/v1/me", {"full_name": "الأستاذ أحمد محمد", "gender": "male"}, format="json")
+    assert r.status_code == 200 and r.json()["full_name"] == "أحمد محمد" and r.json()["display_name"] == "الأستاذ أحمد محمد"
     assert User.objects.get(pk=world.t1.pk).full_name == "أحمد محمد"
     r = client_for(world.admin).patch(f"/api/v1/admin/users/{world.t2.pk}", {"full_name": "الأستاذة مريم علي", "gender": "female"}, format="json")
     assert r.status_code == 200 and r.json()["full_name"] == "مريم علي" and r.json()["display_name"] == "الأستاذة مريم علي"
     assert client_for(world.admin).patch(f"/api/v1/admin/users/{world.t2.pk}", {"gender": "other"}, format="json").status_code == 400
     # a student may be called «أستاذ…»-anything: nothing is removed from non-teachers
-    client_for(world.s1).patch("/api/v1/me", {"full_name": "الشيخ يوسف"}, format="json")
-    assert User.objects.get(pk=world.s1.pk).full_name == "الشيخ يوسف"
+    client_for(world.s1).patch("/api/v1/me", {"full_name": "الأستاذ يوسف"}, format="json")
+    assert User.objects.get(pk=world.s1.pk).full_name == "الأستاذ يوسف"
 
 
 def test_admin_creates_teacher_with_gender(world):

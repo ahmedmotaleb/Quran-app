@@ -81,7 +81,7 @@ await step('account without activity is removed completely', async () => {
 
 await step('teacher with upcoming sessions: explicit choice; cancel the operation changes nothing', async () => {
   await nav(/^المعلمون/);
-  await page.getByRole('button', { name: 'الشيخ عبدالرحمن السالم', exact: true }).click();
+  await page.getByRole('button', { name: 'الأستاذ عبدالرحمن السالم', exact: true }).click();
   await dialog().getByRole('button', { name: 'حذف نهائي' }).click();
   await dialog().getByText(/لدى هذا المعلم \d+ جلسات قادمة\./).waitFor();
   await dialog().getByRole('button', { name: 'إلغاء العملية' }).click();
@@ -101,7 +101,7 @@ await step('teacher: «إلغاء الجلسات القادمة ثم حذف ال
   const body = await (await resp).json();
   if (body.success !== 1) throw new Error(JSON.stringify(body));
   await page.getByText('تم حذف الحساب نهائيًا').first().waitFor();
-  await page.getByRole('button', { name: 'الشيخ عبدالرحمن السالم', exact: true }).waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: 'الأستاذ عبدالرحمن السالم', exact: true }).waitFor({ state: 'detached' });
   if (await canSignIn('teacher@halqa.app')) throw new Error('deleted teacher can sign in');
 });
 

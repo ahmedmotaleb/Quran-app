@@ -93,7 +93,7 @@ export function AcceptInvitePage() {
     if (f.name.trim().length < 2) x.name = 'اكتب اسمك الكامل.';
     if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) x.email = 'اكتب البريد الإلكتروني الذي وصلته الدعوة.';
     if (f.pw.length < 10) x.pw = 'كلمة المرور 10 أحرف على الأقل.';
-    if (!admin && !f.gender) x.gender = 'اختر اللقب: الشيخ أو الأستاذة.';
+    if (!admin && !f.gender) x.gender = 'اختر اللقب: الأستاذ أو الأستاذة.';
     if (Object.keys(x).length) return setErr(x);
     setBusy(true); setErr({});
     try {
@@ -118,9 +118,9 @@ export function AcceptInvitePage() {
             <label htmlFor="iv-g" style={{ fontSize: 15, fontWeight: 700 }}>اللقب</label>
             <select id="iv-g" value={f.gender} onChange={(e) => setF({ ...f, gender: e.target.value as '' | 'male' | 'female' })} aria-invalid={!!err.gender}
               style={{ minHeight: 52, borderRadius: 12, border: `1.5px solid ${err.gender ? color.dangerInk : color.borderStrong}`, padding: '0 10px', fontSize: 16, background: color.card }}>
-              <option value="">— اختر —</option><option value="male">الشيخ</option><option value="female">الأستاذة</option>
+              <option value="">— اختر —</option><option value="male">الأستاذ</option><option value="female">الأستاذة</option>
             </select>
-            <span style={{ fontSize: 12, color: color.muted }}>اكتب اسمك دون لقب؛ يظهر للطلاب «الشيخ …» أو «الأستاذة …».</span>
+            <span style={{ fontSize: 12, color: color.muted }}>اكتب اسمك دون لقب؛ يظهر للطلاب «الأستاذ …» أو «الأستاذة …».</span>
             {err.gender && <FieldError msg={err.gender} />}
           </>}
           {admin && <p style={{ margin: 0, fontSize: 14, color: color.muted }}>اكتب البريد نفسه الذي وصلته الدعوة؛ الرابط صالح لمرة واحدة.</p>}

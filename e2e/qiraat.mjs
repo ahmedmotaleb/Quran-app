@@ -21,7 +21,7 @@ async function learner(email, hello, width = 390) {
   return { ctx, page, app };
 }
 
-const T = await learner('qtest@halqa.app', 'مرحبًا، الشيخ أحمد محمد', 320);
+const T = await learner('qtest@halqa.app', 'مرحبًا، الأستاذ أحمد محمد', 320);
 await step(T.page, 'new teacher: section shown on home, nothing preselected, at least one required', async () => {
   const sec = T.app.getByRole('region', { name: 'القراءات والروايات' });
   await sec.getByText('اختر الروايات التي تجيدها ومؤهل لتدريسها').waitFor();
@@ -53,7 +53,7 @@ const teachersTab = async () => {
 };
 await step(S.page, 'an unapproved teacher is not offered to students; existing teachers without Riwayat still are', async () => {
   await teachersTab();
-  await S.app.getByRole('button', { name: /الشيخ عبدالرحمن السالم/ }).waitFor();
+  await S.app.getByRole('button', { name: /الأستاذ عبدالرحمن السالم/ }).waitFor();
   if (await S.app.getByRole('button', { name: /أحمد محمد/ }).count()) throw new Error('unapproved teacher listed');
 });
 
@@ -84,16 +84,16 @@ await step(S.page, 'students see the confirmed Riwayat and filter teachers by on
   await card.getByText('الروايات: ورش عن نافع · شعبة عن عاصم · حفص عن عاصم').waitFor();
   const f = S.app.getByLabel('الرواية');
   await f.selectOption('warsh');
-  await card.waitFor(); if (await S.app.getByRole('button', { name: /الشيخ عبدالرحمن السالم/ }).count()) throw new Error('filter kept a teacher without ورش');
+  await card.waitFor(); if (await S.app.getByRole('button', { name: /الأستاذ عبدالرحمن السالم/ }).count()) throw new Error('filter kept a teacher without ورش');
   await f.selectOption('qalun'); await S.app.getByText('لا توجد نتائج مطابقة').waitFor();
-  await f.selectOption('all'); await S.app.getByRole('button', { name: /الشيخ عبدالرحمن السالم/ }).waitFor();
+  await f.selectOption('all'); await S.app.getByRole('button', { name: /الأستاذ عبدالرحمن السالم/ }).waitFor();
   await card.click();
   const sec = S.app.getByRole('region', { name: 'القراءات والروايات' });
   await sec.getByText('حفص عن عاصم').waitFor(); await sec.getByText('ورش عن نافع').waitFor();
   await S.page.screenshot({ path: out + '/qiraat-student.png' });
 });
 
-const E = await learner('teacher@halqa.app', 'مرحبًا، الشيخ عبدالرحمن السالم');
+const E = await learner('teacher@halqa.app', 'مرحبًا، الأستاذ عبدالرحمن السالم');
 await step(E.page, 'existing teacher with none: asked to add them, nothing assumed', async () => {
   const sec = E.app.getByRole('region', { name: 'القراءات والروايات' });
   await sec.getByRole('button', { name: 'أضف القراءات والروايات' }).waitFor();
