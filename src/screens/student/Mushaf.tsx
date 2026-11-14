@@ -6,8 +6,8 @@ import { Icon } from '@/components/Icon';
 import { BackButton, Spinner, card, muted } from '@/components/ui';
 import { SUR } from '@/data/demo';
 import { currentReciter, fallbackReciter, loadSurahAudio } from '@/services/quran';
-import { jumpTo, loadSurah, loadSurahList, openSheet, pauseMushaf, playAyah, resumeMushaf, setMushafRate, setReciter, stopMushaf, up, useApp } from '@/store/store';
-import { repLabel } from '@/lib/recitation';
+import { jumpTo, loadSurah, loadSurahList, openSheet, up, useApp } from '@/store/store';
+import { MushafPlayer } from './MushafPlayer';
 
 const stepBtn = { width: 32, height: 44, border: 'none', background: 'transparent', color: color.primary, cursor: 'pointer', display: 'grid', placeItems: 'center' } as const;
 const num = { fontFamily: font.latin, fontWeight: 700, fontSize: 14, minWidth: 20, textAlign: 'center' } as const;
@@ -129,64 +129,7 @@ export default function Mushaf() {
         )}
       </div>
 
-      <div style={{ position: 'sticky', bottom: 0, background: color.card, borderTop: `1px solid ${color.border}` }}>
-      <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-        {/* Play → pause → resume (the ayah, the place in it and the repetition count are kept); stop ends it. */}
-        <button onClick={() => (!M.playing ? playAyah(M.from, 0) : M.paused ? resumeMushaf() : pauseMushaf())} aria-label={playL} disabled={!M.data || !audioName}
-          style={{ width: 52, height: 52, borderRadius: '50%', border: 'none', background: color.primary, color: color.ivory, display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0, opacity: M.data && audioName ? 1 : 0.6 }}>
-          <Icon name={M.playing && !M.paused ? 'pause' : 'play'} />
-        </button>
-        {M.playing && (
-          <button onClick={stopMushaf} aria-label="إيقاف التلاوة"
-            style={{ width: 44, height: 44, borderRadius: '50%', border: `1px solid ${color.borderChip}`, background: color.card, color: color.primary, display: 'grid', placeItems: 'center', cursor: 'pointer', flexShrink: 0 }}>
-            <Icon name="x" size={18} />
-          </button>
-        )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 700 }}>{M.playing ? (M.paused ? 'متوقفة مؤقتًا' : 'جارٍ التشغيل') : playL}</p>
-          <p aria-live="polite" data-testid="recital-status" style={muted(12, { margin: '2px 0 0' })}>{M.playing ? `الآية ${M.cur} · ${repLabel(M.rep, M.repeat)}${M.cur && M.cur > M.to ? ' · متابعة بعد النطاق' : ''}` : audioName ? `النطاق ${M.from}–${M.to} · ${audioName}` : 'التلاوة الصوتية غير متاحة حاليًا'}</p>
-        </div>
-        <div role="group" aria-label="تكرار كل آية" style={{ display: 'flex', alignItems: 'center', gap: 2, border: `1px solid ${color.borderChip}`, borderRadius: 12, padding: 2 }}>
-          <span style={{ color: color.muted, padding: '0 4px' }}><Icon name="repeat" size={18} /></span>
-          {[1, 3, 5, 10, 0].map((n) => {
-            const on = M.repeat === n;
-            return (
-              <button key={n} aria-pressed={on} aria-label={n ? `تكرار كل آية ${n} مرات` : 'تكرار الآية باستمرار'} onClick={() => setM({ repeat: n })}
-                style={{ minWidth: 32, minHeight: 40, border: 'none', borderRadius: 10, background: on ? color.primary : 'transparent', color: on ? color.ivory : color.primary, fontFamily: font.latin, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>{n ? `×${n}` : '∞'}</button>
-            );
-          })}
-        </div>
-      </div>
-      {audioName && (
-        <div style={{ padding: '0 16px 10px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <div role="group" aria-label="سرعة التلاوة" style={{ display: 'flex', alignItems: 'center', gap: 2, border: `1px solid ${color.borderChip}`, borderRadius: 12, padding: 2 }}>
-            <span style={{ fontSize: 12, color: color.muted, padding: '0 6px', fontWeight: 700 }}>السرعة</span>
-            {[0.75, 1, 1.25].map((r) => {
-              const on = M.rate === r;
-              return <button key={r} aria-pressed={on} aria-label={`السرعة ${r}`} onClick={() => setMushafRate(r)}
-                style={{ minWidth: 40, minHeight: 40, border: 'none', borderRadius: 10, background: on ? color.primary : 'transparent', color: on ? color.ivory : color.primary, fontFamily: font.latin, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>{r}×</button>;
-            })}
-          </div>
-          {(pubAudio?.reciters?.length ?? 0) > 1 && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: color.ink, minHeight: 40 }}>
-              القارئ
-              <select aria-label="القارئ" value={reciter?.id ?? ''} onChange={(e) => setReciter(Number(e.target.value))}
-                style={{ minHeight: 40, borderRadius: 10, border: `1px solid ${color.borderChip}`, background: color.card, color: color.primary, fontWeight: 700, fontSize: 13, padding: '0 8px', maxWidth: 230 }}>
-                {pubAudio!.reciters!.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-              </select>
-            </label>
-          )}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: color.ink, minHeight: 40, cursor: 'pointer' }}>
-            <input type="checkbox" checked={!!M.loop} onChange={(e) => setM({ loop: e.target.checked })} style={{ width: 20, height: 20, accentColor: color.primary }} />
-            إعادة النطاق من البداية
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: color.ink, minHeight: 40, cursor: 'pointer', opacity: M.loop ? 0.5 : 1 }}>
-            <input type="checkbox" checked={M.adv} disabled={!!M.loop} onChange={(e) => setM({ adv: e.target.checked })} style={{ width: 20, height: 20, accentColor: color.primary }} />
-            متابعة بعد نهاية النطاق
-          </label>
-        </div>
-      )}
-      </div>
+      <MushafPlayer audioName={audioName} pubAudio={pubAudio} reciter={reciter} playL={playL} />
     </div>
   );
 }
