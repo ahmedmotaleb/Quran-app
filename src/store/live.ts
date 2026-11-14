@@ -41,7 +41,11 @@ export function syncZone(): Promise<void> {
     .catch(() => { /* offline: tried again next time */ }).finally(() => { zoneSync = null; });
   return zoneSync;
 }
-if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && get().me) void syncZone(); });
+const pollInbox = () => { if (get().me && get().me?.role !== 'admin') void import('@/screens/common/Inbox').then((m) => m.refreshUnread()); };
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && get().me) { void syncZone(); pollInbox(); } });
+  setInterval(pollInbox, 60000); // unread count + assignment changes, on every screen
+}
 
 function applyUser(u: E.Me) {
   // Shown name: a teacher with «الشيخ» / «الأستاذة» (lib/names.ts); the stored name stays in `me.full_name`.
@@ -119,6 +123,23 @@ export async function loadParentData() {
     setState((s) => ({ net: { ...s.net, loading: false, error: msg(e) } }));
   }
 }
+
+/* ---- Teacher↔student changes reach open screens (owner report 14 Nov 2026) -------------------------------------
+   The server returns `assignment_rev` with the unread count; it moves whenever this account's teacher links change
+   (an admin reassigns a student, ends a link…). The count is polled every minute, re-read when the app comes back to
+   the foreground, and at once when a push arrives (the service worker messages open windows). When it moves, the
+   account (`me.teacher`) and the role's data are reloaded: the student sees the new teacher, the new teacher sees the
+   student, the previous teacher no longer does. After a restart everything is read from the server anyway. */
+let assignmentRev: string | null = null;
+export async function syncAssignmentRev(rev: string | undefined) {
+  if (rev === undefined || !get().me) return;
+  const before = assignmentRev;
+  assignmentRev = rev;
+  if (before === null || before === rev) return;
+  try { applyUser(await E.me()); } catch { /* offline: next poll */ }
+  await loadData();
+}
+export const resetAssignmentRev = () => { assignmentRev = null; };
 
 export const loadData = () => {
   const r = get().me?.role;
@@ -236,10 +257,12 @@ if (typeof window !== 'undefined') {
   navigator.serviceWorker?.addEventListener?.('message', (e: MessageEvent) => {
     const d = e.data as { type?: string; url?: string } | null;
     if (d?.type === 'halqa:navigate' && typeof d.url === 'string' && d.url.startsWith('/#/')) window.location.hash = d.url.slice(2);
+    if (d?.type === 'halqa:push') pollInbox(); // a notice just arrived: refresh the count and any changed teacher link now
   });
 }
 
 export async function logout() {
+  resetAssignmentRev();
   // This device stops receiving THIS account's phone notifications: the server removes its record of this device
   // (other devices keep theirs). The browser's subscription is KEPT (owner report 13 Nov 2026: dropping it made the
   // app ask again after every sign-in); the next account to sign in here is registered silently.

@@ -9,6 +9,7 @@ export type ApiRole = 'student' | 'teacher' | 'parent' | 'admin';
 export interface Me {
   id: number; email: string; full_name: string; display_name?: string; gender?: 'male' | 'female' | ''; role: ApiRole; status: string; timezone: string; phone: string;
   mfa_enabled: boolean; mfa_required?: boolean; level: string; daily_goal: string; phone_verified?: boolean; teacher_approved?: boolean | null;
+  /** Students: their one active teacher (authoritative, from the assignment; null = none yet). */ teacher?: { id: number; name: string; since: string } | null;
   /** «الإشعارات»: false = no phone push for that category (missing = on). */ notify_prefs?: Partial<Record<'tasks' | 'sessions' | 'feedback' | 'news', boolean>>;
   /** Admins only: access level, preset and the permissions the server grants (null for everyone else). */
   /** Admin access (AdminProfile). A teacher keeps role «teacher» and gets `teacher_admin: true` («معلم + إدارة»). */

@@ -25,6 +25,7 @@ from apps.core.audit import audit
 from apps.core.exceptions import ApiError
 
 from .models import AccountStatus, Role, TeacherAssignment, TeacherRequest, User
+from .reassign import teacher_title
 from .permissions import IsAdminRole, IsStudent
 
 S = TeacherRequest.Status
@@ -192,10 +193,11 @@ class AdminTeacherRequestDecide(APIView):
                     raise ApiError("student_inactive", "حساب الطالب غير نشط.", 409)
                 r.status, r.assigned_teacher = S.ASSIGNED, teacher
                 r.save()
-                _notify(r, "تم تعيين معلمك", f"معلمك: {teacher.display_name}.")
-                if not TeacherAssignment.objects.filter(teacher=teacher, student=r.student, active=True).exists():
-                    a = TeacherAssignment.objects.create(teacher=teacher, student=r.student, created_by=request.user)
-                    audit("admin.teacher_assigned", actor=request.user, target=a, request=request, via="teacher_request")
+                _notify(r, "تم تعيين معلمك", f"معلمك: {teacher_title(teacher)}.")
+                from .reassign import assign_teacher
+
+                # The only active teacher from now on (a previous one is ended and told); the student is told above.
+                assign_teacher(r.student, teacher, request.user, source="teacher_request", tell_student=False, request=request)
                 on_assigned(r.student, teacher, tell=False)  # other open requests closed, reminders cleared (the new link tells the teacher)
             audit("admin.teacher_request_decided", actor=request.user, target=r, request=request, decision=d["action"],
                   teacher=d.get("teacher"))
@@ -215,7 +217,8 @@ def on_assigned(student, teacher, assignment_id: int | None = None, tell: bool =
         r.status, r.assigned_teacher = S.ASSIGNED, teacher
         r.decided_at = r.decided_at or timezone.now()
         r.save(update_fields=["status", "assigned_teacher", "decided_at", "updated_at"])
-        _notify(r, "تم تعيين معلمك", f"معلمك: {teacher.display_name}.")
+        if tell:
+            _notify(r, "تم تعيين معلمك", f"معلمك: {teacher_title(teacher)}.")
         told = True
     # Assigned through the review just now (AdminTeacherRequestDecide already told the student).
     told = told or TeacherRequest.objects.filter(student=student, status=S.ASSIGNED, assigned_teacher=teacher,
@@ -225,7 +228,7 @@ def on_assigned(student, teacher, assignment_id: int | None = None, tell: bool =
         return
     key = f"assignment:{assignment_id or f'{student.pk}-{teacher.pk}'}"
     if not told:
-        after_commit(student, "teacher_assigned", "تم تعيين معلمك", f"معلمك: {teacher.display_name}.", link="/circles",
+        after_commit(student, "teacher_assigned", "تم تعيين معلمك", f"معلمك: {teacher_title(teacher)}.", link="/circles",
                      dedupe=f"{key}:student", data={"screen": "home"})
     after_commit(teacher, "student_assigned", "طالب جديد", f"انضم {student.full_name} إلى طلابك.", link="/teacher/students",
                  dedupe=f"{key}:teacher", data={"student": student.pk, "screen": "students"})

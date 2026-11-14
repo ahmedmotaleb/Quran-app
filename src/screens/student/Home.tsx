@@ -98,6 +98,13 @@ export default function Home() {
       </header>
 
       {s.liveMode && <ChooseTeacherCard />}
+      {s.liveMode && s.me?.teacher && (
+        <section aria-label="معلمك" data-testid="my-teacher" style={{ ...card, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ color: color.primary }}><Icon name="user" /></span>
+          <span style={{ flex: 1, minWidth: 0 }}><span style={muted(12)}>معلمك</span>
+            <strong style={{ display: 'block', fontSize: 16 }}>{s.me.teacher.name}</strong></span>
+        </section>
+      )}
 
       {s.pendingRecs.map((p) => {
         const t = s.tasks.find((x) => x.id === p.taskId);

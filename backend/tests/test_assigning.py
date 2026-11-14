@@ -50,9 +50,13 @@ def test_academic_admin_allowed_support_and_read_only_denied(world):
     # The responsible teacher must be linked; a student without a teacher is refused.
     owner = client_for(world.admin)
     assert owner.post("/api/v1/admin/assignments", {**body, "teacher": world.t2.pk}, format="json").status_code == 400
-    TeacherAssignment.objects.create(teacher=world.t2, student=world.s1)
-    assert owner.post("/api/v1/admin/assignments", body, format="json").json()["fields"]["teacher"]  # two teachers: choose
+    # After a reassignment the task goes to the student's current teacher only (one teacher per student).
+    from apps.accounts.reassign import assign_teacher
+
+    assign_teacher(world.s1, world.t2, world.admin, source="test")
+    assert owner.post("/api/v1/admin/assignments", {**body, "teacher": world.t1.pk}, format="json").status_code == 400  # no longer linked
     assert owner.post("/api/v1/admin/assignments", {**body, "teacher": world.t2.pk}, format="json").status_code == 201
+    assert owner.post("/api/v1/admin/assignments", body, format="json").json()["teacher"] == world.t2.pk
     lone = make_user("lone@x.test")
     assert owner.post("/api/v1/admin/assignments", {**body, "student": lone.pk}, format="json").json()["code"] == "no_teacher"
     assert owner.post("/api/v1/admin/assignments", {**body, "ayah_to": 99}, format="json").status_code == 400  # Hafs range

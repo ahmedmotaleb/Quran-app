@@ -145,9 +145,15 @@ class TeacherAssignment(TimeStamped):
     active = models.BooleanField(default=True)
     created_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name="+")
     ended_at = models.DateTimeField(null=True, blank=True)
+    ended_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    end_reason = models.CharField(max_length=32, blank=True)  # reassigned | ended | repair_duplicate | account_…
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["teacher", "student"], condition=Q(active=True), name="one_active_assignment_per_pair")]
+        constraints = [
+            models.UniqueConstraint(fields=["teacher", "student"], condition=Q(active=True), name="one_active_assignment_per_pair"),
+            # One Quran teacher per student (owner report 14 Nov 2026): changes go through reassign.assign_teacher.
+            models.UniqueConstraint(fields=["student"], condition=Q(active=True), name="one_active_teacher_per_student"),
+        ]
 
 
 class LinkStatus(models.TextChoices):

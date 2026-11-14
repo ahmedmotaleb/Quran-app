@@ -109,7 +109,9 @@ def test_assignment_tells_student_and_teacher_once(team, monkeypatch, django_cap
 
 def test_assignment_from_the_student_record_tells_both(team, monkeypatch, django_capture_on_commit_callbacks):
     ph = Phones(monkeypatch)
-    run(lambda: TeacherAssignment.objects.create(teacher=team.w.t2, student=team.lone), django_capture_on_commit_callbacks)
+    # The admin's «ربط بمعلم» on the student record (reassign.assign_teacher; a bare database insert notifies no one).
+    run(lambda: client_for(team.w.admin).post("/api/v1/admin/teacher-assignments", {"teacher": team.w.t2.pk, "student": team.lone.pk},
+                                              format="json"), django_capture_on_commit_callbacks)
     assert kinds(team.lone) == ["teacher_assigned"] and kinds(team.w.t2) == ["student_assigned"]
     assert len(ph.to(team.lone)) == 1 and len(ph.to(team.w.t2)) == 1
 

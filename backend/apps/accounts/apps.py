@@ -18,6 +18,8 @@ class AccountsConfig(AppConfig):
 
                 from .teacher_requests import on_assigned
 
-                transaction.on_commit(lambda: on_assigned(instance.student, instance.teacher, instance.pk))
+                # Notifications are NOT sent here: reassign.assign_teacher creates them in the same transaction
+                # (owner report 14 Nov 2026), so nobody is told twice and nothing is told for a rolled-back change.
+                transaction.on_commit(lambda: on_assigned(instance.student, instance.teacher, instance.pk, tell=False))
 
         post_save.connect(assigned, sender=TeacherAssignment, dispatch_uid="teacher_request_on_assigned")

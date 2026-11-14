@@ -101,7 +101,8 @@ def test_assign_and_unassign_teacher_and_parent_links(world):
     c = client_for(world.admin)
     r = c.post(f"{A}/teacher-assignments", {"teacher": world.t2.id, "student": world.s1.id}, format="json")
     assert r.status_code == 201
-    assert c.post(f"{A}/teacher-assignments", {"teacher": world.t2.id, "student": world.s1.id}, format="json").status_code == 409
+    assert c.post(f"{A}/teacher-assignments", {"teacher": world.t2.id, "student": world.s1.id}, format="json").status_code == 200  # already: no change
+    assert list(TeacherAssignment.objects.filter(student=world.s1, active=True).values_list("teacher", flat=True)) == [world.t2.id]  # t1 replaced
     assert c.post(f"{A}/teacher-assignments", {"teacher": world.s2.id, "student": world.s1.id}, format="json").status_code == 400
     assert c.post(f"{A}/teacher-assignments/{r.json()['id']}/end").status_code == 204
     assert not TeacherAssignment.objects.filter(pk=r.json()["id"], active=True).exists()

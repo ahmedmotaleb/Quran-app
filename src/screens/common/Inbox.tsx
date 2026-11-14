@@ -18,7 +18,12 @@ const ICON: Record<string, IconName> = {
 
 let listeners: ((n: number) => void)[] = [];
 export async function refreshUnread() {
-  try { const r = await api<{ unread: number }>('GET', 'notifications/unread'); listeners.forEach((f) => f(r.unread)); } catch { /* offline: keep last */ }
+  try {
+    const r = await api<{ unread: number; assignment_rev?: string }>('GET', 'notifications/unread');
+    listeners.forEach((f) => f(r.unread));
+    const { syncAssignmentRev } = await import('@/store/live');
+    void syncAssignmentRev(r.assignment_rev);
+  } catch { /* offline: keep last */ }
 }
 
 export function InboxBell() {
@@ -26,9 +31,8 @@ export function InboxBell() {
   const [n, setN] = useState(0);
   useEffect(() => {
     if (!live) return;
-    listeners.push(setN); void refreshUnread();
-    const t = setInterval(() => void refreshUnread(), 60000);
-    return () => { listeners = listeners.filter((f) => f !== setN); clearInterval(t); };
+    listeners.push(setN); void refreshUnread(); // polled every minute app-wide (store/live.ts)
+    return () => { listeners = listeners.filter((f) => f !== setN); };
   }, [live]);
   return (
     <button onClick={() => go('inbox')} aria-label={n ? `الإشعارات، ${n} غير مقروءة` : 'الإشعارات'}
@@ -49,6 +53,7 @@ export function open(n: Note, role: string | null) {
   if (d.screen === 'mushaf') return go('mushaf', {});
   if (n.kind.startsWith('teacher_pick') || n.kind.startsWith('teacher_request') || n.kind === 'teacher_assigned') return tab('home');
   // Teachers: a new student → «الطلاب»; approval of the account → today's board.
+  if (n.kind === 'student_moved') return tab('tstudents');
   if (n.kind === 'student_assigned') return role === 'teacher' && d.student ? go('tstudent', { id: String(d.student) }) : tab('tstudents');
   if (n.kind === 'teacher_approved' || n.kind === 'teacher_unapproved') return tab('tdash');
   // Parents: the linked child's follow-up (the screen checks the link again).

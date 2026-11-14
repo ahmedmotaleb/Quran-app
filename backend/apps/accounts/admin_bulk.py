@@ -172,17 +172,25 @@ def _teacher_params(raw: dict, actor) -> dict:
 
 
 def _assign_teacher(u: User, actor, reason: str, *, teacher: User, replace: bool):
+    """One teacher per student (reassign.assign_teacher). Without «إنهاء ارتباطهم بمعلميهم الحاليين», a student who
+    already has another teacher is skipped rather than silently moved."""
+    from apps.core.exceptions import ApiError
+
+    from .reassign import assign_teacher
+
     if u.role != Role.STUDENT:
         raise Refuse("not_student", "ليس حساب طالب.")
     if u.status in (AccountStatus.SUSPENDED, AccountStatus.ARCHIVED):
         raise Refuse("inactive", "الحساب موقوف أو مؤرشف.")
-    current = TeacherAssignment.objects.select_for_update().filter(student=u, active=True)
-    ended = current.exclude(teacher=teacher).update(active=False, ended_at=timezone.now()) if replace else 0
-    if current.filter(teacher=teacher).exists():
-        if ended:
-            return  # the other teachers were removed; the requested one stays
+    current = TeacherAssignment.objects.filter(student=u, active=True).first()
+    if current and current.teacher_id == teacher.pk:
         raise Skip("already_assigned", "مرتبط بهذا المعلم بالفعل.")
-    TeacherAssignment.objects.create(teacher=teacher, student=u, created_by=actor)
+    if current and not replace:
+        raise Skip("has_teacher", "لديه معلم آخر؛ اختر «إنهاء ارتباطهم بمعلميهم الحاليين» لنقله.")
+    try:
+        assign_teacher(u, teacher, actor, source="bulk")
+    except ApiError as e:
+        raise Refuse(e.code, str(e.detail)) from None
 
 
 # ---- Enroll in a course ---------------------------------------------------------------------

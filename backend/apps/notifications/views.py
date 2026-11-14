@@ -41,7 +41,19 @@ class UnreadCount(APIView):
         from .services import ensure_session_reminders
 
         ensure_session_reminders(request.user)
-        return Response({"unread": Notification.objects.filter(recipient=request.user, read_at__isnull=True).exclude(kind__startswith="adhkar_").count()})
+        return Response({"unread": Notification.objects.filter(recipient=request.user, read_at__isnull=True).exclude(kind__startswith="adhkar_").count(),
+                         "assignment_rev": assignment_rev(request.user)})
+
+
+def assignment_rev(user) -> str:
+    """Changes whenever this account's teacher↔student links change (a reassignment, an end). The app polls it with
+    the unread count (and right after a push arrives) and reloads its data when it moves."""
+    from django.db.models import Max, Q
+
+    from apps.accounts.models import TeacherAssignment
+
+    r = TeacherAssignment.objects.filter(Q(student=user) | Q(teacher=user)).aggregate(m=Max("updated_at"), n=Max("id"))
+    return f"{r['n'] or 0}:{r['m'].isoformat() if r['m'] else ''}"
 
 
 class NotificationRead(APIView):
