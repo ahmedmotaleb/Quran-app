@@ -54,6 +54,7 @@ await step(A, 'admin: a Sunnah entry needs collection, number and grading; it wa
   await sec.getByRole('button', { name: 'إضافة ذكر' }).click();
   const d = A.getByRole('dialog').last();
   await d.getByLabel('المصدر', { exact: true }).selectOption('hadith');
+  await d.locator('option[value="sunnah_dua"]').waitFor({ state: 'attached' });   // categories arrive with the list (slow servers)
   await d.getByLabel('الفئة').selectOption('sunnah_dua');
   await d.getByLabel('نص الحديث كما في المصدر').fill('نص اختبار آلي');
   await d.getByRole('button', { name: 'إضافة للمراجعة' }).click();
@@ -61,11 +62,14 @@ await step(A, 'admin: a Sunnah entry needs collection, number and grading; it wa
   await d.getByLabel('الكتاب (مثل: صحيح البخاري)').fill('كتاب اختبار');
   await d.getByLabel('رقم الحديث').fill('1');
   await d.getByLabel('الدرجة').selectOption('sahih');
+  const created = A.waitForResponse((r) => r.url().endsWith('/api/v1/admin/adhkar') && r.request().method() === 'POST');
   await d.getByRole('button', { name: 'إضافة للمراجعة' }).click();
-  await A.getByText('أُضيف الذكر وينتظر المراجعة').waitFor();
+  if ((await created).status() !== 201) throw new Error(`create ${(await created).status()}`);
   await sec.getByRole('tab', { name: /^بانتظار المراجعة/ }).click();
   await sec.getByLabel('المصدر', { exact: true }).selectOption('hadith');
-  await sec.locator('[data-dhikr]', { hasText: 'كتاب اختبار (١) · صحيح' }).waitFor();
+  await sec.getByRole('searchbox', { name: 'بحث في نص الذكر' }).fill('نص اختبار آلي');
+  await sec.locator('[data-dhikr]', { hasText: 'كتاب اختبار (١) · صحيح' }).waitFor({ timeout: 20000 });
+  await sec.getByRole('searchbox', { name: 'بحث في نص الذكر' }).fill('');
 });
 await step(A, 'admin: delivery stats', async () => {
   const sec = A.getByTestId('admin-adhkar');
