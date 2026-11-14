@@ -33,7 +33,8 @@ export default function Account() {
   const name = live ? s.user.name : role === 'teacher' ? 'الشيخ عبدالرحمن السالم' : role === 'parent' ? 'أحمد العلي' : s.user.name;
   const email = live ? s.user.email : role === 'teacher' ? 'teacher@halqa.app' : role === 'parent' ? 'parent@halqa.app' : s.user.email;
   // Live: the teachers who assigned this student's tasks.
-  const myTeachers = [...new Set(s.tasks.map((t) => t.teacherName).filter(Boolean))].join('، ') || 'لم يُربط معلم بعد';
+  // The ONE active teacher, from the server's assignment (not from old tasks, which keep their own teacher's name).
+  const myTeachers = s.me?.teacher?.name || 'لم يُربط معلم بعد';
   const ini = live ? (s.user.first[0] ?? '؟') : role === 'teacher' ? 'ع' : role === 'parent' ? 'أ' : s.user.first[0];
   const roleL = { student: 'حساب طالب', teacher: 'حساب معلم', parent: 'حساب ولي أمر', admin: 'حساب إدارة' }[role || 'student'];
   const tz = tzOf(s.tz);

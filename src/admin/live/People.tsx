@@ -491,7 +491,8 @@ function PersonPanel({ id, onClose, onChanged, onDeleted }: { id: number; onClos
             <div key={t.assignment_id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span style={{ flex: 1 }}>{t.name}</span>
               {can('teachers.assign') && <button disabled={busy} onClick={() => reasonRun('إنهاء الربط بالمعلم', `سيتوقف ${t.name} عن رؤية مهام ${nameOf(u)} وتسجيلاته الجديدة. السجل السابق يبقى.`, 'إنهاء الربط', 'أُنهي الربط', () => A.endAssignment(t.assignment_id), false)} aria-label={`إنهاء الربط بـ${t.name}`} style={smallBtn('danger')}>إنهاء الربط</button>}</div>
           ))}
-          {can('teachers.assign') && <button disabled={busy} onClick={() => setSub({ kind: 'pick', target: 'teacher' })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>ربط بمعلم</button>}
+          {can('teachers.assign') && <button disabled={busy} onClick={() => setSub({ kind: 'pick', target: 'teacher' })} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>{u.teachers.length ? 'تغيير المعلم' : 'ربط بمعلم'}</button>}
+          {u.teachers.length > 0 && can('teachers.assign') && <p style={{ margin: 0, fontSize: 12, color: color.muted }}>للطالب معلم واحد: تغييره يُنهي الارتباط الحالي (يبقى السجل والتقييمات) ويُبلغ الطالب والمعلمَين.</p>}
         </>))}
 
         {u.role === 'student' && section('أولياء الأمور', (<>
@@ -526,10 +527,9 @@ function PersonPanel({ id, onClose, onChanged, onDeleted }: { id: number; onClos
         <PickDialog target={sub.target} exclude={sub.target === 'teacher' ? u.teachers.map((t) => t.id) : sub.target === 'parent' ? u.guardians.map((g) => g.id) : u.children.map((c) => c.id)}
           onClose={() => setSub(null)}
           onPick={async (other) => {
-            if (sub.target === 'teacher') await A.assignTeacher(other.id, u.id);
-            else if (sub.target === 'parent') await A.linkGuardian(other.id, u.id);
-            else await A.linkGuardian(u.id, other.id);
-            toast('تم الربط'); await reload(); onChanged();
+            if (sub.target === 'teacher') { await A.assignTeacher(other.id, u.id); toast(u.teachers.length ? 'تم تغيير المعلم وأُبلغ الطالب والمعلمان' : 'تم تعيين المعلم وأُبلغ الطالب والمعلم'); }
+            else { if (sub.target === 'parent') await A.linkGuardian(other.id, u.id); else await A.linkGuardian(u.id, other.id); toast('تم الربط'); }
+            await reload(); onChanged();
           }} />
       )}
     </Modal>

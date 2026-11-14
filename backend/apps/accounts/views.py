@@ -498,7 +498,11 @@ class AcceptInvitationView(APIView):
             else:  # student_teacher
                 if user is None or user.role != Role.STUDENT:
                     raise ApiError("student_required", "سجّل الدخول بحساب الطالب أولًا.", 403)
-                TeacherAssignment.objects.get_or_create(teacher=inv.teacher, student=user, active=True, defaults={"created_by": inv.teacher})
+                from .reassign import assign_teacher
+
+                # One teacher per student: accepting the teacher's invitation makes them the teacher (a previous one
+                # is ended and told). Already this teacher's student: nothing changes.
+                assign_teacher(user, User.objects.select_related("teacher_profile").get(pk=inv.teacher_id), user, source="invitation", request=request)
                 result = {"teacher": {"id": inv.teacher_id, "name": inv.teacher.display_name}}
             inv.uses += 1
             inv.save(update_fields=["uses"])
@@ -694,17 +698,29 @@ class AdminUserStatus(APIView):
         return Response(AdminUserSerializer(_admin_users().get(pk=pk), context={"request": request}).data)
 
 
-class AdminAssignmentCreate(generics.CreateAPIView):
+class AdminAssignmentCreate(APIView):
+    """POST {teacher, student}: make `teacher` the student's ONLY active teacher (reassign.assign_teacher: the previous
+    assignment is ended and kept as history, everyone affected is notified, all in one transaction).
+    201 with the active assignment; 200 when that teacher was already assigned (nothing changes)."""
     admin_perm = "teachers.assign"
     permission_classes = [IsAdminRole]
-    serializer_class = TeacherAssignmentSerializer
 
-    def perform_create(self, serializer):
-        d = serializer.validated_data
-        if TeacherAssignment.objects.filter(teacher=d["teacher"], student=d["student"], active=True).exists():
-            raise ApiError("already_assigned", "الطالب مرتبط بهذا المعلم بالفعل.", 409)
-        obj = serializer.save(created_by=self.request.user)
-        audit("admin.teacher_assigned", actor=self.request.user, target=obj, request=self.request)
+    def post(self, request):
+        from .reassign import assign_teacher
+
+        def pick(k):
+            v = request.data.get(k)
+            return User.objects.select_related("teacher_profile").filter(pk=v).first() if str(v or "").isdigit() else None
+
+        a, ended, changed = assign_teacher(pick("student"), pick("teacher"), request.user, source="admin_record", request=request)
+        return Response(assignment_out(a, ended), status=201 if changed else 200)
+
+
+def assignment_out(a: TeacherAssignment, ended: TeacherAssignment | None = None) -> dict:
+    from .reassign import teacher_title
+
+    return {"id": a.pk, "teacher": a.teacher_id, "student": a.student_id, "active": a.active, "created_at": a.created_at,
+            "teacher_name": teacher_title(a.teacher), "previous": {"id": ended.pk, "teacher": ended.teacher_id} if ended else None}
 
 
 class AdminAssignmentEnd(APIView):
@@ -712,10 +728,10 @@ class AdminAssignmentEnd(APIView):
     permission_classes = [IsAdminRole]
 
     def post(self, request, pk):
+        from .reassign import end_assignment
+
         a = generics.get_object_or_404(TeacherAssignment, pk=pk, active=True)
-        a.active, a.ended_at = False, timezone.now()
-        a.save(update_fields=["active", "ended_at"])
-        audit("admin.teacher_unassigned", actor=request.user, target=a, request=request)
+        end_assignment(a, request.user, request=request)
         return Response(status=204)
 
 

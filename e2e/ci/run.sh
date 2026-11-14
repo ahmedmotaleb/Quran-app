@@ -65,6 +65,8 @@ reseed; CIRCLE_CMD="bash e2e/ci/py.sh circle_for_teacher.py" run assigning
 reseed; QIRAAT_CMD="bash e2e/ci/py.sh qiraat_teacher.py" run qiraat
 # «اختر معلمك»: request / suggest, one pending request, admin review and assignment, card gone after assignment.
 reseed; LONE_CMD="bash e2e/ci/py.sh lone_student.py" run teacher-request
+# Teacher reassignment: one active teacher, student/teachers update without reload, three notices, restart, polling.
+reseed; run teacher-reassign
 # Daily Quran reminders: settings in «حسابي» (quiet hours), a reminder opens the Mushaf.
 reseed; NOTE_CMD="bash e2e/ci/py.sh reminder_note.py" run reminders
 # «الأذكار والأدعية»: admin review gate (verified Quran text), Sunnah source fields, student library/favorites/settings, tap.

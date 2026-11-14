@@ -625,3 +625,56 @@ view and manage; owners have all):
   source.
   - Tapping opens `#/n/<id>`, which opens the entry.
   - Excluded from the learning inbox and its unread count.
+
+## Teacher assignment and reassignment (owner report, 14 Nov 2026)
+
+**Rule:** a student has at most one active teacher.
+- Enforced by the PostgreSQL partial unique index `one_active_teacher_per_student` (`student` where `active`).
+- Every path goes through `apps/accounts/reassign.assign_teacher`: the student record, the bulk action,
+  «اختر معلمك», and accepting a teacher's invitation.
+
+**What `assign_teacher` does, in one transaction:**
+1. Validates the student (active) and the teacher (active, approved).
+2. Locks the student row, so concurrent changes run one after the other and the last one wins.
+3. Ends the current assignment: `active=false`, `ended_at`, `ended_by`, `end_reason="reassigned"`. The row is kept as
+   history.
+4. Creates the new active assignment and writes the audit event `admin.teacher_reassigned` (or
+   `admin.teacher_assigned`).
+5. Creates the notifications in the same transaction (the outbox; push goes out after commit, retried hourly):
+
+| Recipient | Kind | Title | Body |
+| --- | --- | --- | --- |
+| Student | `teacher_assigned` | «تم تغيير معلمك في حلقة» («تم تعيين…» if it is the first teacher) | «تم تعيين الأستاذ/الأستاذة … معلمًا/معلمةً لك. يمكنك الآن متابعة الحفظ والمراجعة معه/معها.» |
+| New teacher | `student_assigned` | «طالب جديد في حلقتك» | «تم تعيين الطالب/الطالبة … ضمن طلابك.» |
+| Previous teacher | `student_moved` | «تحديث قائمة الطلاب» | «تم نقل الطالب/الطالبة … إلى معلم آخر.» |
+
+- Teacher titles follow the teacher's gender: الأستاذ or الأستاذة. With no gender set, the name is shown with no
+  title. «الشيخ» is never used in these notices.
+- Assigning the teacher the student already has changes nothing and notifies no one.
+- These three kinds carry the wording above on the phone (push), not the generic text.
+- Tasks, recordings, evaluations, attendance and memorization progress are never changed or deleted.
+- The previous teacher keeps the tasks they wrote, but no longer sees the student, the student's recordings, or new
+  submissions. New recordings notify the current teacher.
+
+**API**
+- `POST admin/teacher-assignments {teacher, student}` (`teachers.assign`).
+  - 201 with `{id, teacher, student, active, created_at, teacher_name, previous: {id, teacher} | null}`.
+  - 200 when that teacher was already assigned.
+  - 400 for an invalid or unapproved teacher, or an account that is not a student. 409 for a suspended student.
+- Bulk `assign_teacher`: a student who has another teacher is skipped unless `replace` is set.
+- `GET me` → `teacher: {id, name, since} | null` for students. This is the authoritative current teacher, read on
+  every app start; it is never derived from tasks.
+- `GET notifications/unread` → `{unread, assignment_rev}`. `assignment_rev` changes whenever this account's
+  teacher↔student links change.
+
+**Keeping open screens current** (there is no WebSocket or SSE). The app reloads the account and the role's data
+when `assignment_rev` changes. It checks:
+- every 60 s on every screen;
+- when the app returns to the foreground;
+- immediately when a push arrives (the service worker posts `halqa:push` to open windows).
+
+**Existing data:** migration `accounts.0017` finds students with more than one active teacher (created by the old
+«ربط بمعلم»).
+- It keeps the newest assignment active.
+- It ends the others with `end_reason="repair_duplicate"`; nothing is deleted.
+- Each repair is written to the audit log as `data.teacher_assignment_repaired`, with both teachers.

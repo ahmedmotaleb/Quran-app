@@ -25,6 +25,8 @@ self.addEventListener('push', (event) => {
       let shown = true;
       try { shown = (await self.registration.getNotifications({ tag: d.tag })).length > 0; } catch (e) { /* not supported: assume shown */ }
       await receipt(d.r, { ok: true, shown });
+      // Open HALQA windows refresh right away (unread count; a teacher change reloads the student/teacher screens).
+      try { (await self.clients.matchAll({ type: 'window', includeUncontrolled: true })).forEach((c) => c.postMessage({ type: 'halqa:push' })); } catch (e) { /* none open */ }
     } catch (e) {
       // Android refused to display it (notifications blocked for the app, for example): tell the server why.
       await receipt(d.r, { ok: false, error: String((e && e.name) || e).slice(0, 40) });

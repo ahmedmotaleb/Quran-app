@@ -60,9 +60,11 @@ def test_bulk_assign_teacher_validates_teacher_and_reports_per_record(world):
     TeacherProfile.objects.filter(user=t3).update(approved_at=None)
     r = act(admin, "users", action="assign_teacher", ids=[world.s1.id], params={"teacher": t3.id})
     assert r.status_code == 400 and r.json()["fields"]["teacher"]
-    r = act(admin, "users", action="assign_teacher", ids=[world.s1.id, world.s2.id, world.p1.id], params={"teacher": world.t1.id}).json()
-    assert (r["success"], r["skipped"], r["failed"]) == (1, 1, 1)  # s2 added; s1 already; parent refused
-    assert TeacherAssignment.objects.filter(student=world.s2, active=True).count() == 2
+    lone = make_user("lone@x.test")
+    r = act(admin, "users", action="assign_teacher", ids=[world.s1.id, world.s2.id, world.p1.id, lone.id], params={"teacher": world.t1.id}).json()
+    # lone added; s1 already; s2 has another teacher (one teacher per student: moved only with «replace»); parent refused
+    assert (r["success"], r["skipped"], r["failed"]) == (1, 2, 1)
+    assert list(TeacherAssignment.objects.filter(student=world.s2, active=True).values_list("teacher", flat=True)) == [world.t2.id]
     r = act(admin, "users", action="assign_teacher", ids=[world.s2.id], params={"teacher": world.t1.id, "replace": True}).json()
     assert r["success"] == 1
     assert list(TeacherAssignment.objects.filter(student=world.s2, active=True).values_list("teacher", flat=True)) == [world.t1.id]

@@ -26,11 +26,12 @@ class MeSerializer(serializers.ModelSerializer):
     admin_access = serializers.SerializerMethodField()
     phone_verified = serializers.SerializerMethodField()
     teacher_approved = serializers.SerializerMethodField()
+    teacher = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ["id", "email", "full_name", "display_name", "gender", "role", "status", "timezone", "phone", "phone_verified", "mfa_enabled",
-                  "mfa_required", "level", "daily_goal", "date_joined", "admin_access", "teacher_approved", "notify_prefs"]
+                  "mfa_required", "level", "daily_goal", "date_joined", "admin_access", "teacher_approved", "notify_prefs", "teacher"]
         # Only the name, gender (a teacher's title), time zone and contact phone change here. Role, status, email and two-step verification have
         # their own audited flows (a misplaced list let `PATCH me` change them on 22–23 Oct; test_me_protected_fields).
         read_only_fields = ["id", "email", "display_name", "role", "status", "mfa_enabled", "date_joined"]
@@ -50,6 +51,15 @@ class MeSerializer(serializers.ModelSerializer):
         if not isinstance(v, dict) or any(k not in PREF_KEYS or not isinstance(x, bool) for k, x in v.items()):
             raise serializers.ValidationError("إعدادات إشعارات غير صالحة.")
         return {**(self.instance.notify_prefs if self.instance else {}), **v}
+
+    def get_teacher(self, u):
+        """Students: their ONE active teacher, read from the authoritative assignment on every load (never from tasks)."""
+        if u.role != Role.STUDENT:
+            return None
+        from .reassign import teacher_title
+
+        a = TeacherAssignment.objects.filter(student=u, active=True).select_related("teacher").first()
+        return {"id": a.teacher_id, "name": teacher_title(a.teacher), "since": a.created_at} if a else None
 
     def get_teacher_approved(self, u):
         """Teachers only: approved by an admin (visible to students). None for other roles."""

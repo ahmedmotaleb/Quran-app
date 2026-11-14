@@ -157,7 +157,12 @@ class SubmissionCreate(APIView):
                 s = Submission.objects.create(assignment=a, student=request.user, media=m, attempt=attempt,
                                               duration_seconds=m.duration_seconds or 0, idempotency_key=key)
                 services.transition(a, AssignmentStatus.SUBMITTED, actor=request.user)
-                teacher, title, sid = a.teacher, a.title, s.pk
+                # The student's CURRENT teacher reviews it (only they may: FeedbackCreate). After a reassignment the
+                # previous teacher who wrote the task is not told about new recordings.
+                from apps.accounts.models import TeacherAssignment
+
+                cur = TeacherAssignment.objects.filter(student=request.user, active=True).select_related("teacher").first()
+                teacher, title, sid = (cur.teacher if cur else a.teacher), a.title, s.pk
                 transaction.on_commit(lambda: notify(teacher, "submission_new", "تسليم جديد", f"{request.user.full_name} · {title}",
                                                      link=f"/teacher/reviews/{sid}", dedupe=f"submission:{sid}",
                                                      data={"submission": sid}))

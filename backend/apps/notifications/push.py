@@ -55,10 +55,13 @@ GENERIC = [
     ("admin_access", ("الحلقة · الإدارة", "تحديث على صلاحياتك في لوحة الإدارة.")),
     ("admin", ("الحلقة · الإدارة", "تنبيه إداري جديد.")),
     ("student_assigned", ("الحلقة", "انضم طالب جديد إلى طلابك.")),
+    ("student_moved", ("الحلقة", "تحديث قائمة الطلاب.")),
     ("teacher_approved", ("الحلقة", "تم اعتماد حسابك كمعلم.")),
     ("teacher_unapproved", ("الحلقة", "تحديث على اعتماد حسابك.")),
     ("support", ("الحلقة", "تحديث على طلب الدعم.")),
 ]
+
+ASSIGNMENT_KINDS = ("teacher_assigned", "student_assigned", "student_moved")
 
 # kind prefix → preference category («الإشعارات» in حسابي). Kinds not listed (attendance warnings, suspension, excuse
 # decisions, parents' child updates, admin alerts) concern the account itself and are always pushed.
@@ -262,6 +265,9 @@ def deliver(notification) -> int:
     if n.kind.startswith("adhkar_"):
         # A dhikr/dua: its verified text and source are the point of the notice and contain nothing personal.
         payload = {"title": n.title[:80], "body": n.body[:300], "url": f"/#/n/{n.pk}", "tag": f"adhkar-{n.pk}"}
+    elif n.kind in ASSIGNMENT_KINDS and (n.data or {}).get("sync") == "assignment":
+        # Teacher changes (owner request 14 Nov 2026): the owner's own wording, with the teacher's / student's name.
+        payload = {"title": n.title[:80], "body": n.body[:300], "url": f"/#/n/{n.pk}", "tag": f"assignment-{n.pk}", "sync": "assignment"}
     else:
         payload = payload_for(n.kind, n.link, n.pk, admin_section=_admin_section(n, u.role))
     ok, again, last = 0, [], ""
