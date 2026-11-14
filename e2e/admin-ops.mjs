@@ -40,16 +40,19 @@ await step('1. export the filtered list as an Arabic CSV', async () => {
   if (!text.startsWith('﻿الرقم,الاسم,البريد') || !text.includes('يوسف أحمد') || !text.includes('سارة أحمد')) throw new Error('csv ' + text.slice(0, 80));
   if (text.includes('parent@halqa.app')) throw new Error('parents in the students export');
 });
-await step('2. assign a teacher to two students (one already has them)', async () => {
+await step('2. move two students to another teacher (one teacher per student: «إنهاء ارتباطهم…» moves them)', async () => {
   await pick('يوسف أحمد', 'سارة أحمد');
   await run('تعيين معلم', async (d) => {
     await d.locator('button[type=submit]').click();
     await d.getByText('أكمل: المعلم.').waitFor();
     await d.getByLabel('المعلم').selectOption({ label: 'الشيخ خالد العمري' });
+    await d.getByLabel('إنهاء ارتباطهم بمعلميهم الحاليين').check();
   });
   await page.getByText(/تم تنفيذ الإجراء على/).first().waitFor();
   await settle();
-  await page.getByRole('row').filter({ hasText: 'سارة أحمد' }).getByText('الشيخ خالد العمري', { exact: false }).waitFor();
+  const row = page.getByRole('row').filter({ hasText: 'سارة أحمد' });
+  await row.getByText('الشيخ خالد العمري', { exact: false }).waitFor();
+  if (await row.getByText('عبدالرحمن السالم', { exact: false }).count()) throw new Error('previous teacher still listed');
 });
 await step('3. add both to a course; already-enrolled are skipped, not failed', async () => {
   await pick('يوسف أحمد', 'سارة أحمد');
