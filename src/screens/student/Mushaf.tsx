@@ -129,7 +129,7 @@ export default function Mushaf() {
         )}
       </div>
 
-      <MushafPlayer audioName={audioName} pubAudio={pubAudio} reciter={reciter} playL={playL} />
+      <MushafPlayer audioName={audioName} pubAudio={pubAudio} reciter={reciter} playL={playL} surahName={name} />
     </div>
   );
 }

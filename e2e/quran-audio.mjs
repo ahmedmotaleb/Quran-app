@@ -56,6 +56,11 @@ const starts = async (R) => (await R.page.evaluate(() => window.__plays)).filter
 const clearPlays = (R) => R.page.evaluate(() => { window.__plays.length = 0; });
 const waitPlays = async (R, n) => { for (let i = 0; i < 100 && (await starts(R)).length < n; i++) await R.page.waitForTimeout(100); };
 const stopBtn = (R) => R.page.getByRole('button', { name: 'إيقاف التلاوة' });
+// The settings are a bottom sheet (closed by Play and when the Mushaf opens): open it before changing a setting.
+const openSettings = async (R) => {
+  const t = R.page.getByRole('button', { name: 'توسيع مشغل التلاوة' });
+  if (await t.isVisible()) { await t.click(); await R.page.locator('[data-testid=mushaf-player][data-open=true]').waitFor(); await R.page.waitForTimeout(300); }
+};
 async function rangeTo(R, to) {  // the range starts at 1..10; shrink it to 1 (the minimum) and grow it back to `to`
   for (let i = 0; i < 10; i++) await R.page.getByRole('button', { name: 'نهاية النطاق ناقص' }).click();
   for (let i = 1; i < to; i++) await R.page.getByRole('button', { name: 'نهاية النطاق زائد' }).click();
@@ -73,7 +78,7 @@ await step(A.page, 'without an approved source nothing plays and the reader is t
 const R = await reader(ON);
 await step(R.page, '×3: the SAME ayah plays three complete times before the next one (1 1 1 2 2 2), then stops', async () => {
   await rangeTo(R, 2); await clearPlays(R);
-  await repBtn(R, 3).click();
+  await openSettings(R); await repBtn(R, 3).click();
   if (await repBtn(R, 3).getAttribute('aria-pressed') !== 'true') throw new Error('×3 not selected');
   await playBtn(R).click();
   await stopBtn(R).waitFor();
@@ -83,14 +88,14 @@ await step(R.page, '×3: the SAME ayah plays three complete times before the nex
 });
 await step(R.page, '×1 and ×5 follow the same rule', async () => {
   for (const [n, want] of [[1, '1,2'], [5, '1,1,1,1,1,2,2,2,2,2']]) {
-    await clearPlays(R); await repBtn(R, n).click(); await playBtn(R).click();
+    await clearPlays(R); await openSettings(R); await repBtn(R, n).click(); await playBtn(R).click();
     await stopBtn(R).waitFor(); await playBtn(R).waitFor({ timeout: 20000 });
     const got = await starts(R); if (got.join() !== want) throw new Error(`×${n} played ${got.join(' ')}`);
   }
 });
 await step(R.page, '∞ repeats the current ayah until stopped, never moving on', async () => {
   await clearPlays(R);
-  await repBtn(R, 0).click();
+  await openSettings(R); await repBtn(R, 0).click();
   await playBtn(R).click();
   await status(R).getByText('مستمر', { exact: false }).waitFor();
   await waitPlays(R, 6);
@@ -102,20 +107,20 @@ await step(R.page, '∞ repeats the current ayah until stopped, never moving on'
 });
 await step(R.page, 'range loop with ×3: the range restarts and each ayah still plays three times', async () => {
   await clearPlays(R);
-  await repBtn(R, 3).click();
-  await R.page.getByLabel('إعادة النطاق من البداية').check();
+  await openSettings(R); await repBtn(R, 3).click();
+  await openSettings(R); await R.page.getByLabel('إعادة النطاق من البداية').check();
   await playBtn(R).click(); await waitPlays(R, 8);
   await stopBtn(R).click();
   const got = (await starts(R)).slice(0, 8);
   if (got.join() !== '1,1,1,2,2,2,1,1') throw new Error('played ' + got.join(' '));
-  await R.page.getByLabel('إعادة النطاق من البداية').uncheck();
+  await openSettings(R); await R.page.getByLabel('إعادة النطاق من البداية').uncheck();
 });
 await step(R.page, 'speed choice sticks for every repetition, and carrying on past the range', async () => {
   await clearPlays(R);
-  await R.page.getByRole('button', { name: 'السرعة 1.25' }).click();
+  await openSettings(R); await R.page.getByRole('button', { name: 'السرعة 1.25' }).click();
   if (await R.page.getByRole('button', { name: 'السرعة 1.25' }).getAttribute('aria-pressed') !== 'true') throw new Error('speed not selected');
-  await repBtn(R, 1).click();
-  await R.page.getByLabel('متابعة بعد نهاية النطاق').check();
+  await openSettings(R); await repBtn(R, 1).click();
+  await openSettings(R); await R.page.getByLabel('متابعة بعد نهاية النطاق').check();
   await playBtn(R).click();
   await waitPlays(R, 4);
   const got = await starts(R);
@@ -124,10 +129,10 @@ await step(R.page, 'speed choice sticks for every repetition, and carrying on pa
   const rates = (await R.page.evaluate(() => window.__plays)).map((x) => x.r);
   if (!rates.every((r) => r === 1.25)) throw new Error('rates ' + rates.join(' '));
   await stopBtn(R).click();
-  await R.page.getByLabel('متابعة بعد نهاية النطاق').uncheck();
+  await openSettings(R); await R.page.getByLabel('متابعة بعد نهاية النطاق').uncheck();
 });
 await step(R.page, 'leaving the Mushaf stops the recitation', async () => {
-  await repBtn(R, 0).click(); await playBtn(R).click(); await waitPlays(R, 1);
+  await openSettings(R); await repBtn(R, 0).click(); await playBtn(R).click(); await waitPlays(R, 1);
   await R.page.getByRole('button', { name: 'رجوع' }).first().click();
   const n = (await starts(R)).length; await R.page.waitForTimeout(1000);
   if ((await starts(R)).length > n + 1) throw new Error('audio continued after leaving');
@@ -137,7 +142,7 @@ await step(R.page, 'leaving the Mushaf stops the recitation', async () => {
 const P = await reader(ON, 1500);
 await step(P.page, 'pause keeps the ayah, the place in it and the count; resume carries on; nothing advances while paused', async () => {
   await rangeTo(P, 1); await clearPlays(P);
-  await repBtn(P, 3).click(); await playBtn(P).click();
+  await openSettings(P); await repBtn(P, 3).click(); await playBtn(P).click();
   await waitPlays(P, 2);                                   // second play of ayah 1
   await P.page.waitForTimeout(400);
   await P.page.getByRole('button', { name: 'إيقاف مؤقت' }).click();
@@ -152,14 +157,14 @@ await step(P.page, 'pause keeps the ayah, the place in it and the count; resume 
 });
 await step(P.page, 'changing ×3 to ×1 during playback applies when the ayah ends', async () => {
   await rangeTo(P, 2); await clearPlays(P);
-  await repBtn(P, 3).click(); await playBtn(P).click();
-  await waitPlays(P, 1); await repBtn(P, 1).click();
+  await openSettings(P); await repBtn(P, 3).click(); await playBtn(P).click();
+  await waitPlays(P, 1); await openSettings(P); await repBtn(P, 1).click();
   await playBtn(P).waitFor({ timeout: 15000 });
   if ((await starts(P)).join() !== '1,2') throw new Error('played ' + (await starts(P)).join(' '));
 });
 await step(P.page, 'choosing another ayah while repeating starts a fresh count there', async () => {
   await clearPlays(P);
-  await repBtn(P, 0).click(); await playBtn(P).click();
+  await openSettings(P); await repBtn(P, 0).click(); await playBtn(P).click();
   await waitPlays(P, 2);
   await P.app.locator('#ayah-3').click();
   await P.page.getByRole('button', { name: 'استمع من هذه الآية' }).click();
@@ -221,7 +226,7 @@ await step(Q.page, 'Quran Foundation source: the surah audio list loads on open 
   await Q.app.getByText('الحصري — المصحف المعلم', { exact: false }).first().waitFor();
 });
 await step(Q.page, 'choosing another reciter plays that recitation and is remembered on the device', async () => {
-  await Q.page.getByRole('combobox', { name: 'القارئ' }).selectOption({ label: 'مشاري راشد العفاسي' });
+  await openSettings(Q); await Q.page.getByRole('combobox', { name: 'القارئ' }).selectOption({ label: 'مشاري راشد العفاسي' });
   Q.played.length = 0;
   await playBtn(Q).click(); await stopBtn(Q).waitFor(); await playBtn(Q).waitFor({ timeout: 15000 });
   if (!Q.played.length || !Q.played.every((x) => x.startsWith('r7/'))) throw new Error('played ' + Q.played.join(' '));
@@ -235,9 +240,9 @@ await step(Q.page, 'changing the reciter while an ayah repeats carries on with t
   }
   await Q.app.locator('[id^="ayah-"]').first().waitFor();
   await clearPlays(Q);
-  await repBtn(Q, 0).click(); await playBtn(Q).click();
+  await openSettings(Q); await repBtn(Q, 0).click(); await playBtn(Q).click();
   await waitPlays(Q, 3);
-  await Q.page.getByRole('combobox', { name: 'القارئ' }).selectOption({ label: 'محمود خليل الحصري — المصحف المعلم' });
+  await openSettings(Q); await Q.page.getByRole('combobox', { name: 'القارئ' }).selectOption({ label: 'محمود خليل الحصري — المصحف المعلم' });
   await waitPlays(Q, 6);
   const all = (await Q.page.evaluate(() => window.__plays)).filter((x) => x.t < 0.05).map((x) => x.f);
   const at = all.findIndex((f) => f.startsWith('r12/'));
