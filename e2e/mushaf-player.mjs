@@ -1,10 +1,14 @@
-// Compact Mushaf audio panel (owner request, 14 Nov 2026), on a 360 px Android-sized screen with an approved source.
-// Checks:
-//   - about 40% shorter than the old panel (347 px), with the Quran text still in view above it;
-//   - every control at least 44×44, no overlap, no sideways scrolling;
-//   - play, stop and the repetition buttons share one row while playing;
-//   - the mini player keeps play/pause, the reciter and the repetition (tap to cycle), expands on tap, and is
-//     remembered after a reload.
+// Auto-collapsing Mushaf audio player (owner requests, 14 Nov 2026) on a 360 px Android-sized screen.
+// Acceptance checks:
+//   - opens as a mini player of about 56–64 px; the Quran text stays visible and is not covered;
+//   - Expand shows every setting; the sheet closes by the collapse button and by a downward swipe;
+//   - Play closes the sheet automatically;
+//   - expanding and collapsing during recitation never restarts, reloads or replaces the audio: the same element,
+//     no new play() or download, and currentTime keeps going;
+//   - the next ayah keeps the sheet closed;
+//   - Pause keeps the mini player; Resume continues from the same place;
+//   - the progress line moves;
+//   - 44×44 targets, no overlap, no sideways scroll.
 //   node e2e/mushaf-player.mjs <shots> [noAudioUrl, unused] [audioUrl=http://localhost:5176/]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 import { pickWho } from './lib/who.mjs';
@@ -13,7 +17,7 @@ const out = process.argv[2]; const BASE = (process.argv[4] || 'http://localhost:
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 let fails = 0;
 const step = async (p, name, fn) => { try { await fn(); console.log('OK  ', name); } catch (e) { fails++; console.log('FAIL', name, e.message.split('\n')[0]); await p.screenshot({ path: `${out}/player-fail-${name.replace(/\W+/g, '_')}.png` }); } };
-function silentWav(ms = 2000) {
+function silentWav(ms) {
   const n = Math.round(8 * ms), buf = Buffer.alloc(44 + n * 2);
   buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16);
   buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(16000, 28);
@@ -21,7 +25,22 @@ function silentWav(ms = 2000) {
   return buf;
 }
 const ctx = await b.newContext({ viewport: { width: 360, height: 760 }, timezoneId: 'Africa/Cairo' });
-await ctx.route('https://audio.e2e.test/**', (r) => r.fulfill({ status: 200, contentType: 'audio/wav', body: silentWav() }));
+// Every play() with the element it was called on (tagged once) and the time it started from.
+await ctx.addInitScript(() => {
+  window.__plays = []; let n = 0;
+  const orig = HTMLMediaElement.prototype.play;
+  HTMLMediaElement.prototype.play = function () { this.__id ??= ++n; window.__el = this; window.__plays.push({ id: this.__id, f: this.src.split('/').pop(), t: this.currentTime }); return orig.call(this); };
+});
+const downloads = [];
+const WAV = silentWav(4000);   // 4 s per ayah: long enough to watch it continue
+await ctx.route(/audio\.e2e\.test/, (r) => { downloads.push(r.request().url()); return r.fulfill({ status: 200, contentType: 'audio/wav', body: WAV }); });
+// Two reciters, so the reciter choice is part of the sheet (the CI server's source has a single one).
+await ctx.route('**/api/v1/settings/public', async (r) => {
+  const res = await r.fetch(); const j = await res.json();
+  j.ayah_audio = { provider: 'template', url: 'https://audio.e2e.test/{surah}{ayah}.wav', name: 'تلاوة اختبار', default: 7,
+    reciters: [{ id: 7, name: 'مشاري راشد العفاسي' }, { id: 2, name: 'عبد الباسط عبد الصمد' }] };
+  await r.fulfill({ response: res, json: j });
+});
 const page = await ctx.newPage(); page.setDefaultTimeout(10000);
 const app = page.locator('main#scr');
 if ((await (await page.request.get(BASE + 'api/ready')).json()).features?.quran_text !== 'imported') {
@@ -33,65 +52,99 @@ await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).
 await app.getByText('السلام عليكم، يوسف').waitFor();
 await app.getByRole('button', { name: /افتح المصحف/ }).click();
 await app.locator('[id^="ayah-"]').first().waitFor();
-const P = page.getByTestId('mushaf-player');
 
-const measure = () => page.evaluate(() => {
-  const el = document.querySelector('[data-testid=mushaf-player]');
-  const r = el.getBoundingClientRect();
-  const ctl = [...el.querySelectorAll('button,select,input')].filter((x) => x.offsetParent).map((x) => {
-    const box = (x.closest('label') || x).getBoundingClientRect();
-    return { n: x.getAttribute('aria-label') || x.closest('label')?.textContent.trim() || x.textContent.trim(), l: box.left, t: box.top, w: box.width, h: box.height };
+const player = page.getByTestId('mushaf-player');
+const sheet = page.locator('#mushaf-player-settings');
+const isOpen = async () => (await player.getAttribute('data-open')) === 'true';
+const status = () => page.getByTestId('recital-status').innerText();
+const expand = async () => { await page.getByRole('button', { name: 'توسيع مشغل التلاوة' }).click(); await page.locator('[data-testid=mushaf-player][data-open=true]').waitFor(); await page.waitForTimeout(320); };
+const collapse = async () => { await page.getByRole('button', { name: 'تصغير مشغل التلاوة' }).click(); await page.locator('[data-testid=mushaf-player][data-open=false]').waitFor(); await page.waitForTimeout(320); };
+const layout = (scope) => page.evaluate((sel) => {
+  const root = document.querySelector(sel);
+  const ctl = [...root.querySelectorAll('button,select,input')].filter((x) => x.offsetParent && getComputedStyle(x).visibility !== 'hidden' && !x.closest('[inert]')).map((x) => {
+    const q = (x.closest('label') || x).getBoundingClientRect();
+    return { n: x.getAttribute('aria-label') || x.closest('label')?.textContent.trim() || x.textContent.trim(), l: q.left, t: q.top, w: q.width, h: q.height };
   });
-  const small = ctl.filter((c) => c.w < 44 - 0.5 || c.h < 44 - 0.5).map((c) => `${c.n} ${Math.round(c.w)}×${Math.round(c.h)}`);
   const overlap = [];
   for (let i = 0; i < ctl.length; i++) for (let j = i + 1; j < ctl.length; j++) {
     const a = ctl[i], c = ctl[j];
-    if (a.l < c.l + c.w - 1 && c.l < a.l + a.w - 1 && a.t < c.t + c.h - 1 && c.t < a.t + a.h - 1) overlap.push(`${a.n} / ${c.n}`);
+    if (a.n !== c.n && a.l < c.l + c.w - 1 && c.l < a.l + a.w - 1 && a.t < c.t + c.h - 1 && c.t < a.t + a.h - 1) overlap.push(`${a.n} / ${c.n}`);
   }
-  const ayahVisible = [...document.querySelectorAll('[id^="ayah-"]')].some((a) => { const q = a.getBoundingClientRect(); return q.top >= 0 && q.bottom <= r.top; });
-  return { h: r.height, small, overlap, sideways: document.documentElement.scrollWidth > innerWidth, ayahVisible };
-});
+  return { small: ctl.filter((c) => c.w < 43.5 || c.h < 43.5).map((c) => `${c.n} ${Math.round(c.w)}×${Math.round(c.h)}`), overlap,
+    sideways: document.documentElement.scrollWidth > innerWidth };
+}, scope);
+const mini = () => page.locator('section[aria-label="مشغل التلاوة"]');
 
-await step(page, 'expanded: ~40% shorter than before, 44 px targets, no overlap, no sideways scroll, Quran text visible', async () => {
-  const m = await measure();
-  if (m.h > 225) throw new Error(`panel ${m.h}px (was 347)`);
-  if (m.small.length) throw new Error(`small targets: ${m.small.join(', ')}`);
-  if (m.overlap.length) throw new Error(`overlap: ${m.overlap.join(', ')}`);
-  if (m.sideways) throw new Error('sideways scroll');
-  if (!m.ayahVisible) throw new Error('no ayah visible above the panel');
-  await page.screenshot({ path: out + '/player-expanded-360.png' });
-});
-await step(page, 'playing: pause, stop and ×1…∞ in one row; speed and reciter still work', async () => {
-  await P.getByRole('button', { name: 'تشغيل النطاق' }).click();
-  await P.getByRole('button', { name: 'إيقاف التلاوة' }).waitFor();
-  const tops = await P.evaluate((el) => ['إيقاف مؤقت', 'إيقاف التلاوة', 'تكرار كل آية 1 مرات', 'تكرار الآية باستمرار']
-    .map((n) => { const q = el.querySelector(`[aria-label="${n}"]`).getBoundingClientRect(); return Math.round(q.top + q.height / 2); }));
-  if (Math.max(...tops) - Math.min(...tops) > 2) throw new Error(`not one row (centres): ${tops}`);
-  const m = await measure();
-  if (m.small.length || m.overlap.length || m.sideways) throw new Error(JSON.stringify(m));
-  await P.getByRole('button', { name: 'السرعة 1.25' }).click();
-  if (await P.getByRole('button', { name: 'السرعة 1.25' }).getAttribute('aria-pressed') !== 'true') throw new Error('speed');
-  await P.getByRole('button', { name: 'السرعة 1', exact: true }).click();
-  await P.getByRole('button', { name: 'إيقاف التلاوة' }).click();
-});
-await page.getByRole('button', { name: 'إيقاف التلاوة' }).click().catch(() => {});  // stopped even if the step above failed
-await step(page, 'mini player: play, reciter, repetition (tap cycles ×1→×3, applied); expands on tap; the mini choice is remembered after a restart', async () => {
-  await P.getByRole('button', { name: 'تصغير مشغل التلاوة' }).click();
-  await page.locator('[data-testid=mushaf-player][data-mini=true]').waitFor();
-  const m = await measure();
-  if (m.h > 70 || m.small.length || m.overlap.length || m.sideways) throw new Error(JSON.stringify(m));
-  await P.getByRole('button', { name: 'تشغيل النطاق' }).waitFor();
-  await P.getByRole('button', { name: /^التكرار: 1 مرات/ }).click();
-  await P.getByRole('button', { name: /^التكرار: 3 مرات/ }).waitFor();
+await step(page, 'opens as a mini player (56–64 px) that never covers the Quran text; 44 px targets; no sideways scroll', async () => {
+  if (await isOpen()) throw new Error('settings open on arrival');
+  const box = await mini().boundingBox();
+  if (box.height < 50 || box.height > 66) throw new Error(`mini ${box.height}px`);
+  // the last ayah can be scrolled fully above the mini player (it is in the page flow, not on top of the text)
+  await page.locator('[id^="ayah-"]').last().scrollIntoViewIfNeeded();
+  const last = await page.locator('[id^="ayah-"]').last().boundingBox(); const m2 = await mini().boundingBox();
+  if (last.y + last.height > m2.y + 1) throw new Error('the mini player covers the last ayah');
+  const l = await layout('[data-testid=mushaf-player]');
+  if (l.small.length || l.overlap.length || l.sideways) throw new Error(JSON.stringify(l));
+  await page.locator('[id^="ayah-"]').first().scrollIntoViewIfNeeded();
   await page.screenshot({ path: out + '/player-mini-360.png' });
-  await P.getByRole('button', { name: 'توسيع مشغل التلاوة' }).first().click();          // the mini choice applies to the full panel
-  if (await P.getByRole('button', { name: 'تكرار كل آية 3 مرات' }).getAttribute('aria-pressed') !== 'true') throw new Error('repetition from the mini player not applied');
-  await P.getByRole('button', { name: 'تصغير مشغل التلاوة' }).click();
-  await page.reload(); await app.getByText('السلام عليكم، يوسف').waitFor();   // a restart opens the home screen
-  await app.getByRole('button', { name: /افتح المصحف/ }).click(); await app.locator('[id^="ayah-"]').first().waitFor();
-  await page.locator('[data-testid=mushaf-player][data-mini=true]').waitFor();
-  await P.getByRole('button', { name: 'توسيع مشغل التلاوة' }).first().click();
-  await page.locator('[data-testid=mushaf-player][data-mini=false]').waitFor();
+});
+await step(page, 'expand shows every setting; the collapse button and a downward swipe both close it', async () => {
+  await expand();
+  for (const n of ['تكرار كل آية 1 مرات', 'تكرار كل آية 3 مرات', 'تكرار كل آية 5 مرات', 'تكرار كل آية 10 مرات', 'تكرار الآية باستمرار', 'السرعة 0.75', 'السرعة 1', 'السرعة 1.25'])
+    await sheet.getByRole('button', { name: n, exact: true }).waitFor();
+  await sheet.getByRole('combobox', { name: 'القارئ' }).waitFor();
+  await sheet.getByLabel('إعادة النطاق من البداية').waitFor(); await sheet.getByLabel('متابعة بعد نهاية النطاق').waitFor();
+  await sheet.getByRole('button', { name: /تشغيل من بداية النطاق/ }).waitFor();
+  const l = await layout('[data-testid=mushaf-player]');
+  if (l.small.length || l.overlap.length || l.sideways) throw new Error(JSON.stringify(l));
+  await page.screenshot({ path: out + '/player-sheet-360.png' });
+  await collapse();
+  await expand();
+  const h = await sheet.locator('div').first().boundingBox();           // swipe down on the handle row
+  await page.mouse.move(h.x + h.width / 2, h.y + 20); await page.mouse.down();
+  for (let y = 0; y <= 120; y += 20) await page.mouse.move(h.x + h.width / 2, h.y + 20 + y);
+  await page.mouse.up();
+  await page.locator('[data-testid=mushaf-player][data-open=false]').waitFor();
+});
+await step(page, 'Play closes the sheet automatically; expanding/collapsing never restarts, reloads or replaces the audio', async () => {
+  await expand();
+  await page.getByRole('button', { name: 'تشغيل النطاق' }).click();
+  await page.locator('[data-testid=mushaf-player][data-open=false]').waitFor();
+  await page.getByTestId('recital-status').getByText('الآية 1 ·', { exact: false }).waitFor();
+  await page.waitForTimeout(700);
+  const before = await page.evaluate(() => ({ plays: window.__plays.length, id: window.__el.__id, t: window.__el.currentTime, src: window.__el.src }));
+  const dl = downloads.length; const st = await status();
+  await expand();
+  await page.waitForTimeout(400);
+  if ((await status()) !== st) throw new Error(`status changed on expand: ${st} → ${await status()}`);
+  await collapse();
+  const after = await page.evaluate(() => ({ plays: window.__plays.length, id: window.__el.__id, t: window.__el.currentTime, src: window.__el.src, paused: window.__el.paused }));
+  if (after.plays !== before.plays || after.id !== before.id || after.src !== before.src) throw new Error(`audio restarted/replaced ${JSON.stringify([before, after])}`);
+  if (downloads.length !== dl) throw new Error('audio downloaded again');
+  if (!(after.t > before.t) || after.paused) throw new Error(`playback did not continue ${before.t} → ${after.t}`);
+});
+await step(page, 'progress line moves; the next ayah keeps the sheet closed', async () => {
+  const pct = async () => Number(await page.getByRole('progressbar', { name: 'تقدّم التلاوة في النطاق' }).getAttribute('aria-valuenow'));
+  const w0 = await pct();
+  await page.getByTestId('recital-status').getByText('الآية 2 ·', { exact: false }).waitFor({ timeout: 12000 });
+  const w1 = await pct();
+  if (!(w1 > w0)) throw new Error(`progress ${w0} → ${w1}`);
+  if (await isOpen()) throw new Error('sheet reopened on the next ayah');
+});
+await step(page, 'Pause keeps the mini player; Resume continues from the same place', async () => {
+  await page.getByRole('button', { name: 'إيقاف مؤقت' }).click();
+  await page.getByTestId('recital-status').getByText('متوقفة مؤقتًا', { exact: false }).waitFor();
+  await mini().waitFor();
+  const p = await page.evaluate(() => ({ t: window.__el.currentTime, f: window.__el.src.split('/').pop(), id: window.__el.__id }));
+  await page.waitForTimeout(600);
+  const p2 = await page.evaluate(() => window.__el.currentTime);
+  if (Math.abs(p2 - p.t) > 0.05) throw new Error('moved while paused');
+  await page.getByRole('button', { name: 'متابعة التلاوة' }).click();
+  await page.waitForTimeout(500);
+  const r = await page.evaluate(() => ({ t: window.__el.currentTime, f: window.__el.src.split('/').pop(), id: window.__el.__id, paused: window.__el.paused }));
+  if (r.f !== p.f || r.id !== p.id || r.t < p.t || r.paused) throw new Error(`resume ${JSON.stringify([p, r])}`);
+  if (await isOpen()) throw new Error('sheet opened on resume');
+  await page.getByRole('button', { name: 'إيقاف التلاوة' }).click();
 });
 await b.close();
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
