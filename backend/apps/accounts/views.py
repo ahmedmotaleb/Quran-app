@@ -457,8 +457,8 @@ class AcceptInvitationView(APIView):
                     raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"email": ["مطلوب"], "full_name": ["مطلوب"], "password": ["مطلوب"]})
                 if inv.email and email != inv.email:
                     raise invalid
-                if not d.get("gender"):  # the teacher's title: «الشيخ» / «الأستاذة» (display.py)
-                    raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"gender": ["اختر اللقب: الشيخ أو الأستاذة."]})
+                if not d.get("gender"):  # the teacher's title: «الأستاذ» / «الأستاذة» (display.py)
+                    raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"gender": ["اختر اللقب: الأستاذ أو الأستاذة."]})
                 if User.objects.filter(email=email).exists():
                     raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"email": ["هذا البريد مسجّل بالفعل."]})
                 try:

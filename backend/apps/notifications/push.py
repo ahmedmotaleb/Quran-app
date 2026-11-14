@@ -30,6 +30,7 @@ GENERIC = [
     ("reminder_review", ("الحلقة", "حان وقت المراجعة اليومية.")),
     ("reminder_evening", ("الحلقة", "لديك مهام لم تكتمل اليوم.")),
     ("session_reminder", ("الحلقة", "تذكير بجلسة قادمة.")),
+    ("session_soon", ("الحلقة | تذكير بالجلسة", "حلقتك تبدأ قريبًا. استعد للانضمام إلى الجلسة.")),
     ("session_cancelled", ("الحلقة", "تحديث على أحد مواعيدك.")),
     ("booking", ("الحلقة", "تحديث على أحد مواعيدك.")),
     ("submission", ("الحلقة", "تسليم جديد بانتظار مراجعتك.")),
@@ -66,7 +67,7 @@ ASSIGNMENT_KINDS = ("teacher_assigned", "student_assigned", "student_moved")
 # kind prefix → preference category («الإشعارات» in حسابي). Kinds not listed (attendance warnings, suspension, excuse
 # decisions, parents' child updates, admin alerts) concern the account itself and are always pushed.
 CATEGORY = [("assignment", "tasks"), ("review_due", "tasks"), ("correction", "tasks"), ("lesson", "tasks"), ("quiz", "tasks"),
-            ("submission", "tasks"), ("session_reminder", "sessions"), ("session_cancelled", "sessions"), ("booking", "sessions"), ("waitlist", "sessions"),
+            ("submission", "tasks"), ("session_reminder", "sessions"), ("session_soon", "sessions"), ("session_cancelled", "sessions"), ("booking", "sessions"), ("waitlist", "sessions"),
             ("makeup", "sessions"), ("circle", "sessions"), ("feedback", "feedback"), ("weekly_report", "news"), ("admin_message", "news"),
             ("reminder", "reminders"), ("teacher_pick", "reminders")]
 # Adhkar have their own on/off («تفعيل الأذكار», apps.adhkar.Preferences); never mixed with learning/admin notices.
@@ -265,6 +266,9 @@ def deliver(notification) -> int:
     if n.kind.startswith("adhkar_"):
         # A dhikr/dua: its verified text and source are the point of the notice and contain nothing personal.
         payload = {"title": n.title[:80], "body": n.body[:300], "url": f"/#/n/{n.pk}", "tag": f"adhkar-{n.pk}"}
+    elif n.kind == "session_soon":
+        # «الحلقة | تذكير بالجلسة» — the owner's wording; nothing personal in it (no names, no link).
+        payload = {"title": n.title[:80], "body": n.body[:300], "url": f"/#/n/{n.pk}", "tag": f"session-soon-{(n.data or {}).get('occurrence', n.pk)}"}
     elif n.kind in ASSIGNMENT_KINDS and (n.data or {}).get("sync") == "assignment":
         # Teacher changes (owner request 14 Nov 2026): the owner's own wording, with the teacher's / student's name.
         payload = {"title": n.title[:80], "body": n.body[:300], "url": f"/#/n/{n.pk}", "tag": f"assignment-{n.pk}", "sync": "assignment"}

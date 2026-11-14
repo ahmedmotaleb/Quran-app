@@ -66,6 +66,11 @@ def ready(request):
         from apps.quran.models import QuranSource
 
         features["quran_text"] = "imported" if QuranSource.objects.filter(is_active=True).exists() else "not_imported"
+    from apps.scheduling import alarm
+
+    # 15-minute session reminders: "alarm" = Cloud Tasks wakes the server at T−15 (deploy/gcp-reminders.sh);
+    # "fallback" = only while someone has the app open, plus the hourly job (may be late or missed).
+    features["session_reminders"] = "alarm" if alarm.configured() else "fallback"
     return Response({"status": "ok" if ok else "unavailable", "checks": checks, "features": features}, status=200 if ok else 503)
 
 
@@ -123,3 +128,23 @@ def api_500(request):
     from django.views.defaults import server_error
 
     return _json_error(request, 500, "server_error", "", lambda: server_error(request))
+
+
+FINGERPRINT = __import__("re").compile(r"^([0-9A-F]{2}:){31}[0-9A-F]{2}$")
+
+
+def assetlinks(request):
+    """Digital Asset Links for the Android app (android/, a Trusted Web Activity): lets the app open HALQA
+    full-screen in Chrome and verifies its App Links. Lists only well-formed SHA-256 fingerprints from
+    ANDROID_CERT_SHA256 (deploy/android-keystore.sh prints the value). Without one: 404, never a guess."""
+    from django.conf import settings
+    from django.http import Http404, JsonResponse
+
+    prints = [p for p in settings.ANDROID_CERT_SHA256 if FINGERPRINT.match(p)]
+    if not prints:
+        raise Http404
+    r = JsonResponse([{"relation": ["delegate_permission/common.handle_all_urls"],
+                       "target": {"namespace": "android_app", "package_name": settings.ANDROID_PACKAGE,
+                                  "sha256_cert_fingerprints": prints}}], safe=False)
+    r["Cache-Control"] = "public, max-age=3600"
+    return r

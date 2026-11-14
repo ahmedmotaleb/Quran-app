@@ -46,7 +46,7 @@ await S.page.screenshot({ path: out + '/m1-submitted.png' });
 
 const T = await session('teacher@halqa.app');
 await step(T.page, 'teacher sees live queue (no sample sessions)', async () => {
-  await T.app.getByText('مرحبًا، الشيخ عبدالرحمن السالم').waitFor();
+  await T.app.getByText('مرحبًا، الأستاذ عبدالرحمن السالم').waitFor();
   await T.app.getByText('يوسف أحمد · حفظ سورة الملك').waitFor();
   if (await T.app.getByText('عمر الحربي').count()) throw new Error('sample sessions shown');  // demo-only names
 });

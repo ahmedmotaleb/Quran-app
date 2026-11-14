@@ -187,6 +187,19 @@ tasks, and removal of abandoned uploads. The
 GitHub workflow **Scheduled maintenance** starts it at minute 23 of every hour; a failed step fails the run, so
 GitHub emails the repository owner. Run it by hand from **Actions → Scheduled maintenance → Run workflow**.
 
+## 6b-2. 15-minute session reminders (Cloud Tasks)
+
+Run once in Cloud Shell: `bash deploy/gcp-reminders.sh`. It creates the Cloud Tasks queue `halqa-reminders`, a
+callback secret in Secret Manager (not printed), and the app's settings. Afterwards `/api/ready` should show
+`"session_reminders":"alarm"`.
+
+Without it, reminders are sent only while someone has HALQA open (and by the hourly job), so they may be late or
+missed.
+
+Why not a job every 5 minutes: it would keep the Neon database awake about 730 hours a month. Neon's free plan has
+100, and the database is suspended when they run out. The alarm wakes it only when a reminder is due. Cloud Tasks'
+free tier is 1 million operations a month.
+
 ## 6c. Security settings
 
 | Setting | Default when deployed | Purpose |

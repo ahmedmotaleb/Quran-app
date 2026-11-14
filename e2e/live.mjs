@@ -44,11 +44,11 @@ await step('plan shows server tasks', async () => {
 await page.screenshot({ path: out + '/l3-plan.png' });
 await step('teacher directory from API', async () => {
   await page.getByRole('button', { exact: true, name: 'الجلسات' }).click();
-  await app.getByText('الشيخ خالد العمري').waitFor(); await app.getByText('2 معلم').waitFor();
+  await app.getByText('الأستاذ خالد العمري').waitFor(); await app.getByText('2 معلم').waitFor();
 });
 let picked = ''; let bookedDay = 2;
 await step('open teacher → real slots', async () => {
-  await app.getByText('الشيخ عبدالرحمن السالم').click();
+  await app.getByText('الأستاذ عبدالرحمن السالم').click();
   await app.getByText('المواعيد المتاحة').waitFor();
   await app.getByText('جارٍ تحميل المواعيد…').waitFor({ state: 'detached' });
   // Two or more days ahead (a slot later today could fall inside the cancel window), on the first such day with a
@@ -75,12 +75,12 @@ await step('booking persisted (reload restores session + booking)', async () => 
   await app.getByText('السلام عليكم، يوسف').waitFor({ timeout: 6000 });
   await page.getByRole('button', { exact: true, name: 'الجلسات' }).click();
   await app.getByRole('tab', { name: 'حجوزاتي' }).click();
-  await app.getByText('الشيخ عبدالرحمن السالم · فردية').first().waitFor();
+  await app.getByText('الأستاذ عبدالرحمن السالم · فردية').first().waitFor();
 });
 await page.screenshot({ path: out + '/l6-bookings.png' });
 await step('same slot is now taken for this student', async () => {
   await app.getByRole('tab', { name: 'المعلمون' }).click();
-  await app.getByText('الشيخ عبدالرحمن السالم').click();
+  await app.getByText('الأستاذ عبدالرحمن السالم').click();
   await app.getByText('جارٍ تحميل المواعيد…').waitFor({ state: 'detached' });
   await app.getByRole('option').nth(bookedDay).click();
   // individual slot capacity 1 → our booked one is now shown as taken
@@ -90,11 +90,11 @@ await step('same slot is now taken for this student', async () => {
 });
 await step('no student cancel: «طلب اعتذار» instead; the booking stays', async () => {
   await app.getByRole('tab', { name: 'حجوزاتي' }).click();
-  await app.getByText('الشيخ عبدالرحمن السالم · فردية').first().click();
+  await app.getByText('الأستاذ عبدالرحمن السالم · فردية').first().click();
   if (await app.getByRole('button', { exact: true, name: 'إلغاء الحجز' }).count()) throw new Error('student cancel button shown');
   await app.getByRole('button', { exact: true, name: 'طلب اعتذار' }).click();
   const d = page.getByRole('dialog', { name: 'طلب اعتذار عن الجلسة' });
-  await d.getByText('الشيخ عبدالرحمن السالم').waitFor();
+  await d.getByText('الأستاذ عبدالرحمن السالم').waitFor();
   await d.locator('#ex-r').fill('ظرف عائلي طارئ');
   await d.getByRole('button', { name: 'إرسال الاعتذار' }).click();
   await app.getByText('الاعتذار قيد المراجعة').waitFor();

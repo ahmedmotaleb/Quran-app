@@ -242,6 +242,14 @@ if env("REDIS_URL"):
 # Web Push (optional): VAPID keys from deploy/gcp-push.sh. Without both keys push stays off (nothing simulated).
 VAPID_PUBLIC_KEY = env("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = env("VAPID_PRIVATE_KEY", "")
+# 15-minute session reminders: Google Cloud Tasks alarm (apps/scheduling/alarm.py; deploy/gcp-reminders.sh). Optional.
+# Android app (Trusted Web Activity, android/): package and SHA-256 fingerprint(s) of its signing certificate, published
+# at /.well-known/assetlinks.json (Digital Asset Links). Public values, not secrets. Empty = no Android app (404).
+ANDROID_PACKAGE = env("ANDROID_PACKAGE", "app.halqa.quran")
+ANDROID_CERT_SHA256 = [x.strip().upper() for x in (env("ANDROID_CERT_SHA256", "") or "").split(",") if x.strip()]
+REMINDER_TASKS_QUEUE = env("REMINDER_TASKS_QUEUE", "")
+REMINDER_TASKS_URL = env("REMINDER_TASKS_URL", "")
+REMINDER_TASKS_SECRET = env("REMINDER_TASKS_SECRET", "")
 VAPID_SUBJECT = env("VAPID_SUBJECT", "") or (APP_URL or "mailto:admin@example.invalid")
 
 # Admin accounts must have two-step verification before using admin APIs (default on in staging/production).

@@ -58,7 +58,7 @@ def test_subscribe_receive_generic_text_and_opt_out(world, keys, monkeypatch):
     c = client_for(world.s1)
     assert c.post("/api/v1/push/subscriptions", SUB, format="json").status_code == 201
     assert c.get("/api/v1/push/config", {"endpoint": SUB["endpoint"]}).json()["this_device"] is True
-    notify(world.s1, "feedback_new", "تقييم جديد من الشيخ فلان", "سورة الملك 1–10: 4 من 5", link="/tasks/7", dedupe="t1")
+    notify(world.s1, "feedback_new", "تقييم جديد من الأستاذ فلان", "سورة الملك 1–10: 4 من 5", link="/tasks/7", dedupe="t1")
     [(ep, payload)] = fake.sent
     n = Notification.objects.get(recipient=world.s1, kind="feedback_new")
     assert ep == SUB["endpoint"] and payload["body"] == "وصل تقييم جديد من معلمك." and payload["url"] == f"/#/n/{n.pk}"

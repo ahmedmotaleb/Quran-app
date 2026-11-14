@@ -41,8 +41,25 @@ class UnreadCount(APIView):
         from .services import ensure_session_reminders
 
         ensure_session_reminders(request.user)
+        _soon_tick()
         return Response({"unread": Notification.objects.filter(recipient=request.user, read_at__isnull=True).exclude(kind__startswith="adhkar_").count(),
                          "assignment_rev": assignment_rev(request.user)})
+
+
+def _soon_tick() -> None:
+    """Safety net for the 15-minute session reminders (apps/scheduling/reminders.py): while anyone has HALQA open, the
+    due reminders are checked at most once a minute (shared cache), so a missed T−15 alarm is caught before the start."""
+    from django.core.cache import cache
+
+    if cache.add("session_soon_tick", 1, 60):
+        try:
+            from apps.scheduling.reminders import send_due
+
+            send_due()
+        except Exception:  # noqa: BLE001 — never break the unread count
+            import logging
+
+            logging.getLogger(__name__).exception("session_soon_tick_failed")
 
 
 def assignment_rev(user) -> str:

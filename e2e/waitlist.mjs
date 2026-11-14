@@ -24,7 +24,7 @@ await app.getByRole('button', { exact: true, name: 'تسجيل الدخول' }).
 const openTeacher = async () => {
   await page.getByRole('button', { exact: true, name: 'الجلسات' }).click();
   await app.getByRole('tab', { name: 'المعلمون' }).click().catch(() => {});
-  await app.getByText('الشيخ عبدالرحمن السالم').click();
+  await app.getByText('الأستاذ عبدالرحمن السالم').click();
   await app.getByText('جارٍ تحميل المواعيد…').waitFor({ state: 'detached' });
 };
 

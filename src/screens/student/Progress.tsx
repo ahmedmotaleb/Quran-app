@@ -39,9 +39,9 @@ export default function Progress() {
   const evals = useEvals();
   const pending = s.tasks.filter((t) => t.status === 'submitted');
   const approved = [
-    { t: 'سورة النبأ', d: 'كاملة · اعتمدها الشيخ عبدالرحمن' },
-    { t: 'سورة النازعات', d: 'كاملة · اعتمدها الشيخ عبدالرحمن' },
-    { t: 'سورة القلم', d: 'الآيات 1–15 · اعتمدها الشيخ عبدالرحمن' },
+    { t: 'سورة النبأ', d: 'كاملة · اعتمدها الأستاذ عبدالرحمن' },
+    { t: 'سورة النازعات', d: 'كاملة · اعتمدها الأستاذ عبدالرحمن' },
+    { t: 'سورة القلم', d: 'الآيات 1–15 · اعتمدها الأستاذ عبدالرحمن' },
     ...s.tasks.filter((t) => t.type === 'hifz' && t.status === 'reviewed' && t.id !== 'k4' && s.fb[t.id]?.decision === 'approve')
       .map((t) => ({ t: 'سورة ' + surahName(t.s), d: `الآيات ${t.from}–${t.to} · اعتمدها المعلم` })),
   ];
