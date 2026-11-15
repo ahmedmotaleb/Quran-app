@@ -1,5 +1,7 @@
 // PWA update during a recording (pack prompt 29): a new version is published while the student is recording.
 // "Update now" must not reload over the recording; the update applies itself after the recording is submitted.
+// Also: «حدّث الآن» on a page that a service worker does not control yet (first visit in a browser) reloads into the
+// new version (owner report 15 Nov 2026: the button did nothing).
 // Runs on the live preview build (default http://localhost:4175/) with a fake microphone:
 //   NEW_VERSION_CMD='<shell that publishes a changed sw.js>' node e2e/pwa-update.mjs <shots> [liveUrl]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -65,6 +67,28 @@ await step('the submission survived the update', async () => {
   const list = await r.json(); const items = list.results || list;
   const t = items.find((x) => x.title === 'حفظ سورة الملك');
   if (!t || t.status !== 'submitted') throw new Error(`task status ${t && t.status}`);
+});
+await step('first visit (no controlling service worker): «حدّث الآن» reloads into the new version', async () => {
+  const c2 = await chromium.launchPersistentContext(mkdtempSync(join(tmpdir(), 'halqa-upd-')), { executablePath: process.env.CHROMIUM_PATH || undefined, viewport: { width: 390, height: 844 } });
+  try {
+    const p = c2.pages()[0] ?? await c2.newPage(); p.setDefaultTimeout(15000);
+    let n = 0; p.on('load', () => { n++; });
+    await p.goto(LIVE);
+    await p.waitForFunction(() => navigator.serviceWorker.ready.then((r) => !!r.active));
+    if (await p.evaluate(() => !!navigator.serviceWorker.controller)) throw new Error('page already controlled (not a first visit)');
+    execSync(process.env.NEW_VERSION_CMD || 'true', { stdio: 'inherit' });
+    await p.evaluate(() => navigator.serviceWorker.getRegistration().then((r) => r && r.update()));
+    await p.getByText('يتوفر إصدار جديد من التطبيق.').waitFor({ timeout: 30000 });
+    const n0 = n;
+    await p.getByRole('button', { name: 'حدّث الآن' }).click();
+    for (let i = 0; i < 20 && n === n0; i++) await p.waitForTimeout(500);
+    if (n === n0) throw new Error('no reload after «حدّث الآن»');
+    await p.waitForFunction(() => !!navigator.serviceWorker.controller);
+    const st = await p.evaluate(async () => ({ waiting: !!(await navigator.serviceWorker.getRegistration()).waiting }));
+    if (st.waiting) throw new Error('a version is still waiting');
+    await p.waitForTimeout(1000);
+    if (await p.getByText('يتوفر إصدار جديد من التطبيق.').count()) throw new Error('the banner is still shown after the update');
+  } finally { await c2.close(); }
 });
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
 process.exitCode = fails ? 1 : 0;
