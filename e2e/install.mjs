@@ -2,7 +2,7 @@
 // never shows (installed, standalone, Home Screen, desktop), the real prompt() call and the person's choice, «لاحقًا»
 // with a 7-day cooldown, layout above the tab bar, RTL at 320 px, and no notification permission request.
 // The browser's `beforeinstallprompt` is dispatched with a controlled userChoice (Chrome's real installability is
-// checked in pwa.mjs).   node e2e/install.mjs <shots> [base-url]
+// checked in pwa.mjs, and so is an offer made before the app's code loaded).   node e2e/install.mjs <shots> [base-url]
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 import { pickWho } from './lib/who.mjs';
 const out = process.argv[2]; const BASE = (process.argv[3] || 'http://localhost:5174/').replace(/\/?$/, '/');
@@ -55,21 +55,29 @@ const offer = (page, outcome = 'accepted') => page.evaluate((outcome) => {
 const sheet = (page) => page.getByTestId('install-sheet');
 const none = async (page, why) => { await page.waitForTimeout(400); if (await sheet(page).count()) throw new Error('install sheet shown: ' + why); };
 
-await step(null, '1. Android Chrome, not installed: sheet appears once the browser offers installation', async () => {
+await step(null, '1. Android Chrome, not installed: Chrome-menu steps before the offer, then the install button', async () => {
   const { ctx, page } = await open('android');
-  await none(page, 'before the browser offered installation');
+  const m = sheet(page); await m.getByTestId('install-menu-steps').waitFor();      // owner report 15 Nov 2026: no message
+  await m.getByText('افتح قائمة Chrome ثم اختر «تثبيت التطبيق»', { exact: false }).waitFor();
+  await m.getByText('«تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية»', { exact: false }).waitFor();
+  if (await m.getByRole('button', { name: 'تثبيت التطبيق', exact: true }).count()) throw new Error('install button without an offer');
+  await page.screenshot({ path: out + '/install-android-menu.png' });
   await offer(page);
   const s = sheet(page); await s.waitFor();
   await s.getByRole('heading', { name: 'ثبّت تطبيق الحلقة' }).waitFor();
   await s.getByText('ثبّت التطبيق على جهازك للوصول بشكل أسرع واستقبال الإشعارات بسهولة.').waitFor();
   await s.getByRole('button', { name: 'تثبيت التطبيق' }).waitFor(); await s.getByRole('button', { exact: true, name: 'لاحقًا' }).waitFor();
   if (!(await s.locator('img[src="/icons/icon-192.png"]').count())) throw new Error('no app icon');
+  if (await s.getByTestId('install-menu-steps').count()) throw new Error('menu steps kept after the offer');
   await page.screenshot({ path: out + '/install-android.png' });
   await ctx.close();
 });
-await step(null, '2. Android Chrome, already installed from this browser: no sheet', async () => {
+await step(null, '2. Android Chrome, already installed from this browser: no sheet; a later offer (app removed) shows it again', async () => {
   const { ctx, page } = await open('android', { storage: { 'halqa.install.installed': '1' } });
-  await offer(page); await none(page, 'installed');
+  await none(page, 'installed');
+  await offer(page);                                     // Chrome offers only when HALQA is not installed: the mark is stale
+  await sheet(page).getByRole('button', { name: 'تثبيت التطبيق' }).waitFor();
+  if (await page.evaluate(() => localStorage.getItem('halqa.install.installed'))) throw new Error('stale installed mark kept');
   await ctx.close();
 });
 await step(null, '3. Android installed PWA (standalone): no sheet', async () => {
@@ -87,7 +95,7 @@ await step(null, '4–5. «تثبيت التطبيق» opens the browser dialog;
   if ((await page.evaluate(() => localStorage.getItem('halqa.install.installed'))) !== '1') throw new Error('installed state not kept');
   if (await page.evaluate(() => window.__perm)) throw new Error('notification permission requested during install');
   await page.reload(); await page.locator('main#scr').getByRole('button', { exact: true, name: 'تخطَّ' }).click();
-  await offer(page); await none(page, 'after reload when installed');
+  await none(page, 'after reload when installed');     // Chrome does not offer an installed app again
   await ctx.close();
 });
 await step(null, '6. cancelled in the browser dialog: sheet hidden, not shown again on reload', async () => {

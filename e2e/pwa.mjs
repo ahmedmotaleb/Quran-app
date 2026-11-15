@@ -50,6 +50,28 @@ await step(page, 'the manifest (installability) only in browsers whose Android i
   }
   await b2.close();
 });
+await step(page, 'Chrome on Android offers installation before the app loads: the offer is kept, «تثبيت التطبيق» shows', async () => {
+  // Owner report 15 Nov 2026: no install message. Chrome fires `beforeinstallprompt` once; public/install-gate.js keeps
+  // it for src/pwa/install.ts. Dispatched at readyState «interactive», before the module scripts run.
+  const b2 = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+  const c = await b2.newContext({ userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36', isMobile: true, hasTouch: true, viewport: { width: 390, height: 800 }, serviceWorkers: 'block' });
+  await c.addInitScript(() => document.addEventListener('readystatechange', () => {
+    if (document.readyState !== 'interactive') return;
+    window.__appLoadedAtOffer = !!document.querySelector('main#scr');
+    const e = new Event('beforeinstallprompt', { cancelable: true });
+    e.prompt = async () => { window.__prompted = (window.__prompted || 0) + 1; };
+    e.userChoice = Promise.resolve({ outcome: 'dismissed', platform: 'web' });
+    window.dispatchEvent(e);
+  }));
+  const p = await c.newPage(); p.setDefaultTimeout(10000);
+  try {
+    await p.goto(DEMO);
+    await p.locator('main#scr').getByRole('button', { exact: true, name: 'تخطَّ' }).click();
+    if (await p.evaluate(() => window.__appLoadedAtOffer)) throw new Error('the offer came after the app loaded (not early)');
+    await p.getByTestId('install-sheet').getByRole('button', { name: 'تثبيت التطبيق' }).click();
+    await p.waitForFunction(() => window.__prompted === 1);
+  } finally { await b2.close(); }
+});
 await step(page, 'service worker installs and controls the page', async () => {
   await page.waitForFunction(() => navigator.serviceWorker?.controller || navigator.serviceWorker.ready.then(() => true), null, { timeout: 15000 });
   await page.reload();
