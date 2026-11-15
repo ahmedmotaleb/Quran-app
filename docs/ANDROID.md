@@ -15,6 +15,13 @@ below API 23 at all.
 An APK carrying this warning was most likely made with a "website to APK" converter or an old template that targets
 an old Android version.
 
+**Confirmed 15 Nov 2026 (owner's screenshot and client diagnostics):**
+- The blocked «الحلقة» was installed from **Samsung Internet** (Samsung, Android 10), through Samsung's own install
+  option (address-bar icon or menu), not HALQA's button: no `install` diagnostics event was recorded.
+- Since then, `public/install-gate.js` links the web app manifest only in Google Chrome on Android and in non-Android
+  browsers. Samsung Internet and other Android browsers no longer offer their own install of HALQA.
+- HALQA's «تثبيت التطبيق» sends them to Chrome.
+
 **The PWA does not get this warning.** Installing HALQA from Chrome («تثبيت التطبيق» / Install app) makes Chrome
 mint a WebAPK signed by Google. That is the supported install today and needs no APK file.
 

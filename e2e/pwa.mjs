@@ -24,6 +24,32 @@ await step(page, 'manifest is linked and complete', async () => {
   if (!m.icons.some((i) => i.sizes === '512x512' && i.purpose === 'maskable')) throw new Error('no maskable icon');
   for (const i of m.icons) { const r = await page.request.get(new URL(i.src, DEMO).href); if (!r.ok() || !r.headers()['content-type'].includes('png')) throw new Error('icon ' + i.src); }
 });
+await step(page, 'the manifest (installability) only in browsers whose Android install is safe: Chrome, iPhone, desktop', async () => {
+  // Owner report 15 Nov 2026: Samsung Internet built an app package that Play Protect blocked. Other Android browsers
+  // get no manifest, so they offer no install of their own; «تثبيت التطبيق» sends them to Chrome (install.mjs).
+  const UAS = {
+    chromeAndroid: ['Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36', true],
+    iphone: ['Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1', true],
+    desktop: ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36', true],
+    samsung: ['Mozilla/5.0 (Linux; Android 10; SM-A505F) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/26.0 Chrome/122.0.0.0 Mobile Safari/537.36', false],
+    edge: ['Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 EdgA/130.0.0.0', false],
+    opera: ['Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 OPR/85.0.0.0', false],
+    webview: ['Mozilla/5.0 (Linux; Android 14; Pixel 8; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36', false],
+  };
+  const b2 = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+  for (const [name, [ua, want]] of Object.entries(UAS)) {
+    for (const [path, href] of [['', '/manifest.webmanifest'], ['admin/', '/admin/manifest.webmanifest']]) {
+      const c = await b2.newContext({ userAgent: ua, serviceWorkers: 'block' });
+      const p = await c.newPage();
+      await p.goto(new URL(path, DEMO).href);
+      const links = await p.locator('link[rel="manifest"]').evaluateAll((l) => l.map((x) => x.getAttribute('href')));
+      const ok = want ? links.length === 1 && links[0] === href : links.length === 0;
+      await c.close();
+      if (!ok) { await b2.close(); throw new Error(`${name} /${path}: manifest links ${JSON.stringify(links)}`); }
+    }
+  }
+  await b2.close();
+});
 await step(page, 'service worker installs and controls the page', async () => {
   await page.waitForFunction(() => navigator.serviceWorker?.controller || navigator.serviceWorker.ready.then(() => true), null, { timeout: 15000 });
   await page.reload();
