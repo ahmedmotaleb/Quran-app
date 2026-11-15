@@ -22,4 +22,7 @@
   l.rel = 'manifest';
   l.href = href;
   document.head.appendChild(l);
+  // Chrome fires `beforeinstallprompt` once, possibly before the app's code has loaded (owner report 15 Nov 2026: no
+  // install message appeared). Keep it here; src/pwa/install.ts picks it up when it starts.
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.__halqaInstallEvent = e; });
 })();

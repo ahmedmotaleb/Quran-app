@@ -59,9 +59,19 @@ function markInstalled() {
 }
 export const wasInstalled = () => installedHere;
 
+/** Chrome offers installation only when HALQA is NOT installed: a stale «installed» mark (the app was removed since)
+ *  must not hide the offer for good. */
+function offered(e: BeforeInstallPromptEvent) {
+  deferred = e;
+  if (installedHere) { installedHere = false; try { localStorage.removeItem(INSTALLED_KEY); } catch { /* private mode */ } }
+  emit();
+}
 if (typeof window !== 'undefined') {
-  // Keep Chrome's event for our own «تثبيت التطبيق» button (the real browser dialog opens from it).
-  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e as BeforeInstallPromptEvent; emit(); });
+  // Keep Chrome's event for our own «تثبيت التطبيق» button (the real browser dialog opens from it). It may have
+  // fired before this code loaded: public/install-gate.js keeps it in window.__halqaInstallEvent.
+  const early = (window as Window & { __halqaInstallEvent?: BeforeInstallPromptEvent }).__halqaInstallEvent;
+  if (early) offered(early);
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); offered(e as BeforeInstallPromptEvent); });
   window.addEventListener('appinstalled', markInstalled);
   window.matchMedia?.('(display-mode: standalone)').addEventListener?.('change', emit);
 }

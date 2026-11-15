@@ -5,6 +5,7 @@
  *    Google Play Protect can block as «built for an older version of Android» (owner report 14 Nov 2026). The sheet
  *    explains that and offers «فتح في Chrome» first. The browser's own install stays available as a second,
  *    clearly labelled option. Play Protect is never bypassed.
+ *    Before Chrome offers (or when it does not fire the event at all), the sheet shows Chrome's menu steps instead.
  *  - iPhone/iPad: no install dialog exists, so the sheet explains Share → «إضافة إلى الشاشة الرئيسية».
  *  - Never when running installed (standalone / Home Screen), after the browser reported the install, on a desktop
  *    browser, or within 7 days of «لاحقًا» (or a cancelled install dialog).
@@ -33,12 +34,16 @@ function rememberLater() { try { localStorage.setItem(LATER_KEY, String(Date.now
 const inAppBrowser = () => /FBAN|FBAV|Instagram|Line\//i.test(navigator.userAgent);
 const phone = () => isAndroid() || isIos() || /Mobi/i.test(navigator.userAgent);
 
-type Mode = 'prompt' | 'ios' | 'chrome' | 'chrome+own' | null;   // chrome+own: the other browser also offers its own install
+// chrome+own: the other browser also offers its own install. menu: Google Chrome on Android has not offered installation
+// (yet): its menu still installs, so the sheet shows those steps; it becomes «prompt» when Chrome offers (owner report
+// 15 Nov 2026: no install message appeared).
+type Mode = 'prompt' | 'ios' | 'chrome' | 'chrome+own' | 'menu' | null;
 function mode(): Mode {
   if (typeof window === 'undefined' || isStandalone() || wasInstalled() || !phone()) return null;
   if (androidNotChrome()) return hasInstallPrompt() ? 'chrome+own' : 'chrome';
   if (hasInstallPrompt()) return 'prompt';
   if (isIos() && !inAppBrowser()) return 'ios';
+  if (isAndroid() && !inAppBrowser()) return 'menu';
   return null;
 }
 
@@ -58,6 +63,7 @@ export function InstallBanner() {
     } catch { later(); } finally { setBusy(false); }
   };
   const ios = m === 'ios';
+  const menu = m === 'menu';
   const chrome = m === 'chrome' || m === 'chrome+own';
   const installHere = async () => { noteInstall('other_browser'); await install(); };
   const step = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, lineHeight: 1.6 } as const;
@@ -72,7 +78,8 @@ export function InstallBanner() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <h2 id="install-title" style={{ margin: 0, fontSize: 17, fontWeight: 800, color: color.ink }}>ثبّت تطبيق الحلقة</h2>
           <p style={{ margin: '4px 0 0', fontSize: 14, lineHeight: 1.7, color: color.body }}>
-            {ios ? 'لتثبيت الحلقة على جهازك، اضغط زر المشاركة ثم اختر «إضافة إلى الشاشة الرئيسية».'
+            {menu ? 'لتثبيت الحلقة على جهازك، افتح قائمة Chrome ثم اختر «تثبيت التطبيق».'
+              : ios ? 'لتثبيت الحلقة على جهازك، اضغط زر المشاركة ثم اختر «إضافة إلى الشاشة الرئيسية».'
               : chrome ? 'ثبّت الحلقة من متصفح Google Chrome: افتحها فيه ثم اضغط «تثبيت التطبيق». المتصفحات الأخرى تُنشئ التطبيق بإعدادات Android قديمة فيظهر تحذير Google Play Protect.'
               : 'ثبّت التطبيق على جهازك للوصول بشكل أسرع واستقبال الإشعارات بسهولة.'}
           </p>
@@ -88,6 +95,12 @@ export function InstallBanner() {
           <li style={step}><span style={badge}><Icon name="addSquare" size={18} /></span>٢. اختر «إضافة إلى الشاشة الرئيسية» ثم «إضافة»</li>
         </ol>
       )}
+      {menu && (
+        <ol aria-label="خطوات التثبيت" data-testid="install-menu-steps" style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <li style={step}><span style={badge} aria-hidden="true">⋮</span>١. اضغط زر القائمة ⋮ أعلى Chrome</li>
+          <li style={step}><span style={badge}><Icon name="addSquare" size={18} /></span>٢. اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية» ثم «تثبيت»</li>
+        </ol>
+      )}
       {m === 'chrome+own' && (
         <button onClick={() => void installHere()} disabled={busy} data-testid="install-here"
           style={{ minHeight: 44, border: 'none', background: 'transparent', color: color.muted, fontSize: 13, textDecoration: 'underline', cursor: 'pointer', textAlign: 'right', padding: 0 }}>
@@ -101,13 +114,13 @@ export function InstallBanner() {
             <Icon name="globe" size={18} /> فتح في Chrome
           </a>
         )}
-        {!ios && !chrome && (
+        {!ios && !chrome && !menu && (
           <button onClick={install} disabled={busy} aria-busy={busy} style={primaryBtn(48, 15, { flex: 1, borderRadius: 12, opacity: busy ? 0.7 : 1 })}>
             <Icon name="download" size={18} /> تثبيت التطبيق
           </button>
         )}
         <button onClick={later}
-          style={{ minHeight: 48, padding: '0 18px', borderRadius: 12, border: `1px solid ${color.borderStrong}`, background: 'transparent', color: color.primary, fontSize: 15, fontWeight: 700, cursor: 'pointer', ...(ios ? { flex: 1 } : {}) }}>
+          style={{ minHeight: 48, padding: '0 18px', borderRadius: 12, border: `1px solid ${color.borderStrong}`, background: 'transparent', color: color.primary, fontSize: 15, fontWeight: 700, cursor: 'pointer', ...(ios || menu ? { flex: 1 } : {}) }}>
           لاحقًا
         </button>
       </div>
