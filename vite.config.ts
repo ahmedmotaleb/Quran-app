@@ -18,6 +18,20 @@ const adminOwnManifest = {
   },
 };
 
+// The manifest link is added by /install-gate.js (public/), only in browsers whose install is safe (Google Chrome on
+// Android, every non-Android browser): Samsung Internet & co. build app packages that Play Protect blocks. The script
+// replaces the static <link rel="manifest"> that vite-plugin-pwa injects (and the admin page's own).
+const installGate = {
+  name: 'install-gate',
+  enforce: 'post' as const,
+  transformIndexHtml: {
+    order: 'post' as const,
+    handler(html: string) {
+      return html.replace(/<link rel="manifest" href="([^"]+)"[^>]*>/g, (_m: string, href: string) => `<script src="/install-gate.js" data-manifest="${href}"></script>`);
+    },
+  },
+};
+
 export default defineConfig({
   plugins: [
     react(),
@@ -69,6 +83,7 @@ export default defineConfig({
       devOptions: { enabled: false },
     }),
     adminOwnManifest,
+    installGate,
   ],
   build: { rollupOptions: { input: { main: fileURLToPath(new URL('./index.html', import.meta.url)), admin: fileURLToPath(new URL('./admin/index.html', import.meta.url)) } } },
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
