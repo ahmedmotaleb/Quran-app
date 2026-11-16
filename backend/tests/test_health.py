@@ -137,9 +137,29 @@ def test_ready_reports_storage_problems_by_category(settings, monkeypatch):
     class Missing(Exception):
         response = {"Error": {"Code": "404"}}
 
-    Fake.__init__ = lambda self: (setattr(self, "bucket", "b"), setattr(self, "client", type("C", (), {"head_object": lambda *a, **k: (_ for _ in ()).throw(Missing())})()))[0]
+    Fake.__init__ = lambda self: (setattr(self, "bucket", "b"), setattr(self, "client", type("C", (), {
+        "head_object": lambda *a, **k: (_ for _ in ()).throw(Missing()), "put_object": lambda *a, **k: {}})()))[0]
     assert storage.storage_status() == "configured"
     storage._check_cache.clear()
+
+    # Readable but not writable (owner report 16 Nov 2026: a read-only token passed the check; uploads failed).
+    class WriteDenied(Exception):
+        response = {"Error": {"Code": "AccessDenied"}}
+
+    Fake.__init__ = lambda self: (setattr(self, "bucket", "b"), setattr(self, "client", type("C", (), {
+        "head_object": lambda *a, **k: (_ for _ in ()).throw(Missing()), "put_object": lambda *a, **k: (_ for _ in ()).throw(WriteDenied())})()))[0]
+    assert storage.storage_status() == "error: write denied [AccessDenied] (the R2 token must have Object Read & Write on this bucket)"
+    storage._check_cache.clear()
+
+
+def test_r2_client_sends_checksums_only_when_required(settings):
+    """boto3 ≥ 1.36 adds CRC checksum trailers by default; Cloudflare R2 refuses those uploads."""
+    from apps.media.storage import S3Storage
+
+    settings.STORAGE_BUCKET, settings.STORAGE_ACCESS_KEY_ID, settings.STORAGE_SECRET_ACCESS_KEY = "b", "k", "s"
+    settings.STORAGE_ENDPOINT_URL, settings.STORAGE_REGION = "https://acc.r2.cloudflarestorage.com", "auto"
+    cfg = S3Storage().client.meta.config
+    assert cfg.request_checksum_calculation == "when_required" and cfg.response_checksum_validation == "when_required"
 
 
 @pytest.mark.django_db
