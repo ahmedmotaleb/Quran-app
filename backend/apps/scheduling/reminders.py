@@ -35,6 +35,7 @@ log = logging.getLogger(__name__)
 
 LEAD = timedelta(minutes=15)
 SLACK = timedelta(seconds=45)           # an alarm a few seconds early still counts as "15 minutes"
+JUST_STARTED = timedelta(minutes=2)     # a session created to start now is still reminded at once
 TITLE = "الحلقة | تذكير بالجلسة"
 
 
@@ -55,7 +56,10 @@ def due_occurrences(now=None, occurrence_ids=None):
     from .models import Booking, SessionOccurrence
 
     now = now or timezone.now()
-    qs = SessionOccurrence.objects.filter(status=SessionOccurrence.Status.SCHEDULED, starts_at__gt=now,
+    # A session created to start now («ابدأ جلسة الآن») is reminded at once even if its whole-minute start is a few
+    # seconds behind; the periodic checks (alarm, poll, hourly) never remind a session that has already started.
+    lo = now - JUST_STARTED if occurrence_ids is not None else now
+    qs = SessionOccurrence.objects.filter(status=SessionOccurrence.Status.SCHEDULED, starts_at__gt=lo,
                                           starts_at__lte=now + LEAD + SLACK)
     if occurrence_ids is not None:
         qs = qs.filter(pk__in=occurrence_ids)
@@ -93,7 +97,7 @@ def session_changed(o) -> None:
     from .models import SessionOccurrence
 
     o = SessionOccurrence.objects.filter(pk=o.pk).select_related("teacher").first()
-    if o is None or o.status != SessionOccurrence.Status.SCHEDULED or o.starts_at <= timezone.now():
+    if o is None or o.status != SessionOccurrence.Status.SCHEDULED or o.starts_at <= timezone.now() - JUST_STARTED:
         return
     if o.starts_at - timezone.now() <= LEAD + SLACK:
         send_due(occurrence_ids=[o.pk])

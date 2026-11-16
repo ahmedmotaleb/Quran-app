@@ -134,7 +134,7 @@ def test_overlap_and_validation_messages_are_arabic(world):
     assert SessionOccurrence.objects.filter(teacher=world.t1).count() == 1
     past = (timezone.now().astimezone(CAIRO) - timedelta(days=1)).date().isoformat()
     r = create(world.t1, key="past-00001", student=world.s1.pk, date=past)
-    assert r.status_code == 400 and "بعد ربع ساعة" in r.json()["fields"]["time"][0]
+    assert r.status_code == 400 and "هذا الوقت مضى" in r.json()["fields"]["time"][0]
     r = create(world.t1, key="who-000001")
     assert r.status_code == 400 and r.json()["fields"]["student"] == ["اختر طالبًا أو حلقة."]
 
