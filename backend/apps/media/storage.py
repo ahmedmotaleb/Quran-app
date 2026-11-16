@@ -92,14 +92,17 @@ class S3Storage:
             aws_access_key_id=settings.STORAGE_ACCESS_KEY_ID,
             aws_secret_access_key=settings.STORAGE_SECRET_ACCESS_KEY,
             # Path-style URLs (endpoint/bucket/key): the endpoint's TLS certificate always matches, whatever the bucket name.
-            config=Config(signature_version="s3v4", s3={"addressing_style": "path"}, retries={"max_attempts": 3, "mode": "standard"}, connect_timeout=5, read_timeout=30),
+            # Checksums only when the operation requires them: boto3 ≥ 1.36 otherwise sends CRC trailers that
+            # Cloudflare R2 refuses on uploads (reads still work), which is Cloudflare's documented setting for boto3.
+            config=Config(signature_version="s3v4", s3={"addressing_style": "path"}, retries={"max_attempts": 3, "mode": "standard"}, connect_timeout=5, read_timeout=30,
+                          request_checksum_calculation="when_required", response_checksum_validation="when_required"),
         )
 
     def save(self, key: str, fileobj: BinaryIO, content_type: str) -> None:
         try:
             self.client.upload_fileobj(fileobj, self.bucket, key, ExtraArgs={"ContentType": content_type})
         except Exception as e:  # noqa: BLE001 — surfaced as a clean API error
-            raise StorageError(str(e)) from e
+            raise StorageError(str(e), _category(e)) from e
 
     def open(self, key: str) -> BinaryIO:
         return self.client.get_object(Bucket=self.bucket, Key=key)["Body"]
@@ -134,7 +137,7 @@ class S3Storage:
         one bucket with Object Read & Write may not be allowed bucket-level calls such as HeadBucket."""
         try:
             self.client.head_object(Bucket=self.bucket, Key="_halqa_storage_check")
-            return "ok"
+            return self._check_write()
         except Exception as e:  # noqa: BLE001
             code = str(getattr(e, "response", {}).get("Error", {}).get("Code", "")) or type(e).__name__
             if "SSL" in code:
@@ -146,12 +149,24 @@ class S3Storage:
                 return (f"cannot use the storage endpoint [{code}] (usually a wrong account ID in "
                         "STORAGE_ENDPOINT_URL: use the 32-character Account ID from the R2 overview page)")
             if code in ("404", "NoSuchKey", "NotFound"):
-                return "ok"  # authorised; the probe object simply does not exist
+                return self._check_write()  # authorised to read; the probe object simply does not exist
             if code in ("401", "403", "AccessDenied", "Unauthorized", "InvalidAccessKeyId", "SignatureDoesNotMatch"):
                 return f"access denied [{code}] (check the access key, secret and that the token covers this bucket)"
             if code == "NoSuchBucket":
                 return f"bucket not found [{code}] (check STORAGE_BUCKET and, for EU buckets, the .eu endpoint)"
             return f"cannot use the storage endpoint [{code}] (check STORAGE_ENDPOINT_URL)"
+
+    def _check_write(self) -> str:
+        """Reading alone is not enough: recordings are written (owner report 16 Nov 2026: the check passed with a
+        token that could not save). One tiny object, overwritten each time; the result is cached for a minute."""
+        try:
+            self.client.put_object(Bucket=self.bucket, Key="_halqa_storage_check", Body=b"ok", ContentType="text/plain")
+            return "ok"
+        except Exception as e:  # noqa: BLE001
+            code = _category(e)
+            if code in ("401", "403", "AccessDenied", "Unauthorized"):
+                return f"write denied [{code}] (the R2 token must have Object Read & Write on this bucket)"
+            return f"cannot save to the bucket [{code}]"
 
     def read_url(self, key: str, *, media_id: str, request=None) -> tuple[str, datetime]:
         ttl = settings.MEDIA_URL_TTL_SECONDS

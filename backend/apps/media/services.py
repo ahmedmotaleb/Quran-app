@@ -89,7 +89,8 @@ def store_audio(*, owner, purpose: str, upload, duration_seconds, upload_key: st
     try:
         get_storage().save(key, f, declared)
     except StorageError as e:
-        log.error("media_store_failed", extra={"purpose": purpose, "error": type(e.__cause__ or e).__name__, "bytes": upload.size})
+        log.error("media_store_failed", extra={"purpose": purpose, "error": type(e.__cause__ or e).__name__, "code": getattr(e, "category", "") or "",
+                                               "bytes": upload.size})
         m.state = MediaObject.State.REJECTED
         m.rejection_reason = "storage_error"
         m.upload_key = ""  # the retry with the same upload id may try again
