@@ -166,7 +166,17 @@ class S3Storage:
             code = _category(e)
             if code in ("401", "403", "AccessDenied", "Unauthorized"):
                 return f"write denied [{code}] (the R2 token must have Object Read & Write on this bucket)"
+            if code == "NoSuchBucket":
+                return f"bucket not found [{code}] (STORAGE_BUCKET «{self.bucket}»{self._visible_buckets()}; an EU bucket needs the .eu endpoint)"
             return f"cannot save to the bucket [{code}]"
+
+    def _visible_buckets(self) -> str:
+        """Bucket names this key can list (Admin tokens can; bucket-scoped tokens cannot). Names only, never keys."""
+        try:
+            names = [b["Name"] for b in self.client.list_buckets().get("Buckets", [])][:10]
+        except Exception:  # noqa: BLE001
+            return ""
+        return f"; buckets this key sees at this endpoint: {', '.join(names) if names else 'none'}"
 
     def read_url(self, key: str, *, media_id: str, request=None) -> tuple[str, datetime]:
         ttl = settings.MEDIA_URL_TTL_SECONDS
