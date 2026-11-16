@@ -155,6 +155,31 @@ await step(T.page, '6. an individual one-off session for one chosen student stil
   await T.page.getByText('تم إنشاء الجلسة وأُبلغ الطالب.').waitFor();
 });
 
+await step(Y.page, '6b. «ابدأ جلسة الآن»: a group session starting now, students told at once, «انضم» works immediately', async () => {
+  await sched();
+  await T.app.getByRole('button', { name: 'ابدأ جلسة الآن' }).click();
+  const f = T.page.getByRole('dialog', { name: 'ابدأ جلسة الآن' });
+  await f.getByRole('radio', { name: 'جماعية' }).click();
+  for (const n of ['يوسف أحمد', 'سارة أحمد']) await f.getByTestId('student-picker').getByRole('checkbox', { name: n }).check();
+  if (await f.getByLabel('التاريخ').count()) throw new Error('a date field in «now» mode');
+  await f.getByLabel('المدة').selectOption('30');
+  await f.getByLabel('رابط الاجتماع (اختياري)').fill('zoom.us/j/9876543210');
+  const resp = T.page.waitForResponse((r) => r.url().endsWith('/api/v1/teacher/sessions') && r.request().method() === 'POST');
+  await f.getByRole('button', { name: 'ابدأ الجلسة الآن' }).click();
+  const r = await resp; const body = await r.json();
+  if (r.status() !== 201 || Math.abs(new Date(body.starts_at).getTime() - Date.now()) > 90_000) throw new Error(`${r.status()} ${JSON.stringify(body).slice(0, 200)}`);
+  await T.page.getByText('بدأت الجلسة وأُبلغ الطلاب الآن', { exact: false }).waitFor();
+  await T.app.getByRole('button', { name: /انضم إلى الجلسة/ }).first().waitFor();                     // the teacher joins at once
+  const mine = await api(Y, 'bookings?when=upcoming&status=confirmed');
+  const b = (mine.results ?? mine).find((x) => x.occurrence.id === body.id);
+  if (!b || !b.can_join) throw new Error('student cannot join yet ' + JSON.stringify(b && { can_join: b.can_join }));
+  const j = await Y.page.evaluate(async (id) => { const c = (await (await fetch('/api/v1/auth/csrf', { credentials: 'include' })).json()).csrfToken;
+    const x = await fetch(`/api/v1/bookings/${id}/join`, { method: 'POST', credentials: 'include', headers: { 'X-CSRFToken': c } }); return [x.status, await x.json()]; }, b.id);
+  if (j[0] !== 200 || j[1].url !== 'https://zoom.us/j/9876543210') throw new Error('join ' + JSON.stringify(j));
+  const n = await api(Y, 'notifications');
+  if (!(n.results ?? n).some((x) => x.kind === 'session_soon' && x.data?.occurrence === body.id)) throw new Error('no immediate notice');
+});
+
 await step(T.page, '7. no browser errors', async () => { if (errs.length) throw new Error(errs.slice(0, 3).join(' | ')); });
 console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
 process.exitCode = fails ? 1 : 0;

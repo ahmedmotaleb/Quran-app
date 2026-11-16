@@ -152,8 +152,10 @@ class SessionIn(serializers.Serializer):
     student = serializers.IntegerField(required=False, allow_null=True)
     circle = serializers.IntegerField(required=False, allow_null=True)
     topic = serializers.ChoiceField(choices=SessionOccurrence.Topic.choices)
-    date = serializers.DateField()
-    time = serializers.TimeField()
+    date = serializers.DateField(required=False)
+    time = serializers.TimeField(required=False)
+    # «ابدأ جلسة الآن»: the start is the SERVER's current minute (the device clock is never trusted).
+    start_now = serializers.BooleanField(required=False, default=False)
     minutes = serializers.IntegerField(min_value=15, max_value=180)
     title = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
     prep_note = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
@@ -163,12 +165,25 @@ class SessionIn(serializers.Serializer):
     meeting_url = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
 
 
+# A session may start now or at any later minute (owner report 16 Nov 2026: a 15-minute advance rule blocked
+# teachers). Only a start genuinely in the past is refused. GRACE covers the form's whole-minute times and the
+# network / server delay: «16:00» submitted at 16:00:50 is accepted, «15:55» at 16:00 is not. The 15-minute reminder
+# is a separate notification (scheduling/reminders.py) and never restricts creation.
+START_GRACE = timedelta(minutes=2)
+
+
 def _start(teacher, d) -> datetime:
+    now = timezone.now()
+    if d.get("start_now"):
+        return now.replace(second=0, microsecond=0)
+    if not d.get("date") or not d.get("time"):
+        raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"time": ["اختر التاريخ والوقت، أو «ابدأ جلسة الآن»."]})
     tz = ZoneInfo(teacher.timezone or "Africa/Cairo")
     start = datetime.combine(d["date"], d["time"], tz)
-    now = timezone.now()
-    if start < now + timedelta(minutes=15) or start > now + timedelta(days=120):
-        raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"time": ["اختر موعدًا بعد ربع ساعة على الأقل وخلال أربعة أشهر."]})
+    if start < now - START_GRACE:
+        raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"time": ["هذا الوقت مضى. اختر الوقت الحالي أو وقتًا لاحقًا."]})
+    if start > now + timedelta(days=120):
+        raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"time": ["اختر موعدًا خلال أربعة أشهر."]})
     return start
 
 

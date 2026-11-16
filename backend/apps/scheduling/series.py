@@ -38,7 +38,7 @@ from .models import (Booking, RecurringSessionException, RecurringSessionPartici
 log = logging.getLogger(__name__)
 
 HORIZON_DAYS = 14          # sessions exist this far ahead; the hourly job keeps extending it
-MIN_LEAD = timedelta(minutes=5)
+START_GRACE = timedelta(minutes=2)   # a slot starting now (or a moment ago) is still created; only the past is skipped
 MAX_PARTICIPANTS = 40       # the occurrence capacity limit (occurrence_capacity_range)
 
 
@@ -213,7 +213,7 @@ def generate(rule: RecurringSessionRule, now=None, horizon_days: int = HORIZON_D
             if s.weekday != day.weekday() or (day, None) in skip or (day, s.pk) in skip:
                 continue
             start = _local_start(day, s.start_time, tz)
-            if start is None or start <= now + MIN_LEAD:
+            if start is None or start < now - START_GRACE:
                 continue
             if SessionOccurrence.objects.filter(series_slot=s, series_date=day).exclude(status=SessionOccurrence.Status.CANCELLED).exists():
                 continue

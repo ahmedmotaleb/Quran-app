@@ -75,16 +75,22 @@ export function GoogleCalendarCard() {
 
 /* ---------------- «+ إنشاء جلسة» ---------------- */
 export function CreateSessionButton() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState<null | 'plan' | 'now'>(null);
   return <>
-    <button onClick={() => setOpen(true)} style={primaryBtn(48, 15, { borderRadius: 12 })}><Icon name="plus" size={18} /> إنشاء جلسة</button>
-    {open && <CreateSessionForm onClose={() => setOpen(false)} />}
+    <div style={{ display: 'flex', gap: 8 }}>
+      <button onClick={() => setOpen('plan')} style={primaryBtn(48, 15, { borderRadius: 12, flex: 1 })}><Icon name="plus" size={18} /> إنشاء جلسة</button>
+      {/* A session may start right now: no advance notice is required (owner report 16 Nov 2026). */}
+      <button onClick={() => setOpen('now')} style={{ ...smallBtn('primary'), minHeight: 48, borderRadius: 12, fontSize: 15, flex: 1, justifyContent: 'center', background: color.card, color: color.primary }}>
+        <Icon name="video" size={18} /> ابدأ جلسة الآن
+      </button>
+    </div>
+    {open && <CreateSessionForm now={open === 'now'} onClose={() => setOpen(null)} />}
   </>;
 }
 
 type Mode = 'individual' | 'group' | 'circle';
 
-function CreateSessionForm({ onClose }: { onClose: () => void }) {
+function CreateSessionForm({ onClose, now = false }: { onClose: () => void; now?: boolean }) {
   const tz = tzOf(useApp((s) => s.tz)).iana;
   const [gs, setGs] = useState<E.ApiGoogleStatus | null>(null);
   const [circles, setCircles] = useState<{ id: number; name: string }[]>([]);
@@ -105,6 +111,10 @@ function CreateSessionForm({ onClose }: { onClose: () => void }) {
   const setKind = (m: Mode) => { setMode(m); setErrs({}); if (m === 'individual') setPicked((p) => p.slice(0, 1)); if (m === 'circle') setWeekly(false); };
   /** The session exists from here on; the Google part only adds to the message. */
   const created = (s: E.ApiTeacherSession) => {
+    if (now) {
+      toast(s.meeting_url ? 'بدأت الجلسة وأُبلغ الطلاب الآن. اضغط «انضم إلى الجلسة».' : 'بدأت الجلسة وأُبلغ الطلاب الآن. أضف رابط الاجتماع من الجلسة ليتمكنوا من الدخول.', s.meeting_url ? undefined : 'alert');
+      void refreshSchedule(); onClose(); return;
+    }
     const who = s.with?.kind === 'circle' ? 'أُبلغ أعضاء الحلقة' : s.with?.kind === 'group' ? `أُبلغ ${s.with.count ?? ''} طلاب`.replace('  ', ' ') : 'أُبلغ الطالب';
     const g = s.google;
     if (!g) toast(`تم إنشاء الجلسة و${who}.`);
@@ -122,8 +132,8 @@ function CreateSessionForm({ onClose }: { onClose: () => void }) {
       who: mode === 'circle' ? (v.circle ? undefined : 'اختر الحلقة.')
         : mode === 'group' ? (picked.length >= 2 ? undefined : 'اختر طالبين أو أكثر للجلسة الجماعية.')
         : picked.length === 1 ? undefined : 'اختر طالبًا.',
-      date: v.date ? undefined : 'اختر التاريخ.',
-      time: weekly || v.time ? undefined : 'اختر الوقت.',
+      date: now || v.date ? undefined : 'اختر التاريخ.',
+      time: now || weekly || v.time ? undefined : 'اختر الوقت.',
       days: !weekly || days.length ? undefined : 'اختر يومًا واحدًا على الأقل.',
       link: link.error ?? undefined,
     };
@@ -139,7 +149,7 @@ function CreateSessionForm({ onClose }: { onClose: () => void }) {
         return;
       }
       created(await E.createTeacherSession({ ...(mode === 'circle' ? { circle: +v.circle } : { students: picked, kind: mode }), meeting_url: link.url,
-        topic: v.topic, date: v.date, time: v.time, minutes: v.minutes, title: v.title, prep_note: v.prep_note }, key.current));
+        topic: v.topic, ...(now ? { start_now: true } : { date: v.date, time: v.time }), minutes: v.minutes, title: v.title, prep_note: v.prep_note }, key.current));
     } catch (x) {
       const a = x as ApiError;
       setErrs({ form: a.message || 'تعذّر إنشاء الجلسة. تحقق من الاتصال وحاول مرة أخرى.', time: a.field?.('time') ?? undefined,
@@ -152,10 +162,11 @@ function CreateSessionForm({ onClose }: { onClose: () => void }) {
   const pill = (on: boolean) => ({ flex: 1, minHeight: 44, borderRadius: 12, border: `1.5px solid ${on ? color.primary : color.borderStrong}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.primary, fontWeight: 700, fontSize: 15, cursor: 'pointer' } as const);
   const modes: [Mode, string][] = [['individual', 'فردية'], ['group', 'جماعية'], ...(circles.length ? [['circle', 'حلقة']] as [Mode, string][] : [])];
   return (
-    <div role="dialog" aria-modal="true" aria-label="إنشاء جلسة" style={{ position: 'fixed', inset: 0, background: 'rgba(20,33,31,.45)', zIndex: 60, display: 'grid', placeItems: 'end center' }}
+    <div role="dialog" aria-modal="true" aria-label={now ? 'ابدأ جلسة الآن' : 'إنشاء جلسة'} style={{ position: 'fixed', inset: 0, background: 'rgba(20,33,31,.45)', zIndex: 60, display: 'grid', placeItems: 'end center' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
       <form onSubmit={submit} noValidate style={{ background: color.ivory, width: '100%', maxWidth: 520, maxHeight: '92dvh', overflowY: 'auto', borderRadius: '20px 20px 0 0', padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800 }}>إنشاء جلسة</h2>
+        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800 }}>{now ? 'ابدأ جلسة الآن' : 'إنشاء جلسة'}</h2>
+        {now && <p role="note" style={{ margin: 0, fontSize: 14, fontWeight: 700, color: color.primary, background: color.sageTint, borderRadius: 12, padding: '8px 12px' }}>تبدأ الجلسة فور إنشائها، ويصل الطلاب المختارين إشعار فوري للانضمام.</p>}
         <div role="radiogroup" aria-label="فردية أم جماعية" style={{ display: 'flex', gap: 6 }}>
           {modes.map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={mode === k} onClick={() => setKind(k)} style={pill(mode === k)}>{l}</button>)}
         </div>
@@ -177,13 +188,13 @@ function CreateSessionForm({ onClose }: { onClose: () => void }) {
           {TOPICS.map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={v.topic === k} onClick={() => setV({ ...v, topic: k })}
             style={{ minHeight: 40, padding: '0 14px', borderRadius: 999, border: `1.5px solid ${v.topic === k ? color.primary : color.borderStrong}`, background: v.topic === k ? color.primary : color.card, color: v.topic === k ? color.ivory : color.primary, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>{l}</button>)}
         </div>
-        {mode !== 'circle' && (
+        {mode !== 'circle' && !now && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
             <input type="checkbox" checked={weekly} onChange={(e) => { setWeekly(e.target.checked); setErrs({}); if (e.target.checked && !days.length) setDays([]); }} style={{ width: 22, height: 22, accentColor: color.primary }} />
             تكرار أسبوعي تلقائي
           </label>
         )}
-        {weekly ? (<>
+        {now ? null : weekly ? (<>
           <div style={lbl}><span>أيام الجلسات ووقت كل يوم</span>
             <WeeklyDays value={days} onChange={(d) => { setDays(d); setErrs((x) => ({ ...x, days: undefined })); }} defaultTime={v.time} invalid={errs.days} /></div>
           <FieldError msg={errs.days} />
@@ -222,7 +233,7 @@ function CreateSessionForm({ onClose }: { onClose: () => void }) {
           ? 'يصل الطالب إشعار في الحلقة، ويُضاف رابط Google Meet ودعوة على بريده تلقائيًا.'
           : 'يصل كل طالب مختار إشعار في الحلقة. يمكنك إضافة رابط الاجتماع هنا أو من الجلسة بعد إنشائها، أو ربط Google Calendar من «حسابي» لإنشاء رابط Google Meet تلقائيًا (اختياري).'}</p>
         {errs.form && <p role="alert" style={{ margin: 0, fontSize: 14, fontWeight: 700, color: color.dangerInk }}>{errs.form}</p>}
-        <button type="submit" disabled={busy} aria-busy={busy} style={primaryBtn(52, 16)}>{busy ? 'جارٍ إنشاء الجلسة…' : weekly ? 'إنشاء الجلسات الأسبوعية' : 'إنشاء الجلسة'}</button>
+        <button type="submit" disabled={busy} aria-busy={busy} style={primaryBtn(52, 16)}>{busy ? 'جارٍ إنشاء الجلسة…' : now ? 'ابدأ الجلسة الآن' : weekly ? 'إنشاء الجلسات الأسبوعية' : 'إنشاء الجلسة'}</button>
         <button type="button" onClick={onClose} disabled={busy} style={{ ...smallBtn(), justifyContent: 'center' }}>إغلاق</button>
       </form>
     </div>

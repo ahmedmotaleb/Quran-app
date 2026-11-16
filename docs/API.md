@@ -794,3 +794,16 @@ each participant is still a confirmed `Booking`, which holds that student's atte
 - `session_evaluated`.
 - Generated sessions do not notify one by one. The 15-minute `session_soon` reminder goes to the teacher and to every
   confirmed participant.
+
+### Sessions may start now (owner report, 16 Nov 2026)
+- `POST teacher/sessions` accepts any start from the current minute onward; only a genuinely past start is refused.
+  - It allows 2 minutes of grace for whole-minute times and network delay, on the server clock.
+  - The old rule refused anything less than 15 minutes ahead.
+- `start_now: true` («ابدأ جلسة الآن») uses the server's current minute; `date` and `time` are not needed.
+- Weekly series create a slot that starts now.
+- The 15-minute reminder is unchanged and separate:
+  - a session created less than 15 minutes ahead, or starting now, is reminded at once («حلقتك تبدأ الآن تقريبًا»);
+  - later ones keep their T−15 alarm.
+- Creation is never refused for lack of reminder time.
+- Students booking a teacher's open times still follow the admin setting «أقرب حجز ممكن» (`booking_lead_minutes`),
+  which is a booking policy, not a session-creation rule.

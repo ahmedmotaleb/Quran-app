@@ -205,7 +205,7 @@ export interface ApiTeacherSession { id: number; status: string; kind?: 'individ
 /** «إنشاء الجلسة»: the same request id on a retry returns the same session (never a second Google event). Google may
  *  take a little longer: the server waits up to ~1 minute, so this call does too. */
 export const createTeacherSession = (body: { student?: number; circle?: number; students?: number[]; kind?: 'individual' | 'group'; meeting_url?: string;
-  topic: SessionTopic; date: string; time: string; minutes: number; title: string; prep_note: string }, key: string) =>
+  topic: SessionTopic; date?: string; time?: string; start_now?: boolean; minutes: number; title: string; prep_note: string }, key: string) =>
   api<ApiTeacherSession>('POST', 'teacher/sessions', body, { idempotencyKey: key, timeoutMs: 60_000 });
 export const rescheduleTeacherSession = (id: number, body: { date?: string; time?: string; minutes?: number; title?: string }) =>
   api<ApiTeacherSession>('PATCH', `teacher/sessions/${id}`, body, { timeoutMs: 45_000 });
