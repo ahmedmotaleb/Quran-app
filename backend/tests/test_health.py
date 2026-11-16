@@ -152,6 +152,27 @@ def test_ready_reports_storage_problems_by_category(settings, monkeypatch):
     storage._check_cache.clear()
 
 
+def test_missing_bucket_names_the_buckets_the_key_can_see(settings, monkeypatch):
+    from apps.media import storage
+
+    class NoBucket(Exception):
+        response = {"Error": {"Code": "NoSuchBucket"}}
+
+    class Fake(storage.S3Storage):
+        def __init__(self):
+            self.bucket = "halqa-recordings"
+            self.client = type("C", (), {"head_object": lambda *a, **k: (_ for _ in ()).throw(type("M", (Exception,), {"response": {"Error": {"Code": "404"}}})()),
+                                         "put_object": lambda *a, **k: (_ for _ in ()).throw(NoBucket()),
+                                         "list_buckets": lambda *a, **k: {"Buckets": [{"Name": "halqa-media"}]}})()
+
+    settings.MEDIA_STORAGE = "s3"
+    monkeypatch.setattr(storage, "get_storage", lambda: Fake())
+    storage._check_cache.clear()
+    st = storage.storage_status()
+    storage._check_cache.clear()
+    assert "bucket not found [NoSuchBucket]" in st and "«halqa-recordings»" in st and "halqa-media" in st
+
+
 def test_r2_client_sends_checksums_only_when_required(settings):
     """boto3 ≥ 1.36 adds CRC checksum trailers by default; Cloudflare R2 refuses those uploads."""
     from apps.media.storage import S3Storage
