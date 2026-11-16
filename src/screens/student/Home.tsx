@@ -140,7 +140,9 @@ export default function Home() {
               <span style={{ fontSize: 14, fontWeight: 500, color: color.sage }}>الجلسة القادمة</span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: 'rgba(247,243,232,.14)', fontSize: 13, fontWeight: 700 }}><Icon name="check" size={18} /> مؤكدة</span>
             </div>
-            <p style={{ margin: '10px 0 2px', fontSize: 19, fontWeight: 700, position: 'relative' }}>{next.teacherName}</p>
+            {next.title && <p style={{ margin: '10px 0 0', fontSize: 15, fontWeight: 700, color: color.sage, position: 'relative' }}>{next.title}</p>}
+            <p style={{ margin: next.title ? '2px 0 2px' : '10px 0 2px', fontSize: 19, fontWeight: 700, position: 'relative' }}>{next.teacherName}</p>
+            {next.startsAt && <p data-testid="next-kind" style={{ margin: '0 0 2px', fontSize: 13, fontWeight: 700, color: color.sage, position: 'relative' }}>جلسة {next.type}{next.weekly ? ' · أسبوعية' : ''}</p>}
             <p style={{ margin: 0, fontSize: 15, color: '#E5EDE4', position: 'relative' }}>{next.when} · {next.dur} دقيقة</p>
             <p style={{ margin: '2px 0 14px', fontSize: 13, color: color.liveSub, position: 'relative' }}>{next.tzL}{next.platform ? ` · ${next.platform}` : ''}</p>
             <div style={{ display: 'flex', gap: 8, marginTop: 'auto', position: 'relative', alignItems: 'flex-start' }}>

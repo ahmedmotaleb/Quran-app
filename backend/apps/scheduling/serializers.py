@@ -20,7 +20,7 @@ class SlotSerializer(serializers.ModelSerializer):
     class Meta:
         model = SessionOccurrence
         fields = ["id", "teacher", "teacher_name", "kind", "starts_at", "ends_at", "capacity", "seats_left", "circle_name",
-                  "topic", "title", "prep_note"]
+                  "topic", "title", "prep_note", "series"]
 
     def get_seats_left(self, o):
         return max(0, o.capacity - getattr(o, "confirmed_count", 0) - getattr(o, "held_count", 0))
@@ -35,11 +35,19 @@ class BookingSerializer(serializers.ModelSerializer):
     excuse = serializers.SerializerMethodField()
     excuse_deadline = serializers.SerializerMethodField()
     can_excuse = serializers.SerializerMethodField()
+    evaluation = serializers.SerializerMethodField()
 
     class Meta:
         model = Booking
         fields = ["id", "occurrence", "student", "student_name", "status", "assignment", "note", "attendance", "cancelled_at", "cancel_reason",
-                  "rescheduled_from", "created_at", "can_join", "has_meeting_link", "meeting_provider", "excuse", "excuse_deadline", "can_excuse"]
+                  "rescheduled_from", "created_at", "can_join", "has_meeting_link", "meeting_provider", "excuse", "excuse_deadline", "can_excuse",
+                  "evaluation"]
+
+    def get_evaluation(self, b):
+        """The teacher's record of this student in this session (their own; other participants' are never shown)."""
+        from .series_views import booking_evaluation
+
+        return booking_evaluation(b)
 
     def _user(self):
         return self.context["request"].user if "request" in self.context else None
@@ -119,7 +127,7 @@ class TeacherOccurrenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = SessionOccurrence
         fields = ["id", "kind", "starts_at", "ends_at", "capacity", "status", "bookings", "meeting_provider", "meeting_url",
-                  "topic", "title", "prep_note", "circle_name", "google"]
+                  "topic", "title", "prep_note", "circle_name", "google", "series", "private"]
 
     circle_name = serializers.CharField(source="circle.name", default=None)
     google = serializers.SerializerMethodField()
@@ -134,9 +142,10 @@ class TeacherOccurrenceSerializer(serializers.ModelSerializer):
         return {**google_out(ev, teacher_view=True), "student": ev.student_id, "student_name": ev.student.full_name if ev.student else ""}
 
     def get_bookings(self, o):
+        from .series_views import booking_evaluation
         from .views import excuse_out
 
-        return [{"id": b.id, "student": b.student_id, "student_name": b.student.full_name, "attendance": b.attendance,
+        return [{"evaluation": booking_evaluation(b), "id": b.id, "student": b.student_id, "student_name": b.student.full_name, "attendance": b.attendance,
                  "assignment_title": b.assignment.title if b.assignment else "", "note": b.note,
                  "excuse": excuse_out(ex) if (ex := booking_excuse(b)) else None,
                  # «جلسة تعويضية» granted for this absence (status), or null

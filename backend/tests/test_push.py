@@ -117,7 +117,8 @@ def test_every_kind_in_use_has_generic_text_and_no_private_details(world, keys, 
     root = Path(__file__).resolve().parents[1] / "apps"
     kinds = set()
     for f in root.rglob("*.py"):
-        kinds |= set(re.findall(r'(?:notify|after_commit)\([\w.]+,\s*"([a-z_]+)"', f.read_text(encoding="utf-8")))
+        kinds |= set(re.findall(r'(?:notify|after_commit|_tell)\([\w.]+,\s*"([a-z_]+)"', f.read_text(encoding="utf-8")))
+    kinds |= {"series_paused", "series_active", "series_cancelled"}   # series.set_status: f"series_{new}"
     assert {"waitlist_offer", "makeup_granted", "excuse_approved", "weekly_report"} <= kinds
     for k in kinds:
         p = payload_for(k, "/x")

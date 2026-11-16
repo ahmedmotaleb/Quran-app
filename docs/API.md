@@ -734,3 +734,63 @@ when `assignment_rev` changes. It checks:
 
 **Teacher titles:** «الأستاذ» for men, «الأستاذة» for women, everywhere (`display.py`, `names.ts`). An old typed
 «الشيخ» is removed before the title is added.
+
+## Individual & group sessions with weekly recurrence (owner request, 16 Nov 2026)
+Rules live in `apps/scheduling/series.py`. A session is still a `SessionOccurrence` (kind `individual` / `group`), and
+each participant is still a confirmed `Booking`, which holds that student's attendance. New tables:
+`scheduling_recurring_session_rule`, `…_slot` (weekday 0 = Monday … 6 = Sunday, local time, minutes),
+`…_participant` (history kept when someone leaves), `…_exception` (a cancelled date) and
+`scheduling_student_evaluation` (one per booking).
+
+**One-off sessions**
+- `POST teacher/sessions` now also takes `students: [ids]`, `kind: individual|group` and `meeting_url`.
+  - Individual = exactly 1 student; group = 2 or more. Only the teacher's assigned, active students; no duplicates.
+  - The `student` and `circle` bodies still work as before.
+
+**Participants of one session**
+- `POST teacher/sessions/<id>/participants {student}` adds a student.
+- `DELETE teacher/sessions/<id>/participants/<student>` removes one (not after the start, and never the last one).
+
+**Weekly series**
+- `GET teacher/series` lists them.
+- `POST teacher/series` creates one (with `Idempotency-Key`). Body: `{kind, students, slots: [{weekday, time, minutes}],
+  topic, title, prep_note, meeting_url, starts_on, ends_on}`.
+  - Sessions are generated 14 days ahead; the hourly `generate_recurring_sessions` job keeps extending them.
+  - A clash with the teacher's other sessions is skipped and reported in `result.conflicts`.
+- `PATCH teacher/series/<id>` edits the title, topic, prep note, `meeting_url`, `ends_on` and `slots`. Upcoming
+  sessions follow; past ones never change.
+- `POST teacher/series/<id>/pause|resume|cancel`.
+- `POST teacher/series/<id>/participants {student}` adds a student; `DELETE teacher/series/<id>/participants/<student>`
+  removes one (only their future bookings are cancelled).
+- Cancelling one session of a series records an exception, so that date is never generated again.
+
+**Evaluation**
+- `PUT bookings/<id>/evaluation` is open to the session's teacher once the session has started. Body:
+  `{memorization_grade, surah, ayah_from, ayah_to, tajweed_grade, tajweed_note, note}`.
+- Grades are `excellent`, `very_good`, `good` and `needs_work`.
+- The student sees only their own evaluation (`evaluation` on the booking).
+
+**Student picker**
+- `GET teacher/students/picker?q=` returns the teacher's assigned, active students.
+
+**Admin** (`sessions.view` / `sessions.manage`)
+- `GET admin/series` lists every teacher's series; `POST admin/series/<id> {action, reason}` pauses, resumes or cancels one.
+- `POST/DELETE admin/series/<id>/participants[/<student>]` and `GET/POST/DELETE admin/sessions/<id>/participants[/<student>]`
+  manage participants. An admin may add any active student; that is the explicit grant beyond the teacher's own students.
+
+**Privacy**
+- Sessions a teacher made for chosen students (`creation_key` or `series`) are never listed in `teachers/<id>/slots`.
+- They cannot be booked or waitlisted by anyone else.
+
+**Sync**
+- For students, `assignment_rev` (with the unread count) now also changes whenever their bookings change. The app reloads
+  at once: added to or removed from a session or series.
+
+**Notifications** (outbox: in-app plus Web Push, each sent once per person)
+- `session_created` (teacher), `booking_created` (each student).
+- `session_added`, `session_removed`, `session_participant_*`.
+- `series_added`, `series_created`, `series_changed`, `series_paused`, `series_active`, `series_cancelled`,
+  `series_removed`, `series_participant_*`.
+- `session_evaluated`.
+- Generated sessions do not notify one by one. The 15-minute `session_soon` reminder goes to the teacher and to every
+  confirmed participant.

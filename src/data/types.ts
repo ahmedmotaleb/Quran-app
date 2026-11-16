@@ -54,6 +54,14 @@ export interface Session {
   canExcuse?: boolean; excuseDeadline?: string;
   /** Teacher-created session: «حفظ» / «مراجعة» … and an optional title and preparation note. */
   topic?: string; title?: string; prepNote?: string;
+  /** Part of the teacher's weekly sessions («جلسات أسبوعية»). */
+  weekly?: boolean;
+  /** The teacher's record of this student in this session (their own only). */
+  evaluation?: SessionEvaluation | null;
+}
+export interface SessionEvaluation {
+  memorization_grade: string; memorization_label: string; surah: number | null; ayah_from: number | null; ayah_to: number | null;
+  tajweed_grade: string; tajweed_label: string; tajweed_note: string; note: string; updated_at: string;
 }
 
 /** Live mode adds the occurrence id, its instant and kind; `h` is then local hour + minutes/60. */

@@ -157,6 +157,10 @@ class SessionIn(serializers.Serializer):
     minutes = serializers.IntegerField(min_value=15, max_value=180)
     title = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
     prep_note = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
+    # Individual or group with chosen students (owner request 16 Nov 2026); `student` alone stays supported.
+    kind = serializers.ChoiceField(choices=["individual", "group"], required=False)
+    students = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=False)
+    meeting_url = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
 
 
 def _start(teacher, d) -> datetime:
@@ -171,12 +175,20 @@ def _start(teacher, d) -> datetime:
 def session_out(occ: SessionOccurrence) -> dict:
     ev = getattr(occ, "google_event", None)
     b = None if occ.circle_id or (ev and ev.student_id) else occ.bookings.filter(status="confirmed").select_related("student").first()
+    if occ.kind == "group" and not occ.circle_id:
+        names = list(occ.bookings.filter(status="confirmed").select_related("student").values_list("student__full_name", flat=True))
+        who = {"kind": "group", "id": None, "name": "، ".join(names), "count": len(names)}
+        return {**_session_base(occ, ev), "with": who}
     who = ({"kind": "circle", "id": occ.circle_id, "name": occ.circle.name} if occ.circle_id
            else {"kind": "student", "id": ev.student_id, "name": ev.student.full_name} if ev and ev.student_id
            else {"kind": "student", "id": b.student_id, "name": b.student.full_name} if b else None)
-    return {"id": occ.pk, "status": occ.status, "topic": occ.topic, "topic_label": occ.get_topic_display() if occ.topic else "",
+    return {**_session_base(occ, ev), "with": who}
+
+
+def _session_base(occ, ev) -> dict:
+    return {"id": occ.pk, "status": occ.status, "kind": occ.kind, "topic": occ.topic, "topic_label": occ.get_topic_display() if occ.topic else "",
             "title": occ.title, "prep_note": occ.prep_note, "starts_at": occ.starts_at.isoformat(), "ends_at": occ.ends_at.isoformat(),
-            "minutes": int((occ.ends_at - occ.starts_at).total_seconds() // 60), "with": who,
+            "minutes": int((occ.ends_at - occ.starts_at).total_seconds() // 60), "series": occ.series_id,
             "meeting_url": occ.meeting_url,  # the teacher's own session
             "google": google_out(ev, teacher_view=True)}
 
@@ -197,7 +209,7 @@ def google_out(ev: GoogleEvent | None, *, teacher_view: bool = False) -> dict | 
 def _own_session(request, pk) -> SessionOccurrence:
     """A session this teacher created with «إنشاء جلسة» (with or without Google)."""
     occ = (SessionOccurrence.objects.select_related("circle").filter(pk=pk, teacher=request.user)
-           .filter(Q(google_event__isnull=False) | ~Q(creation_key="")).first())
+           .filter(Q(google_event__isnull=False) | ~Q(creation_key="") | Q(series__isnull=False)).first())
     if occ is None:
         raise ApiError("not_found", "العنصر المطلوب غير موجود.", 404)
     return occ
@@ -225,9 +237,19 @@ class TeacherSessions(APIView):
         s.is_valid(raise_exception=True)
         d = s.validated_data
         student = circle = None
-        if bool(d.get("student")) == bool(d.get("circle")):
+        group: list = []
+        if d.get("students"):   # «فردية» (one student) or «جماعية» (two or more), all assigned to this teacher
+            from apps.scheduling import series as S
+
+            group = S.eligible_students(request.user, d["students"])
+            S.check_kind(d.get("kind") or ("group" if len(group) > 1 else "individual"), len(group))
+            if len(group) == 1 and (d.get("kind") or "individual") == "individual":
+                student, group = group[0], []
+        elif bool(d.get("student")) == bool(d.get("circle")):
             raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"student": ["اختر طالبًا أو حلقة."]})
-        if d.get("student"):
+        if student is not None or group:
+            pass   # chosen from `students` above
+        elif d.get("student"):
             student = User.objects.filter(pk=d["student"], role=Role.STUDENT, status=AccountStatus.ACTIVE,
                                           pk__in=assigned_student_ids(request.user)).first()
             if student is None:
@@ -237,15 +259,37 @@ class TeacherSessions(APIView):
             if circle is None:
                 raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"circle": ["الحلقة غير موجودة أو غير منشورة."]})
         start = _start(request.user, d)
-        google_on = _google_connected(request.user)
+        url = provider = ""
+        if d.get("meeting_url", "").strip():
+            from apps.scheduling.meeting import InvalidMeetingLink, normalize, provider_for
+
+            try:
+                url = normalize(d["meeting_url"])
+                provider = provider_for(url)
+            except InvalidMeetingLink as e:
+                raise ApiError("invalid", "تحقق من البيانات المُدخلة.", 400, {"meeting_url": [str(e)]}) from None
+        google_on = _google_connected(request.user) and not group and not url
         try:
             with transaction.atomic():
                 occ = SessionOccurrence.objects.create(
                     teacher=request.user, starts_at=start, ends_at=start + timedelta(minutes=d["minutes"]),
-                    kind=SessionOccurrence.Kind.GROUP if circle else SessionOccurrence.Kind.INDIVIDUAL,
-                    capacity=circle.capacity if circle else 1, circle=circle, status=SessionOccurrence.Status.SCHEDULED,
-                    topic=d["topic"], title=d["title"].strip(), prep_note=d["prep_note"].strip(), creation_key=key)
+                    kind=SessionOccurrence.Kind.GROUP if (circle or group) else SessionOccurrence.Kind.INDIVIDUAL,
+                    capacity=circle.capacity if circle else max(1, len(group)), circle=circle, status=SessionOccurrence.Status.SCHEDULED,
+                    topic=d["topic"], title=d["title"].strip(), prep_note=d["prep_note"].strip(), creation_key=key,
+                    meeting_url=url, meeting_provider=provider)
+                if group:
+                    from apps.scheduling import series as S
+
+                    for st in group:
+                        if S.seat(occ, st, f"tsession-{occ.pk}-{st.pk}") == "conflict":
+                            raise ApiError("student_conflict", f"لدى {st.full_name} جلسة أخرى في هذا الوقت.", 409,
+                                           {"students": [f"لدى {st.full_name} جلسة أخرى في هذا الوقت."]})
                 booked = _book_and_notify(occ, student)
+                from apps.notifications.services import after_commit
+
+                after_commit(request.user, "session_created", "تم إنشاء الجلسة",
+                             f"{'جلسة جماعية' if occ.kind == 'group' else 'جلسة فردية'} · {local_when(occ.starts_at, request.user.timezone)} · {booked} طالب",
+                             link="/teacher/schedule", dedupe=f"session:{occ.pk}:created:teacher", data={"occurrence": occ.pk})
                 if google_on:  # the Google part is only queued here; it runs after the session is committed
                     GoogleEvent.objects.create(occurrence=occ, teacher=request.user, student=student, creation_key=key)
         except IntegrityError as e:
@@ -255,8 +299,8 @@ class TeacherSessions(APIView):
             if "teacher_no_overlapping_sessions" in str(e):
                 raise ApiError("overlap", "يتعارض هذا الموعد مع جلسة أخرى لديك.", 409, {"time": ["لديك جلسة أخرى في هذا الوقت."]}) from None
             raise
-        audit("session.created", actor=request.user, target=occ, request=request, topic=d["topic"], google=google_on,
-              circle=circle.pk if circle else None, student=student.pk if student else None, booked=booked)
+        audit("session.created", actor=request.user, target=occ, request=request, topic=d["topic"], google=google_on, kind=occ.kind,
+              circle=circle.pk if circle else None, student=student.pk if student else None, students=[s.pk for s in group] or None, booked=booked)
         if google_on:
             _try_google(occ)
         return self._answer(occ, created=True)
@@ -390,6 +434,9 @@ class TeacherSessionCancel(APIView):
             from apps.scheduling.services import cancel_occurrence
 
             cancel_occurrence(occurrence_id=pk, by=request.user, reason=reason)  # its on_commit hook tells Google
+            from apps.scheduling.series import skip_occurrence
+
+            skip_occurrence(SessionOccurrence.objects.get(pk=pk), request.user, reason)  # a weekly series never re-creates it
         audit("session.cancelled", actor=request.user, target=occ, request=request)
         return Response(session_out(SessionOccurrence.objects.select_related("circle", "google_event").get(pk=pk)))
 

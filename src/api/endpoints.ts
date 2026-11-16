@@ -1,6 +1,6 @@
 /** Typed API calls and adapters from server records to the screens' data shapes. */
 import { initialOf } from '@/lib/names';
-import type { Feedback, Session, Student, Task, TaskStatus, Teacher } from '@/data/types';
+import type { Feedback, Session, SessionEvaluation, Student, Task, TaskStatus, Teacher } from '@/data/types';
 import { fmtRelative } from '@/lib/time';
 import { baseType, fileNameFor } from '@/services/media';
 import { api, newIdempotencyKey, type Page } from './client';
@@ -39,11 +39,12 @@ export const qiraat = () => api<QiraahCat[]>('GET', 'qiraat');
 export const myRiwayat = () => api<{ riwayat: MyRiwayah[] }>('GET', 'teacher/riwayat');
 export const saveMyRiwayat = (codes: string[]) => api<{ riwayat: MyRiwayah[] }>('PUT', 'teacher/riwayat', { riwayat: codes });
 export interface ApiSlot { id: number | string; minutes?: number; teacher: number; teacher_name: string; kind: 'individual' | 'group'; starts_at: string; ends_at: string; capacity: number; seats_left: number;
-  topic?: string; title?: string; prep_note?: string }
+  topic?: string; title?: string; prep_note?: string; series?: number | null }
 export interface ApiBooking {
   id: number; occurrence: ApiSlot; student: number; student_name: string; status: 'confirmed' | 'cancelled'; assignment: number | null;
   note: string; attendance: string; cancelled_at: string | null; cancel_reason: string; created_at: string; can_join: boolean;
   has_meeting_link: boolean; meeting_provider?: string; excuse: ApiExcuse | null; excuse_deadline: string; can_excuse: boolean;
+  evaluation?: SessionEvaluation | null;
 }
 /** A student's excuse for a booking. `reason`/`teacher_response` are absent for parents (status only). */
 export interface ApiExcuse {
@@ -188,7 +189,9 @@ export interface ApiTeacherOcc {
   /** Teacher-created session with its Google Calendar event (null for other sessions). */
   google?: ApiGoogleEvent | null;
   bookings: { id: number; student: number; student_name: string; attendance: string; assignment_title: string; note: string; excuse: ApiExcuse | null;
-    makeup?: 'available' | 'used' | 'expired' | 'revoked' | null }[];
+    makeup?: 'available' | 'used' | 'expired' | 'revoked' | null; evaluation?: SessionEvaluation | null }[];
+  /** Weekly series id, and whether the session is only for chosen students (teacher-created or weekly). */
+  series?: number | null; private?: boolean;
 }
 export interface ApiGoogleEvent { sync_status: 'pending' | 'ready' | 'failed' | 'reconnect_required' | 'cancelled'; meet_ready: boolean; error: string;
   error_message: string; last_synced_at: string | null; cancel_pending: boolean; calendar_url?: string; student?: number | null; student_name?: string }
@@ -197,11 +200,12 @@ export const googleStatus = () => api<ApiGoogleStatus>('GET', 'teacher/integrati
 export const googleConnect = () => api<{ auth_url: string }>('POST', 'teacher/integrations/google/connect');
 export const googleDisconnect = () => api<ApiGoogleStatus>('POST', 'teacher/integrations/google/disconnect');
 export type SessionTopic = 'hifz' | 'review' | 'tajweed' | 'test' | 'other';
-export interface ApiTeacherSession { id: number; status: string; topic: SessionTopic; topic_label: string; title: string; prep_note: string; starts_at: string;
-  ends_at: string; minutes: number; with: { kind: 'student' | 'circle'; id: number; name: string } | null; meeting_url: string; google: ApiGoogleEvent | null }
+export interface ApiTeacherSession { id: number; status: string; kind?: 'individual' | 'group'; topic: SessionTopic; topic_label: string; title: string; prep_note: string; starts_at: string;
+  ends_at: string; minutes: number; with: { kind: 'student' | 'circle' | 'group'; id: number | null; name: string; count?: number } | null; meeting_url: string; google: ApiGoogleEvent | null }
 /** «إنشاء الجلسة»: the same request id on a retry returns the same session (never a second Google event). Google may
  *  take a little longer: the server waits up to ~1 minute, so this call does too. */
-export const createTeacherSession = (body: { student?: number; circle?: number; topic: SessionTopic; date: string; time: string; minutes: number; title: string; prep_note: string }, key: string) =>
+export const createTeacherSession = (body: { student?: number; circle?: number; students?: number[]; kind?: 'individual' | 'group'; meeting_url?: string;
+  topic: SessionTopic; date: string; time: string; minutes: number; title: string; prep_note: string }, key: string) =>
   api<ApiTeacherSession>('POST', 'teacher/sessions', body, { idempotencyKey: key, timeoutMs: 60_000 });
 export const rescheduleTeacherSession = (id: number, body: { date?: string; time?: string; minutes?: number; title?: string }) =>
   api<ApiTeacherSession>('PATCH', `teacher/sessions/${id}`, body, { timeoutMs: 45_000 });
@@ -215,6 +219,42 @@ export const setMeetingLink = (id: number, url: string) => api<ApiTeacherOcc>('P
 /** The booked student's link, only while the join window is open. */
 export const joinBooking = (id: number) => api<{ url: string; provider: string; provider_label: string }>('POST', `bookings/${id}/join`);
 export const markAttendance = (booking: number, attendance: string) => api<ApiBooking>('POST', `bookings/${booking}/attendance`, { attendance });
+
+// ---- individual / group sessions and weekly series (owner request 16 Nov 2026) ----
+/** The teacher's assigned, active students (the session participant picker). */
+export const studentPicker = (q = '') => api<{ results: { id: number; name: string }[] }>('GET', `teacher/students/picker${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+export interface ApiSeriesSlot { id?: number; weekday: number; time: string; minutes: number }
+export interface ApiSeries {
+  id: number; kind: 'individual' | 'group'; title: string; topic: string; prep_note: string; status: 'active' | 'paused' | 'cancelled';
+  teacher: { id: number; name: string }; meeting_url: string; meeting_provider: string; meeting_label: string; timezone: string;
+  starts_on: string; ends_on: string | null; slots: ApiSeriesSlot[]; schedule_text: string;
+  participants: { student: number; name: string; active: boolean; since: string; ended_at: string | null }[];
+  next_sessions: { id: number; starts_at: string; ends_at: string }[];
+  result?: { created: number; conflicts: string[]; booked: number; student_conflicts: number; cancelled?: number } | null;
+}
+export interface SeriesBody { kind: 'individual' | 'group'; students: number[]; slots: ApiSeriesSlot[]; topic: SessionTopic; title: string; prep_note: string;
+  meeting_url: string; starts_on: string; ends_on: string | null }
+export const teacherSeries = () => api<{ results: ApiSeries[] }>('GET', 'teacher/series');
+export const createSeries = (body: SeriesBody, key: string) => api<ApiSeries>('POST', 'teacher/series', body, { idempotencyKey: key, timeoutMs: 60_000 });
+export const updateSeries = (id: number, body: Partial<Omit<SeriesBody, 'kind' | 'students'>>) => api<ApiSeries>('PATCH', `teacher/series/${id}`, body, { timeoutMs: 60_000 });
+export const seriesAction = (id: number, action: 'pause' | 'resume' | 'cancel', reason = '') => api<ApiSeries>('POST', `teacher/series/${id}/${action}`, { reason }, { timeoutMs: 60_000 });
+export const addSeriesParticipant = (id: number, student: number) => api<ApiSeries>('POST', `teacher/series/${id}/participants`, { student }, { timeoutMs: 60_000 });
+export const removeSeriesParticipant = (id: number, student: number) => api<ApiSeries>('DELETE', `teacher/series/${id}/participants/${student}`);
+export interface ApiSessionParticipants { id: number; kind: string; capacity: number; series: number | null;
+  participants: { booking: number; student: number; name: string; status: string; attendance: string }[] }
+export const addSessionParticipant = (id: number, student: number) => api<ApiSessionParticipants>('POST', `teacher/sessions/${id}/participants`, { student });
+export const removeSessionParticipant = (id: number, student: number) => api<ApiSessionParticipants>('DELETE', `teacher/sessions/${id}/participants/${student}`);
+export interface EvaluationBody { memorization_grade: string; surah: number | null; ayah_from: number | null; ayah_to: number | null;
+  tajweed_grade: string; tajweed_note: string; note: string }
+export const saveEvaluation = (booking: number, body: EvaluationBody) => api<SessionEvaluation>('PUT', `bookings/${booking}/evaluation`, body);
+// admin
+export const adminSeries = (q = '') => api<{ results: ApiSeries[] }>('GET', `admin/series${q}`);
+export const adminSeriesAction = (id: number, action: 'pause' | 'resume' | 'cancel', reason: string) => api<ApiSeries>('POST', `admin/series/${id}`, { action, reason });
+export const adminAddSeriesParticipant = (id: number, student: number) => api<ApiSeries>('POST', `admin/series/${id}/participants`, { student });
+export const adminRemoveSeriesParticipant = (id: number, student: number) => api<ApiSeries>('DELETE', `admin/series/${id}/participants/${student}`);
+export const adminSessionParticipants = (id: number) => api<ApiSessionParticipants>('GET', `admin/sessions/${id}/participants`);
+export const adminAddSessionParticipant = (id: number, student: number) => api<ApiSessionParticipants>('POST', `admin/sessions/${id}/participants`, { student });
+export const adminRemoveSessionParticipant = (id: number, student: number) => api<ApiSessionParticipants>('DELETE', `admin/sessions/${id}/participants/${student}`);
 // ---- lessons & quizzes ----
 export interface ApiLesson {
   id: number; title: string; kind: 'text' | 'video' | 'audio' | 'pdf'; course: number; course_title: string; topic: string; topic_label: string;
@@ -287,7 +327,7 @@ export function toSession(b: ApiBooking): Session {
     id: String(b.id), t: String(o.teacher), teacherName: o.teacher_name, h: 0, type: o.kind === 'group' ? 'جماعية' : 'فردية', dur: minutes,
     status: b.status === 'cancelled' ? 'cancelled' : past ? 'completed' : 'confirmed',
     task: b.assignment ? String(b.assignment) : null, note: b.note, startsAt: o.starts_at, endsAt: o.ends_at, canJoin: b.can_join, hasLink: b.has_meeting_link, platform: b.meeting_provider || '', attendance: b.attendance,
-    topic: o.topic || '', title: o.title || '', prepNote: o.prep_note || '',
+    topic: o.topic || '', title: o.title || '', prepNote: o.prep_note || '', weekly: !!o.series, evaluation: b.evaluation ?? null,
     excuse: b.excuse, canExcuse: b.can_excuse, excuseDeadline: b.excuse_deadline,
   };
 }

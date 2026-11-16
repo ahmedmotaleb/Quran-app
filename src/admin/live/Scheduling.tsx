@@ -7,6 +7,7 @@ import { Icon } from '@/components/Icon';
 import type { ApiError } from '@/api/client';
 import { can, toast } from '../adminStore';
 import * as A from './api';
+import * as E from '@/api/endpoints';
 import { chip, dateTime, errMsg, Modal, ReasonDialog, smallBtn } from './ui';
 import {
   BulkBar, type BulkDef, circleOptions, type Col, DataView, type FilterField, FilterControls, filterOf, items, listParams, Pager,
@@ -298,6 +299,7 @@ export function BookingsLive() {
   const L = useServerList((p) => A.listBookings(p), params);
   const filter = filterOf(params); const sel = useSelection(JSON.stringify(filter));
   const [cancel, setCancel] = useState<A.Booking | null>(null); const [google, setGoogle] = useState<A.Booking | null>(null);
+  const [people, setPeople] = useState<number | null>(null);
   // Bookings change while the page is open (students book and cancel): refresh every minute.
   useEffect(() => { const t = setInterval(() => void L.reload(), 60000); return () => clearInterval(t); }, [L.reload]); // eslint-disable-line react-hooks/exhaustive-deps
   const st = q.status ?? 'all';
@@ -311,11 +313,16 @@ export function BookingsLive() {
       ? <button onClick={() => setGoogle(b)} aria-label={`Google: ${b.student.name}`} style={{ ...smallBtn(), color: b.google.meet_ready ? color.primary : color.dangerInk }}>{b.google.meet_ready ? 'Meet ✓' : GSTATUS[b.google.sync_status] ?? b.google.sync_status}</button>
       : <span style={{ color: color.faint }}>—</span>) },
     { key: 'st', label: 'الحالة', sort: 'status', cell: (b) => <>{pill(BOOK_ST[b.status])}{b.status === 'cancelled' && b.cancel_reason && <span style={{ display: 'block', fontSize: 12, color: color.muted, marginTop: 4 }}>{b.cancelled_by ? `${b.cancelled_by}: ` : ''}{b.cancel_reason}</span>}</> },
-    { key: 'x', label: 'إجراء', cell: (b) => (b.status === 'confirmed' && new Date(b.starts_at) > new Date()
-      && can('bookings.manage') ? <button onClick={() => setCancel(b)} aria-label={`إلغاء حجز ${b.student.name}`} style={smallBtn('danger')}>إلغاء</button> : <span style={{ color: color.faint }}>—</span>) },
+    { key: 'x', label: 'إجراء', cell: (b) => (<span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+      {b.kind === 'group' && !b.circle && can('sessions.view') && <button onClick={() => setPeople(b.occurrence)} aria-label={`المشاركون في جلسة ${b.student.name}`} style={smallBtn()}>المشاركون</button>}
+      {b.status === 'confirmed' && new Date(b.starts_at) > new Date() && can('bookings.manage')
+        ? <button onClick={() => setCancel(b)} aria-label={`إلغاء حجز ${b.student.name}`} style={smallBtn('danger')}>إلغاء</button>
+        : b.kind !== 'group' && <span style={{ color: color.faint }}>—</span>}
+    </span>) },
   ];
   return (
     <>
+      <SeriesAdmin />
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
         <input type="search" aria-label="ابحث باسم الطالب أو المعلم أو الحلقة" placeholder="ابحث باسم الطالب أو المعلم أو الحلقة" value={text} onChange={(e) => setText(e.target.value)}
           style={{ flex: '1 1 240px', minHeight: 48, padding: '0 14px', borderRadius: 12, border: `1.5px solid ${color.borderInput}`, background: color.card, fontSize: 15 }} />
@@ -334,6 +341,7 @@ export function BookingsLive() {
       <Pager page={page} total={L.data?.count ?? 0} setPage={(p) => update({ page: String(p) })} />
       <BulkBar resource="bookings" sel={sel} total={L.data?.count ?? 0} actions={BOOKING_ACTIONS} filter={filter} onDone={() => void L.reload()} exportable />
       {google && <GooglePanel b={google} onClose={() => setGoogle(null)} onChanged={() => void L.reload()} />}
+      {people !== null && <SessionParticipantsDialog occurrence={people} onClose={() => setPeople(null)} onChanged={() => void L.reload()} />}
       {cancel && (
         <ReasonDialog title="إلغاء الحجز" body={`سيُلغى حجز ${cancel.student.name} مع ${cancel.teacher.name} (${dateTime(cancel.starts_at)}) ويُبلَّغ الطالب. يبقى السجل محفوظًا.`} ok="إلغاء الحجز"
           onClose={() => setCancel(null)} run={async (r) => { await A.cancelBooking(cancel.id, r); toast('أُلغي الحجز وأُبلغ الطالب'); await L.reload(); }} />
@@ -375,6 +383,116 @@ function GooglePanel({ b, onClose, onChanged }: { b: A.Booking; onClose: () => v
       </>}
       {cancelling && <ReasonDialog title="إلغاء الجلسة" body="تُلغى الجلسة وكل حجوزاتها ويُبلَّغ الطلاب، ويُحذف حدث Google Calendar مع إبلاغ المدعوين. يبقى السجل محفوظًا." ok="إلغاء الجلسة"
         onClose={() => setCancelling(false)} run={async (r) => { const x = await A.cancelSession(b.occurrence, r); toast(`أُلغيت الجلسة (${x.bookings_cancelled} حجز)`); onChanged(); onClose(); }} />}
+    </Modal>
+  );
+}
+
+/* ===================== Weekly series and session participants (owner request 16 Nov 2026) =====================
+   Admins can add ANY active student (the explicit grant: a teacher can only choose students assigned to them) and
+   remove participants; pause, resume or cancel a teacher's weekly sessions. The server notifies everyone affected. */
+const SERIES_ST: Record<E.ApiSeries['status'], { l: string; bg: string; fg: string }> = {
+  active: { l: 'نشطة', bg: color.sageTint, fg: color.primary }, paused: { l: 'موقوفة مؤقتًا', bg: color.warnBg, fg: color.warnInk },
+  cancelled: { l: 'ملغاة', bg: color.dangerBg, fg: color.dangerInk },
+};
+
+export function SeriesAdmin() {
+  const [rows, setRows] = useState<E.ApiSeries[] | null>(null); const [err, setErr] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const load = useCallback(() => { E.adminSeries().then((r) => setRows(r.results)).catch((e) => setErr(errMsg(e))); }, []);
+  useEffect(() => { if (open && rows === null) load(); }, [open, rows, load]);
+  return (
+    <section aria-labelledby="adm-series" style={{ border: `1px solid ${color.border}`, borderRadius: 14, background: color.card, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <button id="adm-series" aria-expanded={open} onClick={() => setOpen(!open)} style={{ ...smallBtn(), alignSelf: 'flex-start' }}>
+        <Icon name="cal" size={16} /> الجلسات الأسبوعية للمعلمين {open ? '▲' : '▼'}
+      </button>
+      {open && <>
+        <FieldError msg={err} />
+        {rows && rows.length === 0 && <p style={{ margin: 0, color: color.muted }}>لا توجد جلسات أسبوعية.</p>}
+        {rows?.map((r) => <SeriesAdminRow key={r.id} r={r} onChange={(x) => setRows((all) => (all ?? []).map((y) => (y.id === x.id ? x : y)))} />)}
+      </>}
+    </section>
+  );
+}
+
+function SeriesAdminRow({ r, onChange }: { r: E.ApiSeries; onChange: (x: E.ApiSeries) => void }) {
+  const [opts, setOpts] = useState<[string, string][]>([]); const [pick, setPick] = useState(''); const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null); const [act, setAct] = useState<'pause' | 'cancel' | null>(null);
+  const manage = can('sessions.manage');
+  useEffect(() => { if (manage) studentOptions().then(setOpts).catch(() => setOpts([])); }, [manage]);
+  const active = r.participants.filter((p) => p.active);
+  const ids = new Set(active.map((p) => String(p.student)));
+  const run = async (fn: () => Promise<E.ApiSeries>, ok: string) => {
+    setBusy(true); setErr(null);
+    try { onChange(await fn()); toast(ok); setPick(''); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <article aria-label={`جلسات ${r.teacher.name}`} style={{ borderTop: `1px solid ${color.divider}`, paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <strong style={{ flex: 1 }}>{r.title || (r.kind === 'group' ? 'جلسات جماعية' : 'جلسات فردية')} · {r.teacher.name}</strong>
+        {pill(SERIES_ST[r.status])}
+      </div>
+      <span style={{ fontSize: 13, color: color.muted }}>{r.kind === 'group' ? 'جماعية' : 'فردية'} · {r.schedule_text}{r.ends_on ? ` · حتى ${r.ends_on}` : ''}</span>
+      {active.map((p) => (
+        <div key={p.student} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 40 }}>
+          <span style={{ flex: 1 }}>{p.name}</span>
+          {manage && r.status !== 'cancelled' && active.length > 1 && <button disabled={busy} onClick={() => void run(() => E.adminRemoveSeriesParticipant(r.id, p.student), `أُزيل ${p.name}`)} style={smallBtn('danger')}>إزالة</button>}
+        </div>
+      ))}
+      {manage && r.status !== 'cancelled' && (r.kind === 'group' || active.length === 0) && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <label htmlFor={`sa-${r.id}`} style={{ ...labelStyle, fontSize: 14 }}>إضافة طالب</label>
+          <select id={`sa-${r.id}`} value={pick} onChange={(e) => setPick(e.target.value)} style={{ ...inputStyle(null), width: 'auto', minWidth: 200 }}>
+            <option value="">اختر…</option>{opts.filter(([k]) => !ids.has(k)).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+          <button disabled={busy || !pick} onClick={() => void run(() => E.adminAddSeriesParticipant(r.id, Number(pick)), 'أُضيف الطالب إلى الجلسات القادمة')} style={smallBtn('primary')}>إضافة</button>
+        </div>
+      )}
+      {manage && r.status !== 'cancelled' && (
+        <div style={{ display: 'flex', gap: 8 }}>
+          {r.status === 'active' ? <button disabled={busy} onClick={() => setAct('pause')} style={smallBtn()}>إيقاف مؤقت</button>
+            : <button disabled={busy} onClick={() => void run(() => E.adminSeriesAction(r.id, 'resume', ''), 'استؤنفت الجلسات')} style={smallBtn('primary')}>استئناف</button>}
+          <button disabled={busy} onClick={() => setAct('cancel')} style={smallBtn('danger')}>إلغاء</button>
+        </div>
+      )}
+      <FieldError msg={err} />
+      {act && <ReasonDialog title={act === 'pause' ? 'إيقاف الجلسات مؤقتًا' : 'إلغاء الجلسات الأسبوعية'} ok={act === 'pause' ? 'إيقاف مؤقت' : 'إلغاء الجلسات'}
+        body="تُلغى الجلسات القادمة ويُبلَّغ المعلم والطلاب. السجلات السابقة تبقى." onClose={() => setAct(null)}
+        run={async (reason) => { onChange(await E.adminSeriesAction(r.id, act, reason)); toast(act === 'pause' ? 'أُوقفت الجلسات' : 'أُلغيت الجلسات'); setAct(null); }} />}
+    </article>
+  );
+}
+
+export function SessionParticipantsDialog({ occurrence, onClose, onChanged }: { occurrence: number; onClose: () => void; onChanged: () => void }) {
+  const [d, setD] = useState<E.ApiSessionParticipants | null>(null); const [opts, setOpts] = useState<[string, string][]>([]);
+  const [pick, setPick] = useState(''); const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(() => { E.adminSessionParticipants(occurrence).then(setD).catch((e) => setErr(errMsg(e))); }, [occurrence]);
+  useEffect(() => { load(); studentOptions().then(setOpts).catch(() => setOpts([])); }, [load]);
+  const run = async (fn: () => Promise<E.ApiSessionParticipants>, ok: string) => {
+    setBusy(true); setErr(null);
+    try { setD(await fn()); toast(ok); setPick(''); onChanged(); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  const on = (d?.participants ?? []).filter((p) => p.status === 'confirmed');
+  const ids = new Set(on.map((p) => String(p.student)));
+  return (
+    <Modal title="المشاركون في الجلسة" onClose={onClose}>
+      {!d && !err && <p style={{ margin: 0, color: color.muted }}>جارٍ التحميل…</p>}
+      {on.map((p) => (
+        <div key={p.booking} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44, borderTop: `1px solid ${color.divider}` }}>
+          <span style={{ flex: 1 }}>{p.name}</span>
+          <span style={{ fontSize: 13, color: color.muted }}>{ATT[p.attendance] ?? ''}</span>
+          {can('sessions.manage') && on.length > 1 && <button disabled={busy} onClick={() => void run(() => E.adminRemoveSessionParticipant(occurrence, p.student), `أُزيل ${p.name}`)} style={smallBtn('danger')}>إزالة</button>}
+        </div>
+      ))}
+      {can('sessions.manage') && d && (d.kind === 'group' || on.length === 0) && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <label htmlFor={`sp-add-${occurrence}`} style={{ ...labelStyle, fontSize: 14 }}>إضافة طالب</label>
+          <select id={`sp-add-${occurrence}`} value={pick} onChange={(e) => setPick(e.target.value)} style={{ ...inputStyle(null), width: 'auto', minWidth: 200 }}>
+            <option value="">اختر…</option>{opts.filter(([k]) => !ids.has(k)).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+          <button disabled={busy || !pick} onClick={() => void run(() => E.adminAddSessionParticipant(occurrence, Number(pick)), 'أُضيف الطالب إلى الجلسة')} style={smallBtn('primary')}>إضافة</button>
+        </div>
+      )}
+      <FieldError msg={err} />
     </Modal>
   );
 }

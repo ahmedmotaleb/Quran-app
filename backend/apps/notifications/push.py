@@ -32,6 +32,10 @@ GENERIC = [
     ("session_reminder", ("الحلقة", "تذكير بجلسة قادمة.")),
     ("session_soon", ("الحلقة | تذكير بالجلسة", "حلقتك تبدأ قريبًا. استعد للانضمام إلى الجلسة.")),
     ("session_cancelled", ("الحلقة", "تحديث على أحد مواعيدك.")),
+    ("session_evaluated", ("الحلقة", "وصل تقييم جلستك من معلمك.")),
+    ("session_created", ("الحلقة", "تم إنشاء جلسة جديدة.")),
+    ("session_", ("الحلقة", "تحديث على أحد مواعيدك.")),          # added to / removed from a session
+    ("series", ("الحلقة", "تحديث على جلساتك الأسبوعية.")),
     ("booking", ("الحلقة", "تحديث على أحد مواعيدك.")),
     ("submission", ("الحلقة", "تسليم جديد بانتظار مراجعتك.")),
     ("attendance", ("الحلقة", "تحديث على الحضور.")),
@@ -67,7 +71,7 @@ ASSIGNMENT_KINDS = ("teacher_assigned", "student_assigned", "student_moved")
 # kind prefix → preference category («الإشعارات» in حسابي). Kinds not listed (attendance warnings, suspension, excuse
 # decisions, parents' child updates, admin alerts) concern the account itself and are always pushed.
 CATEGORY = [("assignment", "tasks"), ("review_due", "tasks"), ("correction", "tasks"), ("lesson", "tasks"), ("quiz", "tasks"),
-            ("submission", "tasks"), ("session_reminder", "sessions"), ("session_soon", "sessions"), ("session_cancelled", "sessions"), ("booking", "sessions"), ("waitlist", "sessions"),
+            ("submission", "tasks"), ("session_reminder", "sessions"), ("session_soon", "sessions"), ("session_cancelled", "sessions"), ("session_evaluated", "feedback"), ("session_", "sessions"), ("series", "sessions"), ("booking", "sessions"), ("waitlist", "sessions"),
             ("makeup", "sessions"), ("circle", "sessions"), ("feedback", "feedback"), ("weekly_report", "news"), ("admin_message", "news"),
             ("reminder", "reminders"), ("teacher_pick", "reminders")]
 # Adhkar have their own on/off («تفعيل الأذكار», apps.adhkar.Preferences); never mixed with learning/admin notices.

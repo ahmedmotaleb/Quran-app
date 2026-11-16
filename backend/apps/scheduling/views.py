@@ -44,6 +44,7 @@ class TeacherSlots(APIView):
             return Response([])
         qs = (SessionOccurrence.objects.filter(teacher=teacher, status=SessionOccurrence.Status.SCHEDULED, starts_at__gte=lo, starts_at__lte=hi)
               .filter(Q(circle__isnull=True) | Q(circle__state="published"))
+              .filter(series__isnull=True, creation_key="")   # sessions a teacher made for chosen students stay private
               .select_related("teacher", "circle", "google_event")
               .annotate(confirmed_count=Count("bookings", filter=Q(bookings__status=Booking.Status.CONFIRMED), distinct=True),
                         # seats offered to waiting students are held for them (waitlist.py)
@@ -64,7 +65,7 @@ class BookingScopeMixin:
 
     def get_queryset(self):
         u = self.request.user
-        qs = Booking.objects.select_related("occurrence__teacher", "student", "excuse")
+        qs = Booking.objects.select_related("occurrence__teacher", "student", "excuse", "evaluation")
         if u.role == Role.TEACHER:
             qs = qs.filter(occurrence__teacher=u)
         else:
@@ -196,7 +197,7 @@ class TeacherOccurrences(APIView):
         qs = (SessionOccurrence.objects.filter(teacher=request.user, starts_at__gte=today - timedelta(days=7), starts_at__lt=today + timedelta(days=days + 1))
               .exclude(status=SessionOccurrence.Status.CANCELLED)
               .select_related("circle", "google_event", "google_event__student")
-              .prefetch_related(Prefetch("bookings", queryset=Booking.objects.select_related("student", "assignment", "excuse")))
+              .prefetch_related(Prefetch("bookings", queryset=Booking.objects.select_related("student", "assignment", "excuse", "evaluation")))
               .order_by("starts_at"))
         return Response(TeacherOccurrenceSerializer(qs, many=True).data)
 
