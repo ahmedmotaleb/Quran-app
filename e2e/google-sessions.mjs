@@ -35,7 +35,7 @@ await step(T.page, 'teacher WITHOUT Google: a session is created (one, even on a
   await T.app.getByRole('button', { name: 'إنشاء جلسة' }).click();
   const f = T.page.getByRole('dialog', { name: 'إنشاء جلسة' });
   await f.getByText('ربط Google Calendar من «حسابي» لإنشاء رابط Google Meet تلقائيًا (اختياري)', { exact: false }).waitFor();
-  await f.getByLabel('الطالب أو الحلقة').selectOption({ label: 'يوسف أحمد' });
+  await f.getByTestId('student-picker').getByRole('radio', { name: 'يوسف أحمد' }).check();
   await f.getByRole('radio', { name: 'تجويد' }).click();
   await f.getByLabel('التاريخ').fill(day3); await f.getByLabel('الوقت').fill('20:30');
   await f.getByText('٨:٣٠ مساءً', { exact: false }).waitFor();                       // 12-hour preview, device time zone
@@ -74,8 +74,8 @@ await step(T.page, 'teacher: create a «حفظ» session for Yousef — Google M
   await T.app.getByRole('button', { name: 'إنشاء جلسة' }).click();
   const f = T.page.getByRole('dialog', { name: 'إنشاء جلسة' });
   await f.getByRole('button', { name: 'إنشاء الجلسة' }).click();
-  await f.getByText('اختر طالبًا أو حلقة.').waitFor();
-  await f.getByLabel('الطالب أو الحلقة').selectOption({ label: 'يوسف أحمد' });
+  await f.getByText('اختر طالبًا.', { exact: true }).waitFor();
+  await f.getByTestId('student-picker').getByRole('radio', { name: 'يوسف أحمد' }).check();
   await f.getByRole('radio', { name: 'حفظ' }).click();
   await f.getByLabel('التاريخ').fill(day2); await f.getByLabel('الوقت').fill('23:15');
   await f.getByLabel('العنوان (اختياري)').fill('سورة الملك');

@@ -14,6 +14,7 @@ import { refreshSchedule } from '@/store/live';
 import { tzOf } from '@/lib/format';
 import { clockOf } from '@/lib/time';
 import type { ReactNode } from 'react';
+import { StudentPicker, WeeklyDays, seriesChanged, tidyLink } from './GroupSessions';
 
 const TOPICS: [E.SessionTopic, string][] = [['hifz', 'حفظ'], ['review', 'مراجعة'], ['tajweed', 'تجويد'], ['test', 'اختبار'], ['other', 'أخرى']];
 const RESULT: Record<string, string> = {
@@ -81,24 +82,30 @@ export function CreateSessionButton() {
   </>;
 }
 
+type Mode = 'individual' | 'group' | 'circle';
+
 function CreateSessionForm({ onClose }: { onClose: () => void }) {
   const tz = tzOf(useApp((s) => s.tz)).iana;
   const [gs, setGs] = useState<E.ApiGoogleStatus | null>(null);
-  const [students, setStudents] = useState<{ id: number; name: string }[]>([]); const [circles, setCircles] = useState<{ id: number; name: string }[]>([]);
-  const [v, setV] = useState({ who: '', topic: 'hifz' as E.SessionTopic, date: '', time: '19:00', minutes: 45, title: '', prep_note: '' });
+  const [circles, setCircles] = useState<{ id: number; name: string }[]>([]);
+  const [mode, setMode] = useState<Mode>('individual');
+  const [picked, setPicked] = useState<number[]>([]);
+  const [weekly, setWeekly] = useState(false);
+  const [days, setDays] = useState<{ weekday: number; time: string }[]>([]);
+  const [v, setV] = useState({ circle: '', topic: 'hifz' as E.SessionTopic, date: '', time: '19:00', minutes: 45, title: '', prep_note: '', link: '', ends_on: '' });
   const [errs, setErrs] = useState<Record<string, string | undefined>>({}); const [busy, setBusy] = useState(false);
   const key = useRef(newKey()); // one request id per form: a double tap or a retry never makes a second session
   const sending = useRef(false); // a second tap while the first request is still on its way does nothing
   useEffect(() => {
     E.googleStatus().then(setGs).catch(() => setGs(null));
-    E.teacherStudents().then((p) => setStudents(p.results.map((x) => ({ id: x.id, name: x.full_name })))).catch(() => {});
     E.teacherCircles().then((r) => setCircles(r.results.filter((c) => c.state === 'published').map((c) => ({ id: c.id, name: c.name })))).catch(() => {});
     const d = new Date(Date.now() + 86_400_000);
     setV((x) => ({ ...x, date: new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d) }));
   }, [tz]);
+  const setKind = (m: Mode) => { setMode(m); setErrs({}); if (m === 'individual') setPicked((p) => p.slice(0, 1)); if (m === 'circle') setWeekly(false); };
   /** The session exists from here on; the Google part only adds to the message. */
   const created = (s: E.ApiTeacherSession) => {
-    const who = s.with?.kind === 'circle' ? 'أُبلغ أعضاء الحلقة' : 'أُبلغ الطالب';
+    const who = s.with?.kind === 'circle' ? 'أُبلغ أعضاء الحلقة' : s.with?.kind === 'group' ? `أُبلغ ${s.with.count ?? ''} طلاب`.replace('  ', ' ') : 'أُبلغ الطالب';
     const g = s.google;
     if (!g) toast(`تم إنشاء الجلسة و${who}.`);
     else if (g.sync_status === 'ready') toast(`تم إنشاء الجلسة و${who}، ورابط Google Meet جاهز.`);
@@ -110,58 +117,112 @@ function CreateSessionForm({ onClose }: { onClose: () => void }) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (sending.current) return;
-    const local: Record<string, string | undefined> = { who: v.who ? undefined : 'اختر طالبًا أو حلقة.', date: v.date ? undefined : 'اختر التاريخ.', time: v.time ? undefined : 'اختر الوقت.' };
+    const link = tidyLink(v.link);
+    const local: Record<string, string | undefined> = {
+      who: mode === 'circle' ? (v.circle ? undefined : 'اختر الحلقة.')
+        : mode === 'group' ? (picked.length >= 2 ? undefined : 'اختر طالبين أو أكثر للجلسة الجماعية.')
+        : picked.length === 1 ? undefined : 'اختر طالبًا.',
+      date: v.date ? undefined : 'اختر التاريخ.',
+      time: weekly || v.time ? undefined : 'اختر الوقت.',
+      days: !weekly || days.length ? undefined : 'اختر يومًا واحدًا على الأقل.',
+      link: link.error ?? undefined,
+    };
     if (Object.values(local).some(Boolean)) return setErrs(local);
-    const [kind, id] = v.who.split(':');
     sending.current = true; setBusy(true); setErrs({});
     try {
-      created(await E.createTeacherSession({ ...(kind === 'c' ? { circle: +id } : { student: +id }), topic: v.topic, date: v.date, time: v.time, minutes: v.minutes, title: v.title, prep_note: v.prep_note }, key.current));
+      if (weekly && mode !== 'circle') {
+        const r = await E.createSeries({ kind: mode, students: picked, slots: days.map((d) => ({ ...d, minutes: v.minutes })), topic: v.topic, title: v.title,
+          prep_note: v.prep_note, meeting_url: link.url, starts_on: v.date, ends_on: v.ends_on || null }, key.current);
+        const n = r.result?.created ?? 0; const c = r.result?.conflicts?.length ?? 0;
+        toast(`تم إنشاء الجلسات الأسبوعية (${n} جلسة في الأسبوعين القادمين) وأُبلغ ${picked.length === 1 ? 'الطالب' : 'الطلاب'}.${c ? ` لم تُنشأ ${c} جلسة لتعارضها مع جلسات أخرى لديك.` : ''}`, c ? 'alert' : undefined);
+        seriesChanged(); void refreshSchedule(); onClose();
+        return;
+      }
+      created(await E.createTeacherSession({ ...(mode === 'circle' ? { circle: +v.circle } : { students: picked, kind: mode }), meeting_url: link.url,
+        topic: v.topic, date: v.date, time: v.time, minutes: v.minutes, title: v.title, prep_note: v.prep_note }, key.current));
     } catch (x) {
       const a = x as ApiError;
       setErrs({ form: a.message || 'تعذّر إنشاء الجلسة. تحقق من الاتصال وحاول مرة أخرى.', time: a.field?.('time') ?? undefined,
-        who: a.field?.('student') ?? a.field?.('circle') ?? undefined, minutes: a.field?.('minutes') ?? undefined });
+        who: a.field?.('students') ?? a.field?.('student') ?? a.field?.('circle') ?? undefined, minutes: a.field?.('minutes') ?? undefined,
+        days: a.field?.('slots') ?? undefined, link: a.field?.('meeting_url') ?? undefined, ends: a.field?.('ends_on') ?? undefined });
     } finally { sending.current = false; setBusy(false); }
   };
   const lbl = { ...labelStyle, display: 'flex', flexDirection: 'column' as const, gap: 6 };
   const googleOn = !!gs && gs.configured && gs.status === 'active';
+  const pill = (on: boolean) => ({ flex: 1, minHeight: 44, borderRadius: 12, border: `1.5px solid ${on ? color.primary : color.borderStrong}`, background: on ? color.primary : color.card, color: on ? color.ivory : color.primary, fontWeight: 700, fontSize: 15, cursor: 'pointer' } as const);
+  const modes: [Mode, string][] = [['individual', 'فردية'], ['group', 'جماعية'], ...(circles.length ? [['circle', 'حلقة']] as [Mode, string][] : [])];
   return (
     <div role="dialog" aria-modal="true" aria-label="إنشاء جلسة" style={{ position: 'fixed', inset: 0, background: 'rgba(20,33,31,.45)', zIndex: 60, display: 'grid', placeItems: 'end center' }}
       onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
       <form onSubmit={submit} noValidate style={{ background: color.ivory, width: '100%', maxWidth: 520, maxHeight: '92dvh', overflowY: 'auto', borderRadius: '20px 20px 0 0', padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800 }}>إنشاء جلسة</h2>
-        <label style={lbl}>الطالب أو الحلقة
-          <select value={v.who} onChange={(e) => setV({ ...v, who: e.target.value })} style={inputStyle(errs.who)} aria-invalid={!!errs.who}>
-            <option value="">اختر…</option>
-            {students.length > 0 && <optgroup label="الطلاب">{students.map((s) => <option key={s.id} value={`s:${s.id}`}>{s.name}</option>)}</optgroup>}
-            {circles.length > 0 && <optgroup label="الحلقات">{circles.map((c) => <option key={c.id} value={`c:${c.id}`}>{c.name}</option>)}</optgroup>}
-          </select>
-          <FieldError msg={errs.who} />
-        </label>
+        <div role="radiogroup" aria-label="فردية أم جماعية" style={{ display: 'flex', gap: 6 }}>
+          {modes.map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={mode === k} onClick={() => setKind(k)} style={pill(mode === k)}>{l}</button>)}
+        </div>
+        {mode === 'circle' ? (
+          <label style={lbl}>الحلقة
+            <select value={v.circle} onChange={(e) => setV({ ...v, circle: e.target.value })} style={inputStyle(errs.who)} aria-invalid={!!errs.who}>
+              <option value="">اختر…</option>
+              {circles.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+        ) : (
+          <div style={lbl}>
+            <span>{mode === 'group' ? 'الطلاب (اختر طالبين أو أكثر)' : 'الطالب'}</span>
+            <StudentPicker multi={mode === 'group'} value={picked} onChange={(ids) => { setPicked(ids); setErrs((x) => ({ ...x, who: undefined })); }} invalid={errs.who} />
+          </div>
+        )}
+        <FieldError msg={errs.who} />
         <div role="radiogroup" aria-label="نوع الجلسة" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {TOPICS.map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={v.topic === k} onClick={() => setV({ ...v, topic: k })}
             style={{ minHeight: 40, padding: '0 14px', borderRadius: 999, border: `1.5px solid ${v.topic === k ? color.primary : color.borderStrong}`, background: v.topic === k ? color.primary : color.card, color: v.topic === k ? color.ivory : color.primary, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>{l}</button>)}
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <label style={{ ...lbl, flex: 1 }}>التاريخ<input type="date" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} style={inputStyle(errs.date, true)} /></label>
-          <label style={{ ...lbl, flex: 1 }}>الوقت<input type="time" value={v.time} onChange={(e) => setV({ ...v, time: e.target.value })} style={inputStyle(errs.time, true)} /></label>
-        </div>
-        {v.time && <p style={muted(13, { margin: 0 })}>الموعد: <strong>{clockOf(v.time)}</strong> بتوقيت جهازك ({tz})</p>}
-        <FieldError msg={errs.date ?? errs.time} />
+        {mode !== 'circle' && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+            <input type="checkbox" checked={weekly} onChange={(e) => { setWeekly(e.target.checked); setErrs({}); if (e.target.checked && !days.length) setDays([]); }} style={{ width: 22, height: 22, accentColor: color.primary }} />
+            تكرار أسبوعي تلقائي
+          </label>
+        )}
+        {weekly ? (<>
+          <div style={lbl}><span>أيام الجلسات ووقت كل يوم</span>
+            <WeeklyDays value={days} onChange={(d) => { setDays(d); setErrs((x) => ({ ...x, days: undefined })); }} defaultTime={v.time} invalid={errs.days} /></div>
+          <FieldError msg={errs.days} />
+          <div style={{ display: 'flex', gap: 10 }}>
+            <label style={{ ...lbl, flex: 1 }}>تبدأ من<input type="date" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} style={inputStyle(errs.date, true)} /></label>
+            <label style={{ ...lbl, flex: 1 }}>تنتهي في (اختياري)<input type="date" value={v.ends_on} onChange={(e) => setV({ ...v, ends_on: e.target.value })} style={inputStyle(errs.ends, true)} /></label>
+          </div>
+          <FieldError msg={errs.date ?? errs.ends} />
+          <p style={muted(12, { margin: 0 })}>تُنشأ الجلسات تلقائيًا كل أسبوع (أسبوعين مقدمًا) ويُحجز فيها الطلاب المختارون. يمكنك إيقافها أو إلغاؤها أو تعديل المشاركين من «الجلسات الأسبوعية». الأوقات بتوقيت جهازك ({tz}).</p>
+        </>) : (<>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <label style={{ ...lbl, flex: 1 }}>التاريخ<input type="date" value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} style={inputStyle(errs.date, true)} /></label>
+            <label style={{ ...lbl, flex: 1 }}>الوقت<input type="time" value={v.time} onChange={(e) => setV({ ...v, time: e.target.value })} style={inputStyle(errs.time, true)} /></label>
+          </div>
+          {v.time && <p style={muted(13, { margin: 0 })}>الموعد: <strong>{clockOf(v.time)}</strong> بتوقيت جهازك ({tz})</p>}
+          <FieldError msg={errs.date ?? errs.time} />
+        </>)}
         <label style={lbl}>المدة
           <select value={v.minutes} onChange={(e) => setV({ ...v, minutes: +e.target.value })} style={inputStyle(errs.minutes)}>
             {[30, 45, 60, 90].map((m) => <option key={m} value={m}>{m} دقيقة</option>)}
           </select>
         </label>
+        <label style={lbl}>رابط الاجتماع (اختياري)
+          <input dir="ltr" inputMode="url" value={v.link} placeholder="meet.google.com/abc-defg-hij" aria-invalid={!!errs.link}
+            onChange={(e) => { setV({ ...v, link: e.target.value }); setErrs((x) => ({ ...x, link: undefined })); }}
+            onBlur={() => { const t = tidyLink(v.link); setV((x) => ({ ...x, link: t.url })); setErrs((x) => ({ ...x, link: t.error ?? undefined })); }} style={inputStyle(errs.link)} />
+          <span style={muted(12)}>Google Meet أو Zoom أو Teams أو Jitsi، ويُضاف https:// تلقائيًا. الرابط نفسه لكل الطلاب{weekly ? ' ولكل الجلسات' : ''}.</span>
+        </label>
+        <FieldError msg={errs.link} />
         <label style={lbl}>العنوان (اختياري)<input value={v.title} maxLength={120} onChange={(e) => setV({ ...v, title: e.target.value })} style={inputStyle()} /></label>
         <label style={lbl}>ملاحظة تحضير للطالب (اختياري)
           <textarea value={v.prep_note} maxLength={500} rows={2} onChange={(e) => setV({ ...v, prep_note: e.target.value })} style={{ ...inputStyle(), minHeight: 64, padding: 10 }} />
           <span style={muted(12)}>تظهر للطالب في الحلقة فقط، ولا تُرسل إلى Google.</span>
         </label>
-        <p style={muted(12)}>{googleOn
+        <p style={muted(12)}>{googleOn && mode === 'individual' && !weekly && !v.link.trim()
           ? 'يصل الطالب إشعار في الحلقة، ويُضاف رابط Google Meet ودعوة على بريده تلقائيًا.'
-          : 'يصل الطالب إشعار في الحلقة. يمكنك إضافة رابط الاجتماع من الجلسة بعد إنشائها، أو ربط Google Calendar من «حسابي» لإنشاء رابط Google Meet تلقائيًا (اختياري).'}</p>
+          : 'يصل كل طالب مختار إشعار في الحلقة. يمكنك إضافة رابط الاجتماع هنا أو من الجلسة بعد إنشائها، أو ربط Google Calendar من «حسابي» لإنشاء رابط Google Meet تلقائيًا (اختياري).'}</p>
         {errs.form && <p role="alert" style={{ margin: 0, fontSize: 14, fontWeight: 700, color: color.dangerInk }}>{errs.form}</p>}
-        <button type="submit" disabled={busy} aria-busy={busy} style={primaryBtn(52, 16)}>{busy ? 'جارٍ إنشاء الجلسة…' : 'إنشاء الجلسة'}</button>
+        <button type="submit" disabled={busy} aria-busy={busy} style={primaryBtn(52, 16)}>{busy ? 'جارٍ إنشاء الجلسة…' : weekly ? 'إنشاء الجلسات الأسبوعية' : 'إنشاء الجلسة'}</button>
         <button type="button" onClick={onClose} disabled={busy} style={{ ...smallBtn(), justifyContent: 'center' }}>إغلاق</button>
       </form>
     </div>

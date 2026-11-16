@@ -2,6 +2,7 @@
 independent: a failing step is reported and the job exits non-zero, but the other steps still run.
 
 - session_reminders: reminder records for sessions in the next 24 hours
+- generate_recurring_sessions: weekly series keep their next two weeks of sessions, participants booked
 - teacher_reminders: «اختر معلمك» for students without a teacher (every AppSettings.teacher_reminder_hours)
 - quran_reminders: the students' daily Quran reminders that are due this hour (notifications.reminders)
 - generate_reviews: due spaced-repetition review tasks
@@ -24,7 +25,7 @@ class Command(BaseCommand):
     help = "Run the hourly maintenance steps."
 
     def handle(self, **_):
-        steps = ["push_retry", "session_reminders", "generate_reviews", "quran_reminders", "teacher_reminders", "adhkar_reminders", "sync_circle_members", "waitlist_tick", "archive_smoke_accounts", "parent_weekly_reports",
+        steps = ["push_retry", "session_reminders", "generate_reviews", "quran_reminders", "teacher_reminders", "adhkar_reminders", "sync_circle_members", "generate_recurring_sessions", "waitlist_tick", "archive_smoke_accounts", "parent_weekly_reports",
                  "send_pending_setup_emails", "google_calendar_sync"]
         if settings.MEDIA_STORAGE != "none":
             steps += ["purge_orphan_media", "purge_reviewed_recordings"]

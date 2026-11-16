@@ -25,7 +25,8 @@ class Config(AppConfig):
                 transaction.on_commit(lambda: session_changed(instance))
 
         def booking_saved(sender, instance, created, **kw):
-            if instance.status == Booking.Status.CONFIRMED:
+            # Participants seated by a series or a group change: the session's own alarm is set once (series.py).
+            if instance.status == Booking.Status.CONFIRMED and not getattr(instance, "_no_alarm", False):
                 from .reminders import session_changed
 
                 transaction.on_commit(lambda: session_changed(instance.occurrence))

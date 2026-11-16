@@ -8,7 +8,7 @@ import {
   Avatar, BackHeader, Badge, Chips, FieldError, KVCard, SearchInput, card, iconTile, inputStyle, labelStyle, listBtn, muted, outlineBtn, primaryBtn,
 } from '@/components/ui';
 import { LESSONS } from '@/data/demo';
-import { dayL, timeIn, tzLabel, tzOf, type BadgeSpec } from '@/lib/format';
+import { dayL, surahName, timeIn, tzLabel, tzOf, type BadgeSpec } from '@/lib/format';
 import {
   back, confirmBooking, requestExcuse, go, openSheet, openTeacher, replace, rescheduleSession, reset, setState, startQuiz, toast, up, useApp,
 } from '@/store/store';
@@ -184,7 +184,8 @@ function BookingsTab() {
             <span style={iconTile(48, color.sage)}><Icon name="cal" /></span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <span style={{ display: 'block', fontSize: 16, fontWeight: 700 }}>{x.when}</span>
-              <span style={{ display: 'block', fontSize: 14, color: color.body, marginTop: 2 }}>{x.teacherName} · {x.type}{x.platform ? ` · ${x.platform}` : ''}</span>
+              {x.title && <span style={{ display: 'block', fontSize: 14, fontWeight: 700, color: color.primary, marginTop: 2 }}>{x.title}</span>}
+              <span style={{ display: 'block', fontSize: 14, color: color.body, marginTop: 2 }}>{x.teacherName} · {x.type}{x.weekly ? ' · أسبوعية' : ''}{x.platform ? ` · ${x.platform}` : ''}</span>
             </span>
             <Badge kind={x.status} size="sm" style={{ padding: '4px 10px' }} />
           </button>
@@ -434,12 +435,13 @@ export function SessionDetails() {
           ['المعلم', x.teacherName],
           ['التاريخ والوقت', <span style={{ textAlign: 'left' }}><span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>{x.dateFull} · {x.timeL}</span><span style={{ display: 'block', fontSize: 12, color: color.muted }}>{x.tzL}</span></span>],
           ...(x0.topic ? [['نوع الجلسة', `جلسة ${TOPIC[x0.topic] ?? ''}${x0.title ? ` — ${x0.title}` : ''}`] as [string, string]] : []),
-          ['النوع والمدة', `${x.type} · ${x.dur} دقيقة`],
+          ['النوع والمدة', `${x.type}${x0.weekly ? ' · أسبوعية' : ''} · ${x.dur} دقيقة`],
           ...(x0.platform ? [['منصة الاجتماع', x0.platform] as [string, string]] : []),
           ['مهمة الجلسة', x.taskL],
           ...(att ? [['الحضور', att] as [string, string]] : []),
         ]} />
         {ex && <ExcuseStatus ex={ex} />}
+        {x0.evaluation && <EvaluationCard ev={x0.evaluation} />}
         {x.note && <p style={{ margin: 0, fontSize: 14, color: color.body, background: color.sand, padding: 12, borderRadius: 12 }}>ملاحظتك: {x.note}</p>}
         {x0.prepNote && <p style={{ margin: 0, fontSize: 14, color: color.body, background: color.sand, padding: 12, borderRadius: 12 }}>للتحضير: {x0.prepNote}</p>}
         {x.summary && (
@@ -471,6 +473,24 @@ export function SessionDetails() {
 }
 
 const ATTENDANCE: Record<string, string> = { present: 'حضر', late: 'حضر متأخرًا', absent: 'غائب', excused: 'غاب بعذر' };
+
+/** «تقييم المعلم»: this student's own record of the session (memorization range and grade, tajweed, note). */
+function EvaluationCard({ ev }: { ev: NonNullable<Session['evaluation']> }) {
+  const range = ev.surah ? `سورة ${surahName(ev.surah)}${ev.ayah_from ? ` · الآيات ${ev.ayah_from}${ev.ayah_to && ev.ayah_to !== ev.ayah_from ? `–${ev.ayah_to}` : ''}` : ''}` : '';
+  const rows: [string, string][] = [
+    ...(range ? [['الحفظ', range] as [string, string]] : []),
+    ...(ev.memorization_label ? [['تقدير الحفظ', ev.memorization_label] as [string, string]] : []),
+    ...(ev.tajweed_label ? [['التجويد', ev.tajweed_label] as [string, string]] : []),
+    ...(ev.tajweed_note ? [['ملاحظة التجويد', ev.tajweed_note] as [string, string]] : []),
+  ];
+  return (
+    <section aria-label="تقييم المعلم" data-testid="session-evaluation" style={{ background: color.sageTint, borderRadius: 16, padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: color.primary }}>تقييم المعلم</p>
+      {rows.map(([k, v]) => <p key={k} style={{ margin: 0, fontSize: 15 }}><strong>{k}:</strong> {v}</p>)}
+      {ev.note && <p style={{ margin: 0, fontSize: 15, lineHeight: 1.8 }}>{ev.note}</p>}
+    </section>
+  );
+}
 
 function ExcuseStatus({ ex }: { ex: NonNullable<Session['excuse']> }) {
   const [label, bg, fg] = ex.status === 'pending' ? ['الاعتذار قيد المراجعة', color.warnBg, color.warnInk]

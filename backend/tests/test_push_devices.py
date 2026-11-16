@@ -156,7 +156,9 @@ def test_lock_screen_text_is_generic_for_every_event(world, keys, monkeypatch, k
     assert len(mine) == 1, {"sent": fake.sent, "push_status": n.push_status, "push_error": n.push_error,
                             "devices": list(PushSubscription.objects.filter(user=world.s1).values("active", "failures"))}
     payload = mine[0]
-    text = json.dumps(payload, ensure_ascii=False)
+    # The readable fields only. `r` is a random signed receipt token (base64): it contained the test student's name
+    # «s1» by chance, which was the intermittent failure (found 16 Nov 2026). Its own content is checked in test_push.
+    text = json.dumps({k: v for k, v in payload.items() if k != "r"}, ensure_ascii=False)
     assert payload["title"] == "الحلقة" and payload["url"] == f"/#/n/{n.pk}"          # the app opens it after sign-in
     assert set(payload) == {"title", "body", "url", "tag", "r"}   # r: the signed delivery-receipt token (no personal data)
     for leak in ("الملك", "الدرجة", "ملاحظة", "r2.example", world.s1.full_name):

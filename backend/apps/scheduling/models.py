@@ -86,6 +86,93 @@ class Circle(TimeStamped):
         constraints = [models.CheckConstraint(condition=Q(capacity__gte=2, capacity__lte=40), name="circle_capacity_range")]
 
 
+class RecurringSessionRule(TimeStamped):
+    """«جلسات أسبوعية» (owner request 16 Nov 2026): a teacher's weekly sessions with chosen students. One or more
+    weekdays, each with its own time (RecurringSessionSlot); sessions are generated ahead (series.py) and the active
+    participants (RecurringSessionParticipant) are booked into each. Pausing or cancelling stops future sessions; past
+    sessions, attendance and evaluations stay."""
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "نشطة"
+        PAUSED = "paused", "موقوفة مؤقتًا"
+        CANCELLED = "cancelled", "ملغاة"
+
+    teacher = models.ForeignKey(User, on_delete=models.PROTECT, related_name="session_series")
+    kind = models.CharField(max_length=12, choices=[("individual", "فردية"), ("group", "جماعية")])
+    title = models.CharField(max_length=120, blank=True)
+    topic = models.CharField(max_length=10, blank=True)
+    prep_note = models.CharField(max_length=500, blank=True)
+    meeting_url = models.URLField(max_length=500, blank=True)   # one link for every session and every participant
+    meeting_provider = models.CharField(max_length=32, blank=True)
+    timezone = models.CharField(max_length=64, default="Africa/Cairo")
+    starts_on = models.DateField()
+    ends_on = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    creation_key = models.CharField(max_length=64, blank=True, default="")
+
+    class Meta:
+        db_table = "scheduling_recurring_session_rule"
+        constraints = [
+            models.UniqueConstraint(fields=["teacher", "creation_key"], condition=~Q(creation_key=""), name="series_once_per_request"),
+            models.CheckConstraint(condition=Q(ends_on__isnull=True) | Q(ends_on__gte=F("starts_on")), name="series_end_after_start"),
+        ]
+
+
+class RecurringSessionSlot(models.Model):
+    """One weekday and local time of a series. Changing the schedule ends a slot (active=False) and adds a new one, so
+    sessions already generated keep pointing at the slot they came from."""
+
+    rule = models.ForeignKey(RecurringSessionRule, on_delete=models.CASCADE, related_name="slots")
+    weekday = models.PositiveSmallIntegerField()   # 0 = Monday … 6 = Sunday (Python convention, as AvailabilityRule)
+    start_time = models.TimeField()
+    minutes = models.PositiveSmallIntegerField()
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "scheduling_recurring_session_slot"
+        ordering = ["weekday", "start_time"]
+        constraints = [
+            models.UniqueConstraint(fields=["rule", "weekday", "start_time"], condition=Q(active=True), name="series_slot_unique"),
+            models.CheckConstraint(condition=Q(weekday__lte=6), name="series_slot_weekday"),
+            models.CheckConstraint(condition=Q(minutes__gte=15, minutes__lte=180), name="series_slot_minutes"),
+        ]
+
+
+class RecurringSessionParticipant(TimeStamped):
+    """A student in a series. Removing ends the row (history kept) and cancels only their FUTURE bookings."""
+
+    rule = models.ForeignKey(RecurringSessionRule, on_delete=models.PROTECT, related_name="participants")
+    student = models.ForeignKey(User, on_delete=models.PROTECT, related_name="series_memberships")
+    active = models.BooleanField(default=True)
+    added_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    ended_at = models.DateTimeField(null=True, blank=True)
+    ended_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    end_reason = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        db_table = "scheduling_recurring_session_participant"
+        constraints = [models.UniqueConstraint(fields=["rule", "student"], condition=Q(active=True), name="series_one_active_participant")]
+
+
+class RecurringSessionException(models.Model):
+    """A date the series does not meet (the teacher cancelled that one session). `slot` null = every slot that day."""
+
+    rule = models.ForeignKey(RecurringSessionRule, on_delete=models.CASCADE, related_name="exceptions")
+    date = models.DateField()
+    slot = models.ForeignKey(RecurringSessionSlot, null=True, blank=True, on_delete=models.CASCADE, related_name="+")
+    reason = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "scheduling_recurring_session_exception"
+        constraints = [
+            models.UniqueConstraint(fields=["rule", "date", "slot"], name="series_exception_once"),
+            models.UniqueConstraint(fields=["rule", "date"], condition=Q(slot__isnull=True), name="series_exception_day_once"),
+        ]
+
+
 class SessionOccurrence(TimeStamped):
     class Kind(models.TextChoices):
         INDIVIDUAL = "individual", "فردية"
@@ -123,6 +210,16 @@ class SessionOccurrence(TimeStamped):
     prep_note = models.CharField(max_length=500, blank=True)  # shown to the booked students in HALQA, never sent to Google
     # «إنشاء جلسة» by the teacher: the form's request id, so a double tap or a retry returns the same session.
     creation_key = models.CharField(max_length=64, blank=True, default="")
+    # Generated from a weekly series: one live session per (slot, local date).
+    series = models.ForeignKey(RecurringSessionRule, null=True, blank=True, on_delete=models.PROTECT, related_name="occurrences")
+    series_slot = models.ForeignKey(RecurringSessionSlot, null=True, blank=True, on_delete=models.SET_NULL, related_name="occurrences")
+    series_date = models.DateField(null=True, blank=True)
+
+    @property
+    def private(self) -> bool:
+        """Created by the teacher for chosen students (a single «إنشاء جلسة» or a weekly series): never offered to
+        other students to book or wait for."""
+        return bool(self.series_id or self.creation_key)
 
     class Meta:
         ordering = ["starts_at"]
@@ -130,6 +227,8 @@ class SessionOccurrence(TimeStamped):
             models.CheckConstraint(condition=Q(ends_at__gt=F("starts_at")), name="occurrence_positive_length"),
             models.CheckConstraint(condition=Q(capacity__gte=1, capacity__lte=40), name="occurrence_capacity_range"),
             models.UniqueConstraint(fields=["teacher", "creation_key"], condition=~Q(creation_key=""), name="session_once_per_request"),
+            models.UniqueConstraint(fields=["series_slot", "series_date"], condition=Q(series_slot__isnull=False) & ~Q(status="cancelled"),
+                                    name="series_one_session_per_slot_date"),
             ExclusionConstraint(
                 name="teacher_no_overlapping_sessions",
                 expressions=[(TsTzRange("starts_at", "ends_at"), RangeOperators.OVERLAPS), ("teacher", RangeOperators.EQUAL)],
@@ -276,3 +375,33 @@ class MakeupCredit(models.Model):
     class Meta:
         ordering = ["-issued_at"]
         indexes = [models.Index(fields=["student", "status", "expires_at"])]
+
+
+class SessionEvaluation(TimeStamped):
+    """The teacher's per-student record of one session (owner request 16 Nov 2026): memorization progress (a surah
+    range the teacher picks), a memorization and a tajweed grade, and a note. One per booking, so a group session gets
+    one per student; corrections overwrite it (audited) and the booking keeps it after the session."""
+
+    class Grade(models.TextChoices):
+        EXCELLENT = "excellent", "ممتاز"
+        VERY_GOOD = "very_good", "جيد جدًا"
+        GOOD = "good", "جيد"
+        NEEDS_WORK = "needs_work", "يحتاج إلى مراجعة"
+
+    booking = models.OneToOneField(Booking, on_delete=models.PROTECT, related_name="evaluation")
+    memorization_grade = models.CharField(max_length=12, choices=Grade.choices, blank=True)
+    surah = models.PositiveSmallIntegerField(null=True, blank=True)
+    ayah_from = models.PositiveSmallIntegerField(null=True, blank=True)
+    ayah_to = models.PositiveSmallIntegerField(null=True, blank=True)
+    tajweed_grade = models.CharField(max_length=12, choices=Grade.choices, blank=True)
+    tajweed_note = models.CharField(max_length=300, blank=True)
+    note = models.CharField(max_length=1000, blank=True)
+    evaluated_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        db_table = "scheduling_student_evaluation"
+        constraints = [
+            models.CheckConstraint(condition=Q(surah__isnull=True) | Q(surah__gte=1, surah__lte=114), name="evaluation_surah_range"),
+            models.CheckConstraint(condition=Q(ayah_from__isnull=True) | Q(ayah_to__isnull=True) | Q(ayah_to__gte=F("ayah_from")),
+                                   name="evaluation_ayah_order"),
+        ]

@@ -40,7 +40,8 @@ def join(student, occurrence_id: int, request=None) -> WaitlistEntry:
     now, cfg = timezone.now(), AppSettings.load()
     with transaction.atomic():
         occ = SessionOccurrence.objects.select_for_update(of=("self",)).filter(pk=occurrence_id).select_related("circle").first()
-        if occ is None or occ.status != SessionOccurrence.Status.SCHEDULED or (occ.circle_id and occ.circle.state != "published"):
+        if (occ is None or occ.status != SessionOccurrence.Status.SCHEDULED or (occ.circle_id and occ.circle.state != "published")
+                or occ.private):   # chosen students only (series.py)
             raise ApiError("slot_unavailable", "لم يعد هذا الموعد متاحًا.", 409)
         if _cutoff(occ, cfg) <= now:
             raise ApiError("too_late", "يبدأ هذا الموعد قريبًا جدًا؛ لا يمكن الانتظار عليه.", 409)

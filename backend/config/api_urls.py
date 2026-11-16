@@ -207,3 +207,6 @@ urlpatterns = [
 from apps.scheduling.availability_views import urls as _availability_urls  # noqa: E402
 
 urlpatterns += _availability_urls()
+from apps.scheduling.series_views import urls as _series_urls  # noqa: E402
+
+urlpatterns += _series_urls()

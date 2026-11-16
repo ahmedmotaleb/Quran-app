@@ -69,8 +69,13 @@ def assignment_rev(user) -> str:
 
     from apps.accounts.models import TeacherAssignment
 
+    from apps.scheduling.models import Booking
+
     r = TeacherAssignment.objects.filter(Q(student=user) | Q(teacher=user)).aggregate(m=Max("updated_at"), n=Max("id"))
-    return f"{r['n'] or 0}:{r['m'].isoformat() if r['m'] else ''}"
+    # …and whenever the student's session participation changes (added to or removed from a session or a weekly
+    # series, owner request 16 Nov 2026), so the dashboard shows it at once.
+    b = Booking.objects.filter(student=user).aggregate(m=Max("updated_at"), n=Max("id")) if user.role == "student" else {"m": None, "n": None}
+    return f"{r['n'] or 0}:{r['m'].isoformat() if r['m'] else ''}:{b['n'] or 0}:{b['m'].isoformat() if b['m'] else ''}"
 
 
 class NotificationRead(APIView):

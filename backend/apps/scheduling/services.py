@@ -49,7 +49,7 @@ def book(*, student, occurrence_id: int, idempotency_key: str, assignment=None, 
             raise ApiError("slot_unavailable", "لم يعد هذا الموعد متاحًا. اختر موعدًا آخر.", 409)
         prof = getattr(occ.teacher, "teacher_profile", None)
         if (occ.status != SessionOccurrence.Status.SCHEDULED or occ.teacher.status != AccountStatus.ACTIVE
-                or prof is None or prof.approved_at is None or (occ.circle_id and occ.circle.state != "published")):
+                or prof is None or prof.approved_at is None or (occ.circle_id and occ.circle.state != "published") or occ.private):
             raise ApiError("slot_unavailable", "لم يعد هذا الموعد متاحًا. اختر موعدًا آخر.", 409)
         if occ.starts_at < now + timedelta(minutes=cfg.booking_lead_minutes):
             raise ApiError("too_late", "لا يمكن حجز موعد يبدأ قريبًا جدًا. اختر موعدًا لاحقًا.", 409)
