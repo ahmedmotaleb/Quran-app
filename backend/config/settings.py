@@ -329,8 +329,9 @@ QF_ENV = os.environ.get("QF_ENV", "prelive").strip() or "prelive"
 if QF_ENV not in ("prelive", "production"):
     raise ImproperlyConfigured("QF_ENV must be prelive or production.")
 # Reciters offered in the Mushaf (Quran Foundation recitation ids). The first is the default (owner, 22 October 2026:
-# Sheikh al-Husary's teaching Mushaf). QF_RECITERS="12:name;7:name" replaces the list without a code change.
-QF_RECITERS = [(12, "محمود خليل الحصري — المصحف المعلم"), (7, "مشاري راشد العفاسي")]
+# Sheikh al-Husary's teaching Mushaf; 17 November 2026: Sheikh Muhammad Siddiq al-Minshawi (murattal, Quran.com
+# recitation 9) replaces Mishary Alafasy). QF_RECITERS="12:name;9:name" replaces the list without a code change.
+QF_RECITERS = [(12, "محمود خليل الحصري — المصحف المعلم"), (9, "محمد صديق المنشاوي")]
 if os.environ.get("QF_RECITERS", "").strip():
     QF_RECITERS = [(int(i), n.strip()) for i, _, n in (x.partition(":") for x in os.environ["QF_RECITERS"].split(";")) if i.strip().isdigit()]
 QF_RECITATION_ID = int(os.environ.get("QF_RECITATION_ID", "") or QF_RECITERS[0][0])  # the default reciter
