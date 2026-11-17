@@ -187,3 +187,16 @@ def test_mirror_host_allowed_unknown_hosts_logged_and_empty_reciter_falls_back(w
     assert "mirrors.quranicaudio.com" in build_csp()
     fb = c.get("/api/v1/quran/audio/5?reciter=12").json()
     assert fb["requested"] == 12 and fb["reciter_id"] == 7 and fb["ayahs"]  # Afasy instead of silence
+
+
+def test_default_reciters_are_husary_then_minshawi():
+    """Owner request (17 Nov 2026): Mishary Alafasy removed, Muhammad Siddiq al-Minshawi (Quran.com 9) added."""
+    import importlib, os
+
+    import config.settings as s
+
+    if os.environ.get("QF_RECITERS"):
+        pytest.skip("the environment overrides the list")
+    s = importlib.reload(s)
+    assert s.QF_RECITERS == [(12, "محمود خليل الحصري — المصحف المعلم"), (9, "محمد صديق المنشاوي")]
+    assert all("العفاسي" not in n for _, n in s.QF_RECITERS)

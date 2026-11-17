@@ -195,7 +195,7 @@ const Q = await (async () => {
   await hookPlay(ctx);
   const played = []; const asked = [];
   await ctx.route('https://audio.e2e.test/**', (r) => { const p = new URL(r.request().url()).pathname.split('/'); played.push(`${p.at(-2)}/${p.at(-1)}`); return r.fulfill({ status: 200, contentType: 'audio/wav', body: WAV }); });
-  const RECITERS = [{ id: 12, name: 'محمود خليل الحصري — المصحف المعلم' }, { id: 7, name: 'مشاري راشد العفاسي' }];
+  const RECITERS = [{ id: 12, name: 'محمود خليل الحصري — المصحف المعلم' }, { id: 9, name: 'محمد صديق المنشاوي' }];
   await ctx.route('**/api/v1/settings/public', async (r) => { const res = await r.fetch(); const j = await res.json(); j.ayah_audio = { provider: 'qf', name: 'Quran.com', url: '', default: 12, reciters: RECITERS }; return r.fulfill({ response: res, json: j }); });
   await ctx.route('**/api/v1/quran/audio/**', (r) => {
     const u = new URL(r.request().url()); const n = Number(u.pathname.split('/').pop()); const rid = Number(u.searchParams.get('reciter') || 12); asked.push(`${rid}:${n}`);
@@ -226,13 +226,13 @@ await step(Q.page, 'Quran Foundation source: the surah audio list loads on open 
   await Q.app.getByText('الحصري — المصحف المعلم', { exact: false }).first().waitFor();
 });
 await step(Q.page, 'choosing another reciter plays that recitation and is remembered on the device', async () => {
-  await openSettings(Q); await Q.page.getByRole('combobox', { name: 'القارئ' }).selectOption({ label: 'مشاري راشد العفاسي' });
+  await openSettings(Q); await Q.page.getByRole('combobox', { name: 'القارئ' }).selectOption({ label: 'محمد صديق المنشاوي' });
   Q.played.length = 0;
   await playBtn(Q).click(); await stopBtn(Q).waitFor(); await playBtn(Q).waitFor({ timeout: 15000 });
-  if (!Q.played.length || !Q.played.every((x) => x.startsWith('r7/'))) throw new Error('played ' + Q.played.join(' '));
+  if (!Q.played.length || !Q.played.every((x) => x.startsWith('r9/'))) throw new Error('played ' + Q.played.join(' '));
   await Q.page.reload(); await Q.app.locator('[id^="ayah-"]').first().waitFor().catch(() => {});
   const v = await Q.page.evaluate(() => localStorage.getItem('halqa.reciter'));
-  if (v !== '7') throw new Error('choice not remembered: ' + v);
+  if (v !== '9') throw new Error('choice not remembered: ' + v);
 });
 await step(Q.page, 'changing the reciter while an ayah repeats carries on with the same ayah and the same count', async () => {
   if (!(await Q.app.locator('[id^="ayah-"]').count())) {
@@ -246,7 +246,7 @@ await step(Q.page, 'changing the reciter while an ayah repeats carries on with t
   await waitPlays(Q, 6);
   const all = (await Q.page.evaluate(() => window.__plays)).filter((x) => x.t < 0.05).map((x) => x.f);
   const at = all.findIndex((f) => f.startsWith('r12/'));
-  if (at < 3 || !all.slice(0, at).every((f) => f.startsWith('r7/')) || new Set(all.map((f) => f.slice(-7))).size !== 1) throw new Error('played ' + all.join(' '));
+  if (at < 3 || !all.slice(0, at).every((f) => f.startsWith('r9/')) || new Set(all.map((f) => f.slice(-7))).size !== 1) throw new Error('played ' + all.join(' '));
   await status(Q).getByText('مستمر', { exact: false }).waitFor();
   await stopBtn(Q).click();
 });
