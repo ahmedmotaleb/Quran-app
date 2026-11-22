@@ -17,12 +17,17 @@ const ICON: Record<string, IconName> = {
 };
 
 let listeners: ((n: number) => void)[] = [];
+let lastUnread: number | null = null;
 export async function refreshUnread() {
   try {
     const r = await api<{ unread: number; assignment_rev?: string }>('GET', 'notifications/unread');
     listeners.forEach((f) => f(r.unread));
-    const { syncAssignmentRev } = await import('@/store/live');
+    const { refreshSchedule, syncAssignmentRev } = await import('@/store/live');
     void syncAssignmentRev(r.assignment_rev);
+    // A new notice for a teacher is often about their sessions (a student joined and was marked present, a booking,
+    // an excuse): their schedule is re-read so «المواعيد» shows it without reopening the app.
+    if (lastUnread !== null && r.unread > lastUnread && useApp.getState().me?.role === 'teacher') void refreshSchedule();
+    lastUnread = r.unread;
   } catch { /* offline: keep last */ }
 }
 

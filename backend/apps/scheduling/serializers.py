@@ -147,6 +147,7 @@ class TeacherOccurrenceSerializer(serializers.ModelSerializer):
 
         return [{"evaluation": booking_evaluation(b), "id": b.id, "student": b.student_id, "student_name": b.student.full_name, "attendance": b.attendance,
                  "assignment_title": b.assignment.title if b.assignment else "", "note": b.note,
+                 "joined": bool(b.attendance) and b.attendance_marked_by_id == b.student_id,   # recorded when the student joined
                  "excuse": excuse_out(ex) if (ex := booking_excuse(b)) else None,
                  # «جلسة تعويضية» granted for this absence (status), or null
                  "makeup": getattr(getattr(b, "makeup_credit", None), "status", None) if hasattr(b, "makeup_credit") else None}

@@ -82,6 +82,18 @@ await step(S.page, 'student: ONE tap on the home card opens the meeting; the car
 });
 await S.page.screenshot({ path: out + '/live-session-student.png' });
 
+await step(T.page, 'joining records the student\'s attendance and tells the teacher once (owner request 22 Nov 2026)', async () => {
+  const att = sql("select b.attendance || '|' || (b.attendance_marked_by_id = b.student_id) from scheduling_booking b join accounts_user u on u.id = b.student_id where u.email = 'yousef@halqa.app' and b.status = 'confirmed' order by b.id desc limit 1");
+  if (att !== 'present|true') throw new Error('attendance ' + att);
+  const n = sql("select count(*) || '|' || max(n.title) from notifications_notification n join accounts_user u on u.id = n.recipient_id where u.email = 'teacher@halqa.app' and n.kind = 'attendance_joined'");
+  if (n !== '1|حضر: يوسف أحمد') throw new Error('teacher notices ' + n);                   // two joins above, one notice
+  // The teacher's open app learns of it from the unread-count check (every minute, or at once after a push).
+  await T.page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await T.page.getByRole('navigation').getByRole('button', { exact: true, name: 'المواعيد' }).click();
+  await T.app.getByRole('tab', { name: 'الجلسات' }).click();
+  await T.app.getByTestId('joined-badge').first().getByText('سُجّل حضوره تلقائيًا', { exact: false }).waitFor();
+});
+
 await step(S.page, '15-minute reminder in both inboxes; tapping it opens the session with «انضم إلى الجلسة»', async () => {
   const rows = sql("select u.email || '|' || n.title || '|' || n.body from notifications_notification n join accounts_user u on u.id = n.recipient_id where n.kind = 'session_soon' order by u.email");
   if (!rows.includes('teacher@halqa.app|الحلقة | تذكير بالجلسة|حلقتك') || !rows.includes('yousef@halqa.app|الحلقة | تذكير بالجلسة|حلقتك')) throw new Error(rows);

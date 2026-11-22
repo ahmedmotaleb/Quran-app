@@ -293,9 +293,12 @@ class BookingJoin(APIView):
         if not o.meeting_url:
             raise ApiError("no_link", "لم يضف المعلم رابط الجلسة بعد. حاول بعد قليل.", 409)
         audit("booking.joined", actor=request.user, target=b, request=request, provider=o.meeting_provider)
+        from .checkin import check_in
         from .meeting import LABELS
 
-        return Response({"url": o.meeting_url, "provider": o.meeting_provider, "provider_label": LABELS.get(o.meeting_provider, "")})
+        marked = check_in(b.pk, request)   # attendance on joining, and the teacher is told (checkin.py)
+        return Response({"url": o.meeting_url, "provider": o.meeting_provider, "provider_label": LABELS.get(o.meeting_provider, ""),
+                         "attendance": marked})
 
 
 # ---- Excuses (owner decision 23 Oct 2026; rules in excuses.py) ----------------------------------

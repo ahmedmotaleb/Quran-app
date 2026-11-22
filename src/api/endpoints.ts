@@ -189,7 +189,9 @@ export interface ApiTeacherOcc {
   /** Teacher-created session with its Google Calendar event (null for other sessions). */
   google?: ApiGoogleEvent | null;
   bookings: { id: number; student: number; student_name: string; attendance: string; assignment_title: string; note: string; excuse: ApiExcuse | null;
-    makeup?: 'available' | 'used' | 'expired' | 'revoked' | null; evaluation?: SessionEvaluation | null }[];
+    makeup?: 'available' | 'used' | 'expired' | 'revoked' | null; evaluation?: SessionEvaluation | null;
+    /** The attendance was recorded when the student joined from the app. */
+    joined?: boolean }[];
   /** Weekly series id, and whether the session is only for chosen students (teacher-created or weekly). */
   series?: number | null; private?: boolean;
 }
@@ -217,7 +219,8 @@ export const closeSlot = (id: number) => api<null>('POST', `teacher/occurrences/
 /** The teacher's participant link for their own session ("" clears it). */
 export const setMeetingLink = (id: number, url: string) => api<ApiTeacherOcc>('PUT', `teacher/occurrences/${id}/meeting`, { url });
 /** The booked student's link, only while the join window is open. */
-export const joinBooking = (id: number) => api<{ url: string; provider: string; provider_label: string }>('POST', `bookings/${id}/join`);
+/** Also records the student's attendance the first time (`attendance`: "present" / "late", or null if already set). */
+export const joinBooking = (id: number) => api<{ url: string; provider: string; provider_label: string; attendance?: 'present' | 'late' | null }>('POST', `bookings/${id}/join`);
 export const markAttendance = (booking: number, attendance: string) => api<ApiBooking>('POST', `bookings/${booking}/attendance`, { attendance });
 
 // ---- individual / group sessions and weekly series (owner request 16 Nov 2026) ----
