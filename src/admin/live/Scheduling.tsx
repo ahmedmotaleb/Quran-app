@@ -8,6 +8,7 @@ import type { ApiError } from '@/api/client';
 import { can, toast } from '../adminStore';
 import * as A from './api';
 import * as E from '@/api/endpoints';
+import { WeekSessions } from './WeekSessions';
 import { chip, dateTime, errMsg, Modal, ReasonDialog, smallBtn } from './ui';
 import {
   BulkBar, type BulkDef, circleOptions, type Col, DataView, type FilterField, FilterControls, filterOf, items, listParams, Pager,
@@ -290,7 +291,22 @@ const BOOKING_ACTIONS: BulkDef[] = [
     body: (n) => `سيُلغى ${items(n)} ويُبلَّغ كل طالب. تبقى السجلات والحضور محفوظة. الجلسات التي بدأت لا تُلغى.`, ok: (n) => `إلغاء ${items(n)}` },
 ];
 
+/** «الجلسات والحجوزات»: the week's sessions (one row per session) or the bookings list (one row per student). */
 export function BookingsLive() {
+  const [view, setView] = useState<'week' | 'bookings'>(() => { try { return (sessionStorage.getItem('halqa.admin.bkview') as 'week' | 'bookings') || 'week'; } catch { return 'week'; } });
+  const pick = (v: 'week' | 'bookings') => { setView(v); try { sessionStorage.setItem('halqa.admin.bkview', v); } catch { /* private mode */ } };
+  return (
+    <>
+      <div role="tablist" aria-label="العرض" style={{ display: 'flex', gap: 8 }}>
+        {([['week', 'جلسات الأسبوع'], ['bookings', 'كل الحجوزات']] as const).map(([k, l]) =>
+          <button key={k} role="tab" aria-selected={view === k} onClick={() => pick(k)} style={chip(view === k)}>{l}</button>)}
+      </div>
+      {view === 'week' ? <WeekSessions /> : <BookingsList />}
+    </>
+  );
+}
+
+function BookingsList() {
   const { q, update } = useListUrl('bookings');
   const [text, setText] = useUrlSearch(q, update);
   const when = (q.when ?? 'upcoming') as 'upcoming' | 'past' | 'all';
