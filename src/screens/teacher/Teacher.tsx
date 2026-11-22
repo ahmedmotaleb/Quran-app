@@ -826,6 +826,8 @@ function ScheduleLive() {
               {o.bookings.map((b) => (
                 <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${color.divider}`, paddingTop: 8 }}>
                   <span style={{ fontSize: 14 }}><strong>{b.student_name}</strong>{b.assignment_title ? ` · ${b.assignment_title}` : ''}</span>
+                  {b.joined && <span data-testid="joined-badge" style={{ alignSelf: 'flex-start', fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: color.sageTint, color: color.primary }}>
+                    ✓ {b.attendance === 'late' ? 'دخل الجلسة متأخرًا' : 'دخل الجلسة'} · سُجّل حضوره تلقائيًا</span>}
                   {b.excuse && <span style={{ alignSelf: 'flex-start', fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: EXCUSE_BADGE[b.excuse.status][1], color: EXCUSE_BADGE[b.excuse.status][2] }}>{EXCUSE_BADGE[b.excuse.status][0]}</span>}
                   {b.excuse?.status === 'approved' && (b.makeup
                     ? <span style={muted(12)}>جلسة تعويضية: {b.makeup === 'available' ? 'مُنحت ولم تُحجز بعد' : b.makeup === 'used' ? 'حُجزت' : 'انتهت'}</span>

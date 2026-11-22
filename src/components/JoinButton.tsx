@@ -3,6 +3,7 @@
  *  - Student: the link is asked from the server at the tap (bookings/<id>/join). Only the booked student gets it, and
  *    only while the join window is open; it is never stored on the device or shown in lists.
  *  - Teacher: their own session's link (already theirs).
+ *  - The first join also records the student's attendance (حاضر / متأخر) and notifies the teacher (server side).
  *  - Disabled, with the reason, when there is no link yet or the session is not open for joining. */
 import { useState } from 'react';
 import { color } from '@/theme/tokens';
@@ -11,6 +12,7 @@ import { primaryBtn } from '@/components/ui';
 import { joinBooking } from '@/api/endpoints';
 import { ApiError } from '@/api/client';
 import { meetingProvider, openMeeting } from '@/lib/meeting';
+import { toast } from '@/store/store';
 
 type Props = { size?: number; reason?: string; light?: boolean } & (
   | { booking: number; canJoin: boolean; hasLink: boolean; url?: undefined }
@@ -33,6 +35,8 @@ export function JoinButton(p: Props) {
     try {
       const r = await joinBooking(p.booking!);
       if (!openMeeting(r.url)) setErr('الرابط غير صالح.');
+      // The server recorded the attendance on this first join and told the teacher.
+      if (r.attendance) toast(r.attendance === 'late' ? 'سُجّل حضورك (متأخر) وأُبلغ المعلم.' : 'سُجّل حضورك وأُبلغ المعلم.');
       setFallback(r.url);                // if the phone blocked the new window, a plain link stays tappable
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'تعذّر الاتصال. تحقق من الإنترنت وحاول مرة أخرى.');

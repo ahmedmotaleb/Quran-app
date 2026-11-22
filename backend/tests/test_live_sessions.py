@@ -57,7 +57,7 @@ def join(user, b):
 def test_student_joins_only_inside_the_window(world):
     now_b = _booked(world, in_hours=0.1)  # starts in 6 minutes; the window opens 10 minutes before
     r = join(world.s1, now_b)
-    assert r.status_code == 200 and r.json() == {"url": MEET, "provider": "google_meet", "provider_label": "Google Meet"}
+    assert r.status_code == 200 and r.json() == {"url": MEET, "provider": "google_meet", "provider_label": "Google Meet", "attendance": "present"}
     assert AuditEvent.objects.filter(action="booking.joined").count() == 1
     lst = client_for(world.s1).get("/api/v1/bookings?when=upcoming").json()["results"]
     assert lst[0]["can_join"] is True and lst[0]["has_meeting_link"] is True and "meeting_url" not in str(lst)
