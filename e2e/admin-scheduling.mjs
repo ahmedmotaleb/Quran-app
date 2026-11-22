@@ -43,7 +43,7 @@ await step('preview then schedule 2 weekly sessions', async () => {
   await dialog().getByRole('button', { name: 'إلغاء الجلسة' }).first().waitFor();
   if (await dialog().getByRole('button', { name: 'إلغاء الجلسة' }).count() !== 2) throw new Error('expected 2 sessions');
 });
-let student = ''; let occId = 0;
+let student = ''; let occId = 0; let slotStart = '';
 await step('draft circle is hidden from students', async () => {
   student = await tokenFor('yousef@halqa.app');
   const teachers = (await api('GET', 'teachers', student)).body.results;
@@ -57,16 +57,28 @@ await step('publish; the student sees and books a group seat', async () => {
   const khalid = teachers.find((t) => t.display_name === 'الأستاذ خالد العمري');
   const slot = (await api('GET', `teachers/${khalid.id}/slots`, student)).body.find((s) => s.circle_name === CN);
   if (!slot || slot.seats_left !== 3) throw new Error('published circle session not offered');
-  occId = slot.id;
+  occId = slot.id; slotStart = slot.starts_at;
   const r = await api('POST', 'bookings', student, { occurrence: occId }, { 'Idempotency-Key': `e2e-${Date.now()}` });
   if (r.status !== 201) throw new Error(`book ${r.status} ${JSON.stringify(r.body)}`);
 });
+await step('«جلسات الأسبوع» lists the week\'s session with its teacher and student', async () => {
+  await page.keyboard.press('Escape'); await nav('الجلسات والحجوزات');
+  await page.getByRole('tab', { name: 'جلسات الأسبوع' }).click();
+  await page.getByTestId('week-summary').waitFor();
+  await page.getByLabel('أسبوع يوم').fill(new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo' }).format(new Date(slotStart)));
+  const row = page.getByTestId('week-session').filter({ hasText: 'الأستاذ خالد العمري' }).first();
+  await row.getByText('قادمة').waitFor();
+  await row.getByRole('button').first().click(); await row.getByText('يوسف أحمد').waitFor();
+  await page.getByText('حسب المعلم').waitFor();
+});
 await step('the booking appears in admin Bookings; cancel with a reason', async () => {
   await page.keyboard.press('Escape'); await nav('الجلسات والحجوزات');
+  await page.getByRole('tab', { name: 'كل الحجوزات' }).click();
   await page.getByRole('searchbox').fill('يوسف');
   const btn = page.getByRole('button', { name: 'إلغاء حجز يوسف أحمد' }).first(); await btn.click();
   await dialog().locator('#rs').fill('اختبار إلغاء الإدارة'); await dialog().getByRole('button', { name: 'إلغاء الحجز' }).click();
   await settledReload(); await nav('الجلسات والحجوزات');
+  await page.getByRole('tab', { name: 'كل الحجوزات' }).click();
   await page.getByRole('button', { name: 'ملغاة', exact: true }).click(); await page.getByText('اختبار إلغاء الإدارة').first().waitFor();
 });
 await step('the student is notified and the seat is free again', async () => {

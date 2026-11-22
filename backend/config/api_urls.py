@@ -210,3 +210,6 @@ urlpatterns += _availability_urls()
 from apps.scheduling.series_views import urls as _series_urls  # noqa: E402
 
 urlpatterns += _series_urls()
+from apps.scheduling.week_report import AdminWeekSessions  # noqa: E402
+
+urlpatterns += [path("admin/sessions/week", AdminWeekSessions.as_view())]

@@ -247,3 +247,19 @@ export const teacherRequests = (status = 'open') => api<Page<TeacherRequestRow>>
 export const decideTeacherRequest = (id: number, action: 'approve' | 'unavailable' | 'assign', teacher?: number | null, note = '') =>
   api<TeacherRequestRow>('POST', `admin/teacher-requests/${id}/decide`, { action, teacher: teacher ?? null, note });
 export const approvedTeachers = () => api<Page<{ id: number; display_name?: string; full_name: string }>>('GET', 'admin/users?role=teacher&approved=true&status=active&page_size=200');
+
+// «جلسات الأسبوع» (owner request 22 Nov 2026): a Saturday–Friday week of sessions, Cairo time.
+export type WeekResult = 'held' | 'absent' | 'unmarked' | 'empty' | 'in_progress' | 'upcoming' | 'cancelled';
+export interface WeekSession {
+  id: number; starts_at: string; ends_at: string; minutes: number; teacher: { id: number; name: string }; kind: 'individual' | 'group';
+  kind_label: string; topic: string; title: string; circle: string | null; weekly: boolean; result: WeekResult; result_label: string; has_link: boolean;
+  students: { id: number; name: string; attendance: string }[]; attendance: Record<'present' | 'late' | 'absent' | 'excused' | 'unmarked', number>;
+}
+export interface WeekReport {
+  week_start: string; week_end: string; prev: string; next: string; is_current: boolean;
+  summary: Record<WeekResult | 'sessions' | 'students_present' | 'students_absent' | 'students_excused' | 'held_minutes', number>;
+  teachers: { id: number; name: string; sessions: number; held: number; minutes: number; present: number; absent: number; unmarked: number; cancelled: number }[];
+  results: WeekSession[];
+}
+export const weekSessions = (q: { start?: string; teacher?: string; result?: string }) =>
+  api<WeekReport>('GET', `admin/sessions/week?${new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][])}`);
