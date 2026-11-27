@@ -213,3 +213,6 @@ urlpatterns += _series_urls()
 from apps.scheduling.week_report import AdminWeekSessions  # noqa: E402
 
 urlpatterns += [path("admin/sessions/week", AdminWeekSessions.as_view())]
+from apps.accounts.social import urls as _social_urls  # noqa: E402
+
+urlpatterns += _social_urls()

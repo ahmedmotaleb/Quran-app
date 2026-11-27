@@ -9,6 +9,7 @@ import { LIVE } from './api/client';
 const AdminApp = lazy(() => import('./admin/AdminApp'));
 import { parentLoginEntry, setState } from '@/store/store';
 import { googleReturnResult } from '@/screens/teacher/GoogleSessions';
+const OAuthReturn = lazy(() => import('@/screens/auth/Social').then((m) => ({ default: m.OAuthReturn })));
 const DesignSystem = lazy(() => import('./designsystem/DesignSystem'));
 const SetPasswordPage = lazy(() => import('./screens/auth/LinkPages').then((m) => ({ default: m.SetPasswordPage })));
 const AcceptInvitePage = lazy(() => import('./screens/auth/LinkPages').then((m) => ({ default: m.AcceptInvitePage })));
@@ -47,6 +48,7 @@ function Routes() {
   if (h.startsWith('#/teacher')) return <ParentEntry who="teacher" />;
   if (h.startsWith('#/student')) return <ParentEntry who="student" />;
   if (h.startsWith('#/google')) return <GoogleReturn />;
+  if (h.startsWith('#/oauth')) return <Suspense fallback={null}><OAuthReturn key={h} /></Suspense>;   // back from Google / Apple / Microsoft
   return <MobileApp />;
 }
 

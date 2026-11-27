@@ -43,6 +43,8 @@ class PushSubscription(models.Model):
     p256dh = models.CharField(max_length=200)
     auth = models.CharField(max_length=100)
     device = models.CharField(max_length=120, blank=True)
+    # The sign-in it was registered under: ending that session («الأجهزة المسجّلة») removes it.
+    login_session = models.ForeignKey("accounts.LoginSession", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
     last_success_at = models.DateTimeField(null=True, blank=True)
     failures = models.PositiveSmallIntegerField(default=0)  # consecutive

@@ -172,10 +172,24 @@ async function restoreSession(): Promise<boolean> {
     await loadData();
     void syncPush(); // a device that already allowed notifications stays registered for this account (never prompts)
     void openFromHash(); // opened from a tapped phone notification
+    afterProviderSignIn(u.role);
     return true;
   } catch {
     return false;
   }
+}
+
+/** Back from Google / Apple / Microsoft (screens/auth/Social.tsx reloads the app): a new student continues with the
+ *  usual onboarding; a newly connected provider opens «حسابي»; a short note is shown once. */
+function afterProviderSignIn(role: Role) {
+  let onboard = false, open = '', note = '';
+  try {
+    onboard = sessionStorage.getItem('halqa.oauth.onboard') === '1'; open = sessionStorage.getItem('halqa.oauth.open') ?? ''; note = sessionStorage.getItem('halqa.oauth.note') ?? '';
+    ['halqa.oauth.onboard', 'halqa.oauth.open', 'halqa.oauth.note'].forEach((k) => sessionStorage.removeItem(k));
+  } catch { /* private mode */ }
+  if (onboard && role === 'student') reset('onboard', 'student');
+  else if (open === 'account') go('account');
+  if (note) toast(note);
 }
 
 export async function login(email: string, password: string) {

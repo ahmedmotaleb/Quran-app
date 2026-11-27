@@ -111,6 +111,8 @@ class PushConfig(APIView):
 
 class PushSubscriptions(APIView):
     def post(self, request):
+        from apps.accounts.social import current_session
+
         if not push.configured():
             raise ApiError("push_not_configured", "إشعارات الجوال غير مفعّلة على الخادم بعد.", 503)
         ep = str(request.data.get("endpoint", ""))
@@ -122,7 +124,8 @@ class PushSubscriptions(APIView):
         # (Re)registering switches the device back on: a new subscription, or the same one after a failure.
         PushSubscription.objects.update_or_create(endpoint=ep, defaults={
             "user": request.user, "p256dh": str(keys["p256dh"])[:200], "auth": str(keys["auth"])[:100], "device": device, "failures": 0,
-            "active": True, "last_failure": "", "last_failure_at": None})
+            "active": True, "last_failure": "", "last_failure_at": None,
+            "login_session": current_session(request)})
         return Response({"subscribed": True}, status=201)
 
     def delete(self, request):

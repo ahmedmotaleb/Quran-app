@@ -71,6 +71,10 @@ def ready(request):
     # 15-minute session reminders: "alarm" = Cloud Tasks wakes the server at T−15 (deploy/gcp-reminders.sh);
     # "fallback" = only while someone has the app open, plus the hourly job (may be late or missed).
     features["session_reminders"] = "alarm" if alarm.configured() else "fallback"
+    from apps.accounts import oidc
+
+    # Social sign-in providers with credentials set ("configured" is not "verified on a device": docs/AUTH.md).
+    features["sign_in_providers"] = ",".join(p for p in oidc.available() if p != "fake") or "password_only"
     return Response({"status": "ok" if ok else "unavailable", "checks": checks, "features": features}, status=200 if ok else 503)
 
 

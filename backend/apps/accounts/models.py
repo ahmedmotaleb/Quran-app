@@ -395,3 +395,49 @@ class TeacherRequest(TimeStamped):
             models.UniqueConstraint(fields=["student"], condition=Q(status="pending"), name="one_pending_teacher_request"),
             models.CheckConstraint(condition=Q(teacher__isnull=False) | ~Q(suggested_name=""), name="teacher_request_has_choice"),
         ]
+
+
+class AuthIdentity(models.Model):
+    """A Google / Apple / Microsoft account connected to a HALQA user (owner request 27 Nov 2026, social.py).
+
+    One user may have several providers; each provider account (issuer `sub`) belongs to at most one user. The email
+    is the provider's own, kept for display; it never decides which HALQA account a sign-in opens."""
+
+    class Provider(models.TextChoices):
+        GOOGLE = "google", "Google"
+        APPLE = "apple", "Apple"
+        MICROSOFT = "microsoft", "Microsoft"
+        FAKE = "fake", "Development"   # tests / local development only (settings.AUTH_OAUTH_FAKE)
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="auth_identities")
+    provider = models.CharField(max_length=16, choices=Provider.choices)
+    subject = models.CharField(max_length=255)                 # the provider's stable user id (`sub`)
+    email = models.EmailField(blank=True)
+    email_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_login_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "accounts_auth_identity"
+        constraints = [
+            models.UniqueConstraint(fields=["provider", "subject"], name="auth_identity_unique_subject"),
+            models.UniqueConstraint(fields=["user", "provider"], name="auth_identity_one_per_provider"),
+        ]
+
+
+class LoginSession(models.Model):
+    """One signed-in browser or app («الأجهزة المسجّلة»): the web session key or the native token, how it signed in, and
+    when. Ending it deletes the web session / revokes the token, so that device is signed out on its next request."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="login_sessions")
+    session_key = models.CharField(max_length=64, blank=True, db_index=True)
+    token = models.OneToOneField(AuthToken, null=True, blank=True, on_delete=models.CASCADE, related_name="login_session")
+    method = models.CharField(max_length=16)                   # password / google / apple / microsoft / invitation …
+    device = models.CharField(max_length=160, blank=True)      # a short browser / OS description, never the full user agent
+    created_at = models.DateTimeField(default=dj_tz.now)
+    last_seen_at = models.DateTimeField(default=dj_tz.now)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "accounts_login_session"
+        indexes = [models.Index(fields=["user", "ended_at"])]

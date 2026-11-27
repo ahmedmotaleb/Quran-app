@@ -7,6 +7,7 @@ import { tzLabel } from '@/lib/format';
 import { PW_MIN, back, chooseWho, doForgot, doLogin, doSignup, go, obNext, reset, setState as set, skipSplash, up, useApp, type Who } from '@/store/store';
 import { LIVE } from '@/api/client';
 import { BRAND } from '@/theme/brand';
+import { SocialButtons } from './Social';
 import { Logo } from '@/components/Logo';
 
 export function Splash() {
@@ -110,6 +111,7 @@ export function Login() {
         <button type="button" onClick={() => go('forgot')} style={linkBtn(14, { alignSelf: 'flex-start', padding: 0 })}>نسيت كلمة المرور؟</button>
       </div>
       <button type="submit" disabled={L.loading} style={primaryBtn()}>{L.loading ? 'جارٍ الدخول…' : 'تسجيل الدخول'}</button>
+      {LIVE && <SocialButtons />}
       {!LIVE && <div style={{ background: color.sand, borderRadius: 14, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <p style={{ margin: 0, fontSize: 13, color: color.subtle }}>حسابات تجريبية (كلمة المرور {DEMO_PASSWORD}):</p>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

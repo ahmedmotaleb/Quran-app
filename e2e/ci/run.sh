@@ -60,6 +60,8 @@ reseed; run student-import
 reseed; SOON_CMD="bash e2e/ci/py.sh google_soon.py" run google-sessions
 # Individual / group sessions and weekly series: picker, recurrence, per-student attendance and evaluation, removal sync.
 reseed; STARTED_CMD="bash e2e/ci/py.sh series_started.py" run group-sessions
+# Social sign-in with the development stand-in identity provider (real state / binding / ID-token checks).
+reseed; run social-login
 reseed; run phone-login
 reseed; run teacher-onboarding
 reseed; CIRCLE_CMD="bash e2e/ci/py.sh circle_for_teacher.py" run assigning
