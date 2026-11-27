@@ -40,6 +40,7 @@ jobs:
       SMS_FILE_PATH: /tmp/halqa-sms.jsonl
       THROTTLE_PHONE: 1000/hour
       GOOGLE_FAKE: "1"                             # in-process stand-in for Google Calendar/Meet (refused when deployed)
+      AUTH_OAUTH_FAKE: "1"                         # in-process stand-in identity provider for social sign-in (refused when deployed)
       PYTHON: python
     steps:
       - uses: actions/checkout@v4

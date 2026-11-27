@@ -10,6 +10,7 @@ import * as E from '@/api/endpoints';
 import { useEffect, useState, type FormEvent } from 'react';
 import { disablePush, enablePush, PushError, pushState, type PushState } from '@/pwa/push';
 import { GoogleCalendarCard } from '@/screens/teacher/GoogleSessions';
+import { SignInMethods } from '@/screens/auth/Social';
 import { MyRiwayatSection } from '@/screens/teacher/Riwayat';
 import { ReminderSettingsCard } from './Reminders';
 import { PushDiagnostics } from '@/pwa/PushDiagnostics';
@@ -135,6 +136,7 @@ export default function Account() {
       {LIVE && <AdhkarSettingsCard />}
       {LIVE && role === 'teacher' && <MyRiwayatSection />}
       {LIVE && role === 'teacher' && <GoogleCalendarCard />}
+      {LIVE && <SignInMethods />}
       {LIVE && <PhoneRow />}
       <InstallRow />
       {LIVE && <PushRow />}

@@ -362,3 +362,22 @@ GOOGLE_REDIRECT_URI = env("GOOGLE_REDIRECT_URI", "") or (f"{APP_URL}/api/v1/inte
 GOOGLE_TOKEN_KEY = env("GOOGLE_TOKEN_KEY", "")
 # Development and CI only: an in-process stand-in for Google (no network), for the browser tests.
 GOOGLE_FAKE = env_bool("GOOGLE_FAKE", False) and APP_ENV in ("development", "test")
+
+# ---- Social sign-in «المتابعة باستخدام Google / Apple / Microsoft» (owner request 27 Nov 2026; docs/AUTH.md) -------
+# OpenID Connect, authorization code + PKCE, server side. Secrets come only from the environment (Secret Manager in
+# production) and never reach the app. A provider is offered only when its credentials are set.
+# Callback: {APP_URL}/api/v1/auth/oauth/<provider>/callback
+# Set explicitly (never inherited from the Calendar client): a button whose callback is not registered would fail.
+AUTH_GOOGLE_CLIENT_ID = env("AUTH_GOOGLE_CLIENT_ID", "")
+AUTH_GOOGLE_CLIENT_SECRET = env("AUTH_GOOGLE_CLIENT_SECRET", "")
+AUTH_MICROSOFT_CLIENT_ID = env("AUTH_MICROSOFT_CLIENT_ID", "")
+AUTH_MICROSOFT_CLIENT_SECRET = env("AUTH_MICROSOFT_CLIENT_SECRET", "")
+AUTH_MICROSOFT_TENANT = env("AUTH_MICROSOFT_TENANT", "common") or "common"
+AUTH_APPLE_CLIENT_ID = env("AUTH_APPLE_CLIENT_ID", "")              # the Services ID, e.g. app.halqa.web
+AUTH_APPLE_TEAM_ID = env("AUTH_APPLE_TEAM_ID", "")
+AUTH_APPLE_KEY_ID = env("AUTH_APPLE_KEY_ID", "")
+AUTH_APPLE_PRIVATE_KEY = env("AUTH_APPLE_PRIVATE_KEY", "").replace("\\n", "\n")   # the .p8 key (PEM)
+# Development / CI only: an in-process stand-in identity provider («fake») that signs real ID tokens with a local key,
+# so the whole verification path runs in tests. Refused when deployed.
+AUTH_OAUTH_FAKE = env_bool("AUTH_OAUTH_FAKE", False) and APP_ENV in ("development", "test")
+

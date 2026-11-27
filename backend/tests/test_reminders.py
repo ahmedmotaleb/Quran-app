@@ -70,8 +70,8 @@ def test_local_time_zone_catch_up_and_quiet_hours(world):
     device(world.s1)
     world.s1.timezone = "Asia/Tokyo"; world.s1.save(update_fields=["timezone"])
     h = local_hour(world.s1)
-    if h < 4:
-        pytest.skip("needs three earlier hours in the same local day")
+    if h < 4 or h == 23:   # three earlier hours and one later hour in the same local day (23:00 wraps to midnight)
+        pytest.skip("needs three earlier hours and one later hour in the same local day")
     only(world.s1, "reading", reading_hour=h - 3)                                # missed runs: caught up the same day
     assert run()["reading"] == 1
     Notification.objects.all().delete()

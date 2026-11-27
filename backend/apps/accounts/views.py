@@ -107,13 +107,17 @@ def _record_failure(email: str) -> None:
         log.warning("auth_locked", extra={"minutes": settings.LOGIN_LOCKOUT_MINUTES})
 
 
-def _session_payload(request, user, client: str, device: str):
+def _session_payload(request, user, client: str, device: str, method: str = "password"):
+    from .social import record_session
+
     data = {"user": MeSerializer(user).data}
     if client == "native":
-        _, raw = AuthToken.issue(user, device=device)
+        tok, raw = AuthToken.issue(user, device=device)
         data["token"] = raw  # shown once; the app keeps it in protected device storage
+        record_session(request, user, method=method, token=tok)
     else:
         login(request, user)
+        record_session(request, user, method=method)   # «الأجهزة المسجّلة»
     return data
 
 
@@ -255,6 +259,12 @@ class LogoutView(APIView):
             from apps.notifications.models import PushSubscription
 
             PushSubscription.objects.filter(user=request.user, endpoint=ep).delete()
+        from .social import current_session
+
+        cur = current_session(request)
+        if cur is not None:
+            cur.ended_at = timezone.now()
+            cur.save(update_fields=["ended_at"])
         if isinstance(request.auth, AuthToken):
             AuthToken.objects.filter(pk=request.auth.pk).update(revoked_at=timezone.now())
         from .authentication import end_admin_session, is_admin_portal
